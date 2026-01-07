@@ -1,7 +1,9 @@
 import axios from "axios";
 
+// Use relative '/api' by default for production behind Nginx.
+// Override with VITE_API_BASE (e.g., http://localhost:8000/api) for local dev.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || "http://localhost:8000",
+  baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
 export type Rate = { buy_rate: number; sell_rate: number; updated_at?: string };
@@ -95,22 +97,22 @@ export const withAdminKey = (key?: string) =>
     : undefined;
 
 export async function fetchRates() {
-  const res = await api.get<Rate>('/api/rates');
+  const res = await api.get<Rate>('/rates');
   return res.data;
 }
 
 export async function fetchServiceStatus() {
-  const res = await api.get<ServiceStatus>('/api/service-status');
+  const res = await api.get<ServiceStatus>('/service-status');
   return res.data;
 }
 
 export async function fetchMe(initData: string) {
-  const res = await api.get<{ user: UserProfile }>('/api/me', withInitData(initData));
+  const res = await api.get<{ user: UserProfile }>('/me', withInitData(initData));
   return res.data.user;
 }
 
 export async function agreeToTerms(initData: string) {
-  const res = await api.post('/api/agree-terms', {}, withInitData(initData));
+  const res = await api.post('/agree-terms', {}, withInitData(initData));
   return res.data as { ok: boolean; agreed_terms: boolean };
 }
 
@@ -126,28 +128,28 @@ export type UpdateBankInfoInput = {
 };
 
 export async function updateBankInfo(initData: string, payload: UpdateBankInfoInput) {
-  const res = await api.post('/api/update-bank-info', payload, withInitData(initData));
+  const res = await api.post('/update-bank-info', payload, withInitData(initData));
   return res.data as { ok: boolean; message: string };
 }
 
 export async function createExchange(initData: string, payload: ExchangeCreateInput) {
-  const res = await api.post('/api/exchange/create', payload, withInitData(initData));
+  const res = await api.post('/exchange/create', payload, withInitData(initData));
   return res.data;
 }
 
 export async function requestPresign(initData: string, payload: PresignRequest) {
-  const res = await api.post('/api/storage/presign', payload, withInitData(initData));
+  const res = await api.post('/storage/presign', payload, withInitData(initData));
   return res.data as { upload_url: string; public_url: string; path: string };
 }
 
 export async function fetchHistory(initData: string) {
-  const res = await api.get('/api/history', withInitData(initData));
+  const res = await api.get('/history', withInitData(initData));
   return res.data as { items: any[] };
 }
 
 export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAccount[] }> {
   try {
-    const res = await api.get('/api/admin-banks');
+    const res = await api.get('/admin-banks');
     return res.data as { accounts: AdminBankAccount[] };
   } catch {
     // Return empty if endpoint not available yet
@@ -156,27 +158,27 @@ export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAcc
 }
 
 export async function validatePromoCode(initData: string, code: string, direction: string) {
-  const res = await api.post('/api/promo/validate', { code, direction }, withInitData(initData));
+  const res = await api.post('/promo/validate', { code, direction }, withInitData(initData));
   return res.data as { valid: boolean; discount_amount?: number; message?: string };
 }
 
 export async function submitRegistration(initData: string, payload: RegistrationInput) {
-  const res = await api.post('/api/register', payload, withInitData(initData));
+  const res = await api.post('/register', payload, withInitData(initData));
   return res.data as { ok: boolean; message: string };
 }
 
 export async function fetchInbox(adminKey?: string) {
-  const res = await api.get('/api/admin/inbox', withAdminKey(adminKey));
+  const res = await api.get('/admin/inbox', withAdminKey(adminKey));
   return res.data as { items: any[] };
 }
 
 export async function fetchKycPending(adminKey: string): Promise<{ items: KycItem[] }> {
-  const res = await api.get('/api/admin/kyc', withAdminKey(adminKey));
+  const res = await api.get('/admin/kyc', withAdminKey(adminKey));
   return res.data as { items: KycItem[] };
 }
 
 export async function kycAction(adminKey: string, payload: { user_id: number; action: 'approve' | 'reject'; rejection_reason?: string }) {
-  const res = await api.post('/api/admin/kyc/action', payload, withAdminKey(adminKey));
+  const res = await api.post('/admin/kyc/action', payload, withAdminKey(adminKey));
   return res.data as { ok: boolean; message: string };
 }
 
@@ -188,7 +190,7 @@ export async function adminAction(adminKey: string, payload: {
   admin_bill_url?: string;
   completed_by_admin?: number;
 }) {
-  const res = await api.post('/api/admin/action', payload, withAdminKey(adminKey));
+  const res = await api.post('/admin/action', payload, withAdminKey(adminKey));
   return res.data;
 }
 
