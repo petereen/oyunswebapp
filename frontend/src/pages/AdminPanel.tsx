@@ -8,7 +8,11 @@ const ADMIN_KEY_STORAGE_KEY = "oyunsbot_admin_api_key";
 
 type Tab = "inbox" | "kyc" | "users";
 
-export function AdminPanel() {
+interface Props {
+  initData?: string;
+}
+
+export function AdminPanel({ initData }: Props) {
   const [adminKey, setAdminKey] = useState<string>(() => {
     // Load from localStorage on init
     return localStorage.getItem(ADMIN_KEY_STORAGE_KEY) || "";
@@ -76,7 +80,7 @@ export function AdminPanel() {
 
       {/* Tab Content */}
       {activeTab === "inbox" ? (
-        <AdminInbox adminKey={adminKey} />
+        <AdminInbox adminKey={adminKey} initData={initData} />
       ) : activeTab === "kyc" ? (
         <AdminKyc initData={adminKey} />
       ) : (

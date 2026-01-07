@@ -166,16 +166,6 @@ async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Hea
     if not x_telegram_init_data:
         raise HTTPException(status_code=401, detail="Missing X-Telegram-Init-Data header")
     
-    # Dev mode bypass for local testing
-    if x_telegram_init_data == "dev-mode":
-        from models import AuthenticatedUser
-        return AuthenticatedUser(
-            id=1932946217,
-            first_name="Dev",
-            last_name="User",
-            username="devuser",
-        )
-    
     try:
         return verify_telegram_init_data(x_telegram_init_data, settings.bot_token)
     except TelegramAuthError as exc:

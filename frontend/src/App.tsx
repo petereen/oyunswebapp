@@ -49,7 +49,7 @@ export default function App() {
         {view === "client" || !isAdmin ? (
           <Dashboard initData={initData} user={user} />
         ) : (
-          <AdminPanel />
+          <AdminPanel initData={initData} />
         )}
       </div>
     </div>

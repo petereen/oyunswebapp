@@ -26,14 +26,6 @@ export interface TelegramUser {
   username?: string;
 }
 
-// Dev mode user for local testing (matches ADMIN_CHAT_ID)
-const DEV_USER: TelegramUser = {
-  id: 1932946217,
-  first_name: "Dev",
-  last_name: "User",
-  username: "devuser",
-};
-
 export function useTelegramAuth() {
   const [initData, setInitData] = useState<string>("");
   const [user, setUser] = useState<TelegramUser | null>(null);
@@ -48,20 +40,9 @@ export function useTelegramAuth() {
       }
       return;
     }
-    // fallback for local dev - use dev user
-    const fallback = localStorage.getItem("tg_initdata") || "dev-mode";
-    setInitData(fallback);
-    const fallbackUser = localStorage.getItem("tg_user");
-    if (fallbackUser) {
-      try {
-        setUser(JSON.parse(fallbackUser));
-      } catch {
-        setUser(DEV_USER);
-      }
-    } else {
-      // In dev mode without Telegram, use dev user
-      setUser(DEV_USER);
-    }
+    // No Telegram init data available: leave empty for production safety
+    setInitData("");
+    setUser(null);
   }, []);
 
   return { initData, user };

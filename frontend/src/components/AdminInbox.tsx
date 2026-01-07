@@ -37,6 +37,7 @@ import {
 
 interface Props {
   adminKey?: string;
+  initData?: string;
 }
 
 interface InboxItem {
@@ -103,7 +104,7 @@ function getTimeAgo(dateStr: string): string {
   return `${diffDays} өдөр ${diffHours % 24} цаг өмнө`;
 }
 
-export function AdminInbox({ adminKey }: Props) {
+export function AdminInbox({ adminKey, initData }: Props) {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -403,7 +404,10 @@ export function AdminInbox({ adminKey }: Props) {
     setUploading(true);
     try {
       const path = `admin/${Date.now()}-${file.name}`;
-      const presigned = await requestPresign("dev-mode", { bucket: "bills", path });
+      if (!initData) {
+        throw new Error("Missing Telegram init data for presign");
+      }
+      const presigned = await requestPresign(initData, { bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,
