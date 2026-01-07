@@ -9,24 +9,23 @@ logger = logging.getLogger("uvicorn.error")
 
 def send_admin_notification(text: str, reply_markup: dict | None = None) -> None:
     settings = get_settings()
-    logger.info(f"Sending admin notification to chat_id={settings.admin_chat_id}")
-    
-    # Build payload - reply_markup should NOT be json.dumps when using json= in requests
-    payload = {"chat_id": settings.admin_chat_id, "text": text, "parse_mode": "HTML"}
-    if reply_markup:
-        payload["reply_markup"] = reply_markup
-    
-    try:
-        response = requests.post(
-            f"https://api.telegram.org/bot{settings.bot_token}/sendMessage",
-            json=payload,
-            timeout=10,
-        )
-        logger.info(f"Admin notification response: {response.status_code} - {response.text[:200]}")
-        if response.status_code != 200:
-            logger.error(f"Telegram API error: {response.text}")
-    except Exception as e:
-        logger.error(f"Failed to send admin notification: {e}")
+    # Send to all configured admin chat IDs
+    for chat_id in settings.admin_chat_ids:
+        logger.info(f"Sending admin notification to chat_id={chat_id}")
+        payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{settings.bot_token}/sendMessage",
+                json=payload,
+                timeout=10,
+            )
+            logger.info(f"Admin notification response to {chat_id}: {response.status_code}")
+            if response.status_code != 200:
+                logger.error(f"Telegram API error for {chat_id}: {response.text}")
+        except Exception as e:
+            logger.error(f"Failed to send admin notification to {chat_id}: {e}")
 
 
 def send_user_notification(user_id: int, text: str, reply_markup: dict | None = None) -> None:
