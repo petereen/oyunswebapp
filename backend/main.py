@@ -164,11 +164,15 @@ app.add_middleware(
 async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Header(alias="X-Telegram-Init-Data")]):
     settings = get_settings()
     if not x_telegram_init_data:
+        logger.warning("Auth failed: missing X-Telegram-Init-Data header")
         raise HTTPException(status_code=401, detail="Missing X-Telegram-Init-Data header")
     
     try:
         return verify_telegram_init_data(x_telegram_init_data, settings.bot_token)
     except TelegramAuthError as exc:
+        # Log truncated preview to avoid leaking the full token
+        preview = x_telegram_init_data[:120].replace("\n", "") if x_telegram_init_data else ""
+        logger.warning(f"Auth failed: invalid init data. preview='{preview}' error={exc}")
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
