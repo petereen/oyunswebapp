@@ -33,9 +33,10 @@ export function Dashboard({ initData, user }: Props) {
   });
 
   const { data: profile } = useQuery({
-    queryKey: ["me", initData],
+    queryKey: ["me", user?.id],
     queryFn: () => fetchMe(initData),
-    enabled: Boolean(initData),
+    enabled: Boolean(initData) && Boolean(user?.id),
+    staleTime: 0, // Always refetch to ensure fresh user data
   });
 
   // Check if user needs to agree to terms - only show modal when agreed_terms is explicitly false
@@ -49,12 +50,12 @@ export function Dashboard({ initData, user }: Props) {
 
   const handleTermsAgreed = () => {
     // Refetch profile to update agreed_terms status
-    queryClient.invalidateQueries({ queryKey: ["me", initData] });
+    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
   };
 
   const handleRegistered = () => {
     // Refetch profile to update registration status
-    queryClient.invalidateQueries({ queryKey: ["me", initData] });
+    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
   };
 
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
@@ -204,12 +205,12 @@ export function Dashboard({ initData, user }: Props) {
 
       {/* Profile Modal */}
       {showProfile && (
-        <ProfileModal initData={initData} onClose={() => setShowProfile(false)} />
+        <ProfileModal initData={initData} userId={user?.id} onClose={() => setShowProfile(false)} />
       )}
 
       {/* History Modal */}
       {showHistory && (
-        <HistoryModal initData={initData} onClose={() => setShowHistory(false)} />
+        <HistoryModal initData={initData} userId={user?.id} onClose={() => setShowHistory(false)} />
       )}
 
       {/* Terms Agreement Modal - Required for first-time users */}

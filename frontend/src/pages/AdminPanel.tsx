@@ -41,50 +41,63 @@ export function AdminPanel({ initData }: Props) {
         />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setActiveTab("inbox")}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
-            activeTab === "inbox"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
-          }`}
-        >
-          <Inbox className="w-4 h-4" />
-          Гүйлгээ
-        </button>
-        <button
-          onClick={() => setActiveTab("kyc")}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
-            activeTab === "kyc"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          Баталгаажуулалт
-        </button>
-        <button
-          onClick={() => setActiveTab("users")}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
-            activeTab === "users"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          Хэрэглэгч
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === "inbox" ? (
-        <AdminInbox adminKey={adminKey} initData={initData} />
-      ) : activeTab === "kyc" ? (
-        <AdminKyc initData={adminKey} />
+      {/* Only show admin panel content when API key is entered */}
+      {!adminKey ? (
+        <div className="glass-card p-8 rounded-2xl border border-white/60 text-center">
+          <Shield className="w-12 h-12 text-ocean-300 mx-auto mb-4" />
+          <div className="text-lg font-semibold text-ocean-700 mb-2">Админ түлхүүр шаардлагатай</div>
+          <div className="text-sm text-slate-500">
+            Админ самбарт нэвтрэхийн тулд API түлхүүрээ оруулна уу
+          </div>
+        </div>
       ) : (
-        <AdminUserSearch adminKey={adminKey} />
+        <>
+          {/* Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab("inbox")}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+                activeTab === "inbox"
+                  ? "bg-ocean-600 text-white"
+                  : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              }`}
+            >
+              <Inbox className="w-4 h-4" />
+              Гүйлгээ
+            </button>
+            <button
+              onClick={() => setActiveTab("kyc")}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+                activeTab === "kyc"
+                  ? "bg-ocean-600 text-white"
+                  : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Баталгаажуулалт
+            </button>
+            <button
+              onClick={() => setActiveTab("users")}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+                activeTab === "users"
+                  ? "bg-ocean-600 text-white"
+                  : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Хэрэглэгч
+            </button>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === "inbox" ? (
+            <AdminInbox adminKey={adminKey} initData={initData} />
+          ) : activeTab === "kyc" ? (
+            <AdminKyc initData={adminKey} />
+          ) : (
+            <AdminUserSearch adminKey={adminKey} />
+          )}
+        </>
       )}
     </div>
   );

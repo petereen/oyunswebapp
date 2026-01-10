@@ -7,6 +7,7 @@ const TERMS_URL = "https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1
 
 interface Props {
   initData: string;
+  userId?: number;
   onClose: () => void;
 }
 
@@ -32,7 +33,7 @@ const parseBankMnt = (bankStr: string | undefined) => {
   };
 };
 
-export function ProfileModal({ initData, onClose }: Props) {
+export function ProfileModal({ initData, userId, onClose }: Props) {
   const queryClient = useQueryClient();
   const [showPromos, setShowPromos] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -50,15 +51,16 @@ export function ProfileModal({ initData, onClose }: Props) {
   const [mntOwnerName, setMntOwnerName] = useState("");
   
   const { data: profile, isLoading } = useQuery({
-    queryKey: ["me", initData],
+    queryKey: ["me", userId],
     queryFn: () => fetchMe(initData),
-    enabled: Boolean(initData),
+    enabled: Boolean(initData) && Boolean(userId),
+    staleTime: 0, // Always refetch to ensure fresh user data
   });
 
   const { data: promoCodes, isLoading: promoLoading } = useQuery({
-    queryKey: ["user-promos", initData],
+    queryKey: ["user-promos", userId],
     queryFn: () => fetchUserPromoCodes(initData),
-    enabled: Boolean(initData) && showPromos,
+    enabled: Boolean(initData) && Boolean(userId) && showPromos,
   });
 
   // Initialize form values when profile loads or edit mode is enabled
@@ -92,7 +94,7 @@ export function ProfileModal({ initData, onClose }: Props) {
         mnt_owner_name: mntOwnerName,
       };
       await updateBankInfo(initData, payload);
-      queryClient.invalidateQueries({ queryKey: ["me", initData] });
+      queryClient.invalidateQueries({ queryKey: ["me", userId] });
       setEditMode(false);
     } catch (err) {
       console.error("Save error:", err);
