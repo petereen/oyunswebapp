@@ -203,7 +203,7 @@ export type UserPromoCode = {
 
 export async function fetchUserPromoCodes(initData: string): Promise<{ promo_codes: UserPromoCode[] }> {
   try {
-    const res = await api.get('/api/user/promo-codes', withInitData(initData));
+    const res = await api.get('/user/promo-codes', withInitData(initData));
     return res.data as { promo_codes: UserPromoCode[] };
   } catch {
     return { promo_codes: [] };
@@ -230,22 +230,22 @@ export interface ShiftResponse {
 }
 
 export async function fetchAdminUsers(adminKey: string): Promise<AdminUsersResponse> {
-  const res = await api.get('/api/admin/users', withAdminKey(adminKey));
+  const res = await api.get('/admin/users', withAdminKey(adminKey));
   return res.data as AdminUsersResponse;
 }
 
 export async function fetchCurrentShift(adminKey: string): Promise<ShiftResponse> {
-  const res = await api.get('/api/admin/shift', withAdminKey(adminKey));
+  const res = await api.get('/admin/shift', withAdminKey(adminKey));
   return res.data as ShiftResponse;
 }
 
 export async function openShift(adminKey: string, adminId: number, adminName?: string) {
-  const res = await api.post('/api/admin/shift/open', { admin_id: adminId, admin_name: adminName }, withAdminKey(adminKey));
+  const res = await api.post('/admin/shift/open', { admin_id: adminId, admin_name: adminName }, withAdminKey(adminKey));
   return res.data;
 }
 
 export async function transferShift(adminKey: string, fromAdminId: number, toAdminId: number, toAdminName?: string) {
-  const res = await api.post('/api/admin/shift/transfer', { 
+  const res = await api.post('/admin/shift/transfer', { 
     from_admin_id: fromAdminId, 
     to_admin_id: toAdminId, 
     to_admin_name: toAdminName 
@@ -254,7 +254,7 @@ export async function transferShift(adminKey: string, fromAdminId: number, toAdm
 }
 
 export async function closeShift(adminKey: string, adminId: number) {
-  const res = await api.post('/api/admin/shift/close', { admin_id: adminId }, withAdminKey(adminKey));
+  const res = await api.post('/admin/shift/close', { admin_id: adminId }, withAdminKey(adminKey));
   return res.data;
 }
 
@@ -278,12 +278,12 @@ export interface WorkingHoursUpdatePayload {
 }
 
 export async function fetchWorkingHours(adminKey: string): Promise<WorkingHoursConfig> {
-  const res = await api.get('/api/admin/working-hours', withAdminKey(adminKey));
+  const res = await api.get('/admin/working-hours', withAdminKey(adminKey));
   return res.data as WorkingHoursConfig;
 }
 
 export async function updateWorkingHours(adminKey: string, payload: WorkingHoursUpdatePayload) {
-  const res = await api.put('/api/admin/working-hours', payload, withAdminKey(adminKey));
+  const res = await api.put('/admin/working-hours', payload, withAdminKey(adminKey));
   return res.data;
 }
 
@@ -306,6 +306,6 @@ export interface UserSearchResponse {
 }
 
 export async function searchUsers(adminKey: string, query: string = ""): Promise<UserSearchResponse> {
-  const res = await api.get(`/api/admin/user-search?q=${encodeURIComponent(query)}`, withAdminKey(adminKey));
+  const res = await api.get(`/admin/user-search?q=${encodeURIComponent(query)}`, withAdminKey(adminKey));
   return res.data as UserSearchResponse;
 }
