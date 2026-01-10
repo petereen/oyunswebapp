@@ -18,6 +18,13 @@ def parse_init_data(init_data: str) -> Dict[str, str]:
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
     data = parse_init_data(init_data)
+    # Debug: log length and keys to help diagnose hash failures
+    try:
+        from logging import getLogger
+        logger = getLogger("uvicorn.error")
+        logger.debug(f"init_data_len={len(init_data)} keys={list(data.keys())}")
+    except Exception:
+        pass
     if "hash" not in data:
         raise TelegramAuthError("Missing hash in initData")
 
