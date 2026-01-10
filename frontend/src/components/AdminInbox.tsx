@@ -337,8 +337,19 @@ export function AdminInbox({ adminKey, initData }: Props) {
   // Track which field was copied
   const [copiedField, setCopiedField] = useState<string | null>(null);
   
-  const handleCopy = (text: string, fieldId?: string) => {
-    navigator.clipboard.writeText(text.replace(/\s/g, ""));
+  const handleCopy = async (text: string, fieldId?: string) => {
+    const cleanText = text.replace(/\s/g, "");
+    try {
+      await navigator.clipboard.writeText(cleanText);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = cleanText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    }
     setCopiedField(fieldId || "generic");
     setCopied(true);
     setTimeout(() => {

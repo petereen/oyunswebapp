@@ -41,8 +41,18 @@ export function AdminUserSearch({ adminKey }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminKey]);
 
-  const handleCopy = (text: string, fieldId: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string, fieldId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    }
     setCopiedField(fieldId);
     setTimeout(() => setCopiedField(null), 2000);
   };

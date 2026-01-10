@@ -213,13 +213,34 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     setStep(2);
   };
 
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text.replace(/\s/g, ""));
-    setCopied(label);
-    setTimeout(() => setCopied(""), 2000);
+  const handleCopy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text.replace(/\s/g, ""));
+      setCopied(label);
+      setTimeout(() => setCopied(""), 2000);
+    } catch (err) {
+      console.error("Clipboard error:", err);
+      // Fallback for older browsers or when clipboard API fails
+      const textArea = document.createElement("textarea");
+      textArea.value = text.replace(/\s/g, "");
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand("copy");
+        setCopied(label);
+        setTimeout(() => setCopied(""), 2000);
+      } catch {
+        setError("Хуулж чадсангүй");
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   const handleUpload = async (file: File) => {
+    if (!initData) {
+      setError("Telegram-с нэвтэрнэ үү");
+      return;
+    }
     try {
       setError("");
       setUploading(true);
@@ -233,7 +254,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       setReceiptUrl(presigned.public_url);
     } catch (err) {
       console.error(err);
-      setError("Хуулахад алдаа. Дахин оролдоно уу.");
+      setError("Файл байршуулахад алдаа. Дахин оролдоно уу.");
     } finally {
       setUploading(false);
     }
@@ -649,7 +670,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               
               {/* Invoice ID - must include in transaction message */}
               <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="text-xs text-amber-700 font-medium mb-1">⚠️ Гүйлгээний мэдэгдэлд заавал бичнэ үү:</div>
+                <div className="text-xs text-amber-700 font-medium mb-1">⚠️ Гүйлгээний утга хэсэгт заавал бичнэ үү:</div>
                 <div className="flex items-center justify-between">
                   <div className="font-mono font-bold text-amber-800 text-lg">{invoiceId}</div>
                   <button
