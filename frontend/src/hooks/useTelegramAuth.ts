@@ -32,10 +32,17 @@ export function useTelegramAuth() {
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
+    
+    // Debug logging
+    console.log("Telegram WebApp:", tg);
+    console.log("initData:", tg?.initData);
+    console.log("initDataUnsafe:", tg?.initDataUnsafe);
+    
     if (tg?.initData) {
       setInitData(tg.initData);
       tg.ready?.();
       if (tg.initDataUnsafe?.user) {
+        console.log("User from Telegram:", tg.initDataUnsafe.user);
         setUser(tg.initDataUnsafe.user as TelegramUser);
       }
       return;
