@@ -172,7 +172,14 @@ async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Hea
     except TelegramAuthError as exc:
         # Log truncated preview to avoid leaking the full token
         preview = x_telegram_init_data[:120].replace("\n", "") if x_telegram_init_data else ""
-        logger.warning(f"Auth failed: invalid init data. preview='{preview}' error={exc}")
+        hash_len = 0
+        try:
+            from urllib.parse import parse_qsl
+            parsed = dict(parse_qsl(x_telegram_init_data, keep_blank_values=True))
+            hash_len = len(parsed.get("hash", ""))
+        except Exception:
+            pass
+        logger.warning(f"Auth failed: invalid init data. preview='{preview}' len={len(x_telegram_init_data)} hash_len={hash_len} error={exc}")
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 

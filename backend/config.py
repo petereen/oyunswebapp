@@ -21,11 +21,12 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    supabase_key = os.getenv("SUPABASE_KEY", "")
-    bot_token = os.getenv("BOT_TOKEN", "")
-    admin_chat_id = os.getenv("ADMIN_CHAT_ID", "")
-    admin_chat_ids_env = os.getenv("ADMIN_CHAT_IDS", "")
+    # Strip to avoid hidden whitespace/newlines from env files
+    supabase_url = os.getenv("SUPABASE_URL", "").strip()
+    supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+    bot_token = os.getenv("BOT_TOKEN", "").strip()
+    admin_chat_id = os.getenv("ADMIN_CHAT_ID", "").strip()
+    admin_chat_ids_env = os.getenv("ADMIN_CHAT_IDS", "").strip()
     admin_panel_url = os.getenv("ADMIN_PANEL_URL")
     user_panel_url = os.getenv("USER_PANEL_URL")
     admin_api_key = os.getenv("ADMIN_API_KEY")
