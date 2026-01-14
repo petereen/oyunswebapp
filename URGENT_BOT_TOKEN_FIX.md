@@ -4,10 +4,6 @@
 
 Your `.env` file **still contains the exposed bot token:**
 
-```
-BOT_TOKEN=8142574890:AAHzTS6tjFv6j02p0wYxOOKbSSEdapGWbso  ❌ THIS IS EXPOSED!
-```
-
 ### ⚠️ Why This Breaks Everything:
 
 1. **New initData** is being created with a **new token** (from BotFather)
