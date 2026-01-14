@@ -8,53 +8,82 @@ import logging
 
 from models import AuthenticatedUser
 
-logger = logging.getLogger("uvicorn.error")
-
-
 class TelegramAuthError(Exception):
     pass
 
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
     """
-    Verify Telegram Mini App init data using HMAC-SHA256 (official standard).
+    Verify Telegram Mini App init data using HMAC-SHA256 with deterministic parsing.
     
-    Security: The bot token is used to derive a secret key, which then signs
-    the init data. This ensures the data came from Telegram and wasn't tampered with.
+    This implementation follows Telegram's exact specification:
+    1. Parse query string manually to avoid encoding inconsistencies
+    2. Sort keys alphabetically
+    3. Build data check string with newline separators
+    4. Derive secret key from "WebAppData" + bot token
+    5. Compare calculated hash with received hash
     """
-    # Parse init data as query parameters
-    params = dict(parse_qsl(init_data, keep_blank_values=True))
+    # 1. Parse query string manually by splitting on '&'
+    # This avoids parse_qsl quirks with URL encoding
+    pairs = init_data.split('&')
+    data_dict = {}
+    received_hash = ""
     
-    if "hash" not in params:
+    for pair in pairs:
+        if '=' not in pair:
+            continue
+        key, val = pair.split('=', 1)
+        if key == 'hash':
+            # Don't unquote hash; it's already hex-encoded
+            received_hash = val
+        else:
+            # Unquote the value (decode %XX sequences)
+            data_dict[key] = unquote(val)
+    
+    if not received_hash:
         raise TelegramAuthError("Missing hash in initData")
     
-    received_hash = params.pop("hash")
-    # Remove signature field if present (new Telegram format) - not used in HMAC validation
-    params.pop("signature", None)
+    if not data_dict:
+        raise TelegramAuthError("No data parameters in initData")
     
-    # Build data check string: sort all key-value pairs alphabetically, join with newlines
-    # This is deterministic and matches what Telegram signs
-    data_check_string = "\n".join(f"{k}={unquote(v)}" for k, v in sorted(params.items()))
+    # 2. Build data check string: sort keys alphabetically, join with newlines
+    # Critical: Remove 'signature' field if present (new Telegram format)
+    data_dict.pop('signature', None)
     
-    # Step 1: Create secret key by signing "WebAppData" with bot token (HMAC-SHA256)
+    data_check_string = "\n".join(
+        f"{k}={data_dict[k]}" for k in sorted(data_dict.keys())
+    )
+    
+    # 3. Derive secret key: HMAC-SHA256(key="WebAppData", message=bot_token)
     secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     
-    # Step 2: Sign the data check string with the secret key
-    expected_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    # 4. Calculate hash: HMAC-SHA256(key=secret_key, message=data_check_string)
+    calculated_hash = hmac.new(
+        secret_key, data_check_string.encode(), hashlib.sha256
+    ).hexdigest()
     
-    # Step 3: Compare with received hash
-    if expected_hash != received_hash:
+    # 5. Compare hashes
+    if calculated_hash != received_hash:
+        # Debug: Log truncated values to avoid exposing full token
         logger.warning(
-            f"Telegram initData validation failed: expected={expected_hash[:16]}... received={received_hash[:16]}..."
+            f"Telegram initData hash mismatch: "
+            f"calculated={calculated_hash[:16]}... "
+            f"received={received_hash[:16]}... "
+            f"data_len={len(data_check_string)}"
         )
         raise TelegramAuthError("Invalid initData hash")
     
-    # Hash verified! Extract and return user info
-    user_raw = params.get("user")
+    # Hash verified! Extract and return user information
+    user_raw = data_dict.get("user")
     if not user_raw:
         raise TelegramAuthError("Missing user payload in initData")
     
-    user_payload = json.loads(unquote(user_raw))
+    try:
+        user_payload = json.loads(user_raw)
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse user JSON: {e}")
+        raise TelegramAuthError("Invalid user payload JSON")
+    
     return AuthenticatedUser(
         id=user_payload.get("id"),
         first_name=user_payload.get("first_name"),
