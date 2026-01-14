@@ -16,25 +16,30 @@ class TelegramAuthError(Exception):
 
 
 def parse_init_data(init_data: str) -> Dict[str, str]:
-    return {k: v for k, v in parse_qsl(init_data, keep_blank_values=True)}
+    """Parse initData preserving original URL-decoded values for hash verification."""
+    from urllib.parse import unquote
+    result = {}
+    for pair in init_data.split('&'):
+        if '=' in pair:
+            key, value = pair.split('=', 1)
+            # URL-decode the value (this is what Telegram expects for hash calculation)
+            result[key] = unquote(value)
+    return result
 
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
     data = parse_init_data(init_data)
-    # Debug: log length and keys to help diagnose hash failures
-    try:
-        from logging import getLogger
-        logger = getLogger("uvicorn.error")
-        logger.debug(f"init_data_len={len(init_data)} keys={list(data.keys())}")
-    except Exception:
-        pass
+    
     if "hash" not in data:
         raise TelegramAuthError("Missing hash in initData")
 
     received_hash = data.pop("hash")
     # Remove signature field if present (new Telegram format) - it's not included in hash calculation
     data.pop("signature", None)
+    
+    # Build data check string with sorted keys (Telegram's algorithm)
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
+    
     # Correct algorithm per Telegram docs: HMAC-SHA256 with "WebAppData" as key
     secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
@@ -46,7 +51,7 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
     if not user_raw:
         raise TelegramAuthError("Missing user payload")
 
-    user_payload = json.loads(unquote_plus(user_raw))
+    user_payload = json.loads(user_raw)
     return AuthenticatedUser(
         id=user_payload.get("id"),
         first_name=user_payload.get("first_name"),
