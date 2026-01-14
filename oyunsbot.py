@@ -48,7 +48,7 @@ def is_within_ub_business_hours():
 
 # Replace with your bot token
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://oyunsapp.duckdns.org")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://oyunswebapp.ddns.net")
 bot = telebot.TeleBot(BOT_TOKEN)
 
 
