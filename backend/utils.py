@@ -8,6 +8,9 @@ import logging
 
 from models import AuthenticatedUser
 
+logger = logging.getLogger("uvicorn.error")
+
+
 class TelegramAuthError(Exception):
     pass
 
