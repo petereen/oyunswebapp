@@ -45,6 +45,15 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
     calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if calculated != received_hash:
+        # Debug log to inspect hash mismatches without exposing the token
+        preview = data_check_string[:500].replace("\n", "\\n")
+        logger.warning(
+            "Hash mismatch for initData: calc=%s recv=%s len=%s preview=%s",
+            calculated,
+            received_hash,
+            len(data_check_string),
+            preview,
+        )
         raise TelegramAuthError("Invalid initData hash")
 
     user_raw = data.get("user")
