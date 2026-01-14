@@ -47,12 +47,16 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
         else:
             data_dict[key] = unquote(val)
     
+    logger.info(f"Telegram init data parsed: has_signature={bool(received_signature)}, crypto_available={CRYPTO_AVAILABLE}, data_keys={list(data_dict.keys())}")
+    
     # Determine which verification method to use
     if received_signature and CRYPTO_AVAILABLE:
         # New format: Ed25519 signature verification
+        logger.info("Using Ed25519 signature verification")
         return _verify_with_signature(data_dict, bot_token, received_signature)
     elif received_hash:
         # Legacy format: HMAC-SHA256 verification
+        logger.info("Using HMAC-SHA256 hash verification")
         return _verify_with_hash(data_dict, bot_token, received_hash)
     else:
         raise TelegramAuthError("Missing both hash and signature in initData")
