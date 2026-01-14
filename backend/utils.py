@@ -28,33 +28,45 @@ def parse_init_data(init_data: str) -> Dict[str, str]:
 
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
-    data = parse_init_data(init_data)
-    
-    if "hash" not in data:
+    # Parse once with our manual parser (unquote) and once with parse_qsl (unquote_plus)
+    parsed_unquote = parse_init_data(init_data)
+    parsed_qs = {k: v for k, v in parse_qsl(init_data, keep_blank_values=True)}
+
+    if "hash" not in parsed_unquote:
         raise TelegramAuthError("Missing hash in initData")
 
-    received_hash = data.pop("hash")
+    received_hash = parsed_unquote.pop("hash")
     # Remove signature field if present (new Telegram format) - it's not included in hash calculation
-    data.pop("signature", None)
-    
-    # Build data check string with sorted keys (Telegram's algorithm)
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-    
+    parsed_unquote.pop("signature", None)
+    parsed_qs.pop("hash", None)
+    parsed_qs.pop("signature", None)
+
+    # Build data check strings for both parsing strategies
+    dcs_unquote = "\n".join(f"{k}={v}" for k, v in sorted(parsed_unquote.items()))
+    dcs_qs = "\n".join(f"{k}={v}" for k, v in sorted(parsed_qs.items()))
+
     # Correct algorithm per Telegram docs: HMAC-SHA256 with "WebAppData" as key
     secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-    calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    calc_unquote = hmac.new(secret_key, dcs_unquote.encode(), hashlib.sha256).hexdigest()
+    calc_qs = hmac.new(secret_key, dcs_qs.encode(), hashlib.sha256).hexdigest()
 
-    if calculated != received_hash:
-        # Debug log to inspect hash mismatches without exposing the token
-        preview = data_check_string[:500].replace("\n", "\\n")
+    if calc_unquote != received_hash and calc_qs != received_hash:
+        preview_unquote = dcs_unquote[:500].replace("\n", "\\n")
+        preview_qs = dcs_qs[:500].replace("\n", "\\n")
         logger.warning(
-            "Hash mismatch for initData: calc=%s recv=%s len=%s preview=%s",
-            calculated,
+            "Hash mismatch: recv=%s calc_unquote=%s calc_qs=%s len_unquote=%s len_qs=%s preview_unquote=%s preview_qs=%s",
             received_hash,
-            len(data_check_string),
-            preview,
+            calc_unquote,
+            calc_qs,
+            len(dcs_unquote),
+            len(dcs_qs),
+            preview_unquote,
+            preview_qs,
         )
         raise TelegramAuthError("Invalid initData hash")
+
+    # Choose the successful parse (prefer unquote, fallback to qs)
+    data = parsed_unquote if calc_unquote == received_hash else parsed_qs
 
     user_raw = data.get("user")
     if not user_raw:
