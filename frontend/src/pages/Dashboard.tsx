@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { User, History, Clock, AlertCircle, Loader2 } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { User, History, Clock, AlertCircle, Loader2, BarChart3 } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { ExchangeFlow } from "../components/ExchangeFlow";
 import { RateCard } from "../components/RateCard";
 import { ProfileModal } from "../components/ProfileModal";
 import { HistoryModal } from "../components/HistoryModal";
+import { AnalyticsModal } from "../components/AnalyticsModal";
 import { TermsAgreementModal } from "../components/TermsAgreementModal";
 import { RegistrationModal } from "../components/RegistrationModal";
 import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
@@ -14,9 +15,10 @@ import { TelegramUser } from "../hooks/useTelegramAuth";
 interface Props {
   initData: string;
   user: TelegramUser | null;
+  onAdminStatusChange?: (isAdmin: boolean) => void;
 }
 
-export function Dashboard({ initData, user }: Props) {
+export function Dashboard({ initData, user, onAdminStatusChange }: Props) {
   const queryClient = useQueryClient();
   
   const { data: rate, isLoading: ratesLoading, error: ratesError } = useQuery({
@@ -39,14 +41,25 @@ export function Dashboard({ initData, user }: Props) {
     staleTime: 0, // Always refetch to ensure fresh user data
   });
 
+  // Extract user profile and admin status
+  const userProfile = profile?.user;
+  const isAdmin = profile?.is_admin || false;
+
+  // Notify parent component of admin status
+  useEffect(() => {
+    if (onAdminStatusChange && profile) {
+      onAdminStatusChange(profile.is_admin);
+    }
+  }, [profile, onAdminStatusChange]);
+
   // Check if user needs to agree to terms - only show modal when agreed_terms is explicitly false
-  const needsTermsAgreement = profile && profile.agreed_terms === false;
+  const needsTermsAgreement = userProfile && userProfile.agreed_terms === false;
 
   // Check if user needs registration (not verified and not pending verification)
-  const needsRegistration = profile && profile.verified === false && profile.ready_for_verification === false;
+  const needsRegistration = userProfile && userProfile.verified === false && userProfile.ready_for_verification === false;
   
   // Check if user is waiting for verification
-  const pendingVerification = profile && profile.verified === false && profile.ready_for_verification === true;
+  const pendingVerification = userProfile && userProfile.verified === false && userProfile.ready_for_verification === true;
 
   const handleTermsAgreed = () => {
     // Refetch profile to update agreed_terms status
@@ -62,6 +75,7 @@ export function Dashboard({ initData, user }: Props) {
   const [showExchange, setShowExchange] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const effectiveRate = useMemo(() => {
     if (!rate) return 0;
@@ -93,6 +107,13 @@ export function Dashboard({ initData, user }: Props) {
             title="Түүх"
           >
             <History className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setShowAnalytics(true)}
+            className="p-2 rounded-full bg-white text-ocean-700 hover:bg-ocean-50 transition"
+            title="Статистик"
+          >
+            <BarChart3 className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -197,8 +218,8 @@ export function Dashboard({ initData, user }: Props) {
           initData={initData}
           buyRate={rate?.buy_rate || 0}
           sellRate={rate?.sell_rate || 0}
-          savedBankRub={profile?.bank_rub}
-          savedBankMnt={profile?.bank_mnt}
+          savedBankRub={userProfile?.bank_rub}
+          savedBankMnt={userProfile?.bank_mnt}
           onBack={() => setShowExchange(false)}
         />
       )}
@@ -211,6 +232,11 @@ export function Dashboard({ initData, user }: Props) {
       {/* History Modal */}
       {showHistory && (
         <HistoryModal initData={initData} userId={user?.id} onClose={() => setShowHistory(false)} />
+      )}
+
+      {/* Analytics Modal */}
+      {showAnalytics && (
+        <AnalyticsModal initData={initData} onClose={() => setShowAnalytics(false)} />
       )}
 
       {/* Terms Agreement Modal - Required for first-time users */}

@@ -107,8 +107,8 @@ export async function fetchServiceStatus() {
 }
 
 export async function fetchMe(initData: string) {
-  const res = await api.get<{ user: UserProfile }>('/me', withInitData(initData));
-  return res.data.user;
+  const res = await api.get<{ user: UserProfile; is_admin: boolean }>('/me', withInitData(initData));
+  return res.data;
 }
 
 export async function agreeToTerms(initData: string) {
@@ -145,6 +145,11 @@ export async function requestPresign(initData: string, payload: PresignRequest) 
 export async function fetchHistory(initData: string) {
   const res = await api.get('/history', withInitData(initData));
   return res.data as { items: any[] };
+}
+
+export async function fetchAnalytics(initData: string) {
+  const res = await api.get('/analytics', withInitData(initData));
+  return res.data;
 }
 
 export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAccount[] }> {

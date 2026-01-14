@@ -172,6 +172,7 @@ class KycActionRequest(BaseModel):
 
 class MeResponse(BaseModel):
     user: UpsertUserPayload
+    is_admin: bool = False
 
 
 # Admin Bank Accounts

@@ -4,14 +4,10 @@ import { AdminPanel } from "./pages/AdminPanel";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
 import { Shield } from "lucide-react";
 
-// Admin user IDs that can access the admin panel
-const ADMIN_IDS = [1932946217, 1447446407, 5564298862, 1409343588, 6351681039];
-
 export default function App() {
   const { initData, user } = useTelegramAuth();
   const [view, setView] = useState<"client" | "admin">("client");
-
-  const isAdmin = user ? ADMIN_IDS.includes(user.id) : false;
+  const [isAdmin, setIsAdmin] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-ocean-50 to-white p-4 md:p-8">
@@ -47,7 +43,7 @@ export default function App() {
         </div>
 
         {view === "client" || !isAdmin ? (
-          <Dashboard initData={initData} user={user} />
+          <Dashboard initData={initData} user={user} onAdminStatusChange={setIsAdmin} />
         ) : (
           <AdminPanel initData={initData} />
         )}
