@@ -1,10 +1,18 @@
 import hashlib
 import hmac
 import json
+import base64
 from datetime import datetime
 from typing import Any, Dict, Optional
-from urllib.parse import parse_qsl, unquote_plus
+from urllib.parse import parse_qsl, unquote_plus, unquote
 import logging
+
+try:
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    from cryptography.exceptions import InvalidSignature
+    CRYPTO_AVAILABLE = True
+except ImportError:
+    CRYPTO_AVAILABLE = False
 
 from models import AuthenticatedUser
 
@@ -14,65 +22,111 @@ logger = logging.getLogger("uvicorn.error")
 class TelegramAuthError(Exception):
     pass
 
-
-def parse_init_data(init_data: str) -> Dict[str, str]:
-    """Parse initData preserving original URL-decoded values for hash verification."""
-    from urllib.parse import unquote
-    result = {}
-    for pair in init_data.split('&'):
-        if '=' in pair:
-            key, value = pair.split('=', 1)
-            # URL-decode the value (this is what Telegram expects for hash calculation)
-            result[key] = unquote(value)
-    return result
+# Telegram's Ed25519 public key for production
+TELEGRAM_PUBLIC_KEY_HEX = "e7bf03a2fa4602af4580703d88dda5bb59f32ed8b02a56c187fe7d34caed242d"
 
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
-    # Parse once with our manual parser (unquote) and once with parse_qsl (unquote_plus)
-    parsed_unquote = parse_init_data(init_data)
-    parsed_qs = {k: v for k, v in parse_qsl(init_data, keep_blank_values=True)}
+    """
+    Verify Telegram Mini App init data using the appropriate algorithm.
+    Supports both legacy hash (HMAC-SHA256) and new signature (Ed25519).
+    """
+    # Parse init data as query parameters
+    params = dict(parse_qsl(init_data, keep_blank_values=True))
 
-    if "hash" not in parsed_unquote:
+    if "hash" not in params:
         raise TelegramAuthError("Missing hash in initData")
 
-    received_hash = parsed_unquote.pop("hash")
-    # Remove signature field if present (new Telegram format) - it's not included in hash calculation
-    parsed_unquote.pop("signature", None)
-    parsed_qs.pop("hash", None)
-    parsed_qs.pop("signature", None)
+    # Check if using new Ed25519 signature format or legacy HMAC hash
+    if "signature" in params:
+        # New format: Ed25519 signature validation
+        if not CRYPTO_AVAILABLE:
+            raise TelegramAuthError("Cryptography library not available for signature verification")
+        
+        return _verify_with_ed25519(params, bot_token)
+    else:
+        # Legacy format: HMAC-SHA256 with bot token
+        return _verify_with_hmac(params, bot_token)
 
-    # Build data check strings for both parsing strategies
-    dcs_unquote = "\n".join(f"{k}={v}" for k, v in sorted(parsed_unquote.items()))
-    dcs_qs = "\n".join(f"{k}={v}" for k, v in sorted(parsed_qs.items()))
 
-    # Correct algorithm per Telegram docs: HMAC-SHA256 with "WebAppData" as key
-    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-    calc_unquote = hmac.new(secret_key, dcs_unquote.encode(), hashlib.sha256).hexdigest()
-    calc_qs = hmac.new(secret_key, dcs_qs.encode(), hashlib.sha256).hexdigest()
-
-    if calc_unquote != received_hash and calc_qs != received_hash:
-        preview_unquote = dcs_unquote[:500].replace("\n", "\\n")
-        preview_qs = dcs_qs[:500].replace("\n", "\\n")
-        logger.warning(
-            "Hash mismatch: recv=%s calc_unquote=%s calc_qs=%s len_unquote=%s len_qs=%s preview_unquote=%s preview_qs=%s",
-            received_hash,
-            calc_unquote,
-            calc_qs,
-            len(dcs_unquote),
-            len(dcs_qs),
-            preview_unquote,
-            preview_qs,
-        )
-        raise TelegramAuthError("Invalid initData hash")
-
-    # Choose the successful parse (prefer unquote, fallback to qs)
-    data = parsed_unquote if calc_unquote == received_hash else parsed_qs
-
-    user_raw = data.get("user")
+def _verify_with_ed25519(params: Dict[str, str], bot_token: str) -> AuthenticatedUser:
+    """Verify using Ed25519 signature (new Telegram format)."""
+    signature_b64 = params.pop("signature")
+    received_hash = params.pop("hash")
+    params.pop("signature", None)  # Already removed
+    
+    # Build data-check string (exclude hash and signature)
+    data_check_string = "\n".join(f"{k}={unquote(v)}" for k, v in sorted(params.items()))
+    
+    # Extract bot ID from token
+    bot_id = bot_token.split(":")[0]
+    
+    # Construct the full message: "bot_id:WebAppData\n" + data_check_string
+    full_message = f"{bot_id}:WebAppData\n{data_check_string}"
+    
+    # Decode the signature (add padding if needed)
+    try:
+        # Add padding if necessary
+        missing_padding = len(signature_b64) % 4
+        if missing_padding:
+            signature_b64 += "=" * (4 - missing_padding)
+        signature_bytes = base64.b64decode(signature_b64)
+    except Exception as e:
+        logger.warning(f"Failed to decode Ed25519 signature: {e}")
+        raise TelegramAuthError("Invalid signature format")
+    
+    # Verify the Ed25519 signature
+    try:
+        public_key_bytes = bytes.fromhex(TELEGRAM_PUBLIC_KEY_HEX)
+        public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
+        public_key.verify(signature_bytes, full_message.encode())
+    except InvalidSignature:
+        logger.warning("Ed25519 signature verification failed")
+        raise TelegramAuthError("Invalid initData signature")
+    except Exception as e:
+        logger.warning(f"Ed25519 verification error: {e}")
+        raise TelegramAuthError("Signature verification error")
+    
+    # Extract user payload
+    user_raw = params.get("user")
     if not user_raw:
         raise TelegramAuthError("Missing user payload")
+    
+    user_payload = json.loads(unquote(user_raw))
+    return AuthenticatedUser(
+        id=user_payload.get("id"),
+        first_name=user_payload.get("first_name"),
+        last_name=user_payload.get("last_name"),
+        username=user_payload.get("username"),
+    )
 
-    user_payload = json.loads(user_raw)
+
+def _verify_with_hmac(params: Dict[str, str], bot_token: str) -> AuthenticatedUser:
+    """Verify using HMAC-SHA256 with bot token (legacy Telegram format)."""
+    received_hash = params.pop("hash")
+    params.pop("signature", None)
+    
+    # Build data-check string from sorted key-value pairs
+    data_check_string = "\n".join(f"{k}={unquote(v)}" for k, v in sorted(params.items()))
+    
+    # Create secret key: HMAC-SHA256(key="WebAppData", msg=bot_token)
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    
+    # Calculate hash: HMAC-SHA256(key=secret_key, msg=data_check_string)
+    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    
+    if calculated_hash != received_hash:
+        logger.warning(
+            f"HMAC hash mismatch: calc={calculated_hash} recv={received_hash}"
+        )
+        raise TelegramAuthError("Invalid initData hash")
+    
+    # Extract user payload
+    user_raw = params.get("user")
+    if not user_raw:
+        raise TelegramAuthError("Missing user payload")
+    
+    user_payload = json.loads(unquote(user_raw))
     return AuthenticatedUser(
         id=user_payload.get("id"),
         first_name=user_payload.get("first_name"),
