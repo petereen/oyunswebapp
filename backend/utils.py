@@ -32,8 +32,11 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
         raise TelegramAuthError("Missing hash in initData")
 
     received_hash = data.pop("hash")
+    # Remove signature field if present (new Telegram format) - it's not included in hash calculation
+    data.pop("signature", None)
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-    secret_key = hashlib.sha256(f"WebAppData{bot_token}".encode()).digest()
+    # Correct algorithm per Telegram docs: HMAC-SHA256 with "WebAppData" as key
+    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     calculated = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if calculated != received_hash:
