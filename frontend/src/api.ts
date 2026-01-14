@@ -6,6 +6,35 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
+// Add request/response interceptors for debugging
+api.interceptors.request.use(config => {
+  const initData = config.headers["X-Telegram-Init-Data"];
+  if (initData) {
+    console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+      hasInitData: !!initData,
+      initDataLength: (initData as string).length,
+    });
+  } else {
+    console.warn(`⚠️ API Request without initData: ${config.url}`);
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  response => {
+    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
+  error => {
+    console.error(`❌ API Error: ${error.response?.status || error.message} ${error.config?.url}`, {
+      status: error.response?.status,
+      data: error.response?.data,
+      headers: error.response?.headers,
+    });
+    return Promise.reject(error);
+  }
+);
+
 export type Rate = { buy_rate: number; sell_rate: number; updated_at?: string };
 
 export type ServiceStatus = {

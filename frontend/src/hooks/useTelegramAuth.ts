@@ -34,20 +34,38 @@ export function useTelegramAuth() {
     const tg = window.Telegram?.WebApp;
     
     // Debug logging
-    console.log("Telegram WebApp:", tg);
-    console.log("initData:", tg?.initData);
-    console.log("initDataUnsafe:", tg?.initDataUnsafe);
+    console.log("=== Telegram Auth Debug ===");
+    console.log("Telegram WebApp available:", !!tg);
+    console.log("Telegram object:", window.Telegram);
     
-    if (tg?.initData) {
+    if (!tg) {
+      console.error("Telegram WebApp not available!");
+      setInitData("");
+      setUser(null);
+      return;
+    }
+    
+    console.log("initData:", tg.initData ? "✅ Present" : "❌ Missing");
+    console.log("initDataUnsafe:", tg.initDataUnsafe ? "✅ Present" : "❌ Missing");
+    console.log("initDataUnsafe.user:", tg.initDataUnsafe?.user ? "✅ Present" : "❌ Missing");
+    
+    if (tg.initData) {
+      console.log("initData length:", tg.initData.length);
+      console.log("initData preview:", tg.initData.substring(0, 100) + "...");
       setInitData(tg.initData);
       tg.ready?.();
+      
       if (tg.initDataUnsafe?.user) {
-        console.log("User from Telegram:", tg.initDataUnsafe.user);
+        console.log("✅ User data retrieved:", tg.initDataUnsafe.user);
         setUser(tg.initDataUnsafe.user as TelegramUser);
+      } else {
+        console.warn("⚠️ initDataUnsafe.user is missing!");
+        setUser(null);
       }
       return;
     }
-    // No Telegram init data available: leave empty for production safety
+    
+    console.warn("⚠️ initData not available - might be running outside Telegram Mini App");
     setInitData("");
     setUser(null);
   }, []);

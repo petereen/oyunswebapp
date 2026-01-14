@@ -3,6 +3,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { AdminPanel } from "./pages/AdminPanel";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
 import { Shield } from "lucide-react";
+import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
 
 export default function App() {
   const { initData, user } = useTelegramAuth();
@@ -48,6 +49,9 @@ export default function App() {
           <AdminPanel initData={initData} />
         )}
       </div>
+
+      {/* Diagnostic Helper */}
+      <TelegramDiagnostic />
     </div>
   );
 }

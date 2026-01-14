@@ -34,12 +34,25 @@ export function Dashboard({ initData, user, onAdminStatusChange }: Props) {
     refetchInterval: 60000, // Refresh every minute
   });
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: ["me", user?.id],
     queryFn: () => fetchMe(initData),
     enabled: Boolean(initData) && Boolean(user?.id),
     staleTime: 0, // Always refetch to ensure fresh user data
   });
+
+  // Debug logging
+  useEffect(() => {
+    console.log("Dashboard Debug:", {
+      hasInitData: !!initData,
+      initDataLength: initData.length,
+      hasUser: !!user,
+      userId: user?.id,
+      profileLoading,
+      profileError: profileError?.message || null,
+      profile: profile ? "✅ Loaded" : "❌ Not loaded",
+    });
+  }, [initData, user, profileLoading, profileError, profile]);
 
   // Extract user profile and admin status
   const userProfile = profile?.user;
@@ -117,6 +130,28 @@ export function Dashboard({ initData, user, onAdminStatusChange }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Auth Debug Info */}
+      {!initData || !user ? (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm mb-4">
+          <strong>⚠️ Telegram нэвтрэлтийн асуудал:</strong>
+          <div className="text-xs mt-2 space-y-1">
+            <div>initData: {initData ? `✅ ${initData.length} chars` : "❌ Missing"}</div>
+            <div>User ID: {user?.id ? `✅ ${user.id}` : "❌ Missing"}</div>
+            <div>Дэлгэцийн консолыг шалгаж, "=== Telegram Auth Debug ===" гэсэн мэдээлэл олоорой</div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Profile Error */}
+      {profileError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm mb-4">
+          <strong>❌ Профайл ачаалж чадсангүй:</strong>
+          <div className="text-xs mt-2">
+            {profileError instanceof Error ? profileError.message : "Unknown error"}
+          </div>
+        </div>
+      )}
 
       {/* Rates Error */}
       {ratesError && (
