@@ -310,7 +310,7 @@ def _verify_with_hash_raw(init_data: str, bot_token: str, received_hash: str, pa
     """
     # Manual parsing preserving encoding
     pairs = init_data.split('&')
-    data_check_list = []
+    data_check_items = []
     
     for pair in pairs:
         if '=' not in pair:
@@ -318,10 +318,12 @@ def _verify_with_hash_raw(init_data: str, bot_token: str, received_hash: str, pa
         key, value = pair.split('=', 1)
         if key == 'hash' or key == 'signature':
             continue
-        data_check_list.append(f"{key}={value}")
+        data_check_items.append((key, value))
         
-    data_check_list.sort()
-    data_check_string = "\n".join(data_check_list)
+    # Sort by key to match Telegram spec (key=value string sort is risky if keys overlap)
+    data_check_items.sort(key=lambda x: x[0])
+    
+    data_check_string = "\n".join(f"{k}={v}" for k, v in data_check_items)
     
     # Calculate hash
     try:
