@@ -19,6 +19,8 @@ from models import (
     AdminShiftResponse,
     AdminUser,
     AdminUsersResponse,
+    AuthRequest,
+    AuthResponse,
     ExchangeCreateRequest,
     ExchangeCreateResponse,
     HealthResponse,
@@ -50,7 +52,15 @@ from models import (
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo
-from utils import TelegramAuthError, generate_invoice, verify_telegram_init_data, log_admin_action
+from utils import (
+    TelegramAuthError,
+    JWTAuthError,
+    generate_invoice,
+    verify_telegram_init_data,
+    create_jwt_token,
+    verify_jwt_token,
+    log_admin_action,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -183,6 +193,31 @@ async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Hea
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
+async def get_jwt_authenticated_user(authorization: Annotated[str | None, Header()]):
+    """
+    Verify JWT token from Authorization header.
+    This is the preferred authentication method for subsequent requests after /api/auth.
+    """
+    settings = get_settings()
+    if not authorization:
+        logger.warning("Auth failed: missing Authorization header")
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    
+    # Extract token from "Bearer <token>" format
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        logger.warning(f"Auth failed: invalid Authorization header format")
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format. Use: Bearer <token>")
+    
+    token = parts[1]
+    
+    try:
+        return verify_jwt_token(token, settings.jwt_secret)
+    except JWTAuthError as exc:
+        logger.warning(f"JWT auth failed: {exc}")
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
 async def require_admin(request: Request):
     """Validate admin API key (for admin panel access)"""
     settings = get_settings()
@@ -192,7 +227,7 @@ async def require_admin(request: Request):
     return True
 
 
-async def require_admin_user(user=Depends(get_authenticated_user)):
+async def require_admin_user(user=Depends(get_jwt_authenticated_user)):
     """Validate that authenticated user is an admin (by Telegram user ID)"""
     settings = get_settings()
     if user.id not in settings.admin_user_ids:
@@ -204,6 +239,33 @@ async def require_admin_user(user=Depends(get_authenticated_user)):
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse()
+
+
+@app.post("/api/auth", response_model=AuthResponse)
+async def authenticate(payload: AuthRequest):
+    """
+    Authenticate user with Telegram initData and return a JWT token.
+    This endpoint should be called ONCE when the app loads.
+    All subsequent requests should use the returned JWT token.
+    """
+    settings = get_settings()
+    
+    try:
+        # Verify Telegram initData
+        user = verify_telegram_init_data(payload.init_data, settings.bot_token)
+        
+        # Create JWT token
+        token = create_jwt_token(user, settings.jwt_secret)
+        
+        logger.info(f"User {user.id} authenticated successfully, JWT token issued")
+        
+        return AuthResponse(
+            token=token,
+            user=user,
+        )
+    except TelegramAuthError as exc:
+        logger.warning(f"Authentication failed for initData: {exc}")
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 @app.get("/api/rates", response_model=RateResponse)
@@ -310,7 +372,7 @@ async def get_service_status():
 @app.post("/api/storage/presign", response_model=PresignResponse)
 async def create_presigned_url(
     payload: PresignRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     settings = get_settings()
     client = get_supabase()
@@ -323,7 +385,7 @@ async def create_presigned_url(
 
 
 @app.get("/api/history", response_model=HistoryResponse)
-async def history(user=Depends(get_authenticated_user)):
+async def history(user=Depends(get_jwt_authenticated_user)):
     client = get_supabase()
     res = (
         client.table("transactions")
@@ -354,7 +416,7 @@ async def history(user=Depends(get_authenticated_user)):
 
 
 @app.get("/api/analytics")
-async def get_analytics(user=Depends(get_authenticated_user)):
+async def get_analytics(user=Depends(get_jwt_authenticated_user)):
     """Get transaction analytics for the user - monthly spending by direction."""
     from zoneinfo import ZoneInfo
     from collections import defaultdict
@@ -442,7 +504,7 @@ async def get_analytics(user=Depends(get_authenticated_user)):
 
 
 @app.get("/api/me", response_model=MeResponse)
-async def me(user=Depends(get_authenticated_user)):
+async def me(user=Depends(get_jwt_authenticated_user)):
     from zoneinfo import ZoneInfo
     
     settings = get_settings()
@@ -481,7 +543,7 @@ async def me(user=Depends(get_authenticated_user)):
 
 
 @app.post("/api/agree-terms")
-async def agree_terms(user=Depends(get_authenticated_user)):
+async def agree_terms(user=Depends(get_jwt_authenticated_user)):
     """Record that user has agreed to terms of service."""
     from zoneinfo import ZoneInfo
     
@@ -500,7 +562,7 @@ async def agree_terms(user=Depends(get_authenticated_user)):
 @app.post("/api/register")
 async def register_user(
     payload: RegistrationRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     """Submit user registration for verification."""
     from zoneinfo import ZoneInfo
@@ -551,7 +613,7 @@ async def register_user(
 @app.post("/api/update-bank-info")
 async def update_bank_info(
     payload: UpdateBankInfoRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     """Update user's bank info (for verified users to update their banking details)."""
     from zoneinfo import ZoneInfo
@@ -1355,7 +1417,7 @@ async def update_working_hours(
 @app.post("/api/promo/validate", response_model=PromoCodeValidateResponse)
 async def validate_promo_code(
     payload: PromoCodeValidateRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     """
     Validate a promo code.
@@ -1438,7 +1500,7 @@ async def validate_promo_code(
 
 # User's promo codes
 @app.get("/api/user/promo-codes", response_model=UserPromoCodesResponse)
-async def get_user_promo_codes(user=Depends(get_authenticated_user)):
+async def get_user_promo_codes(user=Depends(get_jwt_authenticated_user)):
     """
     Get promo codes belonging to the authenticated user.
     Returns codes from promo_codes table where user_id matches.

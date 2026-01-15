@@ -12,6 +12,7 @@ class Settings:
     admin_chat_id: str
     admin_chat_ids: List[int]
     admin_user_ids: List[int]  # Telegram user IDs with admin access
+    jwt_secret: str
     admin_panel_url: str | None = None
     user_panel_url: str | None = None
     admin_api_key: str | None = None
@@ -32,9 +33,13 @@ def get_settings() -> Settings:
     admin_panel_url = os.getenv("ADMIN_PANEL_URL")
     user_panel_url = os.getenv("USER_PANEL_URL")
     admin_api_key = os.getenv("ADMIN_API_KEY")
+    jwt_secret = os.getenv("JWT_SECRET", "").strip()
 
     if not supabase_url or not supabase_key or not bot_token:
         raise RuntimeError("SUPABASE_URL, SUPABASE_KEY, and BOT_TOKEN must be set")
+    
+    if not jwt_secret:
+        raise RuntimeError("JWT_SECRET must be set for secure authentication")
 
     # Parse admin chat IDs (support multiple IDs)
     admin_chat_ids: List[int] = []
@@ -69,6 +74,7 @@ def get_settings() -> Settings:
         admin_chat_id=admin_chat_id or str(admin_chat_ids[0]),
         admin_chat_ids=admin_chat_ids,
         admin_user_ids=admin_user_ids,
+        jwt_secret=jwt_secret,
         admin_panel_url=admin_panel_url,
         user_panel_url=user_panel_url,
         admin_api_key=admin_api_key,

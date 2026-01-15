@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import json
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, unquote
 import logging
@@ -13,6 +13,12 @@ try:
 except ImportError:
     CRYPTO_AVAILABLE = False
 
+try:
+    from jose import JWTError, jwt
+    JWT_AVAILABLE = True
+except ImportError:
+    JWT_AVAILABLE = False
+
 from models import AuthenticatedUser
 
 logger = logging.getLogger("uvicorn.error")
@@ -20,9 +26,91 @@ logger = logging.getLogger("uvicorn.error")
 # Telegram's Ed25519 public key for production (from docs)
 TELEGRAM_PUBLIC_KEY_HEX = "e7bf03a2fa4602af4580703d88dda5bb59f32ed8b02a56c187fe7d34caed242d"
 
+# JWT configuration
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+
 
 class TelegramAuthError(Exception):
     pass
+
+
+class JWTAuthError(Exception):
+    pass
+
+
+def create_jwt_token(user: AuthenticatedUser, secret: str) -> str:
+    """
+    Create a JWT token for an authenticated user.
+    
+    Args:
+        user: Authenticated user object
+        secret: JWT secret key
+        
+    Returns:
+        Encoded JWT token string
+    """
+    if not JWT_AVAILABLE:
+        raise JWTAuthError("JWT library not available")
+    
+    # Token payload
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user.id),  # Subject (user ID)
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "iat": now,  # Issued at
+        "exp": now + timedelta(hours=JWT_EXPIRATION_HOURS),  # Expiration
+    }
+    
+    # Encode token
+    token = jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+    logger.info(f"JWT token created for user {user.id}, expires in {JWT_EXPIRATION_HOURS}h")
+    return token
+
+
+def verify_jwt_token(token: str, secret: str) -> AuthenticatedUser:
+    """
+    Verify and decode a JWT token.
+    
+    Args:
+        token: JWT token string
+        secret: JWT secret key
+        
+    Returns:
+        AuthenticatedUser object
+        
+    Raises:
+        JWTAuthError: If token is invalid or expired
+    """
+    if not JWT_AVAILABLE:
+        raise JWTAuthError("JWT library not available")
+    
+    try:
+        # Decode and verify token
+        payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+        
+        # Extract user data
+        user_id = int(payload.get("sub"))
+        first_name = payload.get("first_name")
+        last_name = payload.get("last_name")
+        username = payload.get("username")
+        
+        logger.info(f"JWT token verified for user {user_id}")
+        
+        return AuthenticatedUser(
+            id=user_id,
+            first_name=first_name,
+            last_name=last_name,
+            username=username,
+        )
+    except JWTError as e:
+        logger.warning(f"JWT verification failed: {e}")
+        raise JWTAuthError(f"Invalid or expired token: {e}")
+    except (KeyError, ValueError) as e:
+        logger.warning(f"JWT payload parsing failed: {e}")
+        raise JWTAuthError(f"Invalid token payload: {e}")
 
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
@@ -30,6 +118,16 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
     Verify Telegram Mini App init data.
     Supports both new format (Ed25519 signature) and legacy format (HMAC-SHA256 hash).
     """
+    # DEBUG: Log raw init_data to detect proxy interference
+    logger.info(f"RAW init_data received (first 200 chars): {init_data[:200]}")
+    logger.info(f"RAW init_data length: {len(init_data)}")
+    
+    # Check for URL decoding (spaces indicate proxy decoded the data)
+    if ' ' in init_data or init_data != init_data.replace('%20', ' '):
+        logger.warning("⚠️ PROXY INTERFERENCE DETECTED: init_data appears to be URL-decoded!")
+        logger.warning("Nginx or FastAPI middleware is decoding the data before validation.")
+        logger.warning("This will cause hash/signature verification to fail.")
+    
     # Parse query string manually by splitting on '&'
     # Keep BOTH encoded (for verification) and decoded (for user extraction) values
     pairs = init_data.split('&')
