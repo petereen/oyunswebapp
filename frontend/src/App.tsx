@@ -6,7 +6,7 @@ import { Shield } from "lucide-react";
 import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
 
 export default function App() {
-  const { initData, user } = useTelegramAuth();
+  const { initData, user, isAuthenticating, authError } = useTelegramAuth();
   const [view, setView] = useState<"client" | "admin">("client");
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -44,7 +44,7 @@ export default function App() {
         </div>
 
         {view === "client" || !isAdmin ? (
-          <Dashboard initData={initData} user={user} onAdminStatusChange={setIsAdmin} />
+          <Dashboard initData={initData} user={user} isAuthenticating={isAuthenticating} authError={authError} onAdminStatusChange={setIsAdmin} />
         ) : (
           <AdminPanel initData={initData} />
         )}

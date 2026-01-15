@@ -15,10 +15,12 @@ import { TelegramUser } from "../hooks/useTelegramAuth";
 interface Props {
   initData: string;
   user: TelegramUser | null;
+  isAuthenticating?: boolean;
+  authError?: string | null;
   onAdminStatusChange?: (isAdmin: boolean) => void;
 }
 
-export function Dashboard({ initData, user, onAdminStatusChange }: Props) {
+export function Dashboard({ initData, user, isAuthenticating, authError, onAdminStatusChange }: Props) {
   const queryClient = useQueryClient();
   
   const { data: rate, isLoading: ratesLoading, error: ratesError } = useQuery({
@@ -36,8 +38,8 @@ export function Dashboard({ initData, user, onAdminStatusChange }: Props) {
 
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: ["me", user?.id],
-    queryFn: () => fetchMe(initData),
-    enabled: Boolean(initData) && Boolean(user?.id),
+    queryFn: () => fetchMe(),
+    enabled: Boolean(initData) && Boolean(user?.id) && !Boolean(isAuthenticating),
     staleTime: 0, // Always refetch to ensure fresh user data
   });
 
