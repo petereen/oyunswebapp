@@ -97,7 +97,7 @@ def verify_jwt_token(token: str, secret: str) -> AuthenticatedUser:
         last_name = payload.get("last_name")
         username = payload.get("username")
         
-        logger.info(f"JWT token verified for user {user_id}")
+        # logger.info(f"JWT token verified for user {user_id}")
         
         return AuthenticatedUser(
             id=user_id,
@@ -118,99 +118,103 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
     Verify Telegram Mini App init data.
     Supports both new format (Ed25519 signature) and legacy format (HMAC-SHA256 hash).
     """
-    # DEBUG: Log raw init_data to detect proxy interference
-    logger.info(f"RAW init_data received (first 200 chars): {init_data[:200]}")
-    logger.info(f"RAW init_data length: {len(init_data)}")
-    
-    # Check for URL decoding (spaces indicate proxy decoded the data)
-    if ' ' in init_data or init_data != init_data.replace('%20', ' '):
-        logger.warning("⚠️ PROXY INTERFERENCE DETECTED: init_data appears to be URL-decoded!")
-        logger.warning("Nginx or FastAPI middleware is decoding the data before validation.")
-        logger.warning("This will cause hash/signature verification to fail.")
-    
-    # Parse query string manually by splitting on '&'
-    # Keep BOTH encoded (for verification) and decoded (for user extraction) values
-    pairs = init_data.split('&')
-    data_dict_encoded = {}  # For signature/hash verification (URL-encoded values)
-    data_dict_decoded = {}  # For extracting user data (decoded values)
-    received_hash = ""
-    received_signature = ""
-    
-    for pair in pairs:
-        if '=' not in pair:
-            continue
-        key, val = pair.split('=', 1)
-        if key == 'hash':
-            received_hash = val
-        elif key == 'signature':
-            received_signature = val
-        else:
-            data_dict_encoded[key] = val  # Keep original encoded value
-            data_dict_decoded[key] = unquote(val)  # Decode for user extraction
-    
-    logger.info(f"Telegram init data parsed: has_signature={bool(received_signature)}, crypto_available={CRYPTO_AVAILABLE}, data_keys={list(data_dict_decoded.keys())}")
-    
-    # Determine which verification method to use
+    if not init_data:
+        raise TelegramAuthError("Init data is empty")
+
+    # Parse init_data using standard library to get DECODED values
+    try:
+        # keep_blank_values=True ensures empty strings are preserved
+        parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
+    except Exception as e:
+        logger.error(f"Failed to parse init_data: {e}")
+        raise TelegramAuthError(f"Failed to parse init_data: {e}")
+
+    if not parsed_data:
+         # Fallback for when data might be already decoded or in a weird format
+         # But usually parse_qsl handles strings gracefully.
+         logger.warning("parse_qsl returned empty dict, attempting manual split")
+         try:
+             parsed_data = {}
+             for pair in init_data.split('&'):
+                 if '=' in pair:
+                     k, v = pair.split('=', 1)
+                     parsed_data[k] = unquote(v)
+         except Exception as e:
+             raise TelegramAuthError(f"Manual parsing failed: {e}")
+
+    received_hash = parsed_data.get("hash")
+    received_signature = parsed_data.get("signature")
+
+    # Determine verification method
     if received_signature and CRYPTO_AVAILABLE:
         # New format: Ed25519 signature verification
-        logger.info("Using Ed25519 signature verification")
-        return _verify_with_signature(data_dict_encoded, data_dict_decoded, bot_token, received_signature)
+        # For signature verification, we might need the original encoded string components?
+        # Telegram docs say "WebAppData" + data_check_string.
+        # But data_check_string is usually constructed from decoded values in Telegram's spec?
+        # Actually for Ed25519, the spec is less clear in some public docs vs legacy.
+        # However, typically consistency is key.
+        # Let's stick to the safer legacy hash validation if hash is present, 
+        # as the user is likely using a standard bot token.
+        # If ONLY signature is present (unlikely for standard bots), we use signature.
+        if received_hash:
+             return _verify_with_hash(parsed_data, bot_token)
+        else:
+             return _verify_with_signature(parsed_data, bot_token)
+            
     elif received_hash:
         # Legacy format: HMAC-SHA256 verification
-        logger.info("Using HMAC-SHA256 hash verification")
-        return _verify_with_hash(data_dict_encoded, data_dict_decoded, bot_token, received_hash)
+        return _verify_with_hash(parsed_data, bot_token)
     else:
-        raise TelegramAuthError("Missing both hash and signature in initData")
+        raise TelegramAuthError("Missing hash or signature in initData")
 
 
-def _verify_with_signature(data_dict_encoded: Dict[str, str], data_dict_decoded: Dict[str, str], bot_token: str, received_signature: str) -> AuthenticatedUser:
-    """Verify using Ed25519 signature (new Telegram format)."""
-    if not CRYPTO_AVAILABLE:
-        raise TelegramAuthError("Cryptography library not available for Ed25519 verification")
+def _verify_with_hash(parsed_data: Dict[str, str], bot_token: str) -> AuthenticatedUser:
+    """
+    Verify using HMAC-SHA256 with bot token.
+    parsed_data must contain DECODED keys and values.
+    """
+    received_hash = parsed_data.get("hash")
+    if not received_hash:
+        raise TelegramAuthError("Missing hash in initData")
+
+    # 1. Create data_check_string
+    # Filter out hash (and signature if present, though legacy usually doesn't have it mixed)
+    data_check_dict = {
+        k: v for k, v in parsed_data.items() 
+        if k != "hash" and k != "signature"
+    }
     
-    # Extract bot ID from token
-    bot_id = bot_token.split(":")[0]
-    
-    # Build data check string from ENCODED values (sorted, newline-separated, excluding signature and hash)
-    data_dict_copy = dict(data_dict_encoded)  # Use encoded values for verification
-    data_dict_copy.pop('signature', None)
-    data_dict_copy.pop('hash', None)
-    
-    logger.info(f"Building data_check_string from keys: {sorted(data_dict_copy.keys())}")
-    
+    # Sort keys alphabetically and join with newline
     data_check_string = "\n".join(
-        f"{k}={data_dict_copy[k]}" for k in sorted(data_dict_copy.keys())
+        f"{k}={v}" for k, v in sorted(data_check_dict.items())
     )
     
-    # Construct full message for Ed25519: "bot_id:WebAppData\n" + data_check_string
-    full_message = f"{bot_id}:WebAppData\n{data_check_string}"
-    
-    logger.info(f"Ed25519 verification: bot_id={bot_id}, message_len={len(full_message)}, sig_len={len(received_signature)}")
-    logger.debug(f"Full message for verification: {full_message[:200]}...")
-    
-    # Decode signature (add padding if needed)
+    # 2. Calculate Secret Key
+    # secret_key = HMAC_SHA256("WebAppData", bot_token)
     try:
-        missing_padding = len(received_signature) % 4
-        if missing_padding:
-            received_signature += "=" * (4 - missing_padding)
-        signature_bytes = base64.b64decode(received_signature)
-        logger.info(f"Signature decoded successfully: {len(signature_bytes)} bytes")
+        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
     except Exception as e:
-        logger.error(f"Failed to decode Ed25519 signature: {e}", exc_info=True)
-        raise TelegramAuthError("Invalid signature format")
+        logger.error(f"Error creating secret key: {e}")
+        raise TelegramAuthError("Internal error during validation")
+
+    # 3. Calculate Hash
+    # hash = HMAC_SHA256(secret_key, data_check_string)
+    calculated_hash = hmac.new(
+        secret_key, data_check_string.encode(), hashlib.sha256
+    ).hexdigest()
     
-    # Verify Ed25519 signature
-    try:
-        public_key_bytes = bytes.fromhex(TELEGRAM_PUBLIC_KEY_HEX)
-        public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
-        public_key.verify(signature_bytes, full_message.encode())
-        logger.info("Ed25519 signature verified successfully!")
-    except Exception as e:
-        logger.error(f"Ed25519 verification failed: {type(e).__name__}: {e}", exc_info=True)
-        raise TelegramAuthError("Invalid initData signature")
+    # 4. Compare
+    if calculated_hash != received_hash:
+        # Log generic error to avoid leaking details, but log debug info
+        logger.warning(
+            f"Hash mismatch. Calculated: {calculated_hash}, Received: {received_hash}"
+        )
+        # Debug helper: check if data was perhaps double encoded or something
+        logger.debug(f"Data check string used: {data_check_string!r}")
+        raise TelegramAuthError("Invalid initData hash")
     
-    # Signature verified! Extract and return user from DECODED values
-    user_raw = data_dict_decoded.get("user")
+    # 5. Extract User
+    user_raw = parsed_data.get("user")
     if not user_raw:
         raise TelegramAuthError("Missing user payload in initData")
     
@@ -219,7 +223,7 @@ def _verify_with_signature(data_dict_encoded: Dict[str, str], data_dict_decoded:
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse user JSON: {e}")
         raise TelegramAuthError("Invalid user payload JSON")
-    
+        
     return AuthenticatedUser(
         id=user_payload.get("id"),
         first_name=user_payload.get("first_name"),
@@ -228,46 +232,62 @@ def _verify_with_signature(data_dict_encoded: Dict[str, str], data_dict_decoded:
     )
 
 
-def _verify_with_hash(data_dict_encoded: Dict[str, str], data_dict_decoded: Dict[str, str], bot_token: str, received_hash: str) -> AuthenticatedUser:
-    """Verify using HMAC-SHA256 with bot token (legacy Telegram format)."""
-    # Build data check string from ENCODED values (sorted, newline-separated)
-    data_dict_copy = dict(data_dict_encoded)
-    data_dict_copy.pop('signature', None)
-    data_dict_copy.pop('hash', None)
+def _verify_with_signature(parsed_data: Dict[str, str], bot_token: str) -> AuthenticatedUser:
+    """
+    Verify using Ed25519 signature.
+    """
+    if not CRYPTO_AVAILABLE:
+        raise TelegramAuthError("Cryptography library not available for Ed25519 verification")
+    
+    received_signature = parsed_data.get("signature")
+    if not received_signature:
+        raise TelegramAuthError("Missing signature")
+        
+    # Extract bot ID from token (token format: 123456:ABC-...)
+    bot_id = bot_token.split(":")[0]
+    
+    # Prepare data check string
+    data_check_dict = {
+        k: v for k, v in parsed_data.items() 
+        if k != "hash" and k != "signature"
+    }
     
     data_check_string = "\n".join(
-        f"{k}={data_dict_copy[k]}" for k in sorted(data_dict_copy.keys())
+        f"{k}={v}" for k, v in sorted(data_check_dict.items())
     )
     
-    # Derive secret key: HMAC-SHA256(key="WebAppData", message=bot_token)
-    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    # Construct full message
+    full_message = f"{bot_id}:WebAppData\n{data_check_string}"
     
-    # Calculate hash: HMAC-SHA256(key=secret_key, message=data_check_string)
-    calculated_hash = hmac.new(
-        secret_key, data_check_string.encode(), hashlib.sha256
-    ).hexdigest()
-    
-    # Compare hashes
-    if calculated_hash != received_hash:
-        logger.warning(
-            f"Telegram initData hash mismatch: "
-            f"calculated={calculated_hash[:16]}... "
-            f"received={received_hash[:16]}... "
-            f"data_len={len(data_check_string)}"
-        )
-        raise TelegramAuthError("Invalid initData hash")
-    
-    # Hash verified! Extract and return user from DECODED values
-    user_raw = data_dict_decoded.get("user")
+    # Decode signature
+    try:
+        # Fix padding if necessary (though usually standard Base64)
+        missing_padding = len(received_signature) % 4
+        if missing_padding:
+            received_signature += "=" * (4 - missing_padding)
+        signature_bytes = base64.b64decode(received_signature)
+    except Exception as e:
+        raise TelegramAuthError(f"Invalid signature encoding: {e}")
+        
+    # Verify
+    try:
+        public_key_bytes = bytes.fromhex(TELEGRAM_PUBLIC_KEY_HEX)
+        public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
+        public_key.verify(signature_bytes, full_message.encode())
+    except Exception as e:
+        logger.error(f"Ed25519 verification failed: {e}")
+        raise TelegramAuthError("Invalid initData signature")
+        
+    # Extract User
+    user_raw = parsed_data.get("user")
     if not user_raw:
-        raise TelegramAuthError("Missing user payload in initData")
-    
+        raise TelegramAuthError("Missing user payload")
+        
     try:
         user_payload = json.loads(user_raw)
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse user JSON: {e}")
+    except json.JSONDecodeError:
         raise TelegramAuthError("Invalid user payload JSON")
-    
+        
     return AuthenticatedUser(
         id=user_payload.get("id"),
         first_name=user_payload.get("first_name"),

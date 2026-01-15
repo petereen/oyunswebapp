@@ -645,7 +645,7 @@ async def update_bank_info(
 @app.post("/api/exchange/create", response_model=ExchangeCreateResponse)
 async def create_exchange(
     payload: ExchangeCreateRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     from zoneinfo import ZoneInfo
     
