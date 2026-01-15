@@ -60,6 +60,7 @@ from utils import (
     create_jwt_token,
     verify_jwt_token,
     log_admin_action,
+    debug_telegram_validation,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -266,6 +267,13 @@ async def authenticate(payload: AuthRequest):
     except TelegramAuthError as exc:
         logger.warning(f"Authentication failed for initData: {exc}")
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/debug")
+async def auth_debug(payload: AuthRequest):
+    """Debug endpoint to verify initData validation details"""
+    settings = get_settings()
+    return debug_telegram_validation(payload.init_data, settings.bot_token)
 
 
 @app.get("/api/rates", response_model=RateResponse)
