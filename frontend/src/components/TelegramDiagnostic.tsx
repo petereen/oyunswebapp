@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Bug } from "lucide-react";
+import { debugAuth } from "../api";
 
 interface DiagnosticInfo {
   telegramAvailable: boolean;
@@ -14,6 +15,27 @@ interface DiagnosticInfo {
 export function TelegramDiagnostic() {
   const [info, setInfo] = useState<DiagnosticInfo | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [debugResult, setDebugResult] = useState<any>(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+
+  const runDebug = async () => {
+    const initData = window.Telegram?.WebApp?.initData;
+    if (!initData) return;
+    
+    setDebugLoading(true);
+    setDebugResult(null);
+    try {
+      const res = await debugAuth(initData);
+      setDebugResult(res);
+    } catch (e: any) {
+      setDebugResult({ 
+        error: e.message || String(e), 
+        response: e.response?.data 
+      });
+    } finally {
+      setDebugLoading(false);
+    }
+  };
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -121,6 +143,25 @@ export function TelegramDiagnostic() {
                     <li>User data not available from Telegram</li>
                   )}
                 </ul>
+              </div>
+            )}
+
+            {/* Debug Button */}
+            <div className="mt-3 pt-3 border-t border-slate-200">
+              <button 
+                onClick={runDebug}
+                disabled={debugLoading || !info.initDataExists}
+                className="w-full bg-slate-800 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-slate-700 disabled:opacity-50"
+              >
+                <Bug className="w-4 h-4" />
+                {debugLoading ? "Checking..." : "Run Auth Debug"}
+              </button>
+            </div>
+
+            {/* Debug Result */}
+            {debugResult && (
+              <div className="mt-2 p-2 bg-slate-100 rounded text-[10px] font-mono overflow-auto max-h-40">
+                <pre>{JSON.stringify(debugResult, null, 2)}</pre>
               </div>
             )}
           </div>

@@ -150,6 +150,11 @@ export async function loginWithTelegram(initData: string) {
   return res.data;
 }
 
+export async function debugAuth(initData: string) {
+  const res = await api.post('/auth/debug', { init_data: initData });
+  return res.data;
+}
+
 export function withJwt() {
   const token = getJwtToken();
   return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
