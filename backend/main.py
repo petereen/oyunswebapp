@@ -193,7 +193,7 @@ async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Hea
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
-async def get_jwt_authenticated_user(authorization: Annotated[str | None, Header()]):
+async def get_jwt_authenticated_user(authorization: Annotated[str | None, Header(alias="Authorization")] = None):
     """
     Verify JWT token from Authorization header.
     This is the preferred authentication method for subsequent requests after /api/auth.

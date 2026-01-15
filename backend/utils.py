@@ -205,13 +205,21 @@ def _verify_with_hash(parsed_data: Dict[str, str], bot_token: str) -> Authentica
     
     # 4. Compare
     if calculated_hash != received_hash:
-        # Log generic error to avoid leaking details, but log debug info
         logger.warning(
-            f"Hash mismatch. Calculated: {calculated_hash}, Received: {received_hash}"
+            f"Hash mismatch (decoded). Calculated: {calculated_hash}, Received: {received_hash}"
         )
-        # Debug helper: check if data was perhaps double encoded or something
-        logger.debug(f"Data check string used: {data_check_string!r}")
-        raise TelegramAuthError("Invalid initData hash")
+        logger.debug(f"Data check string (decoded) used: {data_check_string!r}")
+        
+        # FALLBACK: Try validating with RAW (encoded) values
+        # This handles cases where intermediate proxies might have messed with encoding
+        # or if the client is sending data in a non-standard way.
+        logger.info("Attempting fallback validation with raw values...")
+        try:
+            return _verify_with_hash_raw(init_data, bot_token, received_hash, parsed_data)
+        except TelegramAuthError:
+            # If fallback also fails, raise the original error (or generic)
+            logger.warning("Fallback validation also failed.")
+            raise TelegramAuthError("Invalid initData hash")
     
     # 5. Extract User
     user_raw = parsed_data.get("user")
@@ -286,6 +294,56 @@ def _verify_with_signature(parsed_data: Dict[str, str], bot_token: str) -> Authe
     try:
         user_payload = json.loads(user_raw)
     except json.JSONDecodeError:
+        raise TelegramAuthError("Invalid user payload JSON")
+        
+    return AuthenticatedUser(
+        id=user_payload.get("id"),
+        first_name=user_payload.get("first_name"),
+        last_name=user_payload.get("last_name"),
+        username=user_payload.get("username"),
+    )
+
+
+def _verify_with_hash_raw(init_data: str, bot_token: str, received_hash: str, parsed_data_decoded: Dict[str, str]) -> AuthenticatedUser:
+    """
+    Fallback: Verify using encoded values (manual parsing).
+    """
+    # Manual parsing preserving encoding
+    pairs = init_data.split('&')
+    data_check_list = []
+    
+    for pair in pairs:
+        if '=' not in pair:
+            continue
+        key, value = pair.split('=', 1)
+        if key == 'hash' or key == 'signature':
+            continue
+        data_check_list.append(f"{key}={value}")
+        
+    data_check_list.sort()
+    data_check_string = "\n".join(data_check_list)
+    
+    # Calculate hash
+    try:
+        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    except Exception:
+        raise TelegramAuthError("Internal error during raw validation")
+        
+    if calculated_hash != received_hash:
+        logger.warning(f"Hash mismatch (raw). Calculated: {calculated_hash}")
+        logger.debug(f"Data check string (raw) used: {data_check_string!r}")
+        raise TelegramAuthError("Invalid initData hash (raw)")
+        
+    # If successful, return the user from the DECODED data (which we trust if hash matches)
+    user_raw = parsed_data_decoded.get("user")
+    if not user_raw:
+        raise TelegramAuthError("Missing user payload in initData")
+    
+    try:
+        user_payload = json.loads(user_raw)
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse user JSON: {e}")
         raise TelegramAuthError("Invalid user payload JSON")
         
     return AuthenticatedUser(
