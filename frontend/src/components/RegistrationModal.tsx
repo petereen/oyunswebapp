@@ -48,13 +48,14 @@ export function RegistrationModal({ onRegistered }: Props) {
     try {
       setUploading(true);
       setError("");
-      const { uploadUrl, storageUrl } = await requestPresign(file.name, file.type);
-      await fetch(uploadUrl, {
+      const path = `passport/${Date.now()}-${file.name}`;
+      const presigned = await requestPresign({ bucket: "bills", path });
+      await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,
         headers: { "Content-Type": file.type },
       });
-      setPassportUrl(storageUrl);
+      setPassportUrl(presigned.public_url);
     } catch (err) {
       console.error("Passport upload error:", err);
       setError("Паспорт зураг оруулахад алдаа гарлаа");

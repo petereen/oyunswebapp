@@ -111,9 +111,22 @@ export function AdminInbox() {
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [confirmModal, setConfirmModal] = useState<InboxItem | null>(null);
-  const [adminBillUrl, setAdminBillUrl] = useState("");
+  const [adminBillUrls, setAdminBillUrls] = useState<string[]>([]); // Changed to array for multiple photos
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Helper function to parse bill_url (can be JSON array or single URL string)
+  const parseBillUrls = (billUrl?: string): string[] => {
+    if (!billUrl) return [];
+    try {
+      const parsed = JSON.parse(billUrl);
+      if (Array.isArray(parsed)) return parsed;
+      return [billUrl];
+    } catch {
+      // Not JSON, treat as single URL
+      return [billUrl];
+    }
+  };
 
   // Sort & Filter
   const [sortBy, setSortBy] = useState<SortOption>("oldest");
@@ -402,18 +415,22 @@ export function AdminInbox() {
     return result;
   };
 
-  const handleAdminBillUpload = async (file: File) => {
-    if (!confirmModal) return;
+  const handleAdminBillUpload = async (files: FileList) => {
+    if (!confirmModal || files.length === 0) return;
     setUploading(true);
     try {
-      const path = `admin/${Date.now()}-${file.name}`;
-      const presigned = await requestPresign({ bucket: "bills", path });
-      await fetch(presigned.upload_url, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      setAdminBillUrl(presigned.public_url);
+      const uploadedUrls: string[] = [...adminBillUrls];
+      for (const file of Array.from(files)) {
+        const path = `admin/${Date.now()}-${file.name}`;
+        const presigned = await requestPresign({ bucket: "bills", path });
+        await fetch(presigned.upload_url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type },
+        });
+        uploadedUrls.push(presigned.public_url);
+      }
+      setAdminBillUrls(uploadedUrls);
     } catch {
       alert("Upload failed");
     } finally {
@@ -421,16 +438,20 @@ export function AdminInbox() {
     }
   };
 
+  const removeAdminBillUrl = (index: number) => {
+    setAdminBillUrls(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleConfirmTransaction = async () => {
     if (!confirmModal) return;
     await adminAction({
       invoice: confirmModal.invoice,
       status: "completed",
-      admin_bill_url: adminBillUrl,
+      admin_bill_url: adminBillUrls.length > 0 ? JSON.stringify(adminBillUrls) : undefined,
       completed_by_admin: currentShift?.current_admin_id ?? undefined,
     });
     setConfirmModal(null);
-    setAdminBillUrl("");
+    setAdminBillUrls([]);
     await load();
   };
 
@@ -690,7 +711,7 @@ export function AdminInbox() {
                 key={item.invoice}
                 onClick={() => {
                   setConfirmModal(item);
-                  setAdminBillUrl(item.admin_bill_url || "");
+                  setAdminBillUrls(parseBillUrls(item.admin_bill_url));
                 }}
                 className="border border-green-200 rounded-xl bg-white p-3 cursor-pointer hover:bg-green-50 transition"
               >
@@ -810,19 +831,24 @@ export function AdminInbox() {
                   <div className="text-slate-400">{getTimeAgo(item.timestamp)}</div>
                 </div>
 
-                {/* User's Receipt Photo - Full display */}
-                {item.bill_url && (
+                {/* User's Receipt Photos - Support multiple */}
+                {item.bill_url && parseBillUrls(item.bill_url).length > 0 && (
                   <div>
-                    <div className="text-xs text-slate-500 mb-2">📸 Хэрэглэгчийн баримт:</div>
-                    <div 
-                      className="relative rounded-lg overflow-hidden cursor-pointer border border-ocean-200"
-                      onClick={() => setPhotoModal(item.bill_url!)}
-                    >
-                      <img 
-                        src={item.bill_url} 
-                        alt="Receipt" 
-                        className="w-full max-h-64 object-contain bg-slate-50"
-                      />
+                    <div className="text-xs text-slate-500 mb-2">📸 Хэрэглэгчийн баримт ({parseBillUrls(item.bill_url).length}):</div>
+                    <div className="flex flex-wrap gap-2">
+                      {parseBillUrls(item.bill_url).map((url, idx) => (
+                        <div 
+                          key={idx}
+                          className="relative rounded-lg overflow-hidden cursor-pointer border border-ocean-200"
+                          onClick={() => setPhotoModal(url)}
+                        >
+                          <img 
+                            src={url} 
+                            alt={`Receipt ${idx + 1}`} 
+                            className="w-24 h-24 object-cover bg-slate-50"
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1009,7 +1035,7 @@ export function AdminInbox() {
                       onClick={() => {
                         setConfirmModal(item);
                         setDetailModal(null);
-                        setAdminBillUrl("");
+                        setAdminBillUrls([]);
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-ocean-600 text-white py-3 font-semibold hover:bg-ocean-700"
                     >
@@ -1240,45 +1266,56 @@ export function AdminInbox() {
               )}
             </div>
 
-            {/* Upload Admin's Bill */}
+            {/* Upload Admin's Bills - Multiple photos support */}
             <div className="mb-4">
-              <div className="text-sm text-slate-600 mb-2">Админы гүйлгээний баримтыг оруулна уу:</div>
-              {adminBillUrl ? (
-                <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  <span className="text-sm text-green-700">Баримт хавсаргасан</span>
-                  <button
-                    onClick={() => setPhotoModal(adminBillUrl)}
-                    className="ml-auto text-xs text-ocean-600 underline"
-                  >
-                    Харах
-                  </button>
+              <div className="text-sm text-slate-600 mb-2">Админы гүйлгээний баримтыг оруулна уу (олон зураг):</div>
+              
+              {/* Show uploaded photos */}
+              {adminBillUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {adminBillUrls.map((url, idx) => (
+                    <div key={idx} className="relative">
+                      <img 
+                        src={url} 
+                        alt={`Admin receipt ${idx + 1}`} 
+                        className="w-20 h-20 object-cover rounded-lg border border-ocean-200 cursor-pointer"
+                        onClick={() => setPhotoModal(url)}
+                      />
+                      <button
+                        onClick={() => removeAdminBillUrl(idx)}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-ocean-200 rounded-xl py-4 cursor-pointer bg-white/60 hover:bg-ocean-50">
-                  <Upload className="w-5 h-5 text-ocean-600" />
-                  <span className="text-xs text-slate-500 mt-1">
-                    {uploading ? "Хуулж байна..." : "Дарж оруулна уу"}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleAdminBillUpload(file);
-                    }}
-                    disabled={uploading}
-                  />
-                </label>
               )}
+              
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-ocean-200 rounded-xl py-4 cursor-pointer bg-white/60 hover:bg-ocean-50">
+                <Upload className="w-5 h-5 text-ocean-600" />
+                <span className="text-xs text-slate-500 mt-1">
+                  {uploading ? "Хуулж байна..." : adminBillUrls.length > 0 ? "Нэмж зураг оруулах" : "Дарж оруулна уу"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) handleAdminBillUpload(files);
+                  }}
+                  disabled={uploading}
+                />
+              </label>
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={() => {
                   setConfirmModal(null);
-                  setAdminBillUrl("");
+                  setAdminBillUrls([]);
                 }}
                 className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
               >
@@ -1286,7 +1323,7 @@ export function AdminInbox() {
               </button>
               <button
                 onClick={handleConfirmTransaction}
-                disabled={!adminBillUrl}
+                disabled={adminBillUrls.length === 0}
                 className="flex-1 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
               >
                 Дуусгах

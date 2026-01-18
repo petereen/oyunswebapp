@@ -428,13 +428,12 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
         client = get_supabase()
         moscow_tz = ZoneInfo("Europe/Moscow")
         
-        # Get all transactions for this user (completed, confirmed, or pending)
+        # Get ALL transactions for this user (no status filter)
         res = (
             client.table("transactions")
-            .select("amount,currency_from,currency_to,direction,timestamp,status")
+            .select("amount,currency_from,currency_to,timestamp,status")
             .eq("user_id", user.id)
-            .in_("status", ["completed", "confirmed", "admin_confirmed"])
-            .order("timestamp", desc=False)  # oldest first for chronological data
+            .order("timestamp", desc=False)
             .execute()
         )
         
@@ -449,7 +448,7 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
                 "total_transactions": 0,
             }
         
-        # Group by month and direction
+        # Group by month and direction (inferred from currency_from)
         monthly_buy = defaultdict(float)
         monthly_sell = defaultdict(float)
         total_buy_rub = 0
@@ -457,34 +456,24 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
         
         for trx in res.data:
             try:
-                timestamp = datetime.fromisoformat(trx.get("timestamp", "").replace('Z', '+00:00'))
+                timestamp_str = trx.get("timestamp", "")
+                if not timestamp_str:
+                    continue
+                timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                 month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01"
                 
-                # Get direction from field or infer from currency_from
-                direction = trx.get("direction", "")
-                if not direction:
-                    # Fallback: infer direction from currency_from
-                    currency_from = trx.get("currency_from", "")
-                    direction = "buy" if currency_from == "RUB" else "sell"
-                
-                amount = float(trx.get("amount", 0))
+                amount = float(trx.get("amount", 0) or 0)
                 currency_from = trx.get("currency_from", "")
                 
-                # Calculate RUB equivalent
-                if direction == "buy":
+                # Infer direction from currency_from
+                if currency_from == "RUB":
                     # User buying MNT with RUB (RUB -> MNT)
-                    if currency_from == "RUB":
-                        rub_amount = amount
-                    else:
-                        continue  # Skip if not standard flow
-                    monthly_buy[month_key] += rub_amount
-                    total_buy_rub += rub_amount
-                    
-                elif direction == "sell":
+                    monthly_buy[month_key] += amount
+                    total_buy_rub += amount
+                elif currency_from == "MNT":
                     # User selling MNT for RUB (MNT -> RUB)
-                    if currency_from == "MNT":
-                        monthly_sell[month_key] += amount
-                        total_sell_rub += amount
+                    monthly_sell[month_key] += amount
+                    total_sell_rub += amount
                         
             except Exception as e:
                 logger.error(f"Error processing transaction for analytics: {e}")
