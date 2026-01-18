@@ -12,21 +12,16 @@ import {
 } from "lucide-react";
 import { searchUsers, UserSearchItem } from "../api";
 
-interface Props {
-  adminKey: string;
-}
-
-export function AdminUserSearch({ adminKey }: Props) {
+export function AdminUserSearch() {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserSearchItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const handleSearch = async () => {
-    if (!adminKey) return;
     setLoading(true);
     try {
-      const res = await searchUsers(adminKey, query);
+      const res = await searchUsers(query);
       setUsers(res.users);
     } catch (err) {
       console.error("Search error:", err);
@@ -39,7 +34,7 @@ export function AdminUserSearch({ adminKey }: Props) {
   useEffect(() => {
     handleSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminKey]);
+  }, []);
 
   const handleCopy = async (text: string, fieldId: string) => {
     try {

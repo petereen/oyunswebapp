@@ -172,107 +172,36 @@ app.add_middleware(
 )
 
 
-async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Header(alias="X-Telegram-Init-Data")]):
-    settings = get_settings()
-    if not x_telegram_init_data:
-        logger.warning("Auth failed: missing X-Telegram-Init-Data header")
-        raise HTTPException(status_code=401, detail="Missing X-Telegram-Init-Data header")
-    
-    # Dev mode bypass
-    if settings.dev_mode and x_telegram_init_data.startswith("dev_mode_bypass"):
-        try:
-            import json
-            from models import AuthenticatedUser
-            # Extract user json if present: "dev_mode_bypass:{"id":123,...}"
-            parts = x_telegram_init_data.split(":", 1)
-            if len(parts) > 1 and parts[1].strip():
-                user_data = json.loads(parts[1])
-                return AuthenticatedUser(
-                    id=user_data.get("id", 123456789),
-                    first_name=user_data.get("first_name", "Dev"),
-                    last_name=user_data.get("last_name", "User"),
-                    username=user_data.get("username", "dev_user"),
-                )
-        except Exception as e:
-            logger.warning(f"Dev mode auth parsing failed: {e}")
-        
-        # Default dev user
-        from models import AuthenticatedUser
-        return AuthenticatedUser(
-            id=123456789,
-            first_name="Dev",
-            last_name="User",
-            username="dev_user",
-        )
-
-    try:
-        return verify_telegram_init_data(x_telegram_init_data, settings.bot_token)
-    except TelegramAuthError as exc:
-        # Log truncated preview to avoid leaking the full token
-        preview = x_telegram_init_data[:120].replace("\n", "") if x_telegram_init_data else ""
-        hash_len = 0
-        try:
-            from urllib.parse import parse_qsl
-            parsed = dict(parse_qsl(x_telegram_init_data, keep_blank_values=True))
-            hash_len = len(parsed.get("hash", ""))
-        except Exception:
-            pass
-        logger.warning(f"Auth failed: invalid init data. preview='{preview}' len={len(x_telegram_init_data)} hash_len={hash_len} error={exc}")
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+# NO AUTH MODE: All endpoints return a default user
+async def get_authenticated_user():
+    """No authentication - returns default user for all requests"""
+    from models import AuthenticatedUser
+    return AuthenticatedUser(
+        id=1932946217,  # Default user ID
+        first_name="Test",
+        last_name="User",
+        username="test_user",
+    )
 
 
-async def get_jwt_authenticated_user(authorization: Annotated[str | None, Header(alias="Authorization")] = None):
-    """
-    Verify JWT token from Authorization header.
-    This is the preferred authentication method for subsequent requests after /api/auth.
-    """
-    settings = get_settings()
-    
-    # DEV MODE: Skip auth entirely and return mock admin user
-    if settings.dev_mode:
-        from models import AuthenticatedUser
-        logger.info("DEV MODE: Bypassing JWT auth, returning mock admin user")
-        return AuthenticatedUser(
-            id=1932946217,  # Real admin user ID for testing
-            first_name="Test",
-            last_name="Admin",
-            username="test_admin",
-        )
-    
-    if not authorization:
-        logger.warning("Auth failed: missing Authorization header")
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-    
-    # Extract token from "Bearer <token>" format
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        logger.warning(f"Auth failed: invalid Authorization header format")
-        raise HTTPException(status_code=401, detail="Invalid Authorization header format. Use: Bearer <token>")
-    
-    token = parts[1]
-    
-    try:
-        return verify_jwt_token(token, settings.jwt_secret)
-    except JWTAuthError as exc:
-        logger.warning(f"JWT auth failed: {exc}")
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+async def get_jwt_authenticated_user():
+    """No authentication - returns default user for all requests"""
+    from models import AuthenticatedUser
+    return AuthenticatedUser(
+        id=1932946217,  # Default user ID
+        first_name="Test",
+        last_name="User",
+        username="test_user",
+    )
 
 
 async def require_admin(request: Request):
-    """Validate admin API key (for admin panel access)"""
-    settings = get_settings()
-    provided = request.headers.get("X-Admin-Key")
-    if not settings.admin_api_key or provided != settings.admin_api_key:
-        raise HTTPException(status_code=401, detail="Admin key required")
+    """No admin key required in no-auth mode"""
     return True
 
 
 async def require_admin_user(user=Depends(get_jwt_authenticated_user)):
-    """Validate that authenticated user is an admin (by Telegram user ID)"""
-    settings = get_settings()
-    if user.id not in settings.admin_user_ids:
-        logger.warning(f"Non-admin user {user.id} attempted to access admin endpoint")
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """No admin check in no-auth mode - all users are admins"""
     return user
 
 

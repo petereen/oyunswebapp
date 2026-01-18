@@ -6,17 +6,9 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
-// Add request/response interceptors for debugging
+// Simple request/response interceptors for debugging
 api.interceptors.request.use(config => {
-  const initData = config.headers["X-Telegram-Init-Data"];
-  if (initData) {
-    console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-      hasInitData: !!initData,
-      initDataLength: (initData as string).length,
-    });
-  } else {
-    console.warn(`⚠️ API Request without initData: ${config.url}`);
-  }
+  console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`);
   return config;
 });
 
@@ -29,7 +21,6 @@ api.interceptors.response.use(
     console.error(`❌ API Error: ${error.response?.status || error.message} ${error.config?.url}`, {
       status: error.response?.status,
       data: error.response?.data,
-      headers: error.response?.headers,
     });
     return Promise.reject(error);
   }
@@ -114,51 +105,7 @@ export type PresignRequest = {
   path: string;
 };
 
-export const withInitData = (initData: string) => ({
-  headers: { "X-Telegram-Init-Data": initData },
-});
-
-export const withAdminKey = (key?: string) =>
-  key
-    ? {
-        headers: { "X-Admin-Key": key },
-      }
-    : undefined;
-
-// JWT Auth helpers
-const JWT_KEY = 'oyunsbot_jwt_token';
-
-export function storeJwtToken(token: string) {
-  localStorage.setItem(JWT_KEY, token);
-}
-
-export function getJwtToken(): string | null {
-  return localStorage.getItem(JWT_KEY);
-}
-
-export function clearJwtToken() {
-  localStorage.removeItem(JWT_KEY);
-}
-
-export async function loginWithTelegram(initData: string) {
-  // Call /api/auth to get JWT
-  const res = await api.post<{ token: string; user: UserProfile }>(
-    '/auth',
-    { init_data: initData }
-  );
-  storeJwtToken(res.data.token);
-  return res.data;
-}
-
-export async function debugAuth(initData: string) {
-  const res = await api.post('/auth/debug', { init_data: initData });
-  return res.data;
-}
-
-export function withJwt() {
-  const token = getJwtToken();
-  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-}
+// NO AUTH MODE - All API calls work without authentication
 
 export async function fetchRates() {
   const res = await api.get<Rate>('/rates');
@@ -171,12 +118,12 @@ export async function fetchServiceStatus() {
 }
 
 export async function fetchMe() {
-  const res = await api.get<{ user: UserProfile; is_admin: boolean }>('/me', withJwt());
+  const res = await api.get<{ user: UserProfile; is_admin: boolean }>('/me');
   return res.data;
 }
 
 export async function agreeToTerms() {
-  const res = await api.post('/agree-terms', {}, withJwt());
+  const res = await api.post('/agree-terms', {});
   return res.data as { ok: boolean; agreed_terms: boolean };
 }
 
@@ -192,27 +139,27 @@ export type UpdateBankInfoInput = {
 };
 
 export async function updateBankInfo(payload: UpdateBankInfoInput) {
-  const res = await api.post('/update-bank-info', payload, withJwt());
+  const res = await api.post('/update-bank-info', payload);
   return res.data as { ok: boolean; message: string };
 }
 
 export async function createExchange(payload: ExchangeCreateInput) {
-  const res = await api.post('/exchange/create', payload, withJwt());
+  const res = await api.post('/exchange/create', payload);
   return res.data;
 }
 
 export async function requestPresign(payload: PresignRequest) {
-  const res = await api.post('/storage/presign', payload, withJwt());
+  const res = await api.post('/storage/presign', payload);
   return res.data as { upload_url: string; public_url: string; path: string };
 }
 
 export async function fetchHistory() {
-  const res = await api.get('/history', withJwt());
+  const res = await api.get('/history');
   return res.data as { items: any[] };
 }
 
 export async function fetchAnalytics() {
-  const res = await api.get('/analytics', withJwt());
+  const res = await api.get('/analytics');
   return res.data;
 }
 
@@ -227,31 +174,31 @@ export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAcc
 }
 
 export async function validatePromoCode(code: string, direction: string) {
-  const res = await api.post('/promo/validate', { code, direction }, withJwt());
+  const res = await api.post('/promo/validate', { code, direction });
   return res.data as { valid: boolean; discount_amount?: number; message?: string };
 }
 
 export async function submitRegistration(payload: RegistrationInput) {
-  const res = await api.post('/register', payload, withJwt());
+  const res = await api.post('/register', payload);
   return res.data as { ok: boolean; message: string };
 }
 
-export async function fetchInbox(adminKey?: string) {
-  const res = await api.get('/admin/inbox', withAdminKey(adminKey));
+export async function fetchInbox() {
+  const res = await api.get('/admin/inbox');
   return res.data as { items: any[] };
 }
 
-export async function fetchKycPending(adminKey: string): Promise<{ items: KycItem[] }> {
-  const res = await api.get('/admin/kyc', withAdminKey(adminKey));
+export async function fetchKycPending(): Promise<{ items: KycItem[] }> {
+  const res = await api.get('/admin/kyc');
   return res.data as { items: KycItem[] };
 }
 
-export async function kycAction(adminKey: string, payload: { user_id: number; action: 'approve' | 'reject'; rejection_reason?: string }) {
-  const res = await api.post('/admin/kyc/action', payload, withAdminKey(adminKey));
+export async function kycAction(payload: { user_id: number; action: 'approve' | 'reject'; rejection_reason?: string }) {
+  const res = await api.post('/admin/kyc/action', payload);
   return res.data as { ok: boolean; message: string };
 }
 
-export async function adminAction(adminKey: string, payload: { 
+export async function adminAction(payload: { 
   invoice: string; 
   status: string; 
   rejection_comment?: string; 
@@ -259,7 +206,7 @@ export async function adminAction(adminKey: string, payload: {
   admin_bill_url?: string;
   completed_by_admin?: number;
 }) {
-  const res = await api.post('/admin/action', payload, withAdminKey(adminKey));
+  const res = await api.post('/admin/action', payload);
   return res.data;
 }
 
@@ -272,7 +219,7 @@ export type UserPromoCode = {
 
 export async function fetchUserPromoCodes(): Promise<{ promo_codes: UserPromoCode[] }> {
   try {
-    const res = await api.get('/user/promo-codes', withJwt());
+    const res = await api.get('/user/promo-codes');
     return res.data as { promo_codes: UserPromoCode[] };
   } catch {
     return { promo_codes: [] };
@@ -298,32 +245,32 @@ export interface ShiftResponse {
   is_shift_active: boolean;
 }
 
-export async function fetchAdminUsers(adminKey: string): Promise<AdminUsersResponse> {
-  const res = await api.get('/admin/users', withAdminKey(adminKey));
+export async function fetchAdminUsers(): Promise<AdminUsersResponse> {
+  const res = await api.get('/admin/users');
   return res.data as AdminUsersResponse;
 }
 
-export async function fetchCurrentShift(adminKey: string): Promise<ShiftResponse> {
-  const res = await api.get('/admin/shift', withAdminKey(adminKey));
+export async function fetchCurrentShift(): Promise<ShiftResponse> {
+  const res = await api.get('/admin/shift');
   return res.data as ShiftResponse;
 }
 
-export async function openShift(adminKey: string, adminId: number, adminName?: string) {
-  const res = await api.post('/admin/shift/open', { admin_id: adminId, admin_name: adminName }, withAdminKey(adminKey));
+export async function openShift(adminId: number, adminName?: string) {
+  const res = await api.post('/admin/shift/open', { admin_id: adminId, admin_name: adminName });
   return res.data;
 }
 
-export async function transferShift(adminKey: string, fromAdminId: number, toAdminId: number, toAdminName?: string) {
+export async function transferShift(fromAdminId: number, toAdminId: number, toAdminName?: string) {
   const res = await api.post('/admin/shift/transfer', { 
     from_admin_id: fromAdminId, 
     to_admin_id: toAdminId, 
     to_admin_name: toAdminName 
-  }, withAdminKey(adminKey));
+  });
   return res.data;
 }
 
-export async function closeShift(adminKey: string, adminId: number) {
-  const res = await api.post('/admin/shift/close', { admin_id: adminId }, withAdminKey(adminKey));
+export async function closeShift(adminId: number) {
+  const res = await api.post('/admin/shift/close', { admin_id: adminId });
   return res.data;
 }
 
@@ -346,13 +293,13 @@ export interface WorkingHoursUpdatePayload {
   is_enabled: boolean;
 }
 
-export async function fetchWorkingHours(adminKey: string): Promise<WorkingHoursConfig> {
-  const res = await api.get('/admin/working-hours', withAdminKey(adminKey));
+export async function fetchWorkingHours(): Promise<WorkingHoursConfig> {
+  const res = await api.get('/admin/working-hours');
   return res.data as WorkingHoursConfig;
 }
 
-export async function updateWorkingHours(adminKey: string, payload: WorkingHoursUpdatePayload) {
-  const res = await api.put('/admin/working-hours', payload, withAdminKey(adminKey));
+export async function updateWorkingHours(payload: WorkingHoursUpdatePayload) {
+  const res = await api.put('/admin/working-hours', payload);
   return res.data;
 }
 
@@ -374,7 +321,7 @@ export interface UserSearchResponse {
   total: number;
 }
 
-export async function searchUsers(adminKey: string, query: string = ""): Promise<UserSearchResponse> {
-  const res = await api.get(`/admin/user-search?q=${encodeURIComponent(query)}`, withAdminKey(adminKey));
+export async function searchUsers(query: string = ""): Promise<UserSearchResponse> {
+  const res = await api.get(`/admin/user-search?q=${encodeURIComponent(query)}`);
   return res.data as UserSearchResponse;
 }

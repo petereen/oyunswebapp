@@ -47,7 +47,7 @@ export default function App() {
         {view === "client" || !isAdmin ? (
           <Dashboard initData={initData} user={user} isAuthenticating={isAuthenticating} authError={authError} onAdminStatusChange={setIsAdmin} />
         ) : (
-          <AdminPanel initData={initData} />
+          <AdminPanel />
         )}
       </div>
 

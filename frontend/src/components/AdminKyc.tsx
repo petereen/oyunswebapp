@@ -16,11 +16,8 @@ import {
 } from "lucide-react";
 import { fetchKycPending, kycAction, KycItem } from "../api";
 
-interface Props {
-  initData: string;
-}
-
-export function AdminKyc({ initData }: Props) {
+// No props needed - auth is removed
+export function AdminKyc() {
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [rejectingUserId, setRejectingUserId] = useState<number | null>(null);
@@ -28,7 +25,7 @@ export function AdminKyc({ initData }: Props) {
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["adminKyc"],
-    queryFn: () => fetchKycPending(initData),
+    queryFn: () => fetchKycPending(),
     refetchInterval: 30000,
   });
 
@@ -36,7 +33,7 @@ export function AdminKyc({ initData }: Props) {
 
   const actionMutation = useMutation({
     mutationFn: ({ userId, action, rejection_reason }: { userId: number; action: "approve" | "reject"; rejection_reason?: string }) =>
-      kycAction(initData, { user_id: userId, action, rejection_reason }),
+      kycAction({ user_id: userId, action, rejection_reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminKyc"] });
       setRejectingUserId(null);

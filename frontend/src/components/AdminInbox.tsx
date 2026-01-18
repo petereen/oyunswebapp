@@ -35,11 +35,6 @@ import {
   WorkingHoursConfig,
 } from "../api";
 
-interface Props {
-  adminKey?: string;
-  initData?: string;
-}
-
 interface InboxItem {
   invoice: string;
   user_id: number;
@@ -104,7 +99,8 @@ function getTimeAgo(dateStr: string): string {
   return `${diffDays} өдөр ${diffHours % 24} цаг өмнө`;
 }
 
-export function AdminInbox({ adminKey, initData }: Props) {
+// No props needed - auth is removed
+export function AdminInbox() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -143,7 +139,7 @@ export function AdminInbox({ adminKey, initData }: Props) {
   const load = async () => {
     try {
       setLoading(true);
-      const res = await fetchInbox(adminKey);
+      const res = await fetchInbox();
       console.log("Loaded items:", res.items);
       setItems(res.items || []);
     } catch {
@@ -154,12 +150,11 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const loadShift = async () => {
-    if (!adminKey) return;
     try {
       setShiftLoading(true);
       const [shiftRes, usersRes] = await Promise.all([
-        fetchCurrentShift(adminKey),
-        fetchAdminUsers(adminKey),
+        fetchCurrentShift(),
+        fetchAdminUsers(),
       ]);
       setCurrentShift(shiftRes);
       setAdminUsers(usersRes.admins || []);
@@ -171,10 +166,9 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const loadWorkingHours = async () => {
-    if (!adminKey) return;
     try {
       setWorkingHoursLoading(true);
-      const config = await fetchWorkingHours(adminKey);
+      const config = await fetchWorkingHours();
       setWorkingHours(config);
       setEditStartHour(config.start_hour_moscow);
       setEditEndHour(config.end_hour_moscow);
@@ -187,10 +181,9 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const handleUpdateWorkingHours = async () => {
-    if (!adminKey) return;
     try {
       setWorkingHoursLoading(true);
-      await updateWorkingHours(adminKey, {
+      await updateWorkingHours({
         start_hour_moscow: editStartHour,
         end_hour_moscow: editEndHour,
         is_enabled: editIsEnabled,
@@ -206,11 +199,11 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const handleOpenShift = async () => {
-    if (!adminKey || !selectedAdminId) return;
+    if (!selectedAdminId) return;
     const selectedAdmin = adminUsers.find(a => a.id === selectedAdminId);
     try {
       setShiftLoading(true);
-      await openShift(adminKey, selectedAdminId, selectedAdmin?.name);
+      await openShift(selectedAdminId, selectedAdmin?.name);
       await loadShift();
       setShowShiftModal(false);
       setSelectedAdminId(null);
@@ -223,11 +216,11 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const handleCloseShift = async () => {
-    if (!adminKey || !currentShift?.current_admin_id) return;
+    if (!currentShift?.current_admin_id) return;
     if (!confirm("Ээлж хаахдаа итгэлтэй байна уу?")) return;
     try {
       setShiftLoading(true);
-      await closeShift(adminKey, currentShift.current_admin_id);
+      await closeShift(currentShift.current_admin_id);
       setCurrentShift(null);
     } catch (err) {
       console.error("Failed to close shift:", err);
@@ -238,11 +231,11 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const handleTransferShift = async () => {
-    if (!adminKey || !currentShift?.current_admin_id || !selectedAdminId) return;
+    if (!currentShift?.current_admin_id || !selectedAdminId) return;
     const selectedAdmin = adminUsers.find(a => a.id === selectedAdminId);
     try {
       setShiftLoading(true);
-      await transferShift(adminKey, currentShift.current_admin_id, selectedAdminId, selectedAdmin?.name);
+      await transferShift(currentShift.current_admin_id, selectedAdminId, selectedAdmin?.name);
       await loadShift();
       setShowShiftModal(false);
       setSelectedAdminId(null);
@@ -259,7 +252,7 @@ export function AdminInbox({ adminKey, initData }: Props) {
     loadShift();
     loadWorkingHours();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminKey]);
+  }, []);
 
   // Sort and filter items
   const displayItems = useMemo(() => {
@@ -305,10 +298,9 @@ export function AdminInbox({ adminKey, initData }: Props) {
   }, [displayItems]);
 
   const handleApprove = async (invoice: string) => {
-    if (!adminKey) return;
     try {
       console.log("Approving invoice:", invoice);
-      const result = await adminAction(adminKey, { invoice, status: "approved" });
+      const result = await adminAction({ invoice, status: "approved" });
       console.log("Approval result:", result);
       setDetailModal(null);
       await load();
@@ -319,9 +311,9 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const handleReject = async () => {
-    if (!adminKey || !rejectModal) return;
+    if (!rejectModal) return;
     try {
-      await adminAction(adminKey, {
+      await adminAction({
         invoice: rejectModal,
         status: "rejected",
         rejection_comment: rejectComment,
@@ -415,10 +407,7 @@ export function AdminInbox({ adminKey, initData }: Props) {
     setUploading(true);
     try {
       const path = `admin/${Date.now()}-${file.name}`;
-      if (!initData) {
-        throw new Error("Missing Telegram init data for presign");
-      }
-      const presigned = await requestPresign(initData, { bucket: "bills", path });
+      const presigned = await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,
@@ -433,8 +422,8 @@ export function AdminInbox({ adminKey, initData }: Props) {
   };
 
   const handleConfirmTransaction = async () => {
-    if (!adminKey || !confirmModal) return;
-    await adminAction(adminKey, {
+    if (!confirmModal) return;
+    await adminAction({
       invoice: confirmModal.invoice,
       status: "completed",
       admin_bill_url: adminBillUrl,
@@ -985,10 +974,9 @@ export function AdminInbox({ adminKey, initData }: Props) {
                   <div className="flex gap-2">
                     <button
                       onClick={async () => {
-                        if (!adminKey) return;
                         try {
                           // Pre-approve: move to "approved" status
-                          await adminAction(adminKey, { 
+                          await adminAction({ 
                             invoice: item.invoice, 
                             status: "approved"
                           });
@@ -998,8 +986,7 @@ export function AdminInbox({ adminKey, initData }: Props) {
                           console.error("Pre-approval error:", err);
                         }
                       }}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 text-white py-3 font-semibold hover:bg-green-700 disabled:opacity-50"
-                      disabled={!adminKey}
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 text-white py-3 font-semibold hover:bg-green-700"
                     >
                       <ShieldCheck className="w-5 h-5" /> Урьдчилан батлах
                     </button>
@@ -1009,7 +996,6 @@ export function AdminInbox({ adminKey, initData }: Props) {
                         setDetailModal(null);
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-100 text-red-700 py-3 font-semibold hover:bg-red-200"
-                      disabled={!adminKey}
                     >
                       <XCircle className="w-5 h-5" /> Татгалзах
                     </button>
@@ -1035,7 +1021,6 @@ export function AdminInbox({ adminKey, initData }: Props) {
                         setDetailModal(null);
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-100 text-red-700 py-3 font-semibold hover:bg-red-200"
-                      disabled={!adminKey}
                     >
                       <XCircle className="w-5 h-5" /> Татгалзах
                     </button>
