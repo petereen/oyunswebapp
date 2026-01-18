@@ -3,7 +3,6 @@ import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 import { fetchAnalytics } from "../api";
 
 interface AnalyticsModalProps {
-  initData: string;
   onClose: () => void;
 }
 
@@ -20,11 +19,10 @@ interface AnalyticsData {
   total_transactions: number;
 }
 
-export function AnalyticsModal({ initData, onClose }: AnalyticsModalProps) {
+export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
   const { data, isLoading, error } = useQuery<AnalyticsData>({
-    queryKey: ["analytics", initData],
-    queryFn: () => fetchAnalytics(initData),
-    enabled: Boolean(initData),
+    queryKey: ["analytics"],
+    queryFn: () => fetchAnalytics(),
   });
 
   const formatMonth = (monthStr: string) => {

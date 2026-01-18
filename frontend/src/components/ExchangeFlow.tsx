@@ -183,7 +183,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     setPromoValidating(true);
     setPromoError("");
     try {
-      const res = await validatePromoCode(initData, promoCode.trim(), direction);
+      const res = await validatePromoCode(promoCode.trim(), direction);
       console.log("Promo validation response:", res);
       if (res.valid) {
         const discount = Number(res.discount_amount) || 0;
@@ -237,15 +237,11 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   };
 
   const handleUpload = async (file: File) => {
-    if (!initData) {
-      setError("Telegram-с нэвтэрнэ үү");
-      return;
-    }
     try {
       setError("");
       setUploading(true);
       const path = `${direction}/${Date.now()}-${file.name}`;
-      const presigned = await requestPresign(initData, { bucket: "bills", path });
+      const presigned = await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,
@@ -346,7 +342,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         invoice: invoiceId, // Pass the pre-generated invoice ID
       };
       console.log("Creating exchange with payload:", payload);
-      const res = await createExchange(initData, payload);
+      const res = await createExchange(payload);
       console.log("Exchange created:", res);
       setSuccessInvoice(res.invoice);
       setStep(6);

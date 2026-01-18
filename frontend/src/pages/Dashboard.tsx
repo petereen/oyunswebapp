@@ -263,27 +263,27 @@ export function Dashboard({ initData, user, isAuthenticating, authError, onAdmin
 
       {/* Profile Modal */}
       {showProfile && (
-        <ProfileModal initData={initData} userId={user?.id} onClose={() => setShowProfile(false)} />
+        <ProfileModal userId={user?.id} onClose={() => setShowProfile(false)} />
       )}
 
       {/* History Modal */}
       {showHistory && (
-        <HistoryModal initData={initData} userId={user?.id} onClose={() => setShowHistory(false)} />
+        <HistoryModal userId={user?.id} onClose={() => setShowHistory(false)} />
       )}
 
       {/* Analytics Modal */}
       {showAnalytics && (
-        <AnalyticsModal initData={initData} onClose={() => setShowAnalytics(false)} />
+        <AnalyticsModal onClose={() => setShowAnalytics(false)} />
       )}
 
       {/* Terms Agreement Modal - Required for first-time users */}
       {needsTermsAgreement && (
-        <TermsAgreementModal initData={initData} onAgreed={handleTermsAgreed} />
+        <TermsAgreementModal onAgreed={handleTermsAgreed} />
       )}
 
       {/* Registration Modal - Required for unverified users */}
       {needsRegistration && !needsTermsAgreement && (
-        <RegistrationModal initData={initData} onRegistered={handleRegistered} />
+        <RegistrationModal onRegistered={handleRegistered} />
       )}
     </div>
   );

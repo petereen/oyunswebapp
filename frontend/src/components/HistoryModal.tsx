@@ -17,7 +17,6 @@ interface HistoryItem {
 }
 
 interface Props {
-  initData: string;
   userId?: number;
   onClose: () => void;
 }
@@ -86,13 +85,13 @@ function getTimeAgo(dateStr: string): string {
   return `${days} өдрийн өмнө`;
 }
 
-export function HistoryModal({ initData, userId, onClose }: Props) {
+export function HistoryModal({ userId, onClose }: Props) {
   const [photoModal, setPhotoModal] = useState<string | null>(null);
   
   const { data, isLoading, error } = useQuery({
     queryKey: ["history", userId],
-    queryFn: () => fetchHistory(initData),
-    enabled: Boolean(initData) && Boolean(userId),
+    queryFn: () => fetchHistory(),
+    enabled: Boolean(userId),
     staleTime: 0, // Always refetch to ensure fresh user data
   });
 

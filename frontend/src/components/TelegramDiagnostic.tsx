@@ -1,6 +1,23 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle, XCircle, Bug } from "lucide-react";
-import { debugAuth } from "../api";
+
+// Extend Window interface for Telegram WebApp
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        initData: string;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name?: string;
+            username?: string;
+          };
+        };
+      };
+    };
+  }
+}
 
 interface DiagnosticInfo {
   telegramAvailable: boolean;
@@ -19,22 +36,8 @@ export function TelegramDiagnostic() {
   const [debugLoading, setDebugLoading] = useState(false);
 
   const runDebug = async () => {
-    const initData = window.Telegram?.WebApp?.initData;
-    if (!initData) return;
-    
-    setDebugLoading(true);
-    setDebugResult(null);
-    try {
-      const res = await debugAuth(initData);
-      setDebugResult(res);
-    } catch (e: any) {
-      setDebugResult({ 
-        error: e.message || String(e), 
-        response: e.response?.data 
-      });
-    } finally {
-      setDebugLoading(false);
-    }
+    // Debug function removed - no auth needed
+    setDebugResult({ message: "Auth disabled - running in dev mode" });
   };
 
   useEffect(() => {

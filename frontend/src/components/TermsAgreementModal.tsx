@@ -3,13 +3,12 @@ import { FileText, ExternalLink, CheckCircle2, Loader2 } from "lucide-react";
 import { agreeToTerms } from "../api";
 
 interface Props {
-  initData: string;
   onAgreed: () => void;
 }
 
 const TERMS_URL = "https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
 
-export function TermsAgreementModal({ initData, onAgreed }: Props) {
+export function TermsAgreementModal({ onAgreed }: Props) {
   const [loading, setLoading] = useState(false);
   const [hasReadTerms, setHasReadTerms] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +22,7 @@ export function TermsAgreementModal({ initData, onAgreed }: Props) {
     try {
       setLoading(true);
       setError("");
-      await agreeToTerms(initData);
+      await agreeToTerms();
       onAgreed();
     } catch (err) {
       console.error("Failed to agree to terms:", err);

@@ -6,7 +6,6 @@ import { fetchMe, fetchUserPromoCodes, updateBankInfo, UserProfile, UserPromoCod
 const TERMS_URL = "https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
 
 interface Props {
-  initData: string;
   userId?: number;
   onClose: () => void;
 }
@@ -33,7 +32,7 @@ const parseBankMnt = (bankStr: string | undefined) => {
   };
 };
 
-export function ProfileModal({ initData, userId, onClose }: Props) {
+export function ProfileModal({ userId, onClose }: Props) {
   const queryClient = useQueryClient();
   const [showPromos, setShowPromos] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -50,17 +49,20 @@ export function ProfileModal({ initData, userId, onClose }: Props) {
   const [mntAccountNumber, setMntAccountNumber] = useState("");
   const [mntOwnerName, setMntOwnerName] = useState("");
   
-  const { data: profile, isLoading } = useQuery({
+  const { data: profileData, isLoading } = useQuery({
     queryKey: ["me", userId],
-    queryFn: () => fetchMe(initData),
-    enabled: Boolean(initData) && Boolean(userId),
+    queryFn: () => fetchMe(),
+    enabled: Boolean(userId),
     staleTime: 0, // Always refetch to ensure fresh user data
   });
 
+  // Extract user from response
+  const profile = profileData?.user;
+
   const { data: promoCodes, isLoading: promoLoading } = useQuery({
     queryKey: ["user-promos", userId],
-    queryFn: () => fetchUserPromoCodes(initData),
-    enabled: Boolean(initData) && Boolean(userId) && showPromos,
+    queryFn: () => fetchUserPromoCodes(),
+    enabled: Boolean(userId) && showPromos,
   });
 
   // Initialize form values when profile loads or edit mode is enabled
@@ -93,7 +95,7 @@ export function ProfileModal({ initData, userId, onClose }: Props) {
         mnt_account_number: mntAccountNumber,
         mnt_owner_name: mntOwnerName,
       };
-      await updateBankInfo(initData, payload);
+      await updateBankInfo(payload);
       queryClient.invalidateQueries({ queryKey: ["me", userId] });
       setEditMode(false);
     } catch (err) {

@@ -13,11 +13,10 @@ import {
 import { submitRegistration, requestPresign, RegistrationInput } from "../api";
 
 interface Props {
-  initData: string;
   onRegistered: () => void;
 }
 
-export function RegistrationModal({ initData, onRegistered }: Props) {
+export function RegistrationModal({ onRegistered }: Props) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -55,7 +54,7 @@ export function RegistrationModal({ initData, onRegistered }: Props) {
       setError("");
       const safeFilename = sanitizeFilename(file.name);
       const path = `passports/${safeFilename}`;
-      const presigned = await requestPresign(initData, { bucket: "passports", path });
+      const presigned = await requestPresign({ bucket: "passports", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,
@@ -110,7 +109,7 @@ export function RegistrationModal({ initData, onRegistered }: Props) {
         passport_storage_url: passportUrl,
       };
 
-      await submitRegistration(initData, payload);
+      await submitRegistration(payload);
       onRegistered();
     } catch (err) {
       console.error("Registration error:", err);
