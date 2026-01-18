@@ -387,6 +387,43 @@ async def create_presigned_url(
     return PresignResponse(upload_url=signed_url, public_url=public, expires_in=ttl, path=payload.path)
 
 
+@app.get("/api/active-transactions")
+async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
+    """Get user's active (pending/approved) and recently completed/rejected transactions."""
+    client = get_supabase()
+    # Get pending and approved transactions
+    res = (
+        client.table("transactions")
+        .select("invoice,amount,currency_from,currency_to,status,timestamp,admin_comment")
+        .eq("user_id", user.id)
+        .in_("status", ["pending", "approved", "completed", "rejected"])
+        .order("timestamp", desc=True)
+        .limit(10)
+        .execute()
+    )
+    
+    # Filter to only pending/approved or recently (within 24h) completed/rejected
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    items = []
+    for row in res.data or []:
+        status = row.get("status")
+        if status in ["pending", "approved"]:
+            items.append(row)
+        elif status in ["completed", "rejected"]:
+            # Include if completed/rejected within last 24 hours
+            timestamp_str = row.get("timestamp", "")
+            if timestamp_str:
+                try:
+                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    if (now.astimezone() - timestamp).total_seconds() < 86400:  # 24 hours
+                        items.append(row)
+                except:
+                    pass
+    
+    return {"transactions": items}
+
+
 @app.get("/api/history", response_model=HistoryResponse)
 async def history(user=Depends(get_jwt_authenticated_user)):
     client = get_supabase()

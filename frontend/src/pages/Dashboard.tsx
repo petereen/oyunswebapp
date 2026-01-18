@@ -9,6 +9,7 @@ import { HistoryModal } from "../components/HistoryModal";
 import { AnalyticsModal } from "../components/AnalyticsModal";
 import { TermsAgreementModal } from "../components/TermsAgreementModal";
 import { RegistrationModal } from "../components/RegistrationModal";
+import { TransactionStatusTracker } from "../components/TransactionStatusTracker";
 import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 
@@ -144,6 +145,9 @@ export function Dashboard({ initData, user, isAuthenticating, authError, onAdmin
           </div>
         </div>
       ) : null}
+
+      {/* Transaction Status Tracker - shows pending/approved transactions */}
+      {user?.id && <TransactionStatusTracker userId={user.id} />}
 
       {/* Profile Error */}
       {profileError && (

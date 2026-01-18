@@ -165,6 +165,25 @@ export async function fetchAnalytics() {
   return res.data;
 }
 
+export type ActiveTransaction = {
+  invoice: string;
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  status: 'pending' | 'approved' | 'completed' | 'rejected';
+  timestamp: string;
+  admin_comment?: string;
+};
+
+export async function fetchActiveTransactions(): Promise<{ transactions: ActiveTransaction[] }> {
+  try {
+    const res = await api.get('/active-transactions');
+    return res.data as { transactions: ActiveTransaction[] };
+  } catch {
+    return { transactions: [] };
+  }
+}
+
 export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAccount[] }> {
   try {
     const res = await api.get('/admin-banks');

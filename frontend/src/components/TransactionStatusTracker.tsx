@@ -1,0 +1,193 @@
+import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { Clock, ThumbsUp, CheckCircle2, X, AlertTriangle, MessageCircle } from "lucide-react";
+import { fetchActiveTransactions, ActiveTransaction } from "../api";
+
+interface TransactionStatusTrackerProps {
+  userId?: number;
+}
+
+export function TransactionStatusTracker({ userId }: TransactionStatusTrackerProps) {
+  // Track which transactions user has dismissed
+  const [dismissedInvoices, setDismissedInvoices] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem("dismissedTransactions");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["activeTransactions", userId],
+    queryFn: () => fetchActiveTransactions(),
+    enabled: Boolean(userId),
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Save dismissed invoices to localStorage
+  useEffect(() => {
+    localStorage.setItem("dismissedTransactions", JSON.stringify(dismissedInvoices));
+  }, [dismissedInvoices]);
+
+  const handleDismiss = (invoice: string) => {
+    setDismissedInvoices(prev => [...prev, invoice]);
+  };
+
+  if (isLoading || !data) return null;
+
+  // Filter out dismissed transactions (only completed ones can be dismissed)
+  const visibleTransactions = data.transactions.filter(
+    (trx) => !dismissedInvoices.includes(trx.invoice) || trx.status === "pending" || trx.status === "approved"
+  );
+
+  // Only show pending/approved OR recently completed/rejected that haven't been dismissed
+  const activeTransactions = visibleTransactions.filter(
+    (trx) => trx.status === "pending" || trx.status === "approved" || 
+             (trx.status === "completed" && !dismissedInvoices.includes(trx.invoice)) ||
+             (trx.status === "rejected" && !dismissedInvoices.includes(trx.invoice))
+  );
+
+  if (activeTransactions.length === 0) return null;
+
+  return (
+    <div className="space-y-2 mb-4">
+      {activeTransactions.map((trx) => (
+        <TransactionStatusCard
+          key={trx.invoice}
+          transaction={trx}
+          onDismiss={trx.status === "completed" || trx.status === "rejected" ? () => handleDismiss(trx.invoice) : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface TransactionStatusCardProps {
+  transaction: ActiveTransaction;
+  onDismiss?: () => void;
+}
+
+function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCardProps) {
+  const { status, invoice, amount, currency_from, currency_to, admin_comment } = transaction;
+
+  const getStatusConfig = () => {
+    switch (status) {
+      case "pending":
+        return {
+          icon: Clock,
+          iconBg: "bg-amber-100",
+          iconColor: "text-amber-600",
+          barColor: "bg-amber-400",
+          barBg: "bg-amber-100",
+          progress: 33,
+          label: "Хүлээгдэж байна",
+          description: "Таны хүсэлтийг админ шалгаж байна",
+        };
+      case "approved":
+        return {
+          icon: ThumbsUp,
+          iconBg: "bg-green-100",
+          iconColor: "text-green-500",
+          barColor: "bg-green-400",
+          barBg: "bg-green-100",
+          progress: 66,
+          label: "Баталгаажсан",
+          description: "Админ гүйлгээг хийж байна",
+        };
+      case "completed":
+        return {
+          icon: CheckCircle2,
+          iconBg: "bg-green-100",
+          iconColor: "text-green-600",
+          barColor: "bg-green-500",
+          barBg: "bg-green-100",
+          progress: 100,
+          label: "Дууссан",
+          description: "Гүйлгээ амжилттай хийгдлээ",
+        };
+      case "rejected":
+        return {
+          icon: AlertTriangle,
+          iconBg: "bg-red-100",
+          iconColor: "text-red-600",
+          barColor: "bg-red-500",
+          barBg: "bg-red-100",
+          progress: 100,
+          label: "Цуцлагдсан",
+          description: admin_comment || "Таны хүсэлт цуцлагдсан",
+        };
+      default:
+        return {
+          icon: Clock,
+          iconBg: "bg-slate-100",
+          iconColor: "text-slate-600",
+          barColor: "bg-slate-400",
+          barBg: "bg-slate-100",
+          progress: 0,
+          label: "Тодорхойгүй",
+          description: "",
+        };
+    }
+  };
+
+  const config = getStatusConfig();
+  const Icon = config.icon;
+
+  return (
+    <div className={`relative p-4 rounded-xl border ${status === "rejected" ? "bg-red-50 border-red-200" : "bg-white border-ocean-100"}`}>
+      {/* Dismiss button for completed/rejected */}
+      {onDismiss && (
+        <button
+          onClick={onDismiss}
+          className="absolute top-2 right-2 p-1 rounded-full hover:bg-slate-100 transition"
+          title="Хаах"
+        >
+          <X className="w-4 h-4 text-slate-400" />
+        </button>
+      )}
+
+      <div className="flex items-center gap-3 mb-3">
+        {/* Status Icon */}
+        <div className={`p-2 rounded-full ${config.iconBg}`}>
+          <Icon className={`w-5 h-5 ${config.iconColor}`} />
+        </div>
+
+        {/* Transaction Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-sm text-slate-700">{config.label}</span>
+            <span className="text-xs text-slate-400">#{invoice}</span>
+          </div>
+          <div className="text-xs text-slate-500 truncate">
+            {amount.toLocaleString()} {currency_from} → {currency_to}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className={`h-2 rounded-full overflow-hidden ${config.barBg}`}>
+        <div
+          className={`h-full transition-all duration-500 ${config.barColor}`}
+          style={{ width: `${config.progress}%` }}
+        />
+      </div>
+
+      {/* Description */}
+      <p className="text-xs text-slate-500 mt-2">{config.description}</p>
+
+      {/* Support contact for rejected */}
+      {status === "rejected" && (
+        <a
+          href="https://t.me/Oyuns_support"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 flex items-center justify-center gap-2 text-xs text-red-600 hover:text-red-700 transition"
+        >
+          <MessageCircle className="w-4 h-4" />
+          <span>Асуудалтай гэж бодвол тусламжтай холбогдоорой</span>
+        </a>
+      )}
+    </div>
+  );
+}
