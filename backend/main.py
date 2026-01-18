@@ -492,21 +492,22 @@ async def history(user=Depends(get_jwt_authenticated_user)):
 @app.get("/api/analytics")
 async def get_analytics(user=Depends(get_jwt_authenticated_user)):
     """Get transaction analytics for the user - monthly spending by direction."""
-    from zoneinfo import ZoneInfo
-    from collections import defaultdict
-    
-    client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    
-    # Get all completed transactions for this user
-    res = (
-        client.table("transactions")
-        .select("amount,currency_from,currency_to,direction,timestamp,status")
-        .eq("user_id", user.id)
-        .eq("status", "completed")
-        .order("timestamp", desc=False)  # oldest first for chronological data
-        .execute()
-    )
+    try:
+        from zoneinfo import ZoneInfo
+        from collections import defaultdict
+        
+        client = get_supabase()
+        moscow_tz = ZoneInfo("Europe/Moscow")
+        
+        # Get all completed transactions for this user
+        res = (
+            client.table("transactions")
+            .select("amount,currency_from,currency_to,direction,timestamp,status")
+            .eq("user_id", user.id)
+            .eq("status", "completed")
+            .order("timestamp", desc=False)  # oldest first for chronological data
+            .execute()
+        )
     
     if not res.data:
         return {
@@ -575,6 +576,16 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
         "total_sell_rub": round(total_sell_rub, 2),
         "total_transactions": len(res.data),
     }
+    except Exception as e:
+        logger.error(f"Analytics error: {e}")
+        # Return empty analytics on error
+        return {
+            "monthly_buy": [],
+            "monthly_sell": [],
+            "total_buy_rub": 0,
+            "total_sell_rub": 0,
+            "total_transactions": 0,
+        }
 
 
 @app.get("/api/me", response_model=MeResponse)
