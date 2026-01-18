@@ -111,15 +111,22 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       .then((res) => setAdminBanks(res.accounts || []))
       .catch(() => setAdminBanks([]));
     
-    // Load user's promo codes (source != "default" and active = true)
+    // Load user's promo codes (active codes belonging to this user)
     fetchUserPromoCodes()
       .then((res) => {
-        const nonDefaultCodes = (res.promo_codes || []).filter(
-          p => p.active && p.source && p.source !== "default"
+        console.log("User promo codes response:", res);
+        // Show all active promo codes that belong to the user
+        // Filter out only 'default' source codes (these are general codes, not user-specific)
+        const userCodes = (res.promo_codes || []).filter(
+          p => p.active && p.source !== "default"
         );
-        setUserPromoCodes(nonDefaultCodes);
+        console.log("User's promo codes (excluding default):", userCodes);
+        setUserPromoCodes(userCodes);
       })
-      .catch(() => setUserPromoCodes([]));
+      .catch((err) => {
+        console.error("Error fetching user promo codes:", err);
+        setUserPromoCodes([]);
+      });
   }, []);
 
   // Calculate effective rate with promo discount
