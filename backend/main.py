@@ -227,6 +227,18 @@ async def get_jwt_authenticated_user(authorization: Annotated[str | None, Header
     This is the preferred authentication method for subsequent requests after /api/auth.
     """
     settings = get_settings()
+    
+    # DEV MODE: Skip auth entirely and return mock admin user
+    if settings.dev_mode:
+        from models import AuthenticatedUser
+        logger.info("DEV MODE: Bypassing JWT auth, returning mock admin user")
+        return AuthenticatedUser(
+            id=1932946217,  # Real admin user ID for testing
+            first_name="Test",
+            last_name="Admin",
+            username="test_admin",
+        )
+    
     if not authorization:
         logger.warning("Auth failed: missing Authorization header")
         raise HTTPException(status_code=401, detail="Missing Authorization header")
