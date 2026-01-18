@@ -18,7 +18,7 @@ export function AdminPanel() {
 
   // Check if already authenticated on mount
   useEffect(() => {
-    const storedAuth = sessionStorage.getItem(STORAGE_KEY);
+    const storedAuth = localStorage.getItem(STORAGE_KEY);
     if (storedAuth === "true") {
       setIsAuthenticated(true);
     }
@@ -27,7 +27,7 @@ export function AdminPanel() {
   const handleLogin = () => {
     if (apiKey === ADMIN_API_KEY) {
       setIsAuthenticated(true);
-      sessionStorage.setItem(STORAGE_KEY, "true");
+      localStorage.setItem(STORAGE_KEY, "true");
       setError("");
     } else {
       setError("Буруу API түлхүүр");
@@ -36,7 +36,7 @@ export function AdminPanel() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
     setApiKey("");
   };
 
