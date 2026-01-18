@@ -4,13 +4,13 @@ import {
   Phone,
   CreditCard,
   Building,
-  Upload,
   CheckCircle2,
   Loader2,
   FileText,
   AlertCircle,
+  Upload,
 } from "lucide-react";
-import { submitRegistration, requestPresign, RegistrationInput } from "../api";
+import { submitRegistration, RegistrationInput, requestPresign } from "../api";
 
 interface Props {
   onRegistered: () => void;
@@ -36,34 +36,28 @@ export function RegistrationModal({ onRegistered }: Props) {
   const [mntBankName, setMntBankName] = useState("");
   const [mntAccountNumber, setMntAccountNumber] = useState("");
   const [mntOwnerName, setMntOwnerName] = useState("");
+  const [mntPhone, setMntPhone] = useState(""); // Mongolian phone number
 
-  // Passport photo
+  // Passport
   const [passportUrl, setPassportUrl] = useState("");
 
-  // Sanitize filename - remove special characters and spaces
-  const sanitizeFilename = (filename: string): string => {
-    // Get extension
-    const ext = filename.split('.').pop() || 'jpg';
-    // Generate safe filename with timestamp
-    return `passport_${Date.now()}.${ext}`;
-  };
+  const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handlePassportUpload = async (file: File) => {
     try {
       setUploading(true);
       setError("");
-      const safeFilename = sanitizeFilename(file.name);
-      const path = `passports/${safeFilename}`;
-      const presigned = await requestPresign({ bucket: "passports", path });
-      await fetch(presigned.upload_url, {
+      const { uploadUrl, storageUrl } = await requestPresign(file.name, file.type);
+      await fetch(uploadUrl, {
         method: "PUT",
         body: file,
         headers: { "Content-Type": file.type },
       });
-      setPassportUrl(presigned.public_url);
+      setPassportUrl(storageUrl);
     } catch (err) {
       console.error("Passport upload error:", err);
-      setError("Зураг оруулахад алдаа гарлаа. Дахин оролдоно уу.");
+      setError("Паспорт зураг оруулахад алдаа гарлаа");
     } finally {
       setUploading(false);
     }
@@ -81,6 +75,7 @@ export function RegistrationModal({ onRegistered }: Props) {
       mntBankName.trim() &&
       mntAccountNumber.trim() &&
       mntOwnerName.trim() &&
+      mntPhone.trim() &&
       passportUrl
     );
   };
@@ -106,6 +101,7 @@ export function RegistrationModal({ onRegistered }: Props) {
         mnt_bank_name: mntBankName.trim(),
         mnt_account_number: mntAccountNumber.trim(),
         mnt_owner_name: mntOwnerName.trim(),
+        mnt_phone: mntPhone.trim(),
         passport_storage_url: passportUrl,
       };
 
@@ -269,44 +265,65 @@ export function RegistrationModal({ onRegistered }: Props) {
                 placeholder="БАТ-ЭРДЭНЭ"
               />
             </div>
+
+            <div>
+              <label className="text-xs text-slate-500">Монгол утасны дугаар <span className="text-red-500">*</span></label>
+              <input
+                type="tel"
+                value={mntPhone}
+                onChange={(e) => setMntPhone(e.target.value)}
+                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                placeholder="+976 9911 2233"
+              />
+            </div>
           </div>
 
           {/* Passport Upload Section */}
           <div className="space-y-3 pt-3 border-t border-slate-100">
             <div className="flex items-center gap-2 text-ocean-700 font-semibold">
-              <Upload className="w-4 h-4" />
-              <span>Паспортын зураг <span className="text-red-500">*</span></span>
+              <FileText className="w-4 h-4" />
+              <span>Паспортын зураг</span>
             </div>
 
-            <label className="flex flex-col items-center justify-center border-2 border-dashed border-ocean-200 rounded-xl py-6 cursor-pointer bg-white/60 hover:bg-ocean-50 transition">
-              {passportUrl ? (
-                <div className="flex flex-col items-center gap-2 text-green-600">
-                  <CheckCircle2 className="w-8 h-8" />
-                  <span className="font-medium text-sm">Амжилттай хавсаргалаа!</span>
-                  <img src={passportUrl} alt="Passport" className="mt-2 max-h-32 rounded-lg" />
-                </div>
-              ) : (
-                <>
-                  <Upload className="w-8 h-8 text-ocean-600" />
-                  <span className="text-sm text-slate-500 mt-2">
-                    {uploading ? "Хавсаргаж байна..." : "Паспортын зураг оруулах"}
-                  </span>
-                  <span className="text-xs text-slate-400 mt-1">
-                    Нүүр хэсгийн зургийг оруулаарай (.jpg, .png форматаар)
-                  </span>
-                </>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handlePassportUpload(file);
-                }}
-                disabled={uploading}
-              />
-            </label>
+            <div>
+              <label className="text-xs text-slate-500">Паспортын зураг оруулах <span className="text-red-500">*</span></label>
+              <div className="mt-1">
+                {passportUrl ? (
+                  <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <span className="text-sm text-green-700">Паспорт амжилттай оруулсан</span>
+                    <button
+                      type="button"
+                      onClick={() => setPassportUrl("")}
+                      className="ml-auto text-xs text-ocean-600 hover:underline"
+                    >
+                      Өөрчлөх
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-ocean-300 rounded-lg cursor-pointer hover:bg-ocean-50 transition">
+                    {uploading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin text-ocean-600" />
+                        <span className="text-sm text-ocean-600">Оруулж байна...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-ocean-600" />
+                        <span className="text-sm text-ocean-600">Паспортын зургаа оруулна уу</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePassportUpload}
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Error */}

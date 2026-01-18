@@ -71,6 +71,7 @@ export type RegistrationInput = {
   mnt_bank_name: string;
   mnt_account_number: string;
   mnt_owner_name: string;
+  mnt_phone: string;
   passport_storage_url: string;
 };
 
@@ -96,6 +97,7 @@ export type ExchangeCreateInput = {
   bank_details: string;
   promo_code?: string;
   receipt_path?: string;
+  receipt_paths?: string[]; // Multiple receipt images
   invoice?: string;
   admin_bank_id?: number;
 };
@@ -215,6 +217,7 @@ export type UserPromoCode = {
   discount: number;
   active: boolean;
   expires_at?: string;
+  source?: string;
 };
 
 export async function fetchUserPromoCodes(): Promise<{ promo_codes: UserPromoCode[] }> {

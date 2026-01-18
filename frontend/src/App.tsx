@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dashboard } from "./pages/Dashboard";
 import { AdminPanel } from "./pages/AdminPanel";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
-import { Shield } from "lucide-react";
+import { Shield, MessageCircle } from "lucide-react";
 import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
 import { DevToolbar } from "./components/DevToolbar";
 
@@ -54,6 +54,17 @@ export default function App() {
       {/* Diagnostic Helper */}
       <TelegramDiagnostic />
       <DevToolbar />
+
+      {/* Support Chat Button */}
+      <a
+        href="https://t.me/Oyuns_support"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-ocean-600 text-white rounded-full shadow-lg hover:bg-ocean-700 transition-all hover:scale-105"
+      >
+        <MessageCircle className="w-5 h-5" />
+        <span className="font-medium">Тусламж</span>
+      </a>
     </div>
   );
 }

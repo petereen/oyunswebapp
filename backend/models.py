@@ -36,6 +36,7 @@ class ExchangeCreateRequest(BaseModel):
     bank_details: str
     promo_code: Optional[str] = None
     receipt_path: Optional[str] = None
+    receipt_paths: Optional[list[str]] = None  # Multiple receipt images
     invoice: Optional[str] = None
 
 
@@ -152,11 +153,12 @@ class RegistrationRequest(BaseModel):
     rub_phone_sbp: str
     rub_card_number: str
     rub_owner_name: str
-    # MNT bank info: bank_name, account_number, owner_name
+    # MNT bank info: bank_name, account_number, owner_name, phone
     mnt_bank_name: str
     mnt_account_number: str
     mnt_owner_name: str
-    passport_storage_url: str
+    mnt_phone: str  # Mongolian phone number
+    passport_storage_url: str  # Passport image URL
 
 
 class UpdateBankInfoRequest(BaseModel):
@@ -171,6 +173,7 @@ class UpdateBankInfoRequest(BaseModel):
     mnt_bank_name: str
     mnt_account_number: str
     mnt_owner_name: str
+    mnt_phone: Optional[str] = None  # Mongolian phone number
 
 
 class KycActionRequest(BaseModel):
@@ -219,6 +222,7 @@ class UserPromoCode(BaseModel):
     discount: float
     active: bool
     expires_at: Optional[datetime] = None
+    source: Optional[str] = None
 
 
 class UserPromoCodesResponse(BaseModel):

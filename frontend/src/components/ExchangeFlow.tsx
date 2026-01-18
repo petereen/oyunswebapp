@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
-import { createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount } from "../api";
+import { createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode } from "../api";
 
 interface Props {
   initData: string;
@@ -48,6 +48,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   const [promoError, setPromoError] = useState("");
   const [promoValid, setPromoValid] = useState(false);
   const [promoMessage, setPromoMessage] = useState("");
+  const [userPromoCodes, setUserPromoCodes] = useState<UserPromoCode[]>([]);
   
   // Amount
   const [amount, setAmount] = useState<number>(0);
@@ -71,8 +72,8 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   const [mntIban, setMntIban] = useState<string>("");
   const [mntOwnerName, setMntOwnerName] = useState<string>("");
   
-  // Receipt upload
-  const [receiptUrl, setReceiptUrl] = useState<string>("");
+  // Receipt upload - now supports multiple
+  const [receiptUrls, setReceiptUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   
   // Invoice ID (generated when entering step 3)
@@ -104,11 +105,21 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     return `${year}${month}${day}-${hours}${minutes}${seconds}-${random}`;
   };
 
-  // Load admin bank accounts
+  // Load admin bank accounts and user promo codes
   useEffect(() => {
     fetchAdminBankAccounts()
       .then((res) => setAdminBanks(res.accounts || []))
       .catch(() => setAdminBanks([]));
+    
+    // Load user's promo codes (source != "default" and active = true)
+    fetchUserPromoCodes()
+      .then((res) => {
+        const nonDefaultCodes = (res.promo_codes || []).filter(
+          p => p.active && p.source && p.source !== "default"
+        );
+        setUserPromoCodes(nonDefaultCodes);
+      })
+      .catch(() => setUserPromoCodes([]));
   }, []);
 
   // Calculate effective rate with promo discount
@@ -247,13 +258,23 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         body: file,
         headers: { "Content-Type": file.type },
       });
-      setReceiptUrl(presigned.public_url);
+      setReceiptUrls(prev => [...prev, presigned.public_url]);
     } catch (err) {
       console.error(err);
       setError("Файл байршуулахад алдаа. Дахин оролдоно уу.");
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleMultipleUpload = async (files: FileList) => {
+    for (const file of Array.from(files)) {
+      await handleUpload(file);
+    }
+  };
+
+  const removeReceipt = (index: number) => {
+    setReceiptUrls(prev => prev.filter((_, i) => i !== index));
   };
 
   const getSavedBankForDirection = (dir: "buy" | "sell") => {
@@ -336,7 +357,8 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         currency_to: currencyTo,
         rate: effectiveRate,
         bank_details: overrideBankDetails || buildBankDetails(),
-        receipt_path: receiptUrl,
+        receipt_path: receiptUrls[0], // First image for backward compatibility
+        receipt_paths: receiptUrls, // All images
         promo_code: promoValid ? promoCode : undefined,
         admin_bank_id: selectedAdminBank?.id,
         invoice: invoiceId, // Pass the pre-generated invoice ID
@@ -435,6 +457,33 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <span>{currencyFrom} → {currencyTo}</span>
             <span className="ml-auto font-semibold">Суурь ханш: {baseRate}</span>
           </div>
+
+          {/* User's available promo codes */}
+          {userPromoCodes.length > 0 && (
+            <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl">
+              <div className="text-sm font-medium text-purple-700 mb-2 flex items-center gap-2">
+                <Gift className="w-4 h-4" /> Таны промо кодууд:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {userPromoCodes.map((promo) => (
+                  <button
+                    key={promo.code}
+                    onClick={() => {
+                      setPromoCode(promo.code);
+                      setPromoError("");
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      promoCode === promo.code
+                        ? "bg-purple-600 text-white"
+                        : "bg-white text-purple-700 border border-purple-200 hover:bg-purple-100"
+                    }`}
+                  >
+                    {promo.code} ({promo.discount > 0 ? `+${promo.discount}` : promo.discount})
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <input
             value={promoCode}
@@ -693,7 +742,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {/* Step 4: Upload Receipt */}
       {step === 4 && direction && (
         <div className="flex flex-col gap-3">
-          <div className="text-sm text-slate-600">4-р алхам — Төлбөрийн баримт оруулах</div>
+          <div className="text-sm text-slate-600">4-р алхам — Төлбөрийн баримт оруулах (олон зураг хавсаргах боломжтой)</div>
           
           {/* Summary */}
           <div className="p-3 bg-ocean-50 rounded-xl text-sm">
@@ -707,11 +756,29 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             </div>
           </div>
 
+          {/* Uploaded receipts preview */}
+          {receiptUrls.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {receiptUrls.map((url, index) => (
+                <div key={index} className="relative">
+                  <img src={url} alt={`Receipt ${index + 1}`} className="w-20 h-20 object-cover rounded-lg border border-ocean-200" />
+                  <button
+                    onClick={() => removeReceipt(index)}
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-ocean-200 rounded-xl py-8 cursor-pointer bg-white/60 hover:bg-ocean-50 transition">
-            {receiptUrl ? (
-              <div className="flex items-center gap-2 text-green-600">
+            {receiptUrls.length > 0 ? (
+              <div className="flex flex-col items-center gap-2 text-green-600">
                 <CheckCircle2 className="w-6 h-6" />
-                <span className="font-medium">Баримтыг амжилттай хавсаргалаа!</span>
+                <span className="font-medium">{receiptUrls.length} зураг хавсаргасан</span>
+                <span className="text-xs text-slate-500">Нэмж зураг хавсаргахын тулд энд дарна уу</span>
               </div>
             ) : (
               <>
@@ -719,15 +786,17 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                 <span className="text-sm text-slate-500 mt-2">
                   {uploading ? "Хавсаргаж байна..." : "Төлбөрийн баримтын скриншот зураг оруулах"}
                 </span>
+                <span className="text-xs text-slate-400 mt-1">Олон зураг сонгож болно</span>
               </>
             )}
             <input
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUpload(file);
+                const files = e.target.files;
+                if (files && files.length > 0) handleMultipleUpload(files);
               }}
               disabled={uploading}
             />
@@ -748,7 +817,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               }
               setStep(5);
             }}
-            disabled={!receiptUrl}
+            disabled={receiptUrls.length === 0}
           >
             Үргэлжлүүлэх
           </button>

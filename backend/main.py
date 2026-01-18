@@ -584,7 +584,7 @@ async def register_user(
     
     # Format bank details as comma-separated strings
     bank_rub = f"{payload.rub_bank_name},{payload.rub_phone_sbp},{payload.rub_card_number},{payload.rub_owner_name}"
-    bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name}"
+    bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone}"
     
     # Update user record with registration info
     update_payload = {
@@ -610,7 +610,8 @@ async def register_user(
         admin_text = (
             f"📋 <b>Шинэ бүртгэл баталгаажуулалт хүлээгдэж байна</b>\n\n"
             f"👤 Хэрэглэгч: {payload.last_name} {payload.first_name}\n"
-            f"📱 Утас: {payload.phone}\n"
+            f"📱 Утас (RU): {payload.phone}\n"
+            f"📱 Утас (MN): {payload.mnt_phone}\n"
             f"🆔 Telegram ID: {user.id}\n"
         )
         send_user_notification(shift_admin_id, admin_text)
@@ -635,7 +636,7 @@ async def update_bank_info(
     
     # Format bank details as comma-separated strings
     bank_rub = f"{payload.rub_bank_name},{payload.rub_phone_sbp},{payload.rub_card_number},{payload.rub_owner_name}"
-    bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name}"
+    bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone or ''}"
     
     # Update user record with bank info only
     update_payload = {
@@ -677,6 +678,16 @@ async def create_exchange(
         returning="minimal",
     ).execute()
 
+    # Support both single receipt_path and multiple receipt_paths
+    receipt_paths_list = payload.receipt_paths or []
+    if payload.receipt_path and payload.receipt_path not in receipt_paths_list:
+        receipt_paths_list.append(payload.receipt_path)
+    
+    # Store paths as JSON array for bill_url, single path for receipt_id (backward compatibility)
+    import json
+    bill_url_value = json.dumps(receipt_paths_list) if receipt_paths_list else None
+    receipt_id_value = receipt_paths_list[0] if receipt_paths_list else None
+    
     insert_payload = {
         "user_id": user.id,
         "invoice": invoice,
@@ -686,11 +697,11 @@ async def create_exchange(
         "rate": str(payload.rate),
         "status": "pending",
         "timestamp": now.isoformat(),
-        "bill_url": payload.receipt_path,
-        "receipt_id": payload.receipt_path,
+        "bill_url": bill_url_value,
+        "receipt_id": receipt_id_value,
         "promo_code": payload.promo_code,
         "bank_details": payload.bank_details,
-        "receipt_submitted_at": now.isoformat() if payload.receipt_path else None,
+        "receipt_submitted_at": now.isoformat() if receipt_paths_list else None,
     }
 
     # snapshot buy/sell side
@@ -1520,7 +1531,7 @@ async def get_user_promo_codes(user=Depends(get_jwt_authenticated_user)):
     
     res = (
         client.table("promo_codes")
-        .select("code,discount,active,expires_at")
+        .select("code,discount,active,expires_at,source")
         .eq("user_id", user.id)
         .eq("active", True)  # Only return active promo codes
         .execute()
@@ -1532,6 +1543,7 @@ async def get_user_promo_codes(user=Depends(get_jwt_authenticated_user)):
             discount=float(p.get("discount", 0) or 0),
             active=p.get("active", False),
             expires_at=p.get("expires_at"),
+            source=p.get("source"),
         )
         for p in res.data or []
     ]
