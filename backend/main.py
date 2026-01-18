@@ -19,6 +19,8 @@ from models import (
     AdminShiftResponse,
     AdminUser,
     AdminUsersResponse,
+    AuthRequest,
+    AuthResponse,
     ExchangeCreateRequest,
     ExchangeCreateResponse,
     HealthResponse,
@@ -50,7 +52,16 @@ from models import (
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo
-from utils import TelegramAuthError, generate_invoice, verify_telegram_init_data
+from utils import (
+    TelegramAuthError,
+    JWTAuthError,
+    generate_invoice,
+    verify_telegram_init_data,
+    create_jwt_token,
+    verify_jwt_token,
+    log_admin_action,
+    debug_telegram_validation,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -167,6 +178,33 @@ async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Hea
         logger.warning("Auth failed: missing X-Telegram-Init-Data header")
         raise HTTPException(status_code=401, detail="Missing X-Telegram-Init-Data header")
     
+    # Dev mode bypass
+    if settings.dev_mode and x_telegram_init_data.startswith("dev_mode_bypass"):
+        try:
+            import json
+            from models import AuthenticatedUser
+            # Extract user json if present: "dev_mode_bypass:{"id":123,...}"
+            parts = x_telegram_init_data.split(":", 1)
+            if len(parts) > 1 and parts[1].strip():
+                user_data = json.loads(parts[1])
+                return AuthenticatedUser(
+                    id=user_data.get("id", 123456789),
+                    first_name=user_data.get("first_name", "Dev"),
+                    last_name=user_data.get("last_name", "User"),
+                    username=user_data.get("username", "dev_user"),
+                )
+        except Exception as e:
+            logger.warning(f"Dev mode auth parsing failed: {e}")
+        
+        # Default dev user
+        from models import AuthenticatedUser
+        return AuthenticatedUser(
+            id=123456789,
+            first_name="Dev",
+            last_name="User",
+            username="dev_user",
+        )
+
     try:
         return verify_telegram_init_data(x_telegram_init_data, settings.bot_token)
     except TelegramAuthError as exc:
@@ -183,7 +221,33 @@ async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Hea
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
+async def get_jwt_authenticated_user(authorization: Annotated[str | None, Header(alias="Authorization")] = None):
+    """
+    Verify JWT token from Authorization header.
+    This is the preferred authentication method for subsequent requests after /api/auth.
+    """
+    settings = get_settings()
+    if not authorization:
+        logger.warning("Auth failed: missing Authorization header")
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    
+    # Extract token from "Bearer <token>" format
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        logger.warning(f"Auth failed: invalid Authorization header format")
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format. Use: Bearer <token>")
+    
+    token = parts[1]
+    
+    try:
+        return verify_jwt_token(token, settings.jwt_secret)
+    except JWTAuthError as exc:
+        logger.warning(f"JWT auth failed: {exc}")
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
 async def require_admin(request: Request):
+    """Validate admin API key (for admin panel access)"""
     settings = get_settings()
     provided = request.headers.get("X-Admin-Key")
     if not settings.admin_api_key or provided != settings.admin_api_key:
@@ -191,9 +255,79 @@ async def require_admin(request: Request):
     return True
 
 
+async def require_admin_user(user=Depends(get_jwt_authenticated_user)):
+    """Validate that authenticated user is an admin (by Telegram user ID)"""
+    settings = get_settings()
+    if user.id not in settings.admin_user_ids:
+        logger.warning(f"Non-admin user {user.id} attempted to access admin endpoint")
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse()
+
+
+@app.post("/api/auth", response_model=AuthResponse)
+async def authenticate(payload: AuthRequest):
+    """
+    Authenticate user with Telegram initData and return a JWT token.
+    This endpoint should be called ONCE when the app loads.
+    All subsequent requests should use the returned JWT token.
+    """
+    settings = get_settings()
+    
+    try:
+        user = None
+        # Check for dev mode bypass
+        if settings.dev_mode and payload.init_data.startswith("dev_mode_bypass"):
+            try:
+                import json
+                from models import AuthenticatedUser
+                parts = payload.init_data.split(":", 1)
+                if len(parts) > 1 and parts[1].strip():
+                    user_data = json.loads(parts[1])
+                    user = AuthenticatedUser(
+                        id=user_data.get("id", 123456789),
+                        first_name=user_data.get("first_name", "Dev"),
+                        last_name=user_data.get("last_name", "User"),
+                        username=user_data.get("username", "dev_user"),
+                    )
+            except Exception:
+                pass
+            
+            if not user:
+                from models import AuthenticatedUser
+                user = AuthenticatedUser(
+                    id=123456789,
+                    first_name="Dev",
+                    last_name="User",
+                    username="dev_user",
+                )
+        else:
+            # Verify Telegram initData
+            user = verify_telegram_init_data(payload.init_data, settings.bot_token)
+        
+        # Create JWT token
+        token = create_jwt_token(user, settings.jwt_secret)
+        
+        logger.info(f"User {user.id} authenticated successfully, JWT token issued")
+        
+        return AuthResponse(
+            token=token,
+            user=user,
+        )
+    except TelegramAuthError as exc:
+        logger.warning(f"Authentication failed for initData: {exc}")
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/debug")
+async def auth_debug(payload: AuthRequest):
+    """Debug endpoint to verify initData validation details"""
+    settings = get_settings()
+    return debug_telegram_validation(payload.init_data, settings.bot_token)
 
 
 @app.get("/api/rates", response_model=RateResponse)
@@ -300,7 +434,7 @@ async def get_service_status():
 @app.post("/api/storage/presign", response_model=PresignResponse)
 async def create_presigned_url(
     payload: PresignRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     settings = get_settings()
     client = get_supabase()
@@ -313,7 +447,7 @@ async def create_presigned_url(
 
 
 @app.get("/api/history", response_model=HistoryResponse)
-async def history(user=Depends(get_authenticated_user)):
+async def history(user=Depends(get_jwt_authenticated_user)):
     client = get_supabase()
     res = (
         client.table("transactions")
@@ -343,10 +477,99 @@ async def history(user=Depends(get_authenticated_user)):
     return HistoryResponse(items=items)
 
 
+@app.get("/api/analytics")
+async def get_analytics(user=Depends(get_jwt_authenticated_user)):
+    """Get transaction analytics for the user - monthly spending by direction."""
+    from zoneinfo import ZoneInfo
+    from collections import defaultdict
+    
+    client = get_supabase()
+    moscow_tz = ZoneInfo("Europe/Moscow")
+    
+    # Get all completed transactions for this user
+    res = (
+        client.table("transactions")
+        .select("amount,currency_from,currency_to,direction,timestamp,status")
+        .eq("user_id", user.id)
+        .eq("status", "completed")
+        .order("timestamp", desc=False)  # oldest first for chronological data
+        .execute()
+    )
+    
+    if not res.data:
+        return {
+            "monthly_buy": [],
+            "monthly_sell": [],
+            "total_buy_rub": 0,
+            "total_sell_rub": 0,
+            "total_transactions": 0,
+        }
+    
+    # Group by month and direction
+    monthly_buy = defaultdict(float)
+    monthly_sell = defaultdict(float)
+    total_buy_rub = 0
+    total_sell_rub = 0
+    
+    for trx in res.data:
+        try:
+            timestamp = datetime.fromisoformat(trx.get("timestamp", "").replace('Z', '+00:00'))
+            month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01"
+            
+            direction = trx.get("direction", "")
+            amount = float(trx.get("amount", 0))
+            currency_from = trx.get("currency_from", "")
+            
+            # Calculate RUB equivalent
+            if direction == "buy":
+                # User buying MNT with RUB (RUB -> MNT)
+                if currency_from == "RUB":
+                    rub_amount = amount
+                else:
+                    continue  # Skip if not standard flow
+                monthly_buy[month_key] += rub_amount
+                total_buy_rub += rub_amount
+                
+            elif direction == "sell":
+                # User selling MNT for RUB (MNT -> RUB)
+                if currency_from == "MNT":
+                    # Estimate RUB received (amount / rate)
+                    # For simplicity, we'll track MNT sold
+                    # In real scenario, you'd want to track the RUB received
+                    monthly_sell[month_key] += amount
+                    total_sell_rub += amount
+                    
+        except Exception as e:
+            logger.error(f"Error processing transaction for analytics: {e}")
+            continue
+    
+    # Convert to sorted list format for frontend
+    all_months = sorted(set(list(monthly_buy.keys()) + list(monthly_sell.keys())))
+    
+    monthly_buy_data = [
+        {"month": month, "amount": round(monthly_buy.get(month, 0), 2)}
+        for month in all_months
+    ]
+    
+    monthly_sell_data = [
+        {"month": month, "amount": round(monthly_sell.get(month, 0), 2)}
+        for month in all_months
+    ]
+    
+    return {
+        "monthly_buy": monthly_buy_data,
+        "monthly_sell": monthly_sell_data,
+        "total_buy_rub": round(total_buy_rub, 2),
+        "total_sell_rub": round(total_sell_rub, 2),
+        "total_transactions": len(res.data),
+    }
+
+
 @app.get("/api/me", response_model=MeResponse)
-async def me(user=Depends(get_authenticated_user)):
+async def me(user=Depends(get_jwt_authenticated_user)):
     from zoneinfo import ZoneInfo
     
+    settings = get_settings()
     client = get_supabase()
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz).isoformat()
@@ -359,11 +582,30 @@ async def me(user=Depends(get_authenticated_user)):
     client.table("users").upsert(upsert_payload, returning="minimal").execute()
     db_user = client.table("users").select("*").eq("id", user.id).limit(1).execute().data
     record = db_user[0] if db_user else upsert_payload
-    return MeResponse(user=UpsertUserPayload(**record))
+    
+    # Add is_admin flag to response
+    is_admin = user.id in settings.admin_user_ids
+    
+    # Log admin panel access
+    if is_admin:
+        log_admin_action(
+            client=client,
+            admin_user_id=user.id,
+            action_type="panel_access",
+            target_type="system",
+            target_id="admin_panel",
+            details={
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "username": user.username
+            }
+        )
+    
+    return MeResponse(user=UpsertUserPayload(**record), is_admin=is_admin)
 
 
 @app.post("/api/agree-terms")
-async def agree_terms(user=Depends(get_authenticated_user)):
+async def agree_terms(user=Depends(get_jwt_authenticated_user)):
     """Record that user has agreed to terms of service."""
     from zoneinfo import ZoneInfo
     
@@ -382,7 +624,7 @@ async def agree_terms(user=Depends(get_authenticated_user)):
 @app.post("/api/register")
 async def register_user(
     payload: RegistrationRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     """Submit user registration for verification."""
     from zoneinfo import ZoneInfo
@@ -433,7 +675,7 @@ async def register_user(
 @app.post("/api/update-bank-info")
 async def update_bank_info(
     payload: UpdateBankInfoRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     """Update user's bank info (for verified users to update their banking details)."""
     from zoneinfo import ZoneInfo
@@ -465,7 +707,7 @@ async def update_bank_info(
 @app.post("/api/exchange/create", response_model=ExchangeCreateResponse)
 async def create_exchange(
     payload: ExchangeCreateRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     from zoneinfo import ZoneInfo
     
@@ -590,9 +832,21 @@ async def create_exchange(
 async def admin_action(
     payload: AdminActionRequest,
     admin=Depends(require_admin),
+    request: Request = None,
 ):
     import logging
     logger = logging.getLogger("uvicorn.error")
+    
+    # Get admin user ID from request headers if available (for logging)
+    admin_user_id = None
+    try:
+        init_data = request.headers.get("X-Telegram-Init-Data") if request else None
+        if init_data:
+            settings = get_settings()
+            admin_user = verify_telegram_init_data(init_data, settings.bot_token)
+            admin_user_id = admin_user.id
+    except Exception:
+        pass  # Admin key auth doesn't provide user ID
     
     client = get_supabase()
     now = datetime.now(timezone.utc)
@@ -712,6 +966,23 @@ async def admin_action(
             if payload.rejection_comment:
                 rejection_msg += f"\n\nШалтгаан: {payload.rejection_comment}"
             send_user_notification(user_id=int(user_id), text=rejection_msg)
+    
+    # Log admin action
+    if admin_user_id:
+        log_admin_action(
+            client=client,
+            admin_user_id=admin_user_id,
+            action_type=f"transaction_{payload.status}",
+            target_type="transaction",
+            target_id=payload.invoice,
+            details={
+                "previous_status": trx.get("status"),
+                "new_status": payload.status,
+                "rejection_comment": payload.rejection_comment,
+                "admin_comment": payload.admin_comment,
+                "has_admin_bill": bool(payload.admin_bill_url),
+            }
+        )
 
     return {"ok": True}
 
@@ -785,9 +1056,21 @@ async def admin_kyc(admin=Depends(require_admin)):
 async def admin_kyc_action(
     payload: KycActionRequest,
     admin=Depends(require_admin),
+    request: Request = None,
 ):
     """Approve or reject user verification."""
     from zoneinfo import ZoneInfo
+    
+    # Get admin user ID for logging
+    admin_user_id = None
+    try:
+        init_data = request.headers.get("X-Telegram-Init-Data") if request else None
+        if init_data:
+            settings = get_settings()
+            admin_user = verify_telegram_init_data(init_data, settings.bot_token)
+            admin_user_id = admin_user.id
+    except Exception:
+        pass
     
     client = get_supabase()
     moscow_tz = ZoneInfo("Europe/Moscow")
@@ -816,6 +1099,17 @@ async def admin_kyc_action(
         )
         send_user_notification(user_id=payload.user_id, text=notification_text)
         
+        # Log admin action
+        if admin_user_id:
+            log_admin_action(
+                client=client,
+                admin_user_id=admin_user_id,
+                action_type="kyc_approve",
+                target_type="user",
+                target_id=str(payload.user_id),
+                details={"user_name": user_name}
+            )
+        
         return {"ok": True, "message": f"User {user_name} verified successfully"}
     
     elif payload.action == "reject":
@@ -833,6 +1127,20 @@ async def admin_kyc_action(
             f"Та мэдээллээ засаад дахин илгээнэ үү."
         )
         send_user_notification(user_id=payload.user_id, text=notification_text)
+        
+        # Log admin action
+        if admin_user_id:
+            log_admin_action(
+                client=client,
+                admin_user_id=admin_user_id,
+                action_type="kyc_reject",
+                target_type="user",
+                target_id=str(payload.user_id),
+                details={
+                    "user_name": user_name,
+                    "rejection_reason": rejection_reason
+                }
+            )
         
         return {"ok": True, "message": f"User {user_name} verification rejected"}
     
@@ -1171,7 +1479,7 @@ async def update_working_hours(
 @app.post("/api/promo/validate", response_model=PromoCodeValidateResponse)
 async def validate_promo_code(
     payload: PromoCodeValidateRequest,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_jwt_authenticated_user),
 ):
     """
     Validate a promo code.
@@ -1254,7 +1562,7 @@ async def validate_promo_code(
 
 # User's promo codes
 @app.get("/api/user/promo-codes", response_model=UserPromoCodesResponse)
-async def get_user_promo_codes(user=Depends(get_authenticated_user)):
+async def get_user_promo_codes(user=Depends(get_jwt_authenticated_user)):
     """
     Get promo codes belonging to the authenticated user.
     Returns codes from promo_codes table where user_id matches.

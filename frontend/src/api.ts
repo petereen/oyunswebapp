@@ -6,6 +6,35 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
+// Add request/response interceptors for debugging
+api.interceptors.request.use(config => {
+  const initData = config.headers["X-Telegram-Init-Data"];
+  if (initData) {
+    console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+      hasInitData: !!initData,
+      initDataLength: (initData as string).length,
+    });
+  } else {
+    console.warn(`⚠️ API Request without initData: ${config.url}`);
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  response => {
+    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
+  error => {
+    console.error(`❌ API Error: ${error.response?.status || error.message} ${error.config?.url}`, {
+      status: error.response?.status,
+      data: error.response?.data,
+      headers: error.response?.headers,
+    });
+    return Promise.reject(error);
+  }
+);
+
 export type Rate = { buy_rate: number; sell_rate: number; updated_at?: string };
 
 export type ServiceStatus = {
@@ -96,6 +125,41 @@ export const withAdminKey = (key?: string) =>
       }
     : undefined;
 
+// JWT Auth helpers
+const JWT_KEY = 'oyunsbot_jwt_token';
+
+export function storeJwtToken(token: string) {
+  localStorage.setItem(JWT_KEY, token);
+}
+
+export function getJwtToken(): string | null {
+  return localStorage.getItem(JWT_KEY);
+}
+
+export function clearJwtToken() {
+  localStorage.removeItem(JWT_KEY);
+}
+
+export async function loginWithTelegram(initData: string) {
+  // Call /api/auth to get JWT
+  const res = await api.post<{ token: string; user: UserProfile }>(
+    '/auth',
+    { init_data: initData }
+  );
+  storeJwtToken(res.data.token);
+  return res.data;
+}
+
+export async function debugAuth(initData: string) {
+  const res = await api.post('/auth/debug', { init_data: initData });
+  return res.data;
+}
+
+export function withJwt() {
+  const token = getJwtToken();
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+}
+
 export async function fetchRates() {
   const res = await api.get<Rate>('/rates');
   return res.data;
@@ -106,13 +170,13 @@ export async function fetchServiceStatus() {
   return res.data;
 }
 
-export async function fetchMe(initData: string) {
-  const res = await api.get<{ user: UserProfile }>('/me', withInitData(initData));
-  return res.data.user;
+export async function fetchMe() {
+  const res = await api.get<{ user: UserProfile; is_admin: boolean }>('/me', withJwt());
+  return res.data;
 }
 
-export async function agreeToTerms(initData: string) {
-  const res = await api.post('/agree-terms', {}, withInitData(initData));
+export async function agreeToTerms() {
+  const res = await api.post('/agree-terms', {}, withJwt());
   return res.data as { ok: boolean; agreed_terms: boolean };
 }
 
@@ -127,24 +191,29 @@ export type UpdateBankInfoInput = {
   mnt_owner_name: string;
 };
 
-export async function updateBankInfo(initData: string, payload: UpdateBankInfoInput) {
-  const res = await api.post('/update-bank-info', payload, withInitData(initData));
+export async function updateBankInfo(payload: UpdateBankInfoInput) {
+  const res = await api.post('/update-bank-info', payload, withJwt());
   return res.data as { ok: boolean; message: string };
 }
 
-export async function createExchange(initData: string, payload: ExchangeCreateInput) {
-  const res = await api.post('/exchange/create', payload, withInitData(initData));
+export async function createExchange(payload: ExchangeCreateInput) {
+  const res = await api.post('/exchange/create', payload, withJwt());
   return res.data;
 }
 
-export async function requestPresign(initData: string, payload: PresignRequest) {
-  const res = await api.post('/storage/presign', payload, withInitData(initData));
+export async function requestPresign(payload: PresignRequest) {
+  const res = await api.post('/storage/presign', payload, withJwt());
   return res.data as { upload_url: string; public_url: string; path: string };
 }
 
-export async function fetchHistory(initData: string) {
-  const res = await api.get('/history', withInitData(initData));
+export async function fetchHistory() {
+  const res = await api.get('/history', withJwt());
   return res.data as { items: any[] };
+}
+
+export async function fetchAnalytics() {
+  const res = await api.get('/analytics', withJwt());
+  return res.data;
 }
 
 export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAccount[] }> {
@@ -157,13 +226,13 @@ export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAcc
   }
 }
 
-export async function validatePromoCode(initData: string, code: string, direction: string) {
-  const res = await api.post('/promo/validate', { code, direction }, withInitData(initData));
+export async function validatePromoCode(code: string, direction: string) {
+  const res = await api.post('/promo/validate', { code, direction }, withJwt());
   return res.data as { valid: boolean; discount_amount?: number; message?: string };
 }
 
-export async function submitRegistration(initData: string, payload: RegistrationInput) {
-  const res = await api.post('/register', payload, withInitData(initData));
+export async function submitRegistration(payload: RegistrationInput) {
+  const res = await api.post('/register', payload, withJwt());
   return res.data as { ok: boolean; message: string };
 }
 
@@ -201,9 +270,9 @@ export type UserPromoCode = {
   expires_at?: string;
 };
 
-export async function fetchUserPromoCodes(initData: string): Promise<{ promo_codes: UserPromoCode[] }> {
+export async function fetchUserPromoCodes(): Promise<{ promo_codes: UserPromoCode[] }> {
   try {
-    const res = await api.get('/user/promo-codes', withInitData(initData));
+    const res = await api.get('/user/promo-codes', withJwt());
     return res.data as { promo_codes: UserPromoCode[] };
   } catch {
     return { promo_codes: [] };

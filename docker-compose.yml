@@ -20,6 +20,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_DEV_MODE: ${VITE_DEV_MODE}
     restart: unless-stopped
 
   nginx:

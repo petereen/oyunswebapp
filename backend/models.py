@@ -12,6 +12,15 @@ class AuthenticatedUser(BaseModel):
     username: Optional[str] = None
 
 
+class AuthRequest(BaseModel):
+    init_data: str = Field(..., description="Telegram initData string")
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: AuthenticatedUser
+
+
 class RateResponse(BaseModel):
     buy_rate: Decimal
     sell_rate: Decimal
@@ -172,6 +181,7 @@ class KycActionRequest(BaseModel):
 
 class MeResponse(BaseModel):
     user: UpsertUserPayload
+    is_admin: bool = False
 
 
 # Admin Bank Accounts
