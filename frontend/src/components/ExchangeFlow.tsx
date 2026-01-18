@@ -400,8 +400,10 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       setStep(2);
     } else if (step === 4) {
       setStep(3);
+      setUseSavedBank(null); // Reset so saved bank choice shows again when going forward
     } else if (step === 5) {
       setStep(4);
+      setUseSavedBank(null); // Reset so saved bank choice shows again
     }
   };
 

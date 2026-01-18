@@ -51,7 +51,7 @@ from models import (
     WorkingHoursUpdateRequest,
 )
 from storage import presign_upload, public_url
-from telegram import send_admin_notification, send_user_notification, send_user_photo
+from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
 from utils import (
     TelegramAuthError,
     JWTAuthError,
@@ -896,22 +896,12 @@ async def admin_action(
                     
                     logger.info(f"Sending {len(photo_urls)} photo(s) to user {user_id}")
                     
-                    # Send first photo with caption
-                    photo_sent = False
-                    if photo_urls:
-                        photo_sent = send_user_photo(
-                            user_id=int(user_id),
-                            photo_url=photo_urls[0],
-                            caption=completion_text
-                        )
-                        
-                        # Send additional photos without caption
-                        for url in photo_urls[1:]:
-                            send_user_photo(
-                                user_id=int(user_id),
-                                photo_url=url,
-                                caption=None
-                            )
+                    # Send all photos in one message using media group
+                    photo_sent = send_user_photos(
+                        user_id=int(user_id),
+                        photo_urls=photo_urls,
+                        caption=completion_text
+                    )
                     
                     # If photo sending failed, send text notification
                     if not photo_sent:

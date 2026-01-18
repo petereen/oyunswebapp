@@ -73,3 +73,45 @@ def send_user_photo(user_id: int, photo_url: str, caption: str | None = None) ->
     except Exception as e:
         logger.error(f"Failed to send photo to user {user_id}: {e}")
         return False
+
+
+def send_user_photos(user_id: int, photo_urls: list[str], caption: str | None = None) -> bool:
+    """Send multiple photos as a media group to user via Telegram. Returns True if successful."""
+    if not photo_urls:
+        return False
+    
+    # If only one photo, use sendPhoto instead
+    if len(photo_urls) == 1:
+        return send_user_photo(user_id, photo_urls[0], caption)
+    
+    settings = get_settings()
+    logger.info(f"Sending {len(photo_urls)} photos as media group to user_id={user_id}")
+    
+    # Build media array - caption goes on first photo only
+    media = []
+    for i, url in enumerate(photo_urls):
+        media_item = {"type": "photo", "media": url}
+        if i == 0 and caption:
+            media_item["caption"] = caption
+            media_item["parse_mode"] = "HTML"
+        media.append(media_item)
+    
+    payload = {
+        "chat_id": user_id,
+        "media": media
+    }
+    
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{settings.bot_token}/sendMediaGroup",
+            json=payload,
+            timeout=30,
+        )
+        logger.info(f"Media group send response to {user_id}: {response.status_code}")
+        if response.status_code != 200:
+            logger.error(f"Telegram API error sending media group to {user_id}: {response.text}")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send media group to user {user_id}: {e}")
+        return False
