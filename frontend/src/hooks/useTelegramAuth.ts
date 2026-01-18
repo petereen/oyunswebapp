@@ -59,6 +59,38 @@ export function useTelegramAuth() {
         
         const mockInitData = `dev_mode_bypass:${JSON.stringify(mockUser)}`;
         
+        // Mock window.Telegram for other components (like TelegramDiagnostic)
+        if (!window.Telegram) {
+          window.Telegram = {} as any;
+        }
+        window.Telegram!.WebApp = {
+          initData: mockInitData,
+          initDataUnsafe: {
+            user: mockUser
+          },
+          ready: () => console.log("Mock Telegram WebApp ready"),
+          // Add other necessary methods as no-ops
+          expand: () => {},
+          close: () => {},
+          MainButton: { 
+            show: () => {}, 
+            hide: () => {}, 
+            setText: () => {},
+            onClick: () => {},
+            offClick: () => {},
+            enable: () => {},
+            disable: () => {},
+            showProgress: () => {},
+            hideProgress: () => {},
+          } as any,
+          BackButton: {
+            show: () => {},
+            hide: () => {},
+            onClick: () => {},
+            offClick: () => {},
+          } as any,
+        } as any;
+
         setInitData(mockInitData);
         setUser(mockUser);
         
