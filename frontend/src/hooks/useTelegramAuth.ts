@@ -46,12 +46,16 @@ export function useTelegramAuth() {
       if (import.meta.env.VITE_DEV_MODE === 'true') {
         console.log("🔧 Dev Mode Active: Using mock Telegram data");
         
-        const mockUser = {
+        // Load dev user from local storage or default
+        const storedDevUser = localStorage.getItem("oyuns_dev_user");
+        const defaultDevUser = {
           id: 123456789,
           first_name: "Dev",
           last_name: "User",
           username: "dev_user"
         };
+        
+        const mockUser = storedDevUser ? JSON.parse(storedDevUser) : defaultDevUser;
         
         const mockInitData = `dev_mode_bypass:${JSON.stringify(mockUser)}`;
         

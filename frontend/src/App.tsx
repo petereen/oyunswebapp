@@ -4,6 +4,7 @@ import { AdminPanel } from "./pages/AdminPanel";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
 import { Shield } from "lucide-react";
 import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
+import { DevToolbar } from "./components/DevToolbar";
 
 export default function App() {
   const { initData, user, isAuthenticating, authError } = useTelegramAuth();
@@ -52,6 +53,7 @@ export default function App() {
 
       {/* Diagnostic Helper */}
       <TelegramDiagnostic />
+      <DevToolbar />
     </div>
   );
 }
