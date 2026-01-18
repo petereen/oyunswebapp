@@ -703,7 +703,6 @@ async def create_exchange(
         "currency_from": payload.currency_from,
         "currency_to": payload.currency_to,
         "rate": str(payload.rate),
-        "direction": payload.direction.lower(),  # Store direction for analytics
         "status": "pending",
         "timestamp": now.isoformat(),
         "bill_url": bill_url_value,
