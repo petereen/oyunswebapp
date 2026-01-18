@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { loginWithTelegram, getJwtToken } from "../api";
 
 declare global {
   interface Window {
@@ -27,6 +26,7 @@ export interface TelegramUser {
   username?: string;
 }
 
+// DEV MODE: Telegram auth is disabled
 export function useTelegramAuth() {
   const [initData, setInitData] = useState<string>("");
   const [user, setUser] = useState<TelegramUser | null>(null);
@@ -34,140 +34,58 @@ export function useTelegramAuth() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
+    // DEV MODE: Always use mock user without Telegram auth
+    console.log("🔧 DEV MODE: Telegram auth disabled, using mock user");
     
-    // Debug logging
-    console.log("=== Telegram Auth Debug ===");
-    console.log("Telegram WebApp available:", !!tg);
-    console.log("Telegram object:", window.Telegram);
+    // Load dev user from local storage or use default
+    const storedDevUser = localStorage.getItem("oyuns_dev_user");
+    const defaultDevUser: TelegramUser = {
+      id: 123456789,
+      first_name: "Dev",
+      last_name: "User",
+      username: "dev_user"
+    };
     
-    if (!tg) {
-      // Check for dev mode bypass
-      if (import.meta.env.VITE_DEV_MODE === 'true') {
-        console.log("🔧 Dev Mode Active: Using mock Telegram data");
-        
-        // Load dev user from local storage or default
-        const storedDevUser = localStorage.getItem("oyuns_dev_user");
-        const defaultDevUser = {
-          id: 123456789,
-          first_name: "Dev",
-          last_name: "User",
-          username: "dev_user"
-        };
-        
-        const mockUser = storedDevUser ? JSON.parse(storedDevUser) : defaultDevUser;
-        
-        const mockInitData = `dev_mode_bypass:${JSON.stringify(mockUser)}`;
-        
-        // Mock window.Telegram for other components (like TelegramDiagnostic)
-        if (!window.Telegram) {
-          window.Telegram = {} as any;
-        }
-        window.Telegram!.WebApp = {
-          initData: mockInitData,
-          initDataUnsafe: {
-            user: mockUser
-          },
-          ready: () => console.log("Mock Telegram WebApp ready"),
-          // Add other necessary methods as no-ops
-          expand: () => {},
-          close: () => {},
-          MainButton: { 
-            show: () => {}, 
-            hide: () => {}, 
-            setText: () => {},
-            onClick: () => {},
-            offClick: () => {},
-            enable: () => {},
-            disable: () => {},
-            showProgress: () => {},
-            hideProgress: () => {},
-          } as any,
-          BackButton: {
-            show: () => {},
-            hide: () => {},
-            onClick: () => {},
-            offClick: () => {},
-          } as any,
-        } as any;
-
-        setInitData(mockInitData);
-        setUser(mockUser);
-        
-        // Trigger auth flow with mock data
-        (async () => {
-          try {
-            setIsAuthenticating(true);
-            setAuthError(null);
-            const res = await loginWithTelegram(mockInitData);
-            if (res && res.user) {
-              setUser(res.user as TelegramUser);
-            }
-          } catch (e: any) {
-            console.error("Dev login failed:", e);
-            setAuthError(e?.message || "Dev authentication failed");
-          } finally {
-            setIsAuthenticating(false);
-          }
-        })();
-        
-        return;
-      }
-
-      console.error("Telegram WebApp not available!");
-      setInitData("");
-      setUser(null);
-      return;
+    const mockUser: TelegramUser = storedDevUser ? JSON.parse(storedDevUser) : defaultDevUser;
+    const mockInitData = `dev_mode_bypass:${JSON.stringify(mockUser)}`;
+    
+    // Mock window.Telegram for components that check it
+    if (!window.Telegram) {
+      window.Telegram = {} as any;
     }
+    window.Telegram!.WebApp = {
+      initData: mockInitData,
+      initDataUnsafe: {
+        user: mockUser
+      },
+      ready: () => console.log("Mock Telegram WebApp ready"),
+      expand: () => {},
+      close: () => {},
+      MainButton: { 
+        show: () => {}, 
+        hide: () => {}, 
+        setText: () => {},
+        onClick: () => {},
+        offClick: () => {},
+        enable: () => {},
+        disable: () => {},
+        showProgress: () => {},
+        hideProgress: () => {},
+      } as any,
+      BackButton: {
+        show: () => {},
+        hide: () => {},
+        onClick: () => {},
+        offClick: () => {},
+      } as any,
+    } as any;
+
+    setInitData(mockInitData);
+    setUser(mockUser);
+    setIsAuthenticating(false);
+    setAuthError(null);
     
-    console.log("initData:", tg.initData ? "✅ Present" : "❌ Missing");
-    console.log("initDataUnsafe:", tg.initDataUnsafe ? "✅ Present" : "❌ Missing");
-    console.log("initDataUnsafe.user:", tg.initDataUnsafe?.user ? "✅ Present" : "❌ Missing");
-    
-    if (tg.initData) {
-      console.log("initData length:", tg.initData.length);
-      console.log("initData preview:", tg.initData.substring(0, 100) + "...");
-      setInitData(tg.initData);
-      tg.ready?.();
-
-      // If we have a local JWT already, prefer it and skip immediate auth
-      if (getJwtToken()) {
-        console.log("Found existing JWT, skipping auth call");
-        // rely on backend /me to populate full user later
-      }
-
-      // If there's an unsafe user available, set it immediately for UI
-      if (tg.initDataUnsafe?.user) {
-        console.log("✅ User data retrieved:", tg.initDataUnsafe.user);
-        setUser(tg.initDataUnsafe.user as TelegramUser);
-      } else {
-        console.warn("⚠️ initDataUnsafe.user is missing!");
-        setUser(null);
-      }
-
-      // Attempt server-side login to get authoritative JWT and user
-      (async () => {
-        try {
-          setIsAuthenticating(true);
-          setAuthError(null);
-          const res = await loginWithTelegram(tg.initData);
-          if (res && res.user) {
-            setUser(res.user as TelegramUser);
-          }
-        } catch (e: any) {
-          console.error("Login with Telegram failed:", e);
-          setAuthError(e?.message || "Authentication failed");
-        } finally {
-          setIsAuthenticating(false);
-        }
-      })();
-
-      return;
-    }
-    
-    console.warn("⚠️ initData not available - might be running outside Telegram Mini App");
-    setInitData("");
-    setUser(null);
+    console.log("✅ Dev user loaded:", mockUser);
   }, []);
 
   return { initData, user, isAuthenticating, authError };
