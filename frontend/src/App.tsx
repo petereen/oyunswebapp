@@ -16,7 +16,7 @@ export default function App() {
   const { data: profile } = useQuery({
     queryKey: ["me", user?.id],
     queryFn: () => fetchMe(),
-    enabled: Boolean(initData) && Boolean(user?.id) && !Boolean(isAuthenticating),
+    enabled: Boolean(user?.id) && !isAuthenticating,
     staleTime: 0,
   });
 

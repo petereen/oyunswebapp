@@ -465,12 +465,11 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
         client = get_supabase()
         moscow_tz = ZoneInfo("Europe/Moscow")
         
-        # Get all transactions for this user except rejected ones
+        # Get all transactions for this user (include all statuses except rejected)
         res = (
             client.table("transactions")
             .select("amount,currency_from,currency_to,timestamp,status")
             .eq("user_id", user.id)
-            .neq("status", "rejected")
             .order("timestamp", desc=False)
             .execute()
         )
@@ -486,13 +485,17 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
                 "total_transactions": 0,
             }
         
+        # Filter out rejected transactions
+        valid_transactions = [t for t in res.data if t.get("status", "").lower() != "rejected"]
+        logger.info(f"Analytics: {len(valid_transactions)} valid transactions (non-rejected)")
+        
         # Group by month and direction (inferred from currency_from)
         monthly_buy = defaultdict(float)
         monthly_sell = defaultdict(float)
         total_buy_rub = 0
         total_sell_rub = 0
         
-        for trx in res.data:
+        for trx in valid_transactions:
             try:
                 timestamp_str = trx.get("timestamp", "")
                 if not timestamp_str:
@@ -501,9 +504,11 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
                 month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01"
                 
                 amount = float(trx.get("amount", 0) or 0)
-                currency_from = trx.get("currency_from", "")
+                currency_from = (trx.get("currency_from", "") or "").upper()
                 
-                # Infer direction from currency_from
+                logger.debug(f"Analytics trx: {amount} {currency_from}, month={month_key}")
+                
+                # Infer direction from currency_from (case-insensitive)
                 if currency_from == "RUB":
                     # User buying MNT with RUB (RUB -> MNT)
                     monthly_buy[month_key] += amount

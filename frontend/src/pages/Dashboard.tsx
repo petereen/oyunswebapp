@@ -39,7 +39,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: ["me", user?.id],
     queryFn: () => fetchMe(),
-    enabled: Boolean(initData) && Boolean(user?.id) && !Boolean(isAuthenticating),
+    enabled: Boolean(user?.id) && !isAuthenticating,
     staleTime: 0, // Always refetch to ensure fresh user data
   });
 
