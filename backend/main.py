@@ -872,20 +872,52 @@ async def admin_action(
         if payload.status == "approved":
             send_user_notification(
                 user_id=int(user_id),
-                text=f"✅ Таны <b>{payload.invoice}</b> дугаартай гүйлгээ баталгаажлаа!\nАдмин таны гүйлгээг хйих хүртэл түр хүлээнэ үү.",
+                text=f"✅ Таны <b>{payload.invoice}</b> дугаартай гүйлгээ баталгаажлаа!\nАдмин таны гүйлгээг хийх хүртэл түр хүлээнэ үү.",
             )
         elif payload.status == "completed":
             # Send completion notification with admin's bill photo if available
             completion_text = f"✅ Таны <b>{payload.invoice}</b> дугаартай гүйлгээ амжилттай хийгдлээ!\n\nТа шилжүүлсэн баримтыг хүлээн авна уу.\n\nМанайхыг сонгон үйлчлүүлдэгт баярлалаа!🤗\nӨдрийг сайхан өнгөрүүлээрэй."
             
-            # If admin uploaded a bill, send it as a photo
+            # If admin uploaded bills, send them as photos
             if payload.admin_bill_url:
                 try:
-                    send_user_photo(
-                        user_id=int(user_id),
-                        photo_url=payload.admin_bill_url,
-                        caption=completion_text
-                    )
+                    import json as json_module
+                    # Try to parse as JSON array (new format)
+                    photo_urls = []
+                    try:
+                        parsed = json_module.loads(payload.admin_bill_url)
+                        if isinstance(parsed, list):
+                            photo_urls = parsed
+                        else:
+                            photo_urls = [payload.admin_bill_url]
+                    except (json_module.JSONDecodeError, TypeError):
+                        # Not JSON, treat as single URL
+                        photo_urls = [payload.admin_bill_url]
+                    
+                    logger.info(f"Sending {len(photo_urls)} photo(s) to user {user_id}")
+                    
+                    # Send first photo with caption
+                    photo_sent = False
+                    if photo_urls:
+                        photo_sent = send_user_photo(
+                            user_id=int(user_id),
+                            photo_url=photo_urls[0],
+                            caption=completion_text
+                        )
+                        
+                        # Send additional photos without caption
+                        for url in photo_urls[1:]:
+                            send_user_photo(
+                                user_id=int(user_id),
+                                photo_url=url,
+                                caption=None
+                            )
+                    
+                    # If photo sending failed, send text notification
+                    if not photo_sent:
+                        logger.warning(f"Photo send failed, sending text notification to {user_id}")
+                        send_user_notification(user_id=int(user_id), text=completion_text)
+                        
                 except Exception as e:
                     logger.warning(f"Failed to send photo, falling back to text: {e}")
                     send_user_notification(user_id=int(user_id), text=completion_text)

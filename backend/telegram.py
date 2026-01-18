@@ -49,15 +49,27 @@ def send_user_notification(user_id: int, text: str, reply_markup: dict | None = 
         logger.error(f"Failed to send user notification to {user_id}: {e}")
 
 
-def send_user_photo(user_id: int, photo_url: str, caption: str | None = None) -> None:
-    """Send a photo to user via Telegram."""
+def send_user_photo(user_id: int, photo_url: str, caption: str | None = None) -> bool:
+    """Send a photo to user via Telegram. Returns True if successful."""
     settings = get_settings()
+    logger.info(f"Sending photo to user_id={user_id}, photo_url={photo_url[:100]}...")
+    
     payload = {"chat_id": user_id, "photo": photo_url}
     if caption:
         payload["caption"] = caption
         payload["parse_mode"] = "HTML"
-    requests.post(
-        f"https://api.telegram.org/bot{settings.bot_token}/sendPhoto",
-        json=payload,
-        timeout=15,
-    )
+    
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{settings.bot_token}/sendPhoto",
+            json=payload,
+            timeout=15,
+        )
+        logger.info(f"Photo send response to {user_id}: {response.status_code}")
+        if response.status_code != 200:
+            logger.error(f"Telegram API error sending photo to {user_id}: {response.text}")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send photo to user {user_id}: {e}")
+        return False
