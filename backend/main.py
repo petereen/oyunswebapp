@@ -428,15 +428,17 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
         client = get_supabase()
         moscow_tz = ZoneInfo("Europe/Moscow")
         
-        # Get all completed transactions for this user
+        # Get all transactions for this user (completed, confirmed, or pending)
         res = (
             client.table("transactions")
             .select("amount,currency_from,currency_to,direction,timestamp,status")
             .eq("user_id", user.id)
-            .eq("status", "completed")
+            .in_("status", ["completed", "confirmed", "admin_confirmed"])
             .order("timestamp", desc=False)  # oldest first for chronological data
             .execute()
         )
+        
+        logger.info(f"Analytics: Found {len(res.data or [])} transactions for user {user.id}")
     
         if not res.data:
             return {
@@ -458,7 +460,13 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
                 timestamp = datetime.fromisoformat(trx.get("timestamp", "").replace('Z', '+00:00'))
                 month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01"
                 
+                # Get direction from field or infer from currency_from
                 direction = trx.get("direction", "")
+                if not direction:
+                    # Fallback: infer direction from currency_from
+                    currency_from = trx.get("currency_from", "")
+                    direction = "buy" if currency_from == "RUB" else "sell"
+                
                 amount = float(trx.get("amount", 0))
                 currency_from = trx.get("currency_from", "")
                 
@@ -695,6 +703,7 @@ async def create_exchange(
         "currency_from": payload.currency_from,
         "currency_to": payload.currency_to,
         "rate": str(payload.rate),
+        "direction": payload.direction.lower(),  # Store direction for analytics
         "status": "pending",
         "timestamp": now.isoformat(),
         "bill_url": bill_url_value,

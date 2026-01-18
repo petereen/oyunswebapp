@@ -209,19 +209,22 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         setPromoDiscount(discount);
         setPromoValid(true);
         setPromoMessage(res.message || "");
+        setStep(2); // Only proceed to next step if promo is valid
       } else {
         setPromoError(res.message || "Промо код олдсонгүй");
         setPromoDiscount(0);
         setPromoValid(false);
+        // Stay on current step - don't proceed
       }
     } catch (err) {
       console.error("Promo validation error:", err);
       setPromoError("Промо код шалгахад алдаа гарлаа");
       setPromoDiscount(0);
+      setPromoValid(false);
+      // Stay on current step - don't proceed
     } finally {
       setPromoValidating(false);
     }
-    setStep(2);
   };
 
   const handleSkipPromo = () => {
