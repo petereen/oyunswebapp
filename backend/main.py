@@ -178,6 +178,33 @@ async def get_authenticated_user(x_telegram_init_data: Annotated[str | None, Hea
         logger.warning("Auth failed: missing X-Telegram-Init-Data header")
         raise HTTPException(status_code=401, detail="Missing X-Telegram-Init-Data header")
     
+    # Dev mode bypass
+    if settings.dev_mode and x_telegram_init_data.startswith("dev_mode_bypass"):
+        try:
+            import json
+            from models import AuthenticatedUser
+            # Extract user json if present: "dev_mode_bypass:{"id":123,...}"
+            parts = x_telegram_init_data.split(":", 1)
+            if len(parts) > 1 and parts[1].strip():
+                user_data = json.loads(parts[1])
+                return AuthenticatedUser(
+                    id=user_data.get("id", 123456789),
+                    first_name=user_data.get("first_name", "Dev"),
+                    last_name=user_data.get("last_name", "User"),
+                    username=user_data.get("username", "dev_user"),
+                )
+        except Exception as e:
+            logger.warning(f"Dev mode auth parsing failed: {e}")
+        
+        # Default dev user
+        from models import AuthenticatedUser
+        return AuthenticatedUser(
+            id=123456789,
+            first_name="Dev",
+            last_name="User",
+            username="dev_user",
+        )
+
     try:
         return verify_telegram_init_data(x_telegram_init_data, settings.bot_token)
     except TelegramAuthError as exc:
@@ -252,8 +279,35 @@ async def authenticate(payload: AuthRequest):
     settings = get_settings()
     
     try:
-        # Verify Telegram initData
-        user = verify_telegram_init_data(payload.init_data, settings.bot_token)
+        user = None
+        # Check for dev mode bypass
+        if settings.dev_mode and payload.init_data.startswith("dev_mode_bypass"):
+            try:
+                import json
+                from models import AuthenticatedUser
+                parts = payload.init_data.split(":", 1)
+                if len(parts) > 1 and parts[1].strip():
+                    user_data = json.loads(parts[1])
+                    user = AuthenticatedUser(
+                        id=user_data.get("id", 123456789),
+                        first_name=user_data.get("first_name", "Dev"),
+                        last_name=user_data.get("last_name", "User"),
+                        username=user_data.get("username", "dev_user"),
+                    )
+            except Exception:
+                pass
+            
+            if not user:
+                from models import AuthenticatedUser
+                user = AuthenticatedUser(
+                    id=123456789,
+                    first_name="Dev",
+                    last_name="User",
+                    username="dev_user",
+                )
+        else:
+            # Verify Telegram initData
+            user = verify_telegram_init_data(payload.init_data, settings.bot_token)
         
         # Create JWT token
         token = create_jwt_token(user, settings.jwt_secret)

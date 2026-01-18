@@ -42,6 +42,42 @@ export function useTelegramAuth() {
     console.log("Telegram object:", window.Telegram);
     
     if (!tg) {
+      // Check for dev mode bypass
+      if (import.meta.env.VITE_DEV_MODE === 'true') {
+        console.log("🔧 Dev Mode Active: Using mock Telegram data");
+        
+        const mockUser = {
+          id: 123456789,
+          first_name: "Dev",
+          last_name: "User",
+          username: "dev_user"
+        };
+        
+        const mockInitData = `dev_mode_bypass:${JSON.stringify(mockUser)}`;
+        
+        setInitData(mockInitData);
+        setUser(mockUser);
+        
+        // Trigger auth flow with mock data
+        (async () => {
+          try {
+            setIsAuthenticating(true);
+            setAuthError(null);
+            const res = await loginWithTelegram(mockInitData);
+            if (res && res.user) {
+              setUser(res.user as TelegramUser);
+            }
+          } catch (e: any) {
+            console.error("Dev login failed:", e);
+            setAuthError(e?.message || "Dev authentication failed");
+          } finally {
+            setIsAuthenticating(false);
+          }
+        })();
+        
+        return;
+      }
+
       console.error("Telegram WebApp not available!");
       setInitData("");
       setUser(null);
