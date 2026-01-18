@@ -509,73 +509,70 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
             .execute()
         )
     
-    if not res.data:
-        return {
-            "monthly_buy": [],
-            "monthly_sell": [],
-            "total_buy_rub": 0,
-            "total_sell_rub": 0,
-            "total_transactions": 0,
-        }
-    
-    # Group by month and direction
-    monthly_buy = defaultdict(float)
-    monthly_sell = defaultdict(float)
-    total_buy_rub = 0
-    total_sell_rub = 0
-    
-    for trx in res.data:
-        try:
-            timestamp = datetime.fromisoformat(trx.get("timestamp", "").replace('Z', '+00:00'))
-            month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01"
-            
-            direction = trx.get("direction", "")
-            amount = float(trx.get("amount", 0))
-            currency_from = trx.get("currency_from", "")
-            
-            # Calculate RUB equivalent
-            if direction == "buy":
-                # User buying MNT with RUB (RUB -> MNT)
-                if currency_from == "RUB":
-                    rub_amount = amount
-                else:
-                    continue  # Skip if not standard flow
-                monthly_buy[month_key] += rub_amount
-                total_buy_rub += rub_amount
+        if not res.data:
+            return {
+                "monthly_buy": [],
+                "monthly_sell": [],
+                "total_buy_rub": 0,
+                "total_sell_rub": 0,
+                "total_transactions": 0,
+            }
+        
+        # Group by month and direction
+        monthly_buy = defaultdict(float)
+        monthly_sell = defaultdict(float)
+        total_buy_rub = 0
+        total_sell_rub = 0
+        
+        for trx in res.data:
+            try:
+                timestamp = datetime.fromisoformat(trx.get("timestamp", "").replace('Z', '+00:00'))
+                month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01"
                 
-            elif direction == "sell":
-                # User selling MNT for RUB (MNT -> RUB)
-                if currency_from == "MNT":
-                    # Estimate RUB received (amount / rate)
-                    # For simplicity, we'll track MNT sold
-                    # In real scenario, you'd want to track the RUB received
-                    monthly_sell[month_key] += amount
-                    total_sell_rub += amount
+                direction = trx.get("direction", "")
+                amount = float(trx.get("amount", 0))
+                currency_from = trx.get("currency_from", "")
+                
+                # Calculate RUB equivalent
+                if direction == "buy":
+                    # User buying MNT with RUB (RUB -> MNT)
+                    if currency_from == "RUB":
+                        rub_amount = amount
+                    else:
+                        continue  # Skip if not standard flow
+                    monthly_buy[month_key] += rub_amount
+                    total_buy_rub += rub_amount
                     
-        except Exception as e:
-            logger.error(f"Error processing transaction for analytics: {e}")
-            continue
-    
-    # Convert to sorted list format for frontend
-    all_months = sorted(set(list(monthly_buy.keys()) + list(monthly_sell.keys())))
-    
-    monthly_buy_data = [
-        {"month": month, "amount": round(monthly_buy.get(month, 0), 2)}
-        for month in all_months
-    ]
-    
-    monthly_sell_data = [
-        {"month": month, "amount": round(monthly_sell.get(month, 0), 2)}
-        for month in all_months
-    ]
-    
-    return {
-        "monthly_buy": monthly_buy_data,
-        "monthly_sell": monthly_sell_data,
-        "total_buy_rub": round(total_buy_rub, 2),
-        "total_sell_rub": round(total_sell_rub, 2),
-        "total_transactions": len(res.data),
-    }
+                elif direction == "sell":
+                    # User selling MNT for RUB (MNT -> RUB)
+                    if currency_from == "MNT":
+                        monthly_sell[month_key] += amount
+                        total_sell_rub += amount
+                        
+            except Exception as e:
+                logger.error(f"Error processing transaction for analytics: {e}")
+                continue
+        
+        # Convert to sorted list format for frontend
+        all_months = sorted(set(list(monthly_buy.keys()) + list(monthly_sell.keys())))
+        
+        monthly_buy_data = [
+            {"month": month, "amount": round(monthly_buy.get(month, 0), 2)}
+            for month in all_months
+        ]
+        
+        monthly_sell_data = [
+            {"month": month, "amount": round(monthly_sell.get(month, 0), 2)}
+            for month in all_months
+        ]
+        
+        return {
+            "monthly_buy": monthly_buy_data,
+            "monthly_sell": monthly_sell_data,
+            "total_buy_rub": round(total_buy_rub, 2),
+            "total_sell_rub": round(total_sell_rub, 2),
+            "total_transactions": len(res.data),
+        }
     except Exception as e:
         logger.error(f"Analytics error: {e}")
         # Return empty analytics on error
