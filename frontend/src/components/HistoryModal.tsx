@@ -24,6 +24,7 @@ interface Props {
 function getStatusInfo(status: string) {
   switch (status) {
     case "completed":
+    case "successful": // Legacy status name - treat same as completed
       return {
         label: "Амжилттай",
         color: "bg-green-100 text-green-700",

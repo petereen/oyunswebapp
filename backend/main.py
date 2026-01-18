@@ -391,18 +391,18 @@ async def create_presigned_url(
 async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
     """Get user's active (pending/approved) and recently completed/rejected transactions."""
     client = get_supabase()
-    # Get pending and approved transactions
+    # Get pending and approved transactions (include 'successful' for legacy data)
     res = (
         client.table("transactions")
         .select("invoice,amount,currency_from,currency_to,status,timestamp,admin_comment")
         .eq("user_id", user.id)
-        .in_("status", ["pending", "approved", "completed", "rejected"])
+        .in_("status", ["pending", "approved", "completed", "successful", "rejected"])
         .order("timestamp", desc=True)
         .limit(10)
         .execute()
     )
     
-    # Filter to only pending/approved or recently (within 24h) completed/rejected
+    # Filter to only pending/approved or recently (within 24h) completed/successful/rejected
     from datetime import datetime, timedelta
     now = datetime.now()
     items = []
@@ -410,8 +410,8 @@ async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
         status = row.get("status")
         if status in ["pending", "approved"]:
             items.append(row)
-        elif status in ["completed", "rejected"]:
-            # Include if completed/rejected within last 24 hours
+        elif status in ["completed", "successful", "rejected"]:
+            # Include if completed/successful/rejected within last 24 hours
             timestamp_str = row.get("timestamp", "")
             if timestamp_str:
                 try:

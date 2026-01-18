@@ -36,15 +36,15 @@ export function TransactionStatusTracker({ userId }: TransactionStatusTrackerPro
 
   if (isLoading || !data) return null;
 
-  // Filter out dismissed transactions (only completed ones can be dismissed)
+  // Filter out dismissed transactions (only completed/successful ones can be dismissed)
   const visibleTransactions = data.transactions.filter(
     (trx) => !dismissedInvoices.includes(trx.invoice) || trx.status === "pending" || trx.status === "approved"
   );
 
-  // Only show pending/approved OR recently completed/rejected that haven't been dismissed
+  // Only show pending/approved OR recently completed/successful/rejected that haven't been dismissed
   const activeTransactions = visibleTransactions.filter(
     (trx) => trx.status === "pending" || trx.status === "approved" || 
-             (trx.status === "completed" && !dismissedInvoices.includes(trx.invoice)) ||
+             ((trx.status === "completed" || trx.status === "successful") && !dismissedInvoices.includes(trx.invoice)) ||
              (trx.status === "rejected" && !dismissedInvoices.includes(trx.invoice))
   );
 
@@ -56,7 +56,7 @@ export function TransactionStatusTracker({ userId }: TransactionStatusTrackerPro
         <TransactionStatusCard
           key={trx.invoice}
           transaction={trx}
-          onDismiss={trx.status === "completed" || trx.status === "rejected" ? () => handleDismiss(trx.invoice) : undefined}
+          onDismiss={(trx.status === "completed" || trx.status === "successful" || trx.status === "rejected") ? () => handleDismiss(trx.invoice) : undefined}
         />
       ))}
     </div>
@@ -96,6 +96,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           description: "Админ гүйлгээг хийж байна",
         };
       case "completed":
+      case "successful": // Legacy status name
         return {
           icon: CheckCircle2,
           iconBg: "bg-green-100",
@@ -103,7 +104,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           barColor: "bg-green-500",
           barBg: "bg-green-100",
           progress: 100,
-          label: "Дууссан",
+          label: "Амжилттай",
           description: "Гүйлгээ амжилттай хийгдлээ",
         };
       case "rejected":

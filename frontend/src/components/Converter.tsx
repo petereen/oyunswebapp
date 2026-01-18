@@ -9,11 +9,11 @@ interface Props {
 
 export function Converter({ rate, onAmountChange }: Props) {
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
-  const [amountFrom, setAmountFrom] = useState<number>(0);
+  const [amountFrom, setAmountFrom] = useState<string>("");
   const [amountTo, setAmountTo] = useState<number>(0);
 
   useEffect(() => {
-    compute(direction, amountFrom);
+    compute(direction, amountFrom ? Number(amountFrom) : 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [direction, rate]);
 
@@ -53,10 +53,11 @@ export function Converter({ rate, onAmountChange }: Props) {
             type="number"
             min={0}
             value={amountFrom}
+            placeholder="0"
             onChange={(e) => {
-              const val = Number(e.target.value || 0);
+              const val = e.target.value;
               setAmountFrom(val);
-              compute(direction, val);
+              compute(direction, val ? Number(val) : 0);
             }}
             className="w-full rounded-xl border border-ocean-100 bg-white/70 p-3 pl-8 text-lg focus:outline-none focus:ring-2 focus:ring-ocean-500"
           />

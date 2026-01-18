@@ -25,18 +25,18 @@ export default function App() {
             />
           </div>
 
-          {/* Admin toggle only visible to admins */}
+          {/* Admin toggle - always visible to admins */}
           {isAdmin && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setView("client")}
-                className={`px-4 py-2 rounded-full text-sm font-semibold ${view === "client" ? "bg-ocean-600 text-white" : "bg-white"}`}
+                className={`px-4 py-2 rounded-full text-sm font-semibold transition ${view === "client" ? "bg-ocean-600 text-white" : "bg-white text-ocean-700 hover:bg-ocean-50"}`}
               >
                 Хэрэглэгч
               </button>
               <button
                 onClick={() => setView("admin")}
-                className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-1 ${view === "admin" ? "bg-ocean-600 text-white" : "bg-white"}`}
+                className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-1 transition ${view === "admin" ? "bg-ocean-600 text-white" : "bg-white text-ocean-700 hover:bg-ocean-50"}`}
               >
                 <Shield className="w-4 h-4" /> Админ
               </button>

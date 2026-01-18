@@ -170,7 +170,7 @@ export type ActiveTransaction = {
   amount: number;
   currency_from: string;
   currency_to: string;
-  status: 'pending' | 'approved' | 'completed' | 'rejected';
+  status: 'pending' | 'approved' | 'completed' | 'successful' | 'rejected';
   timestamp: string;
   admin_comment?: string;
 };

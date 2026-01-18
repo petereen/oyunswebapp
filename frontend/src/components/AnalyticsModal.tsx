@@ -142,7 +142,7 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
                 <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingUp className="w-5 h-5 text-green-600" />
-                    <span className="text-sm font-medium text-green-700">Нийт рубль худалдан авсан</span>
+                    <span className="text-sm font-medium text-green-700">Нийт худалдан авсан </span>
                   </div>
                   <div className="text-2xl font-bold text-green-800">
                     {data.total_buy_rub.toLocaleString()} ₽
@@ -152,7 +152,7 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingDown className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-700">Нийт төгрөг худалдан авсан</span>
+                    <span className="text-sm font-medium text-blue-700">Нийт худалдан авсан төгрөг</span>
                   </div>
                   <div className="text-2xl font-bold text-blue-800">
                     {data.total_sell_rub.toLocaleString()} ₮
