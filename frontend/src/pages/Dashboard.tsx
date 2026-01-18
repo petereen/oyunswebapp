@@ -18,10 +18,9 @@ interface Props {
   user: TelegramUser | null;
   isAuthenticating?: boolean;
   authError?: string | null;
-  onAdminStatusChange?: (isAdmin: boolean) => void;
 }
 
-export function Dashboard({ initData, user, isAuthenticating, authError, onAdminStatusChange }: Props) {
+export function Dashboard({ initData, user, isAuthenticating, authError }: Props) {
   const queryClient = useQueryClient();
   
   const { data: rate, isLoading: ratesLoading, error: ratesError } = useQuery({
@@ -57,16 +56,8 @@ export function Dashboard({ initData, user, isAuthenticating, authError, onAdmin
     });
   }, [initData, user, profileLoading, profileError, profile]);
 
-  // Extract user profile and admin status
+  // Extract user profile
   const userProfile = profile?.user;
-  const isAdmin = profile?.is_admin || false;
-
-  // Notify parent component of admin status
-  useEffect(() => {
-    if (onAdminStatusChange && profile) {
-      onAdminStatusChange(profile.is_admin);
-    }
-  }, [profile, onAdminStatusChange]);
 
   // Check if user needs to agree to terms - only show modal when agreed_terms is explicitly false
   const needsTermsAgreement = userProfile && userProfile.agreed_terms === false;

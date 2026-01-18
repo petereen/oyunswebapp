@@ -1,15 +1,26 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dashboard } from "./pages/Dashboard";
 import { AdminPanel } from "./pages/AdminPanel";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
 import { Shield, MessageCircle } from "lucide-react";
 import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
 import { DevToolbar } from "./components/DevToolbar";
+import { fetchMe } from "./api";
 
 export default function App() {
   const { initData, user, isAuthenticating, authError } = useTelegramAuth();
   const [view, setView] = useState<"client" | "admin">("client");
-  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Fetch profile at App level to determine admin status immediately
+  const { data: profile } = useQuery({
+    queryKey: ["me", user?.id],
+    queryFn: () => fetchMe(),
+    enabled: Boolean(initData) && Boolean(user?.id) && !Boolean(isAuthenticating),
+    staleTime: 0,
+  });
+
+  const isAdmin = profile?.is_admin || false;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-ocean-50 to-white p-4 md:p-8">
@@ -45,7 +56,7 @@ export default function App() {
         </div>
 
         {view === "client" || !isAdmin ? (
-          <Dashboard initData={initData} user={user} isAuthenticating={isAuthenticating} authError={authError} onAdminStatusChange={setIsAdmin} />
+          <Dashboard initData={initData} user={user} isAuthenticating={isAuthenticating} authError={authError} />
         ) : (
           <AdminPanel />
         )}
