@@ -428,11 +428,12 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
         client = get_supabase()
         moscow_tz = ZoneInfo("Europe/Moscow")
         
-        # Get ALL transactions for this user (no status filter)
+        # Get all transactions for this user except rejected ones
         res = (
             client.table("transactions")
             .select("amount,currency_from,currency_to,timestamp,status")
             .eq("user_id", user.id)
+            .neq("status", "rejected")
             .order("timestamp", desc=False)
             .execute()
         )

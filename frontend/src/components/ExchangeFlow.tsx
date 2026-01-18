@@ -287,8 +287,12 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     setReceiptUrls(prev => prev.filter((_, i) => i !== index));
   };
 
-  const getSavedBankForDirection = (dir: "buy" | "sell") => {
-    return dir === "buy" ? savedBankMnt : savedBankRub;
+  const getSavedBankForDirection = (dir: "buy" | "sell"): string | undefined => {
+    const saved = dir === "buy" ? savedBankMnt : savedBankRub;
+    // Return undefined if empty string so falsy check works correctly
+    if (!saved || saved.trim() === "") return undefined;
+    console.log("getSavedBankForDirection:", dir, "saved:", saved);
+    return saved;
   };
 
   const initEmptyBankFields = (dir: "buy" | "sell") => {
