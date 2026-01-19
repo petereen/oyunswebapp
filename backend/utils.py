@@ -116,14 +116,13 @@ def verify_jwt_token(token: str, secret: str) -> AuthenticatedUser:
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
     """
     Verify Telegram Mini App init data.
-    Supports both new format (Ed25519 signature) and legacy format (HMAC-SHA256 hash).
+    Supports both legacy format (HMAC-SHA256 hash) and new format (Ed25519 signature).
     
     Per Telegram docs, data-check-string uses the RAW query string values (URL-encoded).
     """
     if not init_data:
         raise TelegramAuthError("Init data is empty")
 
-    # First, try to extract hash/signature from raw string to determine method
     # Parse using raw splitting to preserve URL-encoded values
     raw_pairs = []
     received_hash = None
@@ -143,11 +142,21 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
     if not raw_pairs:
         raise TelegramAuthError("No valid key-value pairs in initData")
 
-    # Determine verification method
-    if received_signature and CRYPTO_AVAILABLE:
+    logger.info(f"initData has hash={bool(received_hash)}, signature={bool(received_signature)}, pairs={len(raw_pairs)}")
+
+    # PREFER HASH over signature (more reliable, widely tested)
+    if received_hash:
+        try:
+            return _verify_with_hash_raw(raw_pairs, received_hash, bot_token)
+        except TelegramAuthError as e:
+            logger.warning(f"Hash verification failed: {e}")
+            # If we have signature, try that as fallback
+            if received_signature and CRYPTO_AVAILABLE:
+                logger.info("Falling back to signature verification...")
+                return _verify_with_signature_raw(raw_pairs, received_signature, bot_token)
+            raise
+    elif received_signature and CRYPTO_AVAILABLE:
         return _verify_with_signature_raw(raw_pairs, received_signature, bot_token)
-    elif received_hash:
-        return _verify_with_hash_raw(raw_pairs, received_hash, bot_token)
     else:
         raise TelegramAuthError("Missing hash or signature in initData")
 
@@ -158,13 +167,13 @@ def _verify_with_hash_raw(raw_pairs: list, received_hash: str, bot_token: str) -
     Uses RAW (URL-encoded) values as per Telegram documentation.
     """
     # 1. Sort pairs alphabetically by key and create data_check_string
-    raw_pairs.sort(key=lambda x: x[0])
-    data_check_string = "\n".join(f"{k}={v}" for k, v in raw_pairs)
+    sorted_pairs = sorted(raw_pairs, key=lambda x: x[0])
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted_pairs)
     
-    logger.debug(f"Data check string: {data_check_string[:200]}...")
+    logger.info(f"Hash verification - keys: {[p[0] for p in sorted_pairs]}")
+    logger.debug(f"Data check string (first 300 chars): {data_check_string[:300]}")
     
     # 2. Calculate Secret Key: HMAC-SHA256 with "WebAppData" as key and bot_token as message
-    # Per Telegram docs: "HMAC-SHA-256 signature of the bot's token with the constant string WebAppData used as a key"
     secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
 
     # 3. Calculate Hash: HMAC-SHA256 with secret_key and data_check_string
@@ -172,33 +181,35 @@ def _verify_with_hash_raw(raw_pairs: list, received_hash: str, bot_token: str) -
         secret_key, data_check_string.encode('utf-8'), hashlib.sha256
     ).hexdigest()
     
-    logger.debug(f"Calculated hash: {calculated_hash}")
-    logger.debug(f"Received hash: {received_hash}")
+    logger.info(f"Calculated: {calculated_hash[:20]}... | Received: {received_hash[:20]}...")
     
     # 4. Compare
-    if calculated_hash != received_hash:
-        # Try with URL-decoded values as fallback (some implementations decode first)
-        decoded_pairs = [(k, unquote(v)) for k, v in raw_pairs]
-        decoded_pairs.sort(key=lambda x: x[0])
+    if calculated_hash == received_hash:
+        logger.info("✅ Hash verified with raw values")
+    else:
+        # Try with URL-decoded values as fallback
+        logger.info("Trying decoded values...")
+        decoded_pairs = [(k, unquote(v)) for k, v in sorted_pairs]
         decoded_check_string = "\n".join(f"{k}={v}" for k, v in decoded_pairs)
         
         decoded_hash = hmac.new(
             secret_key, decoded_check_string.encode('utf-8'), hashlib.sha256
         ).hexdigest()
         
-        if decoded_hash != received_hash:
-            logger.warning(f"Hash mismatch. Raw calculated: {calculated_hash}, Decoded calculated: {decoded_hash}, Received: {received_hash}")
-            raise TelegramAuthError("Invalid initData hash")
+        logger.info(f"Decoded calc: {decoded_hash[:20]}...")
         
-        # Decoded version matched
-        logger.info("Hash validated using decoded values")
-        raw_pairs = decoded_pairs
+        if decoded_hash == received_hash:
+            logger.info("✅ Hash verified with decoded values")
+            sorted_pairs = decoded_pairs
+        else:
+            logger.error(f"❌ Hash mismatch! Raw: {calculated_hash}, Decoded: {decoded_hash}, Received: {received_hash}")
+            raise TelegramAuthError("Invalid initData hash")
     
-    # 5. Extract User (need to URL-decode and parse JSON)
+    # 5. Extract User
     user_raw = None
-    for k, v in raw_pairs:
+    for k, v in sorted_pairs:
         if k == "user":
-            user_raw = v if '%' not in v else unquote(v)
+            user_raw = unquote(v) if '%' in v else v
             break
     
     if not user_raw:
