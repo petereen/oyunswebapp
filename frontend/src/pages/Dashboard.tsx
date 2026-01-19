@@ -89,6 +89,31 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
     return direction === "buy" ? Number(rate.buy_rate) : Number(rate.sell_rate);
   }, [direction, rate]);
 
+  // Show loading state while authenticating
+  if (isAuthenticating) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <Loader2 className="w-12 h-12 text-ocean-600 animate-spin" />
+        <div className="text-lg font-medium text-ocean-700">Нэвтэрч байна...</div>
+        <div className="text-sm text-slate-500">Түр хүлээнэ үү</div>
+      </div>
+    );
+  }
+
+  // Show error state if authentication failed
+  if (authError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <AlertCircle className="w-12 h-12 text-red-500" />
+        <div className="text-lg font-medium text-red-700">Нэвтрэлт амжилтгүй</div>
+        <div className="text-sm text-slate-500 text-center max-w-md">{authError}</div>
+        <div className="text-xs text-slate-400 mt-2">
+          Telegram Mini App-аас нээнэ үү
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Header with Profile */}

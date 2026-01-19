@@ -6,12 +6,19 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
-// Simple request/response interceptors for debugging
+const JWT_STORAGE_KEY = 'oyuns_jwt';
+
+// Request interceptor - add JWT token to all requests
 api.interceptors.request.use(config => {
+  const token = localStorage.getItem(JWT_STORAGE_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`);
   return config;
 });
 
+// Response interceptor - handle errors and 401 unauthorized
 api.interceptors.response.use(
   response => {
     console.log(`✅ API Response: ${response.status} ${response.config.url}`);
@@ -22,6 +29,16 @@ api.interceptors.response.use(
       status: error.response?.status,
       data: error.response?.data,
     });
+    
+    // On 401 Unauthorized, clear stored auth and let the app re-authenticate
+    if (error.response?.status === 401) {
+      console.warn('🔒 401 Unauthorized - clearing stored auth');
+      localStorage.removeItem(JWT_STORAGE_KEY);
+      localStorage.removeItem('oyuns_user');
+      // Optionally trigger re-auth by dispatching a custom event
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
+    
     return Promise.reject(error);
   }
 );

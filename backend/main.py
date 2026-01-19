@@ -172,27 +172,54 @@ app.add_middleware(
 )
 
 
-# NO AUTH MODE: All endpoints return a default user
-async def get_authenticated_user():
-    """No authentication - returns default user for all requests"""
+# Authentication dependencies - supports both dev mode (mock user) and production (JWT)
+async def get_authenticated_user(
+    authorization: str = Header(None, alias="Authorization")
+):
+    """
+    Authenticate user from JWT token in Authorization header.
+    In dev mode (DEV_MODE=true), falls back to mock user if no token provided.
+    """
     from models import AuthenticatedUser
-    return AuthenticatedUser(
-        id=1932946217,  # Default user ID
-        first_name="Test",
-        last_name="User",
-        username="test_user",
-    )
+    from utils import verify_jwt_token, JWTAuthError
+    
+    settings = get_settings()
+    
+    # Try to extract and verify JWT token
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]  # Remove "Bearer " prefix
+        try:
+            user = verify_jwt_token(token, settings.jwt_secret)
+            return user
+        except JWTAuthError as e:
+            if settings.dev_mode:
+                logger.warning(f"JWT verification failed in dev mode: {e}")
+                # Fall through to dev mode fallback
+            else:
+                raise HTTPException(status_code=401, detail=str(e))
+    
+    # Dev mode fallback - return mock user
+    if settings.dev_mode:
+        logger.debug("Dev mode: Using mock user (no valid JWT provided)")
+        return AuthenticatedUser(
+            id=1932946217,  # Default dev user ID
+            first_name="Test",
+            last_name="User",
+            username="test_user",
+        )
+    
+    # Production mode without valid token - unauthorized
+    raise HTTPException(status_code=401, detail="Missing or invalid authorization token")
 
 
-async def get_jwt_authenticated_user():
-    """No authentication - returns default user for all requests"""
-    from models import AuthenticatedUser
-    return AuthenticatedUser(
-        id=1932946217,  # Default user ID
-        first_name="Test",
-        last_name="User",
-        username="test_user",
-    )
+async def get_jwt_authenticated_user(
+    authorization: str = Header(None, alias="Authorization")
+):
+    """
+    Authenticate user from JWT token in Authorization header.
+    Same as get_authenticated_user - kept for compatibility.
+    """
+    return await get_authenticated_user(authorization)
 
 
 async def require_admin(request: Request):
@@ -249,6 +276,21 @@ async def authenticate(payload: AuthRequest):
         else:
             # Verify Telegram initData
             user = verify_telegram_init_data(payload.init_data, settings.bot_token)
+        
+        # Upsert user in database (create if new, update if exists)
+        try:
+            client = get_supabase()
+            user_data = {
+                "id": user.id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            client.table("users").upsert(user_data, returning="minimal").execute()
+            logger.info(f"User {user.id} upserted in database")
+        except Exception as e:
+            # Don't fail auth if DB upsert fails - user can still use the app
+            logger.warning(f"Failed to upsert user {user.id} in database: {e}")
         
         # Create JWT token
         token = create_jwt_token(user, settings.jwt_secret)
