@@ -132,7 +132,7 @@ export function AdminPanel() {
           }`}
         >
           <FileText className="w-4 h-4" />
-          KYC
+          Хэрэглэгч
         </button>
         <button
           onClick={() => setActiveTab("users")}
@@ -143,7 +143,7 @@ export function AdminPanel() {
           }`}
         >
           <Users className="w-4 h-4" />
-          Хэрэглэгч
+          Хайлт
         </button>
         <button
           onClick={() => setActiveTab("banks")}

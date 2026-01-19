@@ -5183,19 +5183,62 @@ def find_user_or_invoice(message):
     # 2) Now if it’s numeric, treat as Telegram user ID
     if query.isdigit():
         user_id = int(query)
+        
+        # First, try to get user info from our database
+        db_user = None
         try:
-            user_info = bot.get_chat(user_id)
-            full_name = user_info.first_name + (f" {user_info.last_name}" if user_info.last_name else "")
-            user_link  = f"[{full_name}](tg://user?id={user_id})"
-            username_link = f"[@{user_info.username}](https://t.me/{user_info.username})" if user_info.username else "— `Username байхгүй`"
-            id_link = f"[{user_id}](tg://user?id={user_id})"
-
-            text = f"👤 Хэрэглэгч олдлоо:\n\n" \
-                   f"{user_link} — {username_link} — {id_link}"
-            return bot.send_message(message.chat.id, text, parse_mode="Markdown")
+            db_resp = supabase.table("users").select("first_name,last_name,phone,verified,bank_rub,bank_mnt").eq("id", user_id).limit(1).execute()
+            if db_resp.data:
+                db_user = db_resp.data[0]
         except Exception as e:
-            print(f"❌ User lookup error: {e}")
-            return bot.reply_to(message, "❌ Хэрэглэгчийн мэдээллийг олж чадсангүй.")
+            print(f"⚠️ DB user lookup error: {e}")
+        
+        # Try to get Telegram info (may fail if bot hasn't interacted with user)
+        tg_user = None
+        try:
+            tg_user = bot.get_chat(user_id)
+        except Exception as e:
+            print(f"⚠️ Telegram user lookup error: {e}")
+        
+        # Build response based on available data
+        if db_user or tg_user:
+            lines = ["👤 <b>Хэрэглэгчийн мэдээлэл:</b>\n"]
+            
+            # Name from DB or Telegram
+            if db_user and (db_user.get("first_name") or db_user.get("last_name")):
+                full_name = f"{db_user.get('last_name', '')} {db_user.get('first_name', '')}".strip()
+                lines.append(f"📛 Нэр (DB): {full_name}")
+            if tg_user:
+                tg_name = tg_user.first_name + (f" {tg_user.last_name}" if tg_user.last_name else "")
+                lines.append(f"📛 Нэр (TG): {tg_name}")
+                if tg_user.username:
+                    lines.append(f"🔗 Username: @{tg_user.username}")
+            
+            lines.append(f"🆔 ID: <code>{user_id}</code>")
+            
+            # DB info
+            if db_user:
+                lines.append("")
+                lines.append(f"✅ Баталгаажсан: {'Тийм' if db_user.get('verified') else 'Үгүй'}")
+                if db_user.get("phone"):
+                    lines.append(f"📞 Утас: {db_user.get('phone')}")
+                if db_user.get("bank_rub"):
+                    lines.append(f"🏦 RUB данс: {db_user.get('bank_rub')}")
+                if db_user.get("bank_mnt"):
+                    lines.append(f"🏦 MNT данс: {db_user.get('bank_mnt')}")
+            
+            # Get transaction count
+            try:
+                tx_resp = supabase.table("transactions").select("id", count="exact").eq("user_id", user_id).execute()
+                tx_count = tx_resp.count if tx_resp.count else 0
+                lines.append(f"\n📊 Нийт гүйлгээ: {tx_count}")
+            except:
+                pass
+            
+            text = "\n".join(lines)
+            return bot.send_message(message.chat.id, text, parse_mode="HTML")
+        else:
+            return bot.reply_to(message, f"❌ <code>{user_id}</code> хэрэглэгчийн мэдээлэл олдсонгүй.\n\nБотонд бүртгэлгүй эсвэл буруу ID байна.", parse_mode="HTML")
     else:
         # neither invoice nor pure-digit
         return bot.reply_to(message, "❌ Зөв формат: /haih <user_id|invoice_id>")
