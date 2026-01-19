@@ -136,6 +136,9 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
             received_hash = value
         elif key == 'signature':
             received_signature = value
+            # For HASH verification, signature IS included in data_check_string
+            # For SIGNATURE verification, signature is excluded
+            raw_pairs.append((key, value))
         else:
             raw_pairs.append((key, value))
     
@@ -147,16 +150,21 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUs
     # PREFER HASH over signature (more reliable, widely tested)
     if received_hash:
         try:
+            # For hash verification, include ALL fields except 'hash' (including 'signature' if present)
             return _verify_with_hash_raw(raw_pairs, received_hash, bot_token)
         except TelegramAuthError as e:
             logger.warning(f"Hash verification failed: {e}")
             # If we have signature, try that as fallback
             if received_signature and CRYPTO_AVAILABLE:
                 logger.info("Falling back to signature verification...")
-                return _verify_with_signature_raw(raw_pairs, received_signature, bot_token)
+                # For signature verification, exclude 'signature' from pairs
+                pairs_without_sig = [(k, v) for k, v in raw_pairs if k != 'signature']
+                return _verify_with_signature_raw(pairs_without_sig, received_signature, bot_token)
             raise
     elif received_signature and CRYPTO_AVAILABLE:
-        return _verify_with_signature_raw(raw_pairs, received_signature, bot_token)
+        # For signature verification, exclude 'signature' from pairs
+        pairs_without_sig = [(k, v) for k, v in raw_pairs if k != 'signature']
+        return _verify_with_signature_raw(pairs_without_sig, received_signature, bot_token)
     else:
         raise TelegramAuthError("Missing hash or signature in initData")
 
