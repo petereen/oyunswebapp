@@ -46,7 +46,10 @@ export function RegistrationModal({ onRegistered }: Props) {
     try {
       setUploading(true);
       setError("");
-      const path = `passport/${Date.now()}-${file.name}`;
+      // Get file extension and generate a safe filename (avoid Cyrillic and special characters)
+      const ext = file.name.split('.').pop() || 'jpg';
+      const safeFilename = `passport_${Date.now()}.${ext}`;
+      const path = `passport/${safeFilename}`;
       const presigned = await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",

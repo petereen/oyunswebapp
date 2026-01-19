@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Shield, FileText, Inbox, Users, Lock, Eye, EyeOff } from "lucide-react";
+import { Shield, FileText, Inbox, Users, Lock, Eye, EyeOff, CreditCard } from "lucide-react";
 import { AdminInbox } from "../components/AdminInbox";
 import { AdminKyc } from "../components/AdminKyc";
 import { AdminUserSearch } from "../components/AdminUserSearch";
+import { AdminBankAccounts } from "../components/AdminBankAccounts";
 
-type Tab = "inbox" | "kyc" | "users";
+type Tab = "inbox" | "kyc" | "users" | "banks";
 
 const ADMIN_API_KEY = "oyuns-admin-key-07012026";
 const STORAGE_KEY = "admin_authenticated";
@@ -110,10 +111,10 @@ export function AdminPanel() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setActiveTab("inbox")}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+          className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "inbox"
               ? "bg-ocean-600 text-white"
               : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
@@ -124,18 +125,18 @@ export function AdminPanel() {
         </button>
         <button
           onClick={() => setActiveTab("kyc")}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+          className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "kyc"
               ? "bg-ocean-600 text-white"
               : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
           }`}
         >
           <FileText className="w-4 h-4" />
-          Баталгаажуулалт
+          KYC
         </button>
         <button
           onClick={() => setActiveTab("users")}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+          className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "users"
               ? "bg-ocean-600 text-white"
               : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
@@ -144,6 +145,17 @@ export function AdminPanel() {
           <Users className="w-4 h-4" />
           Хэрэглэгч
         </button>
+        <button
+          onClick={() => setActiveTab("banks")}
+          className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+            activeTab === "banks"
+              ? "bg-ocean-600 text-white"
+              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          Данс
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -151,8 +163,10 @@ export function AdminPanel() {
         <AdminInbox />
       ) : activeTab === "kyc" ? (
         <AdminKyc />
-      ) : (
+      ) : activeTab === "users" ? (
         <AdminUserSearch />
+      ) : (
+        <AdminBankAccounts />
       )}
     </div>
   );

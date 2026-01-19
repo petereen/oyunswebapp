@@ -127,28 +127,17 @@ export function AdminUserSearch() {
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="text-xs text-slate-500 mb-2">👤 Холбогдох:</div>
               <div className="flex flex-wrap gap-2">
-                {/* Telegram Direct Chat */}
-                <a
-                  href={`tg://user?id=${user.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  Telegram чат
-                </a>
-
-                {/* Copy User ID */}
+                {/* Copy User ID - Primary action */}
                 <button
                   onClick={() => handleCopy(String(user.id), `id-${user.id}`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-300 transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition"
                 >
                   {copiedField === `id-${user.id}` ? (
-                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    <CheckCircle2 className="w-4 h-4" />
                   ) : (
                     <Copy className="w-4 h-4" />
                   )}
-                  ID: {user.id}
+                  ID хуулах: {user.id}
                 </button>
 
                 {/* Username link if available */}
@@ -159,7 +148,7 @@ export function AdminUserSearch() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-300 transition"
                   >
-                    <ExternalLink className="w-4 h-4" />
+                    <MessageCircle className="w-4 h-4" />
                     @{user.username}
                   </a>
                 )}
@@ -180,29 +169,9 @@ export function AdminUserSearch() {
                 )}
               </div>
 
-              {/* Additional Links */}
-              <div className="mt-2 pt-2 border-t border-blue-200 flex flex-wrap gap-2">
-                <a
-                  href={`https://t.me/${user.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  t.me/{user.id}
-                </a>
-                <span className="text-slate-300">|</span>
-                <button
-                  onClick={() => handleCopy(`tg://user?id=${user.id}`, `link-${user.id}`)}
-                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                >
-                  {copiedField === `link-${user.id}` ? (
-                    <CheckCircle2 className="w-3 h-3 text-green-500" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                  tg://user?id={user.id}
-                </button>
+              {/* Instruction for contacting */}
+              <div className="mt-2 pt-2 border-t border-blue-200 text-xs text-slate-500">
+                💡 Telegram бот дотор ID-г хайж хэрэглэгч рүү мессеж илгээх боломжтой
               </div>
             </div>
           </div>

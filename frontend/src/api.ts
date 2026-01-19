@@ -363,3 +363,40 @@ export async function searchUsers(query: string = ""): Promise<UserSearchRespons
   const res = await api.get(`/admin/user-search?q=${encodeURIComponent(query)}`);
   return res.data as UserSearchResponse;
 }
+
+// ============= Admin Bank Account Management =============
+
+export interface AdminBankAccountFull {
+  id: string;
+  bank_name: string;
+  account_number?: string;
+  card_number?: string;
+  phone?: string;
+  owner_name: string;
+  currency: "RUB" | "MNT";
+  is_active: boolean;
+  display_order: number;
+  admin_id?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function fetchAllAdminBankAccounts(): Promise<{ accounts: AdminBankAccountFull[] }> {
+  const res = await api.get('/admin/bank-accounts');
+  return res.data;
+}
+
+export async function createAdminBankAccount(payload: Partial<AdminBankAccountFull>) {
+  const res = await api.post('/admin/bank-accounts', payload);
+  return res.data;
+}
+
+export async function updateAdminBankAccount(id: string, payload: Partial<AdminBankAccountFull>) {
+  const res = await api.put(`/admin/bank-accounts/${id}`, payload);
+  return res.data;
+}
+
+export async function deleteAdminBankAccount(id: string) {
+  const res = await api.delete(`/admin/bank-accounts/${id}`);
+  return res.data;
+}

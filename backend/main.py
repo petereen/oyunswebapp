@@ -278,15 +278,25 @@ async def authenticate(payload: AuthRequest):
             user = verify_telegram_init_data(payload.init_data, settings.bot_token)
         
         # Upsert user in database (create if new, update if exists)
+        # Only set first_name/last_name for NEW users, don't overwrite registered names
         try:
             client = get_supabase()
-            user_data = {
-                "id": user.id,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }
-            client.table("users").upsert(user_data, returning="minimal").execute()
+            # Check if user already exists
+            existing = client.table("users").select("id,first_name").eq("id", user.id).limit(1).execute()
+            if existing.data:
+                # User exists - only update timestamp
+                client.table("users").update({
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", user.id).execute()
+            else:
+                # New user - create with Telegram names
+                user_data = {
+                    "id": user.id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                client.table("users").insert(user_data).execute()
             logger.info(f"User {user.id} upserted in database")
         except Exception as e:
             # Don't fail auth if DB upsert fails - user can still use the app
@@ -604,15 +614,24 @@ async def me(user=Depends(get_jwt_authenticated_user)):
     client = get_supabase()
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz).isoformat()
-    upsert_payload = {
-        "id": user.id,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "updated_at": now,
-    }
-    client.table("users").upsert(upsert_payload, returning="minimal").execute()
+    
+    # Check if user already exists - don't overwrite registered names
+    existing = client.table("users").select("id,first_name").eq("id", user.id).limit(1).execute()
+    if existing.data:
+        # User exists - only update timestamp
+        client.table("users").update({"updated_at": now}).eq("id", user.id).execute()
+    else:
+        # New user - create with Telegram names
+        upsert_payload = {
+            "id": user.id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "updated_at": now,
+        }
+        client.table("users").insert(upsert_payload).execute()
+    
     db_user = client.table("users").select("*").eq("id", user.id).limit(1).execute().data
-    record = db_user[0] if db_user else upsert_payload
+    record = db_user[0] if db_user else {"id": user.id, "first_name": user.first_name, "last_name": user.last_name}
     
     # Add is_admin flag to response
     is_admin = user.id in settings.admin_user_ids
@@ -755,11 +774,16 @@ async def create_exchange(
     now = datetime.now(moscow_tz)
     invoice = payload.invoice or generate_invoice(now)
 
-    # ensure user row exists
-    client.table("users").upsert(
-        {"id": user.id, "first_name": user.first_name, "last_name": user.last_name, "updated_at": now.isoformat()},
-        returning="minimal",
-    ).execute()
+    # ensure user row exists - but don't overwrite registered names
+    existing = client.table("users").select("id,first_name").eq("id", user.id).limit(1).execute()
+    if existing.data:
+        # User exists - only update timestamp
+        client.table("users").update({"updated_at": now.isoformat()}).eq("id", user.id).execute()
+    else:
+        # New user - create with Telegram names
+        client.table("users").insert(
+            {"id": user.id, "first_name": user.first_name, "last_name": user.last_name, "updated_at": now.isoformat()}
+        ).execute()
 
     # Support both single receipt_path and multiple receipt_paths
     receipt_paths_list = payload.receipt_paths or []
@@ -1257,28 +1281,41 @@ async def admin_user_search(
     q: str = "",
     admin=Depends(require_admin),
 ):
-    """Search users by ID, name, or phone."""
+    """Search users by ID, name, or phone. Optimized for flexible search."""
     client = get_supabase()
     
-    # Get all users with their transaction counts (username column doesn't exist in this schema)
-    query = client.table("users").select("id,first_name,last_name,phone,verified,created_at")
+    q = q.strip() if q else ""
     
-    # If search query provided, filter
+    users_data = []
+    
     if q:
-        q = q.strip()
-        # Try to search by ID if it's a number
+        # Try to search by ID if it looks like a number
         if q.isdigit():
-            query = query.eq("id", int(q))
+            # Search by exact ID
+            res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").eq("id", int(q)).execute()
+            users_data = res.data or []
         else:
-            # Search by name or phone (case insensitive)
-            query = query.or_(
-                f"first_name.ilike.%{q}%,last_name.ilike.%{q}%,phone.ilike.%{q}%"
-            )
+            # Search by name or phone - use multiple queries for better results
+            # First try exact starts-with match for better relevance
+            res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").or_(
+                f"first_name.ilike.{q}%,last_name.ilike.{q}%,phone.ilike.%{q}%"
+            ).order("id", desc=True).limit(50).execute()
+            users_data = res.data or []
+            
+            # If no results, try contains match
+            if not users_data:
+                res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").or_(
+                    f"first_name.ilike.%{q}%,last_name.ilike.%{q}%"
+                ).order("id", desc=True).limit(50).execute()
+                users_data = res.data or []
+    else:
+        # No query - return recent users
+        res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").order("id", desc=True).limit(50).execute()
+        users_data = res.data or []
     
-    res = query.order("id", desc=True).limit(50).execute()
-    
+    # Build response with transaction counts
     users = []
-    for row in res.data or []:
+    for row in users_data:
         user_id = row.get("id")
         # Get transaction count for this user
         tx_res = client.table("transactions").select("id", count="exact").eq("user_id", user_id).execute()
@@ -1354,6 +1391,127 @@ async def get_admin_bank_accounts(currency: str = None):
         for row in res.data or []
     ]
     return AdminBankAccountsResponse(accounts=accounts)
+
+
+# ============= Admin Bank Account Management =============
+
+@app.get("/api/admin/bank-accounts")
+async def get_all_admin_bank_accounts(admin=Depends(require_admin)):
+    """Get all bank accounts for admin management (including inactive)."""
+    client = get_supabase()
+    res = (
+        client.table("admin_bank_accounts")
+        .select("*")
+        .order("admin_id", desc=False)
+        .order("currency", desc=False)
+        .order("display_order", desc=False)
+        .execute()
+    )
+    
+    accounts = [
+        {
+            "id": str(row.get("id")),
+            "bank_name": row.get("bank_name"),
+            "account_number": row.get("account_number"),
+            "card_number": row.get("card_number"),
+            "phone": row.get("phone"),
+            "owner_name": row.get("owner_name"),
+            "currency": row.get("currency"),
+            "is_active": row.get("is_active", True),
+            "display_order": row.get("display_order", 0),
+            "admin_id": row.get("admin_id"),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        }
+        for row in res.data or []
+    ]
+    return {"accounts": accounts}
+
+
+@app.post("/api/admin/bank-accounts")
+async def create_admin_bank_account(
+    payload: dict,
+    admin=Depends(require_admin),
+):
+    """Create a new admin bank account."""
+    client = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Validate required fields
+    required = ["bank_name", "owner_name", "currency"]
+    for field in required:
+        if not payload.get(field):
+            raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+    
+    # Validate currency
+    if payload.get("currency") not in ["RUB", "MNT"]:
+        raise HTTPException(status_code=400, detail="Currency must be RUB or MNT")
+    
+    insert_data = {
+        "bank_name": payload.get("bank_name"),
+        "account_number": payload.get("account_number"),
+        "card_number": payload.get("card_number"),
+        "phone": payload.get("phone"),
+        "owner_name": payload.get("owner_name"),
+        "currency": payload.get("currency"),
+        "is_active": payload.get("is_active", True),
+        "display_order": payload.get("display_order", 0),
+        "admin_id": payload.get("admin_id"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    
+    result = client.table("admin_bank_accounts").insert(insert_data).execute()
+    
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create bank account")
+    
+    return {"ok": True, "account": result.data[0]}
+
+
+@app.put("/api/admin/bank-accounts/{account_id}")
+async def update_admin_bank_account(
+    account_id: str,
+    payload: dict,
+    admin=Depends(require_admin),
+):
+    """Update an existing admin bank account."""
+    client = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Validate currency if provided
+    if payload.get("currency") and payload.get("currency") not in ["RUB", "MNT"]:
+        raise HTTPException(status_code=400, detail="Currency must be RUB or MNT")
+    
+    update_data = {"updated_at": now}
+    
+    allowed_fields = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id"]
+    for field in allowed_fields:
+        if field in payload:
+            update_data[field] = payload[field]
+    
+    result = client.table("admin_bank_accounts").update(update_data).eq("id", account_id).execute()
+    
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    
+    return {"ok": True, "account": result.data[0]}
+
+
+@app.delete("/api/admin/bank-accounts/{account_id}")
+async def delete_admin_bank_account(
+    account_id: str,
+    admin=Depends(require_admin),
+):
+    """Delete an admin bank account."""
+    client = get_supabase()
+    
+    result = client.table("admin_bank_accounts").delete().eq("id", account_id).execute()
+    
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    
+    return {"ok": True, "message": "Bank account deleted"}
 
 
 # ============= Admin Shift Management =============
@@ -1455,6 +1613,12 @@ async def transfer_shift(payload: ShiftTransferRequest, admin=Depends(require_ad
     
     previous_admin_id = current.data[0].get("current_admin_id")
     
+    # Get admin names for notification
+    from_admin_res = client.table("admin_users").select("name").eq("id", payload.from_admin_id).limit(1).execute()
+    to_admin_res = client.table("admin_users").select("name").eq("id", payload.to_admin_id).limit(1).execute()
+    from_name = from_admin_res.data[0].get("name") if from_admin_res.data else str(payload.from_admin_id)
+    to_name = to_admin_res.data[0].get("name") if to_admin_res.data else str(payload.to_admin_id)
+    
     # Update shift to new admin
     client.table("admin_shifts").update({
         "current_admin_id": payload.to_admin_id,
@@ -1471,6 +1635,16 @@ async def transfer_shift(payload: ShiftTransferRequest, admin=Depends(require_ad
         "timestamp": now.isoformat()
     }).execute()
     
+    # Send notification to new admin about balance logging
+    notification_text = (
+        f"🔄 <b>Ээлж шилжүүлэгдлээ</b>\n\n"
+        f"👤 Өмнөх админ: {from_name}\n"
+        f"👤 Шинэ админ: {to_name}\n\n"
+        f"⚠️ <b>Шилжүүлэхээс өмнө банкны дансны үлдэгдлийг бүртгэхээ мартуузай!</b>\n\n"
+        f"🔗 <a href='https://oyunsadmin.pages.dev/'>Админ самбарт орох</a>"
+    )
+    send_user_notification(payload.to_admin_id, notification_text)
+    
     return {"ok": True, "message": f"Shift transferred from {payload.from_admin_id} to {payload.to_admin_id}"}
 
 
@@ -1483,6 +1657,13 @@ async def close_shift(payload: ShiftCloseRequest, admin=Depends(require_admin)):
     # Get current shift to log
     current = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
     previous_admin_id = current.data[0].get("current_admin_id") if current.data else None
+    
+    # Get admin name for notification
+    admin_name = str(payload.admin_id)
+    if previous_admin_id:
+        admin_res = client.table("admin_users").select("name").eq("id", previous_admin_id).limit(1).execute()
+        if admin_res.data:
+            admin_name = admin_res.data[0].get("name")
     
     # Clear the current admin
     client.table("admin_shifts").update({
@@ -1499,6 +1680,15 @@ async def close_shift(payload: ShiftCloseRequest, admin=Depends(require_admin)):
         "is_automatic": False,
         "timestamp": now.isoformat()
     }).execute()
+    
+    # Send notification about balance logging
+    notification_text = (
+        f"🔒 <b>Ээлж хаагдлаа</b>\n\n"
+        f"👤 Админ: {admin_name}\n\n"
+        f"⚠️ <b>Ээлж хаахаасаа өмнө банкны дансны үлдэгдлийг бүртгэхээ мартуузай!</b>\n\n"
+        f"🔗 <a href='https://oyunsadmin.pages.dev/'>Админ самбарт орох</a>"
+    )
+    send_user_notification(payload.admin_id, notification_text)
     
     return {"ok": True, "message": "Shift closed"}
 
