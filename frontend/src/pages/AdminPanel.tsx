@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Shield, FileText, Inbox, Users, Lock, Eye, EyeOff, CreditCard } from "lucide-react";
+import { Shield, FileText, Inbox, Users, Lock, Eye, EyeOff, CreditCard, History } from "lucide-react";
 import { AdminInbox } from "../components/AdminInbox";
 import { AdminKyc } from "../components/AdminKyc";
 import { AdminUserSearch } from "../components/AdminUserSearch";
 import { AdminBankAccounts } from "../components/AdminBankAccounts";
+import { AdminHistory } from "../components/AdminHistory";
 
-type Tab = "inbox" | "kyc" | "users" | "banks";
+type Tab = "inbox" | "kyc" | "users" | "banks" | "history";
 
 const ADMIN_API_KEY = "oyuns-admin-key-07012026";
 const STORAGE_KEY = "admin_authenticated";
@@ -156,6 +157,17 @@ export function AdminPanel() {
           <CreditCard className="w-4 h-4" />
           Данс
         </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+            activeTab === "history"
+              ? "bg-ocean-600 text-white"
+              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+          }`}
+        >
+          <History className="w-4 h-4" />
+          Түүх
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -165,6 +177,8 @@ export function AdminPanel() {
         <AdminKyc />
       ) : activeTab === "users" ? (
         <AdminUserSearch />
+      ) : activeTab === "history" ? (
+        <AdminHistory />
       ) : (
         <AdminBankAccounts />
       )}

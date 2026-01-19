@@ -320,3 +320,28 @@ class UserSearchItem(BaseModel):
 class UserSearchResponse(BaseModel):
     users: list[UserSearchItem]
     total: int = 0
+
+
+# Admin Transaction History (all transactions)
+class AdminHistoryItem(BaseModel):
+    invoice: str
+    user_id: int
+    user_name: Optional[str] = None  # first_name + last_name from users table
+    amount: Decimal
+    currency_from: str
+    currency_to: str
+    status: str
+    timestamp: datetime
+    rate: Decimal
+    bank_details: Optional[str] = None
+    receipt_id: Optional[str] = None
+    bill_url: Optional[str] = None
+    admin_bill_url: Optional[str] = None
+    rejection_comment: Optional[str] = None
+    direction: Optional[str] = None
+    completed_by_admin: Optional[int] = None
+
+
+class AdminHistoryResponse(BaseModel):
+    items: list[AdminHistoryItem]
+    total: int = 0

@@ -13,6 +13,8 @@ from models import (
     AdminActionRequest,
     AdminBankAccount,
     AdminBankAccountsResponse,
+    AdminHistoryItem,
+    AdminHistoryResponse,
     AdminInboxItem,
     AdminInboxResponse,
     AdminShift,
@@ -1129,6 +1131,64 @@ async def admin_inbox(admin=Depends(require_admin)):
             direction=direction,
         ))
     return AdminInboxResponse(items=items)
+
+
+@app.get("/api/admin/history", response_model=AdminHistoryResponse)
+async def admin_history(
+    status: str = None,
+    limit: int = 100,
+    offset: int = 0,
+    admin=Depends(require_admin)
+):
+    """Get all transactions with filters for admin history view."""
+    client = get_supabase()
+    
+    # Build query
+    query = client.table("transactions").select(
+        "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,completed_by_admin",
+        count="exact"
+    )
+    
+    # Apply status filter if provided
+    if status and status != "all":
+        query = query.eq("status", status)
+    
+    # Order by timestamp descending (newest first) and apply pagination
+    res = query.order("timestamp", desc=True).range(offset, offset + limit - 1).execute()
+    
+    # Get user names for all user_ids
+    user_ids = list(set([row.get("user_id") for row in res.data or [] if row.get("user_id")]))
+    user_names = {}
+    if user_ids:
+        users_res = client.table("users").select("id,first_name,last_name").in_("id", user_ids).execute()
+        for u in users_res.data or []:
+            name = f"{u.get('last_name', '')} {u.get('first_name', '')}".strip()
+            user_names[u.get("id")] = name if name else None
+    
+    items = []
+    for row in res.data or []:
+        direction = "buy" if row.get("currency_from") == "RUB" else "sell"
+        user_id = row.get("user_id")
+        items.append(AdminHistoryItem(
+            invoice=row.get("invoice"),
+            user_id=user_id,
+            user_name=user_names.get(user_id),
+            amount=row.get("amount"),
+            currency_from=row.get("currency_from"),
+            currency_to=row.get("currency_to"),
+            status=row.get("status"),
+            timestamp=row.get("timestamp"),
+            rate=row.get("rate"),
+            bank_details=row.get("bank_details"),
+            receipt_id=row.get("receipt_id"),
+            bill_url=row.get("bill_url"),
+            admin_bill_url=row.get("admin_bill_url"),
+            rejection_comment=row.get("rejection_comment"),
+            direction=direction,
+            completed_by_admin=row.get("completed_by_admin"),
+        ))
+    
+    return AdminHistoryResponse(items=items, total=res.count or len(items))
 
 
 @app.get("/api/admin/kyc", response_model=KycResponse)

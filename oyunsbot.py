@@ -5202,18 +5202,33 @@ def find_user_or_invoice(message):
         
         # Build response based on available data
         if db_user or tg_user:
-            lines = ["👤 <b>Хэрэглэгчийн мэдээлэл:</b>\n"]
-            
-            # Name from DB or Telegram
-            if db_user and (db_user.get("first_name") or db_user.get("last_name")):
-                full_name = f"{db_user.get('last_name', '')} {db_user.get('first_name', '')}".strip()
-                lines.append(f"📛 Нэр (DB): {full_name}")
+            # Get name parts
+            tg_name = ""
+            username = ""
             if tg_user:
                 tg_name = tg_user.first_name + (f" {tg_user.last_name}" if tg_user.last_name else "")
-                lines.append(f"📛 Нэр (TG): {tg_name}")
-                if tg_user.username:
-                    lines.append(f"🔗 Username: @{tg_user.username}")
+                username = f"@{tg_user.username}" if tg_user.username else "username_байхгүй"
             
+            db_name = ""
+            if db_user and (db_user.get("first_name") or db_user.get("last_name")):
+                db_name = f"{db_user.get('first_name', '')} {db_user.get('last_name', '')}".strip()
+            
+            # Build the quick-copy line format: "Name — @username — ID"
+            display_name = tg_name or db_name or "Нэр_байхгүй"
+            quick_line = f"<code>{display_name} — {username} — {user_id}</code>"
+            
+            lines = [
+                "👤 <b>Хэрэглэгчийн мэдээлэл:</b>\n",
+                f"📋 <b>Хуулах:</b> {quick_line}\n"
+            ]
+            
+            # Detailed info
+            if db_name:
+                lines.append(f"📛 Нэр (DB): {db_name}")
+            if tg_name:
+                lines.append(f"📛 Нэр (TG): {tg_name}")
+            if tg_user and tg_user.username:
+                lines.append(f"🔗 Username: @{tg_user.username}")
             lines.append(f"🆔 ID: <code>{user_id}</code>")
             
             # DB info

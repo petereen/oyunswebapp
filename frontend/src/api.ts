@@ -225,6 +225,42 @@ export async function fetchInbox() {
   return res.data as { items: any[] };
 }
 
+// ============= Admin History =============
+
+export interface AdminHistoryItem {
+  invoice: string;
+  user_id: number;
+  user_name?: string;
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  status: string;
+  timestamp: string;
+  rate: number;
+  bank_details?: string;
+  receipt_id?: string;
+  bill_url?: string;
+  admin_bill_url?: string;
+  rejection_comment?: string;
+  direction?: string;
+  completed_by_admin?: number;
+}
+
+export interface AdminHistoryResponse {
+  items: AdminHistoryItem[];
+  total: number;
+}
+
+export async function fetchAdminHistory(status?: string, limit: number = 100, offset: number = 0): Promise<AdminHistoryResponse> {
+  const params = new URLSearchParams();
+  if (status && status !== "all") params.append("status", status);
+  params.append("limit", limit.toString());
+  params.append("offset", offset.toString());
+  
+  const res = await api.get(`/admin/history?${params.toString()}`);
+  return res.data as AdminHistoryResponse;
+}
+
 export async function fetchKycPending(): Promise<{ items: KycItem[] }> {
   const res = await api.get('/admin/kyc');
   return res.data as { items: KycItem[] };
