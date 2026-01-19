@@ -35,8 +35,8 @@ def get_settings() -> Settings:
     user_panel_url = os.getenv("USER_PANEL_URL")
     admin_api_key = os.getenv("ADMIN_API_KEY")
     jwt_secret = os.getenv("JWT_SECRET", "").strip().strip('"').strip("'")
-    # DEV MODE: Telegram auth disabled by default
-    dev_mode = os.getenv("DEV_MODE", "true").lower() == "true"
+    # DEV MODE: Telegram auth bypass - defaults to FALSE for production safety
+    dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
 
     if not supabase_url or not supabase_key or not bot_token:
         raise RuntimeError("SUPABASE_URL, SUPABASE_KEY, and BOT_TOKEN must be set")

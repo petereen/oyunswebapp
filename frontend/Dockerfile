@@ -6,9 +6,10 @@ RUN npm ci
 COPY . .
 # Set the API base URL for production to use relative path (proxied by Nginx)
 ENV VITE_API_BASE=/api
-ARG VITE_DEV_MODE
+# Default to production mode (false) - override with --build-arg VITE_DEV_MODE=true for dev
+ARG VITE_DEV_MODE=false
 ENV VITE_DEV_MODE=$VITE_DEV_MODE
-RUN npm run build
+RUN echo "Building with VITE_DEV_MODE=$VITE_DEV_MODE" && npm run build
 
 # Stage 2: Serve
 FROM nginx:alpine

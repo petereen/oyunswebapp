@@ -21,7 +21,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_DEV_MODE: ${VITE_DEV_MODE}
+        # Default to false (production) - set VITE_DEV_MODE=true in .env for local dev
+        VITE_DEV_MODE: ${VITE_DEV_MODE:-false}
     restart: unless-stopped
 
   nginx:

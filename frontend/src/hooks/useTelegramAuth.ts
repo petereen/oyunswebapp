@@ -29,6 +29,8 @@ declare global {
         ready: () => void;
         expand: () => void;
         close: () => void;
+        platform?: string;
+        version?: string;
         MainButton: {
           text: string;
           show: () => void;
@@ -63,6 +65,7 @@ export function useTelegramAuth() {
 
   const authenticate = useCallback(async (initData: string) => {
     try {
+      console.log('🔐 Authenticating with initData length:', initData.length);
       const response = await fetch(
         (import.meta.env.VITE_API_BASE || '/api') + '/auth',
         {
@@ -109,22 +112,62 @@ export function useTelegramAuth() {
 
   useEffect(() => {
     const initAuth = async () => {
-      // Check for existing JWT token first
+      const tg = window.Telegram?.WebApp;
+      
+      // Debug logging
+      console.log('=== Telegram Auth Debug ===');
+      console.log('DEV_MODE:', DEV_MODE);
+      console.log('VITE_DEV_MODE env:', import.meta.env.VITE_DEV_MODE);
+      console.log('Telegram object exists:', !!window.Telegram);
+      console.log('WebApp object exists:', !!tg);
+      console.log('initData:', tg?.initData ? `${tg.initData.substring(0, 50)}... (${tg.initData.length} chars)` : 'EMPTY');
+      console.log('initDataUnsafe.user:', tg?.initDataUnsafe?.user);
+      console.log('Platform:', tg?.platform);
+      console.log('Version:', tg?.version);
+      console.log('===========================');
+
+      // PRIORITY 1: Real Telegram WebApp context (always use if available)
+      if (tg?.initData && tg.initData.length > 0) {
+        console.log('📱 Real Telegram WebApp detected! Using initData for authentication...');
+        tg.ready();
+        tg.expand();
+        
+        // Clear any old dev mode tokens to force fresh auth with real user
+        localStorage.removeItem(JWT_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        
+        try {
+          await authenticate(tg.initData);
+          return;
+        } catch {
+          // Auth failed, error already set in state
+          return;
+        }
+      }
+
+      // PRIORITY 2: Check for existing valid JWT token (only if no Telegram context)
       const storedToken = localStorage.getItem(JWT_STORAGE_KEY);
       const storedUser = localStorage.getItem(USER_STORAGE_KEY);
       
       if (storedToken && storedUser) {
         try {
           const user = JSON.parse(storedUser) as TelegramUser;
-          setState({
-            initData: '',
-            user,
-            isAuthenticating: false,
-            authError: null,
-            token: storedToken,
-          });
-          console.log('✅ Restored auth from localStorage:', user);
-          return;
+          // Don't use cached dev user (id 1932946217) in production
+          if (!DEV_MODE && user.id === DEV_USER.id) {
+            console.log('🚫 Clearing cached dev user in production mode');
+            localStorage.removeItem(JWT_STORAGE_KEY);
+            localStorage.removeItem(USER_STORAGE_KEY);
+          } else {
+            setState({
+              initData: '',
+              user,
+              isAuthenticating: false,
+              authError: null,
+              token: storedToken,
+            });
+            console.log('✅ Restored auth from localStorage:', user);
+            return;
+          }
         } catch {
           // Invalid stored data, clear and re-authenticate
           localStorage.removeItem(JWT_STORAGE_KEY);
@@ -132,22 +175,8 @@ export function useTelegramAuth() {
         }
       }
 
-      // Check for Telegram WebApp context
-      const tg = window.Telegram?.WebApp;
-      
-      if (tg?.initData) {
-        // Real Telegram WebApp - use initData for authentication
-        console.log('📱 Telegram WebApp detected, authenticating...');
-        tg.ready();
-        tg.expand();
-        
-        try {
-          await authenticate(tg.initData);
-        } catch {
-          // Auth failed, error already set in state
-        }
-      } else if (DEV_MODE) {
-        // Dev mode without Telegram - use bypass
+      // PRIORITY 3: Dev mode fallback (only in dev mode, no Telegram context)
+      if (DEV_MODE) {
         console.log('🔧 Dev mode: Using mock user (no Telegram context)');
         
         // Check if DevToolbar set a custom user
@@ -167,16 +196,18 @@ export function useTelegramAuth() {
             token: null,
           });
         }
-      } else {
-        // Production without Telegram context - error
-        setState({
-          initData: '',
-          user: null,
-          isAuthenticating: false,
-          authError: 'Please open this app from Telegram',
-          token: null,
-        });
+        return;
       }
+
+      // PRIORITY 4: Production without Telegram context - show error
+      console.error('❌ No Telegram context and not in dev mode');
+      setState({
+        initData: '',
+        user: null,
+        isAuthenticating: false,
+        authError: 'Telegram-ээс нээнэ үү / Please open from Telegram',
+        token: null,
+      });
     };
 
     initAuth();
