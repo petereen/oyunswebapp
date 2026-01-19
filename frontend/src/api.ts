@@ -80,7 +80,6 @@ export type AdminBankAccount = {
 export type RegistrationInput = {
   last_name: string;
   first_name: string;
-  phone: string;
   rub_bank_name: string;
   rub_phone_sbp: string;
   rub_card_number: string;

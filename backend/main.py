@@ -669,10 +669,11 @@ async def register_user(
     bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone}"
     
     # Update user record with registration info
+    # Note: We use the user's provided first_name and last_name from the form,
+    # not overwriting with Telegram profile names
     update_payload = {
         "first_name": payload.first_name,
         "last_name": payload.last_name,
-        "phone": payload.phone,
         "bank_rub": bank_rub,
         "bank_mnt": bank_mnt,
         "passport_storage_url": payload.passport_storage_url,
@@ -692,8 +693,8 @@ async def register_user(
         admin_text = (
             f"📋 <b>Шинэ бүртгэл баталгаажуулалт хүлээгдэж байна</b>\n\n"
             f"👤 Хэрэглэгч: {payload.last_name} {payload.first_name}\n"
-            f"📱 Утас (RU): {payload.phone}\n"
             f"📱 Утас (MN): {payload.mnt_phone}\n"
+            f"📱 Утас СБП (RU): {payload.rub_phone_sbp}\n"
             f"🆔 Telegram ID: {user.id}\n"
         )
         send_user_notification(shift_admin_id, admin_text)
@@ -860,6 +861,27 @@ async def create_exchange(
     else:
         # No shift admin - skip notification
         logger.warning("No shift admin found, skipping transaction notification")
+
+    # Send confirmation notification to user
+    user_direction_text = "Төгрөг авах (RUB → MNT)" if payload.direction.lower() == "buy" else "Рубль авах (MNT → RUB)"
+    user_notification = (
+        f"✅ <b>Таны гүйлгээний хүсэлтийг хүлээн авлаа!</b>\n\n"
+        f"📋 <b>Гүйлгээний дэлгэрэнгүй мэдээлэл:</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🧾 Invoice: <code>{invoice}</code>\n"
+        f"🔄 Чиглэл: {user_direction_text}\n"
+        f"💰 Та илгээх дүн: <b>{payload.amount:,.0f}</b> {payload.currency_from}\n"
+        f"💸 Та хүлээн авах: <b>{admin_sends:,.0f}</b> {admin_sends_currency}\n"
+        f"📊 Ханш: <b>{payload.rate}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"⏳ Таны хүсэлтийг админ удахгүй баталгаажуулах болно. Та түр хүлээнэ үү."
+    )
+    
+    try:
+        send_user_notification(user.id, user_notification)
+        logger.info(f"Sent confirmation notification to user {user.id}")
+    except Exception as e:
+        logger.warning(f"Failed to send user confirmation notification: {e}")
 
     return ExchangeCreateResponse(
         id=str(transaction.get("id")),
@@ -1155,13 +1177,29 @@ async def admin_kyc_action(
             "updated_at": now,
         }).eq("id", payload.user_id).execute()
         
-        # Notify user via Telegram
+        # Notify user via Telegram with webapp button
         notification_text = (
-            f"✅ <b>Таны бүртгэл баталгаажлаа!</b>\n\n"
-            f"Та одоо OYUNS FINANCE үйлчилгээг ашиглах боломжтой боллоо.\n"
-            f"Баярлалаа! 🎉"
+            f"✅ <b>Таны бүртгэл амжилттай баталгаажлаа!</b>\n\n"
+            f"Та OYUNS FINANCE үйлчилгээг ашиглах боломжтой боллоо.\n"
+            f"Доорх товчийг дараад валютаа солиорой!"
         )
-        send_user_notification(user_id=payload.user_id, text=notification_text)
+        
+        # Add webapp launch button if URL is configured
+        settings = get_settings()
+        reply_markup = None
+        if settings.user_panel_url and settings.user_panel_url.startswith("https://"):
+            reply_markup = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "🚀 Апп нээх",
+                            "web_app": {"url": settings.user_panel_url}
+                        }
+                    ]
+                ]
+            }
+        
+        send_user_notification(user_id=payload.user_id, text=notification_text, reply_markup=reply_markup)
         
         # Log admin action
         if admin_user_id:

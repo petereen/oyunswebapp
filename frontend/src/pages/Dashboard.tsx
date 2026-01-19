@@ -184,92 +184,103 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
 
       {/* Main Content */}
       {!showExchange ? (
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-4">
-            <RateCard rate={rate} />
-            <Converter rate={rate} onAmountChange={(p) => setDirection(p.direction)} />
-          </div>
-          <div className="flex flex-col gap-4">
-            {/* Exchange CTA */}
-            <div className="glass-card p-6 rounded-2xl border border-white/60 flex flex-col items-center justify-center gap-4 min-h-[200px]">
-              {needsRegistration ? (
-                // User needs to register
-                <>
-                  <div className="flex items-center justify-center w-16 h-16 bg-ocean-100 rounded-full">
-                    <AlertCircle className="w-8 h-8 text-ocean-600" />
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-ocean-700 mb-2">Бүртгүүлэх шаардлагатай</div>
-                    <div className="text-sm text-slate-500">
-                      Үйлчилгээг ашиглахын тулд эхлээд бүртгүүлнэ үү
+        <>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+              <RateCard rate={rate} />
+            </div>
+            <div className="flex flex-col gap-4">
+              {/* Exchange CTA */}
+              <div className="glass-card p-6 rounded-2xl border border-white/60 flex flex-col items-center justify-center gap-4 min-h-[200px]">
+                {needsRegistration ? (
+                  // User needs to register
+                  <>
+                    <div className="flex items-center justify-center w-16 h-16 bg-ocean-100 rounded-full">
+                      <AlertCircle className="w-8 h-8 text-ocean-600" />
                     </div>
-                  </div>
-                </>
-              ) : pendingVerification ? (
-                // User is waiting for admin verification
-                <>
-                  <div className="flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full">
-                    <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-amber-700 mb-2">Баталгаажуулалт хүлээгдэж байна</div>
-                    <div className="text-sm text-slate-500 mb-2">
-                      Таны бүртгэлийг админ шалгаж байна
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-ocean-700 mb-2">Бүртгүүлэх шаардлагатай</div>
+                      <div className="text-sm text-slate-500">
+                        Үйлчилгээг ашиглахын тулд эхлээд бүртгүүлнэ үү
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-400">
-                      Баталгаажуулалт дууссаны дараа Telegram чатаар мэдэгдэл очих болно
+                  </>
+                ) : pendingVerification ? (
+                  // User is waiting for admin verification
+                  <>
+                    <div className="flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full">
+                      <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
                     </div>
-                  </div>
-                  <button
-                    disabled
-                    className="w-full max-w-xs bg-slate-300 text-slate-500 py-4 rounded-xl font-bold text-lg cursor-not-allowed"
-                  >
-                    ВАЛЮТ СОЛИХ
-                  </button>
-                </>
-              ) : serviceStatus?.is_open !== false ? (
-                <>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-ocean-700 mb-2">Та валют солиход бэлэн үү?</div>
-                    <div className="text-sm text-slate-500">
-                      {direction === "buy" ? "RUB → MNT" : "MNT → RUB"} ХАНШ {effectiveRate || "—"}
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-amber-700 mb-2">Баталгаажуулалт хүлээгдэж байна</div>
+                      <div className="text-sm text-slate-500 mb-2">
+                        Таны бүртгэлийг админ шалгаж байна
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Баталгаажуулалт дууссаны дараа Telegram чатаар мэдэгдэл очих болно
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    onClick={() => setShowExchange(true)}
-                    disabled={!rate || ratesLoading}
-                    className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ВАЛЮТ СОЛИХ
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full">
-                    <Clock className="w-8 h-8 text-amber-600" />
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-slate-700 mb-2">
-                      {!serviceStatus?.is_within_hours ? "Бидний ажлын цаг дууссан байна" : "Түр хаалттай"}
+                    <button
+                      disabled
+                      className="w-full max-w-xs bg-slate-300 text-slate-500 py-4 rounded-xl font-bold text-lg cursor-not-allowed"
+                    >
+                      ВАЛЮТ СОЛИХ
+                    </button>
+                  </>
+                ) : serviceStatus?.is_open !== false ? (
+                  <>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-ocean-700 mb-2">Та валют солиход бэлэн үү?</div>
+                      <div className="text-sm text-slate-500">
+                        {direction === "buy" ? "RUB → MNT" : "MNT → RUB"} ХАНШ {effectiveRate || "—"}
+                      </div>
                     </div>
-                    <div className="text-sm text-slate-500 mb-2">
-                      {serviceStatus?.message}
+                    <button
+                      onClick={() => setShowExchange(true)}
+                      disabled={!rate || ratesLoading}
+                      className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ВАЛЮТ СОЛИХ
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-center w-16 h-16 bg-amber-100 rounded-full">
+                      <Clock className="w-8 h-8 text-amber-600" />
                     </div>
-                    <div className="text-xs text-slate-400">
-                      Бид Москвагийн цагаар 04:00-23:00 хооронд, Улаанбаатарын цагаар 09:00–04:00(дараа өдрийн) цагийн хооронд ажиллаж байна.
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-slate-700 mb-2">
+                        {!serviceStatus?.is_within_hours ? "Бидний ажлын цаг дууссан байна" : "Түр хаалттай"}
+                      </div>
+                      <div className="text-sm text-slate-500 mb-2">
+                        {serviceStatus?.message}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Бид Москвагийн цагаар 04:00-23:00 хооронд, Улаанбаатарын цагаар 09:00–04:00(дараа өдрийн) цагийн хооронд ажиллаж байна.
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    disabled
-                    className="w-full max-w-xs bg-slate-300 text-slate-500 py-4 rounded-xl font-bold text-lg cursor-not-allowed"
-                  >
-                    ВАЛЮТ СОЛИХ
-                  </button>
-                </>
-              )}
+                    <button
+                      disabled
+                      className="w-full max-w-xs bg-slate-300 text-slate-500 py-4 rounded-xl font-bold text-lg cursor-not-allowed"
+                    >
+                      ВАЛЮТ СОЛИХ
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+          
+          {/* Calculator at the bottom */}
+          <div className="mt-4">
+            <Converter rate={rate} onAmountChange={(p) => setDirection(p.direction)} />
+          </div>
+
+          {/* Copyright */}
+          <div className="mt-8 text-center text-xs text-slate-400">
+            © 2026 OYUNS FINANCE. All rights reserved.
+          </div>
+        </>
       ) : (
         <ExchangeFlow
           initData={initData}

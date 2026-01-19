@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   User,
-  Phone,
   CreditCard,
   Building,
   CheckCircle2,
@@ -24,7 +23,6 @@ export function RegistrationModal({ onRegistered }: Props) {
   // Personal info
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
-  const [phone, setPhone] = useState("");
 
   // RUB bank info
   const [rubBankName, setRubBankName] = useState("");
@@ -68,7 +66,6 @@ export function RegistrationModal({ onRegistered }: Props) {
     return (
       lastName.trim() &&
       firstName.trim() &&
-      phone.trim() &&
       rubBankName.trim() &&
       rubPhoneSbp.trim() &&
       rubCardNumber.trim() &&
@@ -94,7 +91,6 @@ export function RegistrationModal({ onRegistered }: Props) {
       const payload: RegistrationInput = {
         last_name: lastName.trim(),
         first_name: firstName.trim(),
-        phone: phone.trim(),
         rub_bank_name: rubBankName.trim(),
         rub_phone_sbp: rubPhoneSbp.trim(),
         rub_card_number: rubCardNumber.trim(),
@@ -160,17 +156,6 @@ export function RegistrationModal({ onRegistered }: Props) {
                 onChange={(e) => setFirstName(e.target.value)}
                 className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
                 placeholder="Нэр"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">Утасны дугаар (Орос) <span className="text-red-500">*</span></label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
-                placeholder="+7 900 123 4567"
               />
             </div>
           </div>

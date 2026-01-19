@@ -147,7 +147,6 @@ class KycResponse(BaseModel):
 class RegistrationRequest(BaseModel):
     last_name: str
     first_name: str
-    phone: str  # Russian phone number
     # RUB bank info: bank_name, phone_sbp, card_number, owner_name
     rub_bank_name: str
     rub_phone_sbp: str

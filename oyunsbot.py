@@ -934,14 +934,11 @@ def main_menu():
     markup.row_width = 2
     markup.add(
         InlineKeyboardButton("📊 Ханш", callback_data="exchange_rate"),
-        InlineKeyboardButton("ℹ️ Бот ашиглах заавар", callback_data="how_to_use"),
         InlineKeyboardButton("💱 Валют солих", callback_data="exchange_menu"),
         InlineKeyboardButton("👤 Хэрэглэгчийн тохиргоо", callback_data="user_profile"),
         InlineKeyboardButton("⭐ Бусад үйлчилгээ", callback_data="other_services"),
         InlineKeyboardButton("📝 Бүртгүүлэх", callback_data="start_registration"),
-        InlineKeyboardButton("🤝 Найз урих", callback_data="invite_friend"),
-        InlineKeyboardButton("🎁 Бэлэг нээх", callback_data="open_gift")#,
-        #InlineKeyboardButton("📞 Холбоо барих", callback_data="contact_support")
+        InlineKeyboardButton("🤝 Найз урих", callback_data="invite_friend")
     )
     return markup
 
