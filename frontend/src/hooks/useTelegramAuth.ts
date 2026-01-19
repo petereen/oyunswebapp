@@ -66,6 +66,24 @@ export function useTelegramAuth() {
   const authenticate = useCallback(async (initData: string) => {
     try {
       console.log('🔐 Authenticating with initData length:', initData.length);
+      console.log('🔐 initData preview:', initData.substring(0, 100) + '...');
+      
+      // First, call debug endpoint to see validation details
+      try {
+        const debugRes = await fetch(
+          (import.meta.env.VITE_API_BASE || '/api') + '/auth/debug',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ init_data: initData }),
+          }
+        );
+        const debugData = await debugRes.json();
+        console.log('🔍 Auth Debug Info:', debugData);
+      } catch (e) {
+        console.warn('Debug endpoint failed:', e);
+      }
+      
       const response = await fetch(
         (import.meta.env.VITE_API_BASE || '/api') + '/auth',
         {
