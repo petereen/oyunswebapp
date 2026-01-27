@@ -249,7 +249,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
         currency_from: currencyFrom,
         currency_to: currencyTo,
         rate: effectiveRate,
-        admin_bank_id: selectedAdminBank.id,
+        admin_bank_id: Number(selectedAdminBank.id),
         sender_receipt_url: receiptUrl,
         from_name: fromName.trim() || undefined,
       };
