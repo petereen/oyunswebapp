@@ -257,9 +257,11 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       console.log("Creating gift with payload:", payload);
       await createGift(payload);
       setSuccessInvoice(finalInvoiceId);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Gift creation error:", err);
-      setError("Бэлэг илгээхэд алдаа гарлаа. Дахин оролдоно уу.");
+      const errorDetail = err?.response?.data?.detail || err?.response?.data?.body || "";
+      console.error("Error details:", errorDetail);
+      setError(`Бэлэг илгээхэд алдаа гарлаа: ${typeof errorDetail === 'string' ? errorDetail.slice(0, 100) : JSON.stringify(errorDetail).slice(0, 100)}`);
     } finally {
       setLoading(false);
     }

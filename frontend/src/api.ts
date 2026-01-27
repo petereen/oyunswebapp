@@ -524,8 +524,14 @@ export async function searchUserByPhone(phone: string): Promise<{ found: boolean
 }
 
 export async function createGift(payload: GiftCreateInput) {
-  const res = await api.post('/gift/create', payload);
-  return res.data;
+  console.log("Creating gift with payload:", JSON.stringify(payload, null, 2));
+  try {
+    const res = await api.post('/gift/create', payload);
+    return res.data;
+  } catch (err: any) {
+    console.error("Gift create error details:", err.response?.data);
+    throw err;
+  }
 }
 
 export async function fetchPendingGifts(): Promise<{ gifts: PendingGift[] }> {
