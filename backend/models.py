@@ -370,10 +370,10 @@ class GiftCreateRequest(BaseModel):
     gift_card_url: str
     message: str = ""
     direction: str  # "buy" or "sell"
-    amount: Decimal
+    amount: float
     currency_from: str
     currency_to: str
-    rate: Decimal
+    rate: float
     admin_bank_id: int
     sender_receipt_url: str
     from_name: Optional[str] = None  # "From who" field displayed on gift

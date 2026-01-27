@@ -6,6 +6,8 @@ import logging
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from config import get_settings
 from db import get_supabase
@@ -178,6 +180,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Oyunsbot WebApp", version="0.1.0", lifespan=lifespan)
+
+# Add validation error handler to log detailed errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Validation error on {request.url.path}: {exc.errors()}")
+    logger.error(f"Request body: {exc.body}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(exc.body)[:500]}
+    )
 
 app.add_middleware(
     CORSMiddleware,

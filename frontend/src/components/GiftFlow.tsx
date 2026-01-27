@@ -228,12 +228,18 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       return;
     }
 
+    // Ensure invoice ID exists
+    const finalInvoiceId = invoiceId || generateInvoiceId();
+    if (!invoiceId) {
+      setInvoiceId(finalInvoiceId);
+    }
+
     try {
       setLoading(true);
       setError("");
 
       const payload: GiftCreateInput = {
-        invoice: invoiceId,
+        invoice: finalInvoiceId,
         recipient_phone: recipientPhone.trim(),
         recipient_user_id: recipientFound.id,
         gift_card_url: giftCards[selectedCardIndex].image_url,
@@ -248,8 +254,9 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
         from_name: fromName.trim() || undefined,
       };
 
+      console.log("Creating gift with payload:", payload);
       await createGift(payload);
-      setSuccessInvoice(invoiceId);
+      setSuccessInvoice(finalInvoiceId);
     } catch (err) {
       console.error("Gift creation error:", err);
       setError("Бэлэг илгээхэд алдаа гарлаа. Дахин оролдоно уу.");
