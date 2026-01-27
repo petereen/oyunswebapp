@@ -2008,38 +2008,150 @@ async def lookup_recipient_by_phone(
     phone: str,
     user=Depends(get_jwt_authenticated_user)
 ):
-    """Look up a verified user by phone number"""
+    """Look up a verified user by phone number.
+    
+    Searches in:
+    1. phone column directly
+    2. bank_rub column - format: "Банк, +79603548085, Данс, Нэр"
+    3. bank_mnt column - format: "Банк, Данс, Нэр"
+    """
     client = get_supabase()
+    import re
     
-    # Clean phone number
-    clean_phone = phone.strip().replace(" ", "").replace("-", "")
+    # === INPUT VALIDATION & SANITIZATION ===
+    if not phone or not phone.strip():
+        return RecipientLookupResponse(found=False)
     
-    # Search in users table - check both phone fields in bank info
-    # bank_mnt format: "Банк | Данс | Нэр | Утас"
-    res = (
-        client.table("users")
-        .select("id, first_name, last_name, bank_mnt")
-        .eq("verified", True)
-        .execute()
-    )
+    # Clean phone number - remove spaces, dashes, parentheses
+    clean_phone = re.sub(r'[\s\-\(\)\.]', '', phone.strip())
     
-    for u in res.data or []:
-        # Check if phone is in bank_mnt field
-        bank_mnt = u.get("bank_mnt", "") or ""
-        if clean_phone in bank_mnt.replace(" ", "").replace("-", ""):
+    # Validate: must contain only digits and optionally start with +
+    if not re.match(r'^\+?\d+$', clean_phone):
+        return RecipientLookupResponse(found=False)
+    
+    # Minimum length check (at least 6 digits for any valid phone)
+    digits_only = re.sub(r'\D', '', clean_phone)
+    if len(digits_only) < 6:
+        return RecipientLookupResponse(found=False)
+    
+    # Maximum length check (no phone number exceeds 15 digits)
+    if len(digits_only) > 15:
+        return RecipientLookupResponse(found=False)
+    
+    # Also create version without + for comparison
+    phone_no_plus = clean_phone.lstrip("+")
+    
+    # Helper function to extract phone numbers from bank info string
+    def extract_phone_from_bank_info(bank_info: str) -> list:
+        """Extract phone numbers from comma-separated bank info.
+        Example: 'Сбер банк, +79603548085, 2202205354510650, Баасанжаргал'
+        Returns list of cleaned phone numbers found.
+        """
+        if not bank_info:
+            return []
+        
+        phones = []
+        parts = bank_info.split(",")
+        for part in parts:
+            part = re.sub(r'[\s\-\(\)\.]', '', part.strip())
+            # Check if this part looks like a phone number (starts with + or has 8-12 digits)
+            if part.startswith("+") and 10 <= len(part) <= 16:
+                phones.append(part)
+                phones.append(part.lstrip("+"))
+            # Also check for numbers that could be phones (Russian: 10-11 digits, MN: 8 digits)
+            elif re.match(r"^\d{8,12}$", part):
+                # Likely a phone if it's not too long (card numbers are 16+ digits)
+                phones.append(part)
+        return phones
+    
+    # Helper function for safe phone comparison
+    def phones_match(search_phone: str, user_phone: str) -> bool:
+        """Safely compare two phone numbers with various formats."""
+        if not search_phone or not user_phone:
+            return False
+        
+        # Normalize both - only digits
+        search_digits = re.sub(r'\D', '', search_phone)
+        user_digits = re.sub(r'\D', '', user_phone)
+        
+        if not search_digits or not user_digits:
+            return False
+        
+        # Minimum match length to avoid false positives
+        min_match_length = 8
+        
+        # Exact match
+        if search_digits == user_digits:
+            return True
+        
+        # Check if one ends with the other (handles country code variations)
+        # e.g., "79991234567" matches "9991234567"
+        if len(search_digits) >= min_match_length and len(user_digits) >= min_match_length:
+            if search_digits.endswith(user_digits[-min_match_length:]) or user_digits.endswith(search_digits[-min_match_length:]):
+                return True
+        
+        return False
+    
+    try:
+        # Search in users table
+        res = (
+            client.table("users")
+            .select("id, first_name, last_name, phone, bank_rub, bank_mnt")
+            .eq("verified", True)
+            .execute()
+        )
+        
+        for u in res.data or []:
             # Don't allow sending to yourself
             if u.get("id") == user.id:
                 continue
-            return RecipientLookupResponse(
-                found=True,
-                user={
-                    "id": u.get("id"),
-                    "first_name": u.get("first_name"),
-                    "last_name": u.get("last_name"),
-                }
-            )
-    
-    return RecipientLookupResponse(found=False)
+            
+            # 1. Check phone column directly
+            user_phone = u.get("phone") or ""
+            if user_phone and phones_match(clean_phone, user_phone):
+                return RecipientLookupResponse(
+                    found=True,
+                    user={
+                        "id": u.get("id"),
+                        "first_name": u.get("first_name"),
+                        "last_name": u.get("last_name"),
+                    }
+                )
+            
+            # 2. Check bank_rub column for phone number
+            bank_rub = u.get("bank_rub") or ""
+            rub_phones = extract_phone_from_bank_info(bank_rub)
+            for rub_phone in rub_phones:
+                if phones_match(clean_phone, rub_phone):
+                    return RecipientLookupResponse(
+                        found=True,
+                        user={
+                            "id": u.get("id"),
+                            "first_name": u.get("first_name"),
+                            "last_name": u.get("last_name"),
+                        }
+                    )
+            
+            # 3. Check bank_mnt column (may also contain phone in some formats)
+            bank_mnt = u.get("bank_mnt") or ""
+            mnt_phones = extract_phone_from_bank_info(bank_mnt)
+            for mnt_phone in mnt_phones:
+                if phones_match(clean_phone, mnt_phone):
+                    return RecipientLookupResponse(
+                        found=True,
+                        user={
+                            "id": u.get("id"),
+                            "first_name": u.get("first_name"),
+                            "last_name": u.get("last_name"),
+                        }
+                    )
+        
+        return RecipientLookupResponse(found=False)
+        
+    except Exception as e:
+        # Log error but don't expose details to client
+        print(f"Error in recipient lookup: {e}")
+        return RecipientLookupResponse(found=False)
 
 
 @app.post("/api/gift/create", response_model=GiftCreateResponse)
@@ -2160,7 +2272,6 @@ async def get_pending_gifts(user=Depends(get_jwt_authenticated_user)):
             sender_user_id=g.get("sender_user_id"),
             sender_first_name=sender.get("first_name"),
             sender_last_name=sender.get("last_name"),
-            from_name=g.get("from_name"),
             gift_card_url=g.get("gift_card_url", ""),
             message=g.get("message", ""),
             direction=g.get("direction", ""),
@@ -2172,38 +2283,6 @@ async def get_pending_gifts(user=Depends(get_jwt_authenticated_user)):
         ))
     
     return PendingGiftsResponse(gifts=gifts)
-
-
-@app.get("/api/gift/sent", response_model=SentGiftsResponse)
-async def get_sent_gifts(user=Depends(get_jwt_authenticated_user)):
-    """Get gifts sent by the current user (for status tracking)"""
-    client = get_supabase()
-    
-    res = (
-        client.table("gifts")
-        .select("*, recipient:users!recipient_user_id(first_name, last_name)")
-        .eq("sender_user_id", user.id)
-        .order("created_at", desc=True)
-        .limit(10)  # Only recent gifts
-        .execute()
-    )
-    
-    gifts = []
-    for g in res.data or []:
-        recipient = g.get("recipient", {}) or {}
-        gifts.append(SentGift(
-            id=str(g.get("id")),
-            invoice=g.get("invoice", ""),
-            recipient_first_name=recipient.get("first_name"),
-            recipient_last_name=recipient.get("last_name"),
-            amount=g.get("amount", 0),
-            currency_from=g.get("currency_from", ""),
-            currency_to=g.get("currency_to", ""),
-            status=g.get("status", ""),
-            created_at=g.get("created_at"),
-        ))
-    
-    return SentGiftsResponse(gifts=gifts)
 
 
 @app.post("/api/gift/{gift_id}/confirm")

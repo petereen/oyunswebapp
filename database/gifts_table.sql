@@ -73,9 +73,9 @@ CREATE TABLE IF NOT EXISTS gift_cards (
 -- These URLs point to images in the Supabase storage "gift_card" bucket
 INSERT INTO gift_cards (name, image_url, display_order) VALUES 
     ('🎂 Төрсөн өдөр', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/birthday.jpg', 1),
-    ('🌸 Ерөнхий', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/general.jpg', 2),
-    ('🌙 Цагаан сар 1', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/tsagaansar1.jpg', 3),
-    ('🌙 Цагаан сар 2', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/tsagaansar2.jpg', 4),
+    ('🎁 Энгийн', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/general.jpg', 2),
+    ('🌙 Цагаан сар', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/tsagaansar1.jpg', 3),
+    ('🌙 Цагаан сар', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/tsagaansar2.jpg', 4),
     ('❤️ Валентин', 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/valentine.jpg', 5)
 ON CONFLICT DO NOTHING;
 

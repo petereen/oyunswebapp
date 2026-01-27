@@ -366,14 +366,14 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           {/* From who field */}
           <div className="mt-4">
             <label className="text-xs text-slate-500 flex items-center gap-1">
-              <User className="w-3 h-3" /> Хэнээс? (Бэлэг дээр харагдах нэр)
+              <User className="w-3 h-3" /> Хэнээс? (Бэлэг хүлээн авч буй хүнд харагдах нэр)
             </label>
             <input
               type="text"
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
               className="w-full rounded-lg border border-ocean-200 p-3 text-sm mt-1"
-              placeholder="Жишээ: Ээжээсээ хайртай ❤️"
+              placeholder="Жишээ нь: Найзаас нь"
             />
           </div>
 
