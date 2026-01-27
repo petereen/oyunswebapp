@@ -2154,6 +2154,59 @@ async def lookup_recipient_by_phone(
         return RecipientLookupResponse(found=False)
 
 
+@app.get("/api/gift/sent", response_model=SentGiftsResponse)
+async def get_sent_gifts(
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Get all gifts sent by the current user"""
+    client = get_supabase()
+    
+    try:
+        res = (
+            client.table("gifts")
+            .select("id, invoice, recipient_user_id, amount, currency_from, currency_to, status, created_at")
+            .eq("sender_user_id", user.id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        
+        gifts = []
+        for g in res.data or []:
+            # Get recipient name
+            recipient_name = {"first_name": None, "last_name": None}
+            if g.get("recipient_user_id"):
+                try:
+                    recipient_res = (
+                        client.table("users")
+                        .select("first_name, last_name")
+                        .eq("id", g.get("recipient_user_id"))
+                        .single()
+                        .execute()
+                    )
+                    if recipient_res.data:
+                        recipient_name = recipient_res.data
+                except:
+                    pass
+            
+            gifts.append(SentGift(
+                id=str(g.get("id")),
+                invoice=g.get("invoice", ""),
+                recipient_first_name=recipient_name.get("first_name"),
+                recipient_last_name=recipient_name.get("last_name"),
+                amount=g.get("amount", 0),
+                currency_from=g.get("currency_from", ""),
+                currency_to=g.get("currency_to", ""),
+                status=g.get("status", ""),
+                created_at=g.get("created_at"),
+            ))
+        
+        return SentGiftsResponse(gifts=gifts)
+        
+    except Exception as e:
+        logger.error(f"Error fetching sent gifts: {e}")
+        return SentGiftsResponse(gifts=[])
+
+
 @app.post("/api/gift/create", response_model=GiftCreateResponse)
 async def create_gift(
     payload: GiftCreateRequest,
@@ -2163,90 +2216,95 @@ async def create_gift(
     client = get_supabase()
     settings = get_settings()
     
-    # Get sender details
-    sender_res = client.table("users").select("first_name, last_name").eq("id", user.id).single().execute()
-    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip()
-    
-    # Get recipient details
-    recipient_res = client.table("users").select("first_name, last_name, bank_mnt").eq("id", payload.recipient_user_id).single().execute()
-    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip()
-    
-    # Create gift record
-    gift_data = {
-        "invoice": payload.invoice,
-        "sender_user_id": user.id,
-        "recipient_user_id": payload.recipient_user_id,
-        "recipient_phone": payload.recipient_phone,
-        "recipient_name": recipient_name,
-        "gift_card_url": payload.gift_card_url,
-        "message": payload.message[:1000] if payload.message else "",
-        "from_name": payload.from_name[:100] if payload.from_name else None,
-        "direction": payload.direction,
-        "amount": float(payload.amount),
-        "currency_from": payload.currency_from,
-        "currency_to": payload.currency_to,
-        "rate": float(payload.rate),
-        "admin_bank_id": payload.admin_bank_id,
-        "sender_receipt_url": payload.sender_receipt_url,
-        "status": "pending_recipient",
-    }
-    
-    res = client.table("gifts").insert(gift_data).execute()
-    
-    if not res.data:
-        raise HTTPException(status_code=500, detail="Failed to create gift")
-    
-    gift_id = res.data[0].get("id")
-    
-    # Calculate receive amount
-    if payload.direction == "buy":
-        receive_amount = float(payload.amount) * float(payload.rate)
-    else:
-        receive_amount = float(payload.amount) / float(payload.rate)
-    
-    # Send Telegram notification to recipient with gift card photo
     try:
-        # Use from_name if provided, otherwise use sender's actual name
-        display_sender = payload.from_name if payload.from_name else sender_name
+        # Get sender details
+        sender_res = client.table("users").select("first_name, last_name").eq("id", user.id).single().execute()
+        sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip()
         
-        message_text = (
-            f"🎁 <b>Танд бэлэг ирлээ!</b>\n\n"
-            f"👤 Хэнээс: <b>{display_sender}</b>\n"
-            f"💰 Дүн: <b>{payload.amount}</b> {payload.currency_from}\n"
-            f"📦 Хүлээн авах: <b>{receive_amount:,.2f}</b> {payload.currency_to}\n"
+        # Get recipient details
+        recipient_res = client.table("users").select("first_name, last_name, bank_mnt").eq("id", payload.recipient_user_id).single().execute()
+        recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip()
+        
+        # Create gift record
+        gift_data = {
+            "invoice": payload.invoice,
+            "sender_user_id": user.id,
+            "recipient_user_id": payload.recipient_user_id,
+            "recipient_phone": payload.recipient_phone,
+            "recipient_name": recipient_name,
+            "gift_card_url": payload.gift_card_url,
+            "message": payload.message[:1000] if payload.message else "",
+            "from_name": payload.from_name[:100] if payload.from_name else None,
+            "direction": payload.direction,
+            "amount": float(payload.amount),
+            "currency_from": payload.currency_from,
+            "currency_to": payload.currency_to,
+            "rate": float(payload.rate),
+            "admin_bank_id": payload.admin_bank_id,
+            "sender_receipt_url": payload.sender_receipt_url,
+            "status": "pending_recipient",
+        }
+        
+        res = client.table("gifts").insert(gift_data).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to create gift")
+        
+        gift_id = res.data[0].get("id")
+        
+        # Calculate receive amount
+        if payload.direction == "buy":
+            receive_amount = float(payload.amount) * float(payload.rate)
+        else:
+            receive_amount = float(payload.amount) / float(payload.rate)
+        
+        # Send Telegram notification to recipient with gift card photo
+        try:
+            # Use from_name if provided, otherwise use sender's actual name
+            display_sender = payload.from_name if payload.from_name else sender_name
+            
+            message_text = (
+                f"🎁 <b>Танд бэлэг ирлээ!</b>\n\n"
+                f"👤 Хэнээс: <b>{display_sender}</b>\n"
+                f"💰 Дүн: <b>{payload.amount}</b> {payload.currency_from}\n"
+                f"📦 Хүлээн авах: <b>{receive_amount:,.2f}</b> {payload.currency_to}\n"
+            )
+            
+            if payload.message:
+                message_text += f"\n💬 Мессеж:\n<i>\"{payload.message}\"</i>\n"
+            
+            message_text += (
+                f"\n✨ Бэлгээ хүлээн авахын тулд апп-д орж, банкны мэдээллээ оруулна уу!"
+            )
+            
+            # Create inline keyboard with app link
+            reply_markup = None
+            if settings.webapp_url:
+                reply_markup = {
+                    "inline_keyboard": [
+                        [{"text": "🎁 Бэлэг хүлээн авах", "web_app": {"url": settings.webapp_url}}]
+                    ]
+                }
+            
+            # Send gift card photo with caption
+            send_user_photo(
+                payload.recipient_user_id,
+                payload.gift_card_url,
+                message_text,
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Failed to send gift notification: {e}")
+        
+        return GiftCreateResponse(
+            id=str(gift_id),
+            invoice=payload.invoice,
+            status="pending_recipient"
         )
-        
-        if payload.message:
-            message_text += f"\n💬 Мессеж:\n<i>\"{payload.message}\"</i>\n"
-        
-        message_text += (
-            f"\n✨ Бэлгээ хүлээн авахын тулд апп-д орж, банкны мэдээллээ оруулна уу!"
-        )
-        
-        # Create inline keyboard with app link
-        reply_markup = None
-        if settings.webapp_url:
-            reply_markup = {
-                "inline_keyboard": [
-                    [{"text": "🎁 Бэлэг хүлээн авах", "web_app": {"url": settings.webapp_url}}]
-                ]
-            }
-        
-        # Send gift card photo with caption
-        send_user_photo(
-            payload.recipient_user_id,
-            payload.gift_card_url,
-            message_text,
-            reply_markup=reply_markup
-        )
-    except Exception as e:
-        logger.error(f"Failed to send gift notification: {e}")
     
-    return GiftCreateResponse(
-        id=str(gift_id),
-        invoice=payload.invoice,
-        status="pending_recipient"
-    )
+    except Exception as e:
+        logger.error(f"Error creating gift: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create gift: {str(e)}")
 
 
 @app.get("/api/gift/pending", response_model=PendingGiftsResponse)
