@@ -68,7 +68,7 @@ export type UserProfile = {
 };
 
 export type AdminBankAccount = {
-  id: number;
+  id: number | string;  // Backend returns string, but we need to convert to number for some APIs
   bank_name: string;
   account_number: string;
   card_number?: string;
