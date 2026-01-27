@@ -347,3 +347,120 @@ class AdminHistoryItem(BaseModel):
 class AdminHistoryResponse(BaseModel):
     items: list[AdminHistoryItem]
     total: int = 0
+
+
+# ============= Gift Feature Models =============
+
+class GiftCard(BaseModel):
+    id: str
+    name: str
+    image_url: str
+    is_active: bool = True
+    display_order: int = 0
+
+
+class GiftCardsResponse(BaseModel):
+    cards: list[GiftCard]
+
+
+class GiftCreateRequest(BaseModel):
+    invoice: str
+    recipient_phone: str
+    recipient_user_id: int
+    gift_card_url: str
+    message: str = ""
+    direction: str  # "buy" or "sell"
+    amount: Decimal
+    currency_from: str
+    currency_to: str
+    rate: Decimal
+    admin_bank_id: int
+    sender_receipt_url: str
+    from_name: Optional[str] = None  # "From who" field displayed on gift
+
+
+class GiftCreateResponse(BaseModel):
+    id: str
+    invoice: str
+    status: str
+
+
+class RecipientLookupResponse(BaseModel):
+    found: bool
+    user: Optional[dict] = None  # { id, first_name, last_name }
+
+
+class PendingGift(BaseModel):
+    id: str
+    invoice: str
+    sender_user_id: int
+    sender_first_name: Optional[str] = None
+    sender_last_name: Optional[str] = None
+    from_name: Optional[str] = None
+    gift_card_url: str
+    message: str = ""
+    direction: str
+    amount: Decimal
+    currency_from: str
+    currency_to: str
+    rate: Decimal
+    created_at: datetime
+
+
+class PendingGiftsResponse(BaseModel):
+    gifts: list[PendingGift]
+
+
+class SentGift(BaseModel):
+    id: str
+    invoice: str
+    recipient_first_name: Optional[str] = None
+    recipient_last_name: Optional[str] = None
+    amount: Decimal
+    currency_from: str
+    currency_to: str
+    status: str
+    created_at: datetime
+
+
+class SentGiftsResponse(BaseModel):
+    gifts: list[SentGift]
+
+
+class GiftConfirmRequest(BaseModel):
+    bank_details: str
+
+
+class AdminGift(BaseModel):
+    id: str
+    invoice: str
+    sender_user_id: int
+    sender_first_name: Optional[str] = None
+    sender_last_name: Optional[str] = None
+    recipient_user_id: int
+    recipient_first_name: Optional[str] = None
+    recipient_last_name: Optional[str] = None
+    recipient_phone: str
+    gift_card_url: str
+    message: str = ""
+    direction: str
+    amount: Decimal
+    currency_from: str
+    currency_to: str
+    rate: Decimal
+    status: str
+    sender_receipt_url: Optional[str] = None
+    recipient_bank_details: Optional[str] = None
+    admin_bill_url: Optional[str] = None
+    rejection_comment: Optional[str] = None
+    created_at: datetime
+    confirmed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class AdminGiftsResponse(BaseModel):
+    gifts: list[AdminGift]
+
+
+class GiftRejectRequest(BaseModel):
+    comment: str

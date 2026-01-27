@@ -51,6 +51,20 @@ from models import (
     WorkingHoursConfig,
     WorkingHoursResponse,
     WorkingHoursUpdateRequest,
+    # Gift-related models
+    GiftCard,
+    GiftCardsResponse,
+    GiftCreateRequest,
+    GiftCreateResponse,
+    RecipientLookupResponse,
+    PendingGift,
+    PendingGiftsResponse,
+    SentGift,
+    SentGiftsResponse,
+    GiftConfirmRequest,
+    AdminGift,
+    AdminGiftsResponse,
+    GiftRejectRequest,
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
@@ -1958,3 +1972,461 @@ async def get_user_promo_codes(user=Depends(get_jwt_authenticated_user)):
     ]
     
     return UserPromoCodesResponse(promo_codes=promo_codes)
+
+
+# ============= Gift Feature Endpoints =============
+
+@app.get("/api/gift/cards", response_model=GiftCardsResponse)
+async def get_gift_cards():
+    """Get all active gift cards"""
+    client = get_supabase()
+    
+    res = (
+        client.table("gift_cards")
+        .select("*")
+        .eq("is_active", True)
+        .order("display_order", desc=False)
+        .execute()
+    )
+    
+    cards = [
+        GiftCard(
+            id=str(c.get("id")),
+            name=c.get("name", ""),
+            image_url=c.get("image_url", ""),
+            is_active=c.get("is_active", True),
+            display_order=c.get("display_order", 0),
+        )
+        for c in res.data or []
+    ]
+    
+    return GiftCardsResponse(cards=cards)
+
+
+@app.get("/api/gift/lookup-recipient", response_model=RecipientLookupResponse)
+async def lookup_recipient_by_phone(
+    phone: str,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Look up a verified user by phone number"""
+    client = get_supabase()
+    
+    # Clean phone number
+    clean_phone = phone.strip().replace(" ", "").replace("-", "")
+    
+    # Search in users table - check both phone fields in bank info
+    # bank_mnt format: "Банк | Данс | Нэр | Утас"
+    res = (
+        client.table("users")
+        .select("id, first_name, last_name, bank_mnt")
+        .eq("verified", True)
+        .execute()
+    )
+    
+    for u in res.data or []:
+        # Check if phone is in bank_mnt field
+        bank_mnt = u.get("bank_mnt", "") or ""
+        if clean_phone in bank_mnt.replace(" ", "").replace("-", ""):
+            # Don't allow sending to yourself
+            if u.get("id") == user.id:
+                continue
+            return RecipientLookupResponse(
+                found=True,
+                user={
+                    "id": u.get("id"),
+                    "first_name": u.get("first_name"),
+                    "last_name": u.get("last_name"),
+                }
+            )
+    
+    return RecipientLookupResponse(found=False)
+
+
+@app.post("/api/gift/create", response_model=GiftCreateResponse)
+async def create_gift(
+    payload: GiftCreateRequest,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Create a new gift transaction"""
+    client = get_supabase()
+    settings = get_settings()
+    
+    # Get sender details
+    sender_res = client.table("users").select("first_name, last_name").eq("id", user.id).single().execute()
+    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip()
+    
+    # Get recipient details
+    recipient_res = client.table("users").select("first_name, last_name, bank_mnt").eq("id", payload.recipient_user_id).single().execute()
+    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip()
+    
+    # Create gift record
+    gift_data = {
+        "invoice": payload.invoice,
+        "sender_user_id": user.id,
+        "recipient_user_id": payload.recipient_user_id,
+        "recipient_phone": payload.recipient_phone,
+        "recipient_name": recipient_name,
+        "gift_card_url": payload.gift_card_url,
+        "message": payload.message[:1000] if payload.message else "",
+        "from_name": payload.from_name[:100] if payload.from_name else None,
+        "direction": payload.direction,
+        "amount": float(payload.amount),
+        "currency_from": payload.currency_from,
+        "currency_to": payload.currency_to,
+        "rate": float(payload.rate),
+        "admin_bank_id": payload.admin_bank_id,
+        "sender_receipt_url": payload.sender_receipt_url,
+        "status": "pending_recipient",
+    }
+    
+    res = client.table("gifts").insert(gift_data).execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create gift")
+    
+    gift_id = res.data[0].get("id")
+    
+    # Calculate receive amount
+    if payload.direction == "buy":
+        receive_amount = float(payload.amount) * float(payload.rate)
+    else:
+        receive_amount = float(payload.amount) / float(payload.rate)
+    
+    # Send Telegram notification to recipient with gift card photo
+    try:
+        # Use from_name if provided, otherwise use sender's actual name
+        display_sender = payload.from_name if payload.from_name else sender_name
+        
+        message_text = (
+            f"🎁 <b>Танд бэлэг ирлээ!</b>\n\n"
+            f"👤 Хэнээс: <b>{display_sender}</b>\n"
+            f"💰 Дүн: <b>{payload.amount}</b> {payload.currency_from}\n"
+            f"📦 Хүлээн авах: <b>{receive_amount:,.2f}</b> {payload.currency_to}\n"
+        )
+        
+        if payload.message:
+            message_text += f"\n💬 Мессеж:\n<i>\"{payload.message}\"</i>\n"
+        
+        message_text += (
+            f"\n✨ Бэлгээ хүлээн авахын тулд апп-д орж, банкны мэдээллээ оруулна уу!"
+        )
+        
+        # Create inline keyboard with app link
+        reply_markup = None
+        if settings.webapp_url:
+            reply_markup = {
+                "inline_keyboard": [
+                    [{"text": "🎁 Бэлэг хүлээн авах", "web_app": {"url": settings.webapp_url}}]
+                ]
+            }
+        
+        # Send gift card photo with caption
+        send_user_photo(
+            payload.recipient_user_id,
+            payload.gift_card_url,
+            message_text,
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.error(f"Failed to send gift notification: {e}")
+    
+    return GiftCreateResponse(
+        id=str(gift_id),
+        invoice=payload.invoice,
+        status="pending_recipient"
+    )
+
+
+@app.get("/api/gift/pending", response_model=PendingGiftsResponse)
+async def get_pending_gifts(user=Depends(get_jwt_authenticated_user)):
+    """Get gifts pending confirmation from the current user"""
+    client = get_supabase()
+    
+    res = (
+        client.table("gifts")
+        .select("*, sender:users!sender_user_id(first_name, last_name)")
+        .eq("recipient_user_id", user.id)
+        .eq("status", "pending_recipient")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    
+    gifts = []
+    for g in res.data or []:
+        sender = g.get("sender", {}) or {}
+        gifts.append(PendingGift(
+            id=str(g.get("id")),
+            invoice=g.get("invoice", ""),
+            sender_user_id=g.get("sender_user_id"),
+            sender_first_name=sender.get("first_name"),
+            sender_last_name=sender.get("last_name"),
+            from_name=g.get("from_name"),
+            gift_card_url=g.get("gift_card_url", ""),
+            message=g.get("message", ""),
+            direction=g.get("direction", ""),
+            amount=g.get("amount", 0),
+            currency_from=g.get("currency_from", ""),
+            currency_to=g.get("currency_to", ""),
+            rate=g.get("rate", 0),
+            created_at=g.get("created_at"),
+        ))
+    
+    return PendingGiftsResponse(gifts=gifts)
+
+
+@app.get("/api/gift/sent", response_model=SentGiftsResponse)
+async def get_sent_gifts(user=Depends(get_jwt_authenticated_user)):
+    """Get gifts sent by the current user (for status tracking)"""
+    client = get_supabase()
+    
+    res = (
+        client.table("gifts")
+        .select("*, recipient:users!recipient_user_id(first_name, last_name)")
+        .eq("sender_user_id", user.id)
+        .order("created_at", desc=True)
+        .limit(10)  # Only recent gifts
+        .execute()
+    )
+    
+    gifts = []
+    for g in res.data or []:
+        recipient = g.get("recipient", {}) or {}
+        gifts.append(SentGift(
+            id=str(g.get("id")),
+            invoice=g.get("invoice", ""),
+            recipient_first_name=recipient.get("first_name"),
+            recipient_last_name=recipient.get("last_name"),
+            amount=g.get("amount", 0),
+            currency_from=g.get("currency_from", ""),
+            currency_to=g.get("currency_to", ""),
+            status=g.get("status", ""),
+            created_at=g.get("created_at"),
+        ))
+    
+    return SentGiftsResponse(gifts=gifts)
+
+
+@app.post("/api/gift/{gift_id}/confirm")
+async def confirm_gift(
+    gift_id: str,
+    payload: GiftConfirmRequest,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Recipient confirms gift and provides bank details"""
+    client = get_supabase()
+    settings = get_settings()
+    
+    # Get the gift
+    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Gift not found")
+    
+    gift = res.data
+    
+    # Verify recipient
+    if gift.get("recipient_user_id") != user.id:
+        raise HTTPException(status_code=403, detail="Not your gift")
+    
+    # Verify status
+    if gift.get("status") != "pending_recipient":
+        raise HTTPException(status_code=400, detail="Gift already confirmed")
+    
+    # Update gift with bank details and change status to pending_admin
+    client.table("gifts").update({
+        "recipient_bank_details": payload.bank_details,
+        "status": "pending_admin",
+        "confirmed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", gift_id).execute()
+    
+    # Get sender and recipient names
+    sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
+    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip() if sender_res.data else "Unknown"
+    
+    recipient_res = client.table("users").select("first_name, last_name").eq("id", user.id).single().execute()
+    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip() if recipient_res.data else "Unknown"
+    
+    # Calculate receive amount
+    direction = gift.get("direction")
+    amount = gift.get("amount", 0)
+    rate = gift.get("rate", 0)
+    if direction == "buy":
+        receive_amount = amount * rate
+    else:
+        receive_amount = amount / rate if rate else 0
+    
+    # Notify admin
+    admin_message = (
+        f"🎁 <b>БЭЛЭГ ШИЛЖҮҮЛЭЛТ!</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"👤 Илгээгч: {sender_name} (ID: {gift.get('sender_user_id')})\n"
+        f"🎯 Хүлээн авагч: {recipient_name} (ID: {user.id})\n"
+        f"📞 Утас: {gift.get('recipient_phone')}\n\n"
+        f"💰 Дүн: <b>{amount}</b> {gift.get('currency_from')}\n"
+        f"📦 Шилжүүлэх: <b>{receive_amount:,.2f}</b> {gift.get('currency_to')}\n"
+        f"📈 Ханш: {rate}\n\n"
+        f"🏦 Хүлээн авагчийн банк:\n<code>{payload.bank_details}</code>\n"
+    )
+    
+    if gift.get("message"):
+        admin_message += f"\n💬 Мессеж: <i>\"{gift.get('message')}\"</i>\n"
+    
+    send_admin_notification(admin_message, gift.get("sender_receipt_url"))
+    
+    return {"ok": True, "status": "pending_admin"}
+
+
+@app.get("/api/admin/gifts", response_model=AdminGiftsResponse)
+async def get_admin_gifts(
+    status: str = None,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Get all gifts for admin review"""
+    client = get_supabase()
+    settings = get_settings()
+    
+    # Check if user is admin
+    if user.id not in settings.admin_ids:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    query = client.table("gifts").select(
+        "*, sender:users!sender_user_id(first_name, last_name), recipient:users!recipient_user_id(first_name, last_name)"
+    )
+    
+    if status:
+        query = query.eq("status", status)
+    
+    res = query.order("created_at", desc=True).execute()
+    
+    gifts = []
+    for g in res.data or []:
+        sender = g.get("sender", {}) or {}
+        recipient = g.get("recipient", {}) or {}
+        gifts.append(AdminGift(
+            id=str(g.get("id")),
+            invoice=g.get("invoice", ""),
+            sender_user_id=g.get("sender_user_id"),
+            sender_first_name=sender.get("first_name"),
+            sender_last_name=sender.get("last_name"),
+            recipient_user_id=g.get("recipient_user_id"),
+            recipient_first_name=recipient.get("first_name"),
+            recipient_last_name=recipient.get("last_name"),
+            recipient_phone=g.get("recipient_phone", ""),
+            gift_card_url=g.get("gift_card_url", ""),
+            message=g.get("message", ""),
+            direction=g.get("direction", ""),
+            amount=g.get("amount", 0),
+            currency_from=g.get("currency_from", ""),
+            currency_to=g.get("currency_to", ""),
+            rate=g.get("rate", 0),
+            status=g.get("status", ""),
+            sender_receipt_url=g.get("sender_receipt_url"),
+            recipient_bank_details=g.get("recipient_bank_details"),
+            admin_bill_url=g.get("admin_bill_url"),
+            rejection_comment=g.get("rejection_comment"),
+            created_at=g.get("created_at"),
+            confirmed_at=g.get("confirmed_at"),
+            completed_at=g.get("completed_at"),
+        ))
+    
+    return AdminGiftsResponse(gifts=gifts)
+
+
+@app.post("/api/admin/gift/{gift_id}/approve")
+async def approve_gift(
+    gift_id: str,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Admin approves a gift transaction"""
+    client = get_supabase()
+    settings = get_settings()
+    
+    # Check if user is admin
+    if user.id not in settings.admin_ids:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Get gift
+    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Gift not found")
+    
+    gift = res.data
+    
+    if gift.get("status") != "pending_admin":
+        raise HTTPException(status_code=400, detail="Gift cannot be approved")
+    
+    # Update gift status
+    client.table("gifts").update({
+        "status": "completed",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "completed_by_admin": user.id,
+    }).eq("id", gift_id).execute()
+    
+    # Notify sender
+    sender_message = (
+        f"✅ <b>Таны илгээсэн бэлэг амжилттай хүргэгдлээ!</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}"
+    )
+    send_user_notification(gift.get("sender_user_id"), sender_message)
+    
+    # Notify recipient
+    recipient_message = (
+        f"✅ <b>Бэлгийн мөнгө таны дансанд шилжүүлэгдлээ!</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"🏦 Шилжүүлсэн данс: {gift.get('recipient_bank_details')}"
+    )
+    send_user_notification(gift.get("recipient_user_id"), recipient_message)
+    
+    return {"ok": True, "status": "completed"}
+
+
+@app.post("/api/admin/gift/{gift_id}/reject")
+async def reject_gift(
+    gift_id: str,
+    payload: GiftRejectRequest,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Admin rejects a gift transaction"""
+    client = get_supabase()
+    settings = get_settings()
+    
+    # Check if user is admin
+    if user.id not in settings.admin_ids:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Get gift
+    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Gift not found")
+    
+    gift = res.data
+    
+    # Update gift status
+    client.table("gifts").update({
+        "status": "rejected",
+        "rejection_comment": payload.comment,
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", gift_id).execute()
+    
+    # Notify sender
+    sender_message = (
+        f"❌ <b>Таны бэлэг цуцлагдлаа</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"📝 Шалтгаан: {payload.comment}\n\n"
+        f"Асуудал байвал админтай холбогдоно уу."
+    )
+    send_user_notification(gift.get("sender_user_id"), sender_message)
+    
+    # Notify recipient if they already confirmed
+    if gift.get("status") == "pending_admin":
+        recipient_message = (
+            f"❌ <b>Таны хүлээж буй бэлэг цуцлагдлаа</b>\n\n"
+            f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+            f"📝 Шалтгаан: {payload.comment}"
+        )
+        send_user_notification(gift.get("recipient_user_id"), recipient_message)
+    
+    return {"ok": True, "status": "rejected"}

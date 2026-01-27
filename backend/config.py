@@ -15,11 +15,17 @@ class Settings:
     jwt_secret: str
     admin_panel_url: str | None = None
     user_panel_url: str | None = None
+    webapp_url: str | None = None  # Telegram Mini App URL
     admin_api_key: str | None = None
     storage_bucket_passports: str = "passports"
     storage_bucket_receipts: str = "bills"
     presigned_ttl_seconds: int = 900  # 15 minutes
     dev_mode: bool = False
+    
+    @property
+    def admin_ids(self) -> List[int]:
+        """Alias for admin_user_ids"""
+        return self.admin_user_ids
 
 
 @lru_cache(maxsize=1)
@@ -33,6 +39,7 @@ def get_settings() -> Settings:
     admin_user_ids_env = os.getenv("ADMIN_USER_IDS", "").strip().strip('"').strip("'")
     admin_panel_url = os.getenv("ADMIN_PANEL_URL")
     user_panel_url = os.getenv("USER_PANEL_URL")
+    webapp_url = os.getenv("WEBAPP_URL")  # Telegram Mini App URL
     admin_api_key = os.getenv("ADMIN_API_KEY")
     jwt_secret = os.getenv("JWT_SECRET", "").strip().strip('"').strip("'")
     # DEV MODE: Telegram auth bypass - defaults to FALSE for production safety
@@ -80,6 +87,7 @@ def get_settings() -> Settings:
         jwt_secret=jwt_secret,
         admin_panel_url=admin_panel_url,
         user_panel_url=user_panel_url,
+        webapp_url=webapp_url,
         admin_api_key=admin_api_key,
         dev_mode=dev_mode,
     )

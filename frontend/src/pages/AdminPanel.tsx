@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Shield, FileText, Inbox, Users, Lock, Eye, EyeOff, CreditCard, History } from "lucide-react";
+import { Shield, FileText, Inbox, Users, Lock, Eye, EyeOff, CreditCard, History, Gift } from "lucide-react";
 import { AdminInbox } from "../components/AdminInbox";
 import { AdminKyc } from "../components/AdminKyc";
 import { AdminUserSearch } from "../components/AdminUserSearch";
 import { AdminBankAccounts } from "../components/AdminBankAccounts";
 import { AdminHistory } from "../components/AdminHistory";
+import { AdminGifts } from "../components/AdminGifts";
 
-type Tab = "inbox" | "kyc" | "users" | "banks" | "history";
+type Tab = "inbox" | "kyc" | "users" | "banks" | "history" | "gifts";
 
 const ADMIN_API_KEY = "oyuns-admin-key-07012026";
 const STORAGE_KEY = "admin_authenticated";
@@ -168,6 +169,17 @@ export function AdminPanel() {
           <History className="w-4 h-4" />
           Түүх
         </button>
+        <button
+          onClick={() => setActiveTab("gifts")}
+          className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+            activeTab === "gifts"
+              ? "bg-pink-500 text-white"
+              : "bg-pink-50 text-pink-700 hover:bg-pink-100"
+          }`}
+        >
+          <Gift className="w-4 h-4" />
+          Бэлэг
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -179,6 +191,8 @@ export function AdminPanel() {
         <AdminUserSearch />
       ) : activeTab === "history" ? (
         <AdminHistory />
+      ) : activeTab === "gifts" ? (
+        <AdminGifts />
       ) : (
         <AdminBankAccounts />
       )}

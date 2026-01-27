@@ -146,11 +146,14 @@ export function HistoryModal({ userId, onClose }: Props) {
                   const statusInfo = getStatusInfo(item.status);
                   const StatusIcon = statusInfo.icon;
                   const isBuy = item.currency_from === "RUB";
-                  // RUB->MNT (buy): RUB * buy_rate = MNT
-                  // MNT->RUB (sell): MNT / sell_rate = RUB
+                  // Rate is stored as MNT per RUB (e.g., 46.2 means 1 RUB = 46.2 MNT)
+                  // RUB->MNT (buy): user sends RUB, receives MNT = RUB * rate
+                  // MNT->RUB (sell): user sends MNT, receives RUB = MNT / rate
+                  const rate = Number(item.rate);
+                  const amount = Number(item.amount);
                   const receiveAmount = isBuy
-                    ? (Number(item.amount) * Number(item.rate)).toFixed(0)
-                    : (Number(item.amount) / Number(item.rate)).toFixed(2);
+                    ? Math.round(amount * rate)
+                    : parseFloat((amount / rate).toFixed(2));
 
                   return (
                     <div

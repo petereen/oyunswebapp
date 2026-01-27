@@ -438,3 +438,143 @@ export async function deleteAdminBankAccount(id: string) {
   const res = await api.delete(`/admin/bank-accounts/${id}`);
   return res.data;
 }
+
+// ============= Gift Feature =============
+
+export interface GiftCard {
+  id: string;
+  name: string;
+  image_url: string;
+  is_active: boolean;
+  display_order: number;
+}
+
+export interface GiftCreateInput {
+  invoice: string;
+  recipient_phone: string;
+  recipient_user_id: number;
+  gift_card_url: string;
+  message: string;
+  direction: "buy" | "sell";
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  rate: number;
+  admin_bank_id: number;
+  sender_receipt_url: string;
+  from_name?: string;
+}
+
+export interface PendingGift {
+  id: string;
+  invoice: string;
+  sender_user_id: number;
+  sender_first_name: string;
+  sender_last_name: string;
+  from_name?: string;
+  gift_card_url: string;
+  message: string;
+  direction: "buy" | "sell";
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  rate: number;
+  created_at: string;
+}
+
+export interface AdminGift {
+  id: string;
+  invoice: string;
+  sender_user_id: number;
+  sender_first_name: string;
+  sender_last_name: string;
+  recipient_user_id: number;
+  recipient_first_name: string;
+  recipient_last_name: string;
+  recipient_phone: string;
+  gift_card_url: string;
+  message: string;
+  direction: "buy" | "sell";
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  rate: number;
+  status: string;
+  sender_receipt_url: string;
+  recipient_bank_details?: string;
+  admin_bill_url?: string;
+  rejection_comment?: string;
+  created_at: string;
+  confirmed_at?: string;
+  completed_at?: string;
+}
+
+export async function fetchGiftCards(): Promise<{ cards: GiftCard[] }> {
+  try {
+    const res = await api.get('/gift/cards');
+    return res.data;
+  } catch {
+    return { cards: [] };
+  }
+}
+
+export async function searchUserByPhone(phone: string): Promise<{ found: boolean; user?: { id: number; first_name: string; last_name: string } }> {
+  const res = await api.get(`/gift/lookup-recipient?phone=${encodeURIComponent(phone)}`);
+  return res.data;
+}
+
+export async function createGift(payload: GiftCreateInput) {
+  const res = await api.post('/gift/create', payload);
+  return res.data;
+}
+
+export async function fetchPendingGifts(): Promise<{ gifts: PendingGift[] }> {
+  try {
+    const res = await api.get('/gift/pending');
+    return res.data;
+  } catch {
+    return { gifts: [] };
+  }
+}
+
+export interface SentGift {
+  id: string;
+  invoice: string;
+  recipient_first_name: string;
+  recipient_last_name: string;
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  status: string;
+  created_at: string;
+}
+
+export async function fetchSentGifts(): Promise<{ gifts: SentGift[] }> {
+  try {
+    const res = await api.get('/gift/sent');
+    return res.data;
+  } catch {
+    return { gifts: [] };
+  }
+}
+
+export async function confirmGiftReceipt(giftId: string, bankDetails: string) {
+  const res = await api.post(`/gift/${giftId}/confirm`, { bank_details: bankDetails });
+  return res.data;
+}
+
+export async function fetchAdminGifts(status?: string): Promise<{ gifts: AdminGift[] }> {
+  const params = status ? `?status=${status}` : '';
+  const res = await api.get(`/admin/gifts${params}`);
+  return res.data;
+}
+
+export async function approveGift(giftId: string) {
+  const res = await api.post(`/admin/gift/${giftId}/approve`);
+  return res.data;
+}
+
+export async function rejectGift(giftId: string, comment: string) {
+  const res = await api.post(`/admin/gift/${giftId}/reject`, { comment });
+  return res.data;
+}

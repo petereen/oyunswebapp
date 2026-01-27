@@ -1,14 +1,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
-import { User, History, Clock, AlertCircle, Loader2, BarChart3, RefreshCw, UserPlus } from "lucide-react";
+import { User, History, Clock, AlertCircle, Loader2, BarChart3, RefreshCw, UserPlus, Gift } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { ExchangeFlow } from "../components/ExchangeFlow";
+import { GiftFlow } from "../components/GiftFlow";
 import { RateCard } from "../components/RateCard";
 import { ProfileModal } from "../components/ProfileModal";
 import { HistoryModal } from "../components/HistoryModal";
 import { AnalyticsModal } from "../components/AnalyticsModal";
 import { RegistrationModal } from "../components/RegistrationModal";
 import { TransactionStatusTracker } from "../components/TransactionStatusTracker";
+import { PendingGiftBanner } from "../components/PendingGiftBanner";
+import { GiftStatusTracker } from "../components/GiftStatusTracker";
 import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 
@@ -77,13 +80,12 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
   };
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["rates"] });
-    queryClient.invalidateQueries({ queryKey: ["serviceStatus"] });
-    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    window.location.reload();
   };
 
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
   const [showExchange, setShowExchange] = useState(false);
+  const [showGift, setShowGift] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -188,6 +190,12 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
       {/* Transaction Status Tracker - shows pending/approved transactions */}
       {user?.id && <TransactionStatusTracker userId={user.id} />}
 
+      {/* Gift Status Tracker - shows sent gifts status */}
+      {user?.id && isVerified && <GiftStatusTracker userId={user.id} />}
+
+      {/* Pending Gift Banner - shows gifts waiting for recipient confirmation */}
+      {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: ["me", user?.id] })} />}
+
       {/* Profile Error */}
       {profileError && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm mb-4">
@@ -206,7 +214,14 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
       )}
 
       {/* Main Content */}
-      {!showExchange ? (
+      {showGift ? (
+        <GiftFlow
+          buyRate={rate?.buy_rate || 0}
+          sellRate={rate?.sell_rate || 0}
+          onBack={() => setShowGift(false)}
+          onSuccess={() => setShowGift(false)}
+        />
+      ) : !showExchange ? (
         <>
           <div className="grid md:grid-cols-2 gap-4">
             <div className="flex flex-col gap-4">
@@ -270,6 +285,14 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
                       className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       ВАЛЮТ СОЛИХ
+                    </button>
+                    <button
+                      onClick={() => setShowGift(true)}
+                      disabled={!rate || ratesLoading}
+                      className="w-full max-w-xs bg-gradient-to-r from-pink-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-pink-200 hover:from-pink-600 hover:to-purple-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Gift className="w-5 h-5" />
+                      БЭЛЭГ ИЛГЭЭХ
                     </button>
                   </>
                 ) : (
