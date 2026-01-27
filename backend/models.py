@@ -74,6 +74,7 @@ class UpsertUserPayload(BaseModel):
     id: int
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
     bank_rub: Optional[str] = None
     bank_mnt: Optional[str] = None
@@ -147,11 +148,12 @@ class KycResponse(BaseModel):
 class RegistrationRequest(BaseModel):
     last_name: str
     first_name: str
-    # RUB bank info: bank_name, phone_sbp, card_number, owner_name
-    rub_bank_name: str
-    rub_phone_sbp: str
-    rub_card_number: str
-    rub_owner_name: str
+    email: Optional[str] = None
+    # RUB bank info: bank_name, phone_sbp, card_number, owner_name (optional)
+    rub_bank_name: str = ""
+    rub_phone_sbp: str = ""
+    rub_card_number: str = ""
+    rub_owner_name: str = ""
     # MNT bank info: bank_name, account_number, owner_name, phone
     mnt_bank_name: str
     mnt_account_number: str

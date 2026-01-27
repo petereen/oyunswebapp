@@ -1,13 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
-import { User, History, Clock, AlertCircle, Loader2, BarChart3 } from "lucide-react";
+import { User, History, Clock, AlertCircle, Loader2, BarChart3, RefreshCw, UserPlus } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { ExchangeFlow } from "../components/ExchangeFlow";
 import { RateCard } from "../components/RateCard";
 import { ProfileModal } from "../components/ProfileModal";
 import { HistoryModal } from "../components/HistoryModal";
 import { AnalyticsModal } from "../components/AnalyticsModal";
-import { TermsAgreementModal } from "../components/TermsAgreementModal";
 import { RegistrationModal } from "../components/RegistrationModal";
 import { TransactionStatusTracker } from "../components/TransactionStatusTracker";
 import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
@@ -59,22 +58,27 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
   // Extract user profile
   const userProfile = profile?.user;
 
-  // Check if user needs to agree to terms - only show modal when agreed_terms is explicitly false
-  const needsTermsAgreement = userProfile && userProfile.agreed_terms === false;
-
+  // Check if user is verified (can use exchange)
+  const isVerified = userProfile?.verified === true;
+  
   // Check if user needs registration (not verified and not pending verification)
   const needsRegistration = userProfile && userProfile.verified === false && userProfile.ready_for_verification === false;
   
   // Check if user is waiting for verification
   const pendingVerification = userProfile && userProfile.verified === false && userProfile.ready_for_verification === true;
 
-  const handleTermsAgreed = () => {
-    // Refetch profile to update agreed_terms status
-    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
-  };
+  // State to show registration modal manually
+  const [showRegistration, setShowRegistration] = useState(false);
 
   const handleRegistered = () => {
     // Refetch profile to update registration status
+    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    setShowRegistration(false);
+  };
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["rates"] });
+    queryClient.invalidateQueries({ queryKey: ["serviceStatus"] });
     queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
   };
 
@@ -126,13 +130,32 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Refresh Button */}
           <button
-            onClick={() => setShowProfile(true)}
-            className="p-2 rounded-full bg-ocean-100 text-ocean-700 hover:bg-ocean-200 transition"
-            title="Профайл"
+            onClick={handleRefresh}
+            className="p-2 rounded-full bg-white text-ocean-700 hover:bg-ocean-50 transition"
+            title="Шинэчлэх"
           >
-            <User className="w-5 h-5" />
+            <RefreshCw className="w-5 h-5" />
           </button>
+          {/* Profile or Register Button */}
+          {isVerified ? (
+            <button
+              onClick={() => setShowProfile(true)}
+              className="p-2 rounded-full bg-ocean-100 text-ocean-700 hover:bg-ocean-200 transition"
+              title="Профайл"
+            >
+              <User className="w-5 h-5" />
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowRegistration(true)}
+              className="p-2 rounded-full bg-ocean-600 text-white hover:bg-ocean-700 transition"
+              title="Бүртгүүлэх"
+            >
+              <UserPlus className="w-5 h-5" />
+            </button>
+          )}
           <button
             onClick={() => setShowHistory(true)}
             className="p-2 rounded-full bg-white text-ocean-700 hover:bg-ocean-50 transition"
@@ -192,18 +215,24 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
             <div className="flex flex-col gap-4">
               {/* Exchange CTA */}
               <div className="glass-card p-6 rounded-2xl border border-white/60 flex flex-col items-center justify-center gap-4 min-h-[200px]">
-                {needsRegistration ? (
-                  // User needs to register
+                {!isVerified && !pendingVerification ? (
+                  // User not registered - can use calculator but not exchange
                   <>
                     <div className="flex items-center justify-center w-16 h-16 bg-ocean-100 rounded-full">
-                      <AlertCircle className="w-8 h-8 text-ocean-600" />
+                      <UserPlus className="w-8 h-8 text-ocean-600" />
                     </div>
                     <div className="text-center">
                       <div className="text-lg font-semibold text-ocean-700 mb-2">Бүртгүүлэх шаардлагатай</div>
                       <div className="text-sm text-slate-500">
-                        Үйлчилгээг ашиглахын тулд эхлээд бүртгүүлнэ үү
+                        Валют солихын тулд эхлээд бүртгүүлнэ үү. Баруун дээр байрлах <UserPlus className="w-4 h-4 inline-block text-ocean-600" /> товчийг дарна уу.
                       </div>
                     </div>
+                    <button
+                      onClick={() => setShowRegistration(true)}
+                      className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition"
+                    >
+                      БҮРТГҮҮЛЭХ
+                    </button>
                   </>
                 ) : pendingVerification ? (
                   // User is waiting for admin verification
@@ -292,8 +321,8 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
         />
       )}
 
-      {/* Profile Modal */}
-      {showProfile && (
+      {/* Profile Modal - only for verified users */}
+      {showProfile && isVerified && (
         <ProfileModal userId={user?.id} onClose={() => setShowProfile(false)} />
       )}
 
@@ -307,14 +336,9 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
         <AnalyticsModal onClose={() => setShowAnalytics(false)} />
       )}
 
-      {/* Terms Agreement Modal - Required for first-time users */}
-      {needsTermsAgreement && (
-        <TermsAgreementModal onAgreed={handleTermsAgreed} />
-      )}
-
-      {/* Registration Modal - Required for unverified users */}
-      {needsRegistration && !needsTermsAgreement && (
-        <RegistrationModal onRegistered={handleRegistered} />
+      {/* Registration Modal - shown when user clicks register button */}
+      {showRegistration && !isVerified && !pendingVerification && (
+        <RegistrationModal onRegistered={handleRegistered} onClose={() => setShowRegistration(false)} />
       )}
     </div>
   );

@@ -5,6 +5,10 @@ import { fetchMe, fetchUserPromoCodes, updateBankInfo, UserProfile, UserPromoCod
 
 const TERMS_URL = "https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
 
+// Bank name options
+const RUB_BANKS = ["Tinkoff", "Sber", "Alfa", "VTB", "Raiffeisen", "Газпромбанк", "Открытие", "Россельхозбанк", "Другой"];
+const MNT_BANKS = ["Хаан банк", "Голомт банк", "Хас банк", "Төрийн банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Капитрон банк", "М банк", "Бусад"];
+
 interface Props {
   userId?: number;
   onClose: () => void;
@@ -12,13 +16,15 @@ interface Props {
 
 // Helper to parse bank string
 const parseBankRub = (bankStr: string | undefined) => {
-  if (!bankStr) return { bankName: "", phoneSbp: "", cardNumber: "", ownerName: "" };
+  if (!bankStr || bankStr === ",,,") return { bankName: "", phoneSbp: "", cardNumber: "", ownerName: "", hasBank: false };
   const parts = bankStr.split(",").map(p => p.trim());
+  const hasBank = parts.some(p => p !== "");
   return {
     bankName: parts[0] || "",
     phoneSbp: parts[1] || "",
     cardNumber: parts[2] || "",
     ownerName: parts[3] || "",
+    hasBank,
   };
 };
 
@@ -41,11 +47,14 @@ export function ProfileModal({ userId, onClose }: Props) {
   
   // Bank info form state
   const [phone, setPhone] = useState("");
+  const [hasRubBank, setHasRubBank] = useState(false);
   const [rubBankName, setRubBankName] = useState("");
+  const [rubBankNameOther, setRubBankNameOther] = useState("");
   const [rubPhoneSbp, setRubPhoneSbp] = useState("");
   const [rubCardNumber, setRubCardNumber] = useState("");
   const [rubOwnerName, setRubOwnerName] = useState("");
   const [mntBankName, setMntBankName] = useState("");
+  const [mntBankNameOther, setMntBankNameOther] = useState("");
   const [mntAccountNumber, setMntAccountNumber] = useState("");
   const [mntOwnerName, setMntOwnerName] = useState("");
   
@@ -71,15 +80,45 @@ export function ProfileModal({ userId, onClose }: Props) {
       setPhone(profile.phone || "");
       const rubBank = parseBankRub(profile.bank_rub);
       const mntBank = parseBankMnt(profile.bank_mnt);
-      setRubBankName(rubBank.bankName);
+      
+      // Check if RUB bank exists
+      setHasRubBank(rubBank.hasBank);
+      
+      // Check if bank name is in the predefined list or "Other"
+      if (rubBank.bankName && !RUB_BANKS.includes(rubBank.bankName)) {
+        setRubBankName("Другой");
+        setRubBankNameOther(rubBank.bankName);
+      } else {
+        setRubBankName(rubBank.bankName);
+        setRubBankNameOther("");
+      }
       setRubPhoneSbp(rubBank.phoneSbp);
       setRubCardNumber(rubBank.cardNumber);
       setRubOwnerName(rubBank.ownerName);
-      setMntBankName(mntBank.bankName);
+      
+      // Check if MNT bank name is in the predefined list or "Other"
+      if (mntBank.bankName && !MNT_BANKS.includes(mntBank.bankName)) {
+        setMntBankName("Бусад");
+        setMntBankNameOther(mntBank.bankName);
+      } else {
+        setMntBankName(mntBank.bankName);
+        setMntBankNameOther("");
+      }
       setMntAccountNumber(mntBank.accountNumber);
       setMntOwnerName(mntBank.ownerName);
     }
   }, [profile, editMode]);
+
+  // Get actual bank names (handle "Other" option)
+  const getActualRubBankName = () => {
+    if (rubBankName === "Другой") return rubBankNameOther.trim();
+    return rubBankName;
+  };
+
+  const getActualMntBankName = () => {
+    if (mntBankName === "Бусад") return mntBankNameOther.trim();
+    return mntBankName;
+  };
 
   const handleSave = async () => {
     try {
@@ -87,11 +126,11 @@ export function ProfileModal({ userId, onClose }: Props) {
       setError("");
       const payload: UpdateBankInfoInput = {
         phone,
-        rub_bank_name: rubBankName,
-        rub_phone_sbp: rubPhoneSbp,
-        rub_card_number: rubCardNumber,
-        rub_owner_name: rubOwnerName,
-        mnt_bank_name: mntBankName,
+        rub_bank_name: hasRubBank ? getActualRubBankName() : "",
+        rub_phone_sbp: hasRubBank ? rubPhoneSbp : "",
+        rub_card_number: hasRubBank ? rubCardNumber : "",
+        rub_owner_name: hasRubBank ? rubOwnerName : "",
+        mnt_bank_name: getActualMntBankName(),
         mnt_account_number: mntAccountNumber,
         mnt_owner_name: mntOwnerName,
       };
@@ -167,34 +206,64 @@ export function ProfileModal({ userId, onClose }: Props) {
                     <CreditCard className="w-4 h-4" />
                     RUB банкны мэдээлэл
                   </div>
-                  <input
-                    type="text"
-                    value={rubBankName}
-                    onChange={(e) => setRubBankName(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                    placeholder="Банкны нэр (Tinkoff, Sber...)"
-                  />
-                  <input
-                    type="tel"
-                    value={rubPhoneSbp}
-                    onChange={(e) => setRubPhoneSbp(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                    placeholder="СБП утас"
-                  />
-                  <input
-                    type="text"
-                    value={rubCardNumber}
-                    onChange={(e) => setRubCardNumber(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                    placeholder="Картын дугаар"
-                  />
-                  <input
-                    type="text"
-                    value={rubOwnerName}
-                    onChange={(e) => setRubOwnerName(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                    placeholder="Эзэмшигчийн нэр"
-                  />
+                  
+                  {/* Checkbox to enable RUB bank */}
+                  <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg bg-white hover:bg-slate-100 transition">
+                    <input
+                      type="checkbox"
+                      checked={hasRubBank}
+                      onChange={(e) => setHasRubBank(e.target.checked)}
+                      className="w-5 h-5 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+                    />
+                    <span className="text-sm text-slate-600">
+                      Оросын банкны данс байгаа
+                    </span>
+                  </label>
+
+                  {hasRubBank && (
+                    <div className="space-y-2 pl-2 border-l-2 border-ocean-200">
+                      <select
+                        value={rubBankName}
+                        onChange={(e) => setRubBankName(e.target.value)}
+                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm bg-white"
+                      >
+                        <option value="">Банк сонгоно уу</option>
+                        {RUB_BANKS.map((bank) => (
+                          <option key={bank} value={bank}>{bank}</option>
+                        ))}
+                      </select>
+                      {rubBankName === "Другой" && (
+                        <input
+                          type="text"
+                          value={rubBankNameOther}
+                          onChange={(e) => setRubBankNameOther(e.target.value)}
+                          className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                          placeholder="Банкны нэр"
+                        />
+                      )}
+                      <input
+                        type="tel"
+                        value={rubPhoneSbp}
+                        onChange={(e) => setRubPhoneSbp(e.target.value)}
+                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                        placeholder="СБП утас"
+                      />
+                      <input
+                        type="text"
+                        value={rubCardNumber}
+                        onChange={(e) => setRubCardNumber(e.target.value)}
+                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                        placeholder="Картын дугаар"
+                      />
+                      <input
+                        type="text"
+                        value={rubOwnerName}
+                        onChange={(e) => setRubOwnerName(e.target.value)}
+                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                        placeholder="Эзэмшигчийн нэр"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* MNT Bank Section */}
@@ -203,13 +272,25 @@ export function ProfileModal({ userId, onClose }: Props) {
                     <Building className="w-4 h-4" />
                     MNT банкны мэдээлэл
                   </div>
-                  <input
-                    type="text"
+                  <select
                     value={mntBankName}
                     onChange={(e) => setMntBankName(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                    placeholder="Банкны нэр (Хаан, Голомт...)"
-                  />
+                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm bg-white"
+                  >
+                    <option value="">Банк сонгоно уу</option>
+                    {MNT_BANKS.map((bank) => (
+                      <option key={bank} value={bank}>{bank}</option>
+                    ))}
+                  </select>
+                  {mntBankName === "Бусад" && (
+                    <input
+                      type="text"
+                      value={mntBankNameOther}
+                      onChange={(e) => setMntBankNameOther(e.target.value)}
+                      className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                      placeholder="Банкны нэр"
+                    />
+                  )}
                   <input
                     type="text"
                     value={mntAccountNumber}

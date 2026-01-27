@@ -146,6 +146,8 @@ export function HistoryModal({ userId, onClose }: Props) {
                   const statusInfo = getStatusInfo(item.status);
                   const StatusIcon = statusInfo.icon;
                   const isBuy = item.currency_from === "RUB";
+                  // RUB->MNT (buy): RUB * buy_rate = MNT
+                  // MNT->RUB (sell): MNT / sell_rate = RUB
                   const receiveAmount = isBuy
                     ? (Number(item.amount) * Number(item.rate)).toFixed(0)
                     : (Number(item.amount) / Number(item.rate)).toFixed(2);

@@ -686,7 +686,11 @@ async def register_user(
     now = datetime.now(moscow_tz).isoformat()
     
     # Format bank details as comma-separated strings
-    bank_rub = f"{payload.rub_bank_name},{payload.rub_phone_sbp},{payload.rub_card_number},{payload.rub_owner_name}"
+    # RUB bank is optional - only format if provided
+    bank_rub = ""
+    if payload.rub_bank_name and payload.rub_phone_sbp:
+        bank_rub = f"{payload.rub_bank_name},{payload.rub_phone_sbp},{payload.rub_card_number},{payload.rub_owner_name}"
+    
     bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone}"
     
     # Update user record with registration info
@@ -695,12 +699,19 @@ async def register_user(
     update_payload = {
         "first_name": payload.first_name,
         "last_name": payload.last_name,
-        "bank_rub": bank_rub,
         "bank_mnt": bank_mnt,
         "passport_storage_url": payload.passport_storage_url,
         "ready_for_verification": True,
         "updated_at": now,
     }
+    
+    # Add email if provided
+    if payload.email:
+        update_payload["email"] = payload.email
+    
+    # Add RUB bank only if provided
+    if bank_rub:
+        update_payload["bank_rub"] = bank_rub
     
     result = client.table("users").update(update_payload).eq("id", user.id).execute()
     
@@ -893,13 +904,11 @@ async def create_exchange(
     user_notification = (
         f"✅ <b>Таны гүйлгээний хүсэлтийг хүлээн авлаа!</b>\n\n"
         f"📋 <b>Гүйлгээний дэлгэрэнгүй мэдээлэл:</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🧾 Invoice: <code>{invoice}</code>\n"
         f"🔄 Чиглэл: {user_direction_text}\n"
         f"💰 Та илгээх дүн: <b>{payload.amount:,.0f}</b> {payload.currency_from}\n"
         f"💸 Та хүлээн авах: <b>{admin_sends:,.0f}</b> {admin_sends_currency}\n"
-        f"📊 Ханш: <b>{payload.rate}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📊 Ханш: <b>{payload.rate}</b>\n\n"
         f"⏳ Таны хүсэлтийг админ удахгүй баталгаажуулах болно. Та түр хүлээнэ үү."
     )
     

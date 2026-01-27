@@ -57,6 +57,7 @@ export type UserProfile = {
   id: number;
   first_name?: string;
   last_name?: string;
+  email?: string;
   phone?: string;
   bank_rub?: string;
   bank_mnt?: string;
@@ -80,6 +81,7 @@ export type AdminBankAccount = {
 export type RegistrationInput = {
   last_name: string;
   first_name: string;
+  email?: string;
   rub_bank_name: string;
   rub_phone_sbp: string;
   rub_card_number: string;

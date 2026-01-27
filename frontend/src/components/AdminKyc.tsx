@@ -73,8 +73,10 @@ export function AdminKyc() {
   };
 
   const parseRubBank = (bankStr: string | null | undefined) => {
-    if (!bankStr) return { bankName: "—", phoneSbp: "—", cardNumber: "—", ownerName: "—" };
+    if (!bankStr || bankStr === ",,,") return null; // Return null if empty or just commas
     const parts = bankStr.split(",").map((p) => p.trim());
+    // Check if all parts are empty
+    if (parts.every(p => !p)) return null;
     return {
       bankName: parts[0] || "—",
       phoneSbp: parts[1] || "—",
@@ -169,31 +171,38 @@ export function AdminKyc() {
                 {/* Expanded Details */}
                 {isExpanded && (
                   <div className="border-t border-ocean-100 p-4 space-y-4 bg-ocean-50/30">
-                    {/* RUB Bank Details */}
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-semibold text-ocean-700 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" />
-                        RUB банкны мэдээлэл
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="bg-white rounded-lg p-2">
-                          <span className="text-xs text-slate-500">Банк</span>
-                          <p className="font-medium">{rubBank.bankName}</p>
-                        </div>
-                        <div className="bg-white rounded-lg p-2">
-                          <span className="text-xs text-slate-500">СБП утас</span>
-                          <p className="font-medium">{rubBank.phoneSbp}</p>
-                        </div>
-                        <div className="bg-white rounded-lg p-2">
-                          <span className="text-xs text-slate-500">Карт</span>
-                          <p className="font-medium">{rubBank.cardNumber}</p>
-                        </div>
-                        <div className="bg-white rounded-lg p-2">
-                          <span className="text-xs text-slate-500">Эзэмшигч</span>
-                          <p className="font-medium">{rubBank.ownerName}</p>
+                    {/* RUB Bank Details - Only show if available */}
+                    {rubBank ? (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-semibold text-ocean-700 flex items-center gap-2">
+                          <CreditCard className="w-4 h-4" />
+                          RUB банкны мэдээлэл
+                        </h4>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="bg-white rounded-lg p-2">
+                            <span className="text-xs text-slate-500">Банк</span>
+                            <p className="font-medium">{rubBank.bankName}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-2">
+                            <span className="text-xs text-slate-500">СБП утас</span>
+                            <p className="font-medium">{rubBank.phoneSbp}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-2">
+                            <span className="text-xs text-slate-500">Карт</span>
+                            <p className="font-medium">{rubBank.cardNumber}</p>
+                          </div>
+                          <div className="bg-white rounded-lg p-2">
+                            <span className="text-xs text-slate-500">Эзэмшигч</span>
+                            <p className="font-medium">{rubBank.ownerName}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="p-3 bg-slate-50 rounded-lg text-sm text-slate-500 flex items-center gap-2">
+                        <CreditCard className="w-4 h-4" />
+                        <span>RUB банкны мэдээлэл оруулаагүй</span>
+                      </div>
+                    )}
 
                     {/* MNT Bank Details */}
                     <div className="space-y-2">
