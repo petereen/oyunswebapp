@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dashboard } from "./pages/Dashboard";
 import { AdminPanel } from "./pages/AdminPanel";
@@ -9,8 +9,19 @@ import { DevToolbar } from "./components/DevToolbar";
 import { fetchMe } from "./api";
 
 export default function App() {
-  const { initData, user, isAuthenticating, authError } = useTelegramAuth();
+  const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
   const [view, setView] = useState<"client" | "admin">("client");
+
+  // Listen for auth:unauthorized events and trigger re-authentication
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      console.log('🔄 Received auth:unauthorized event, refreshing auth...');
+      refreshAuth();
+    };
+    
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, [refreshAuth]);
 
   // Fetch profile at App level to determine admin status immediately
   const { data: profile } = useQuery({

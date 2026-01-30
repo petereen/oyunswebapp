@@ -2059,7 +2059,10 @@ async def lookup_recipient_by_phone(
     # Helper function to extract phone numbers from bank info string
     def extract_phone_from_bank_info(bank_info: str) -> list:
         """Extract phone numbers from comma-separated bank info.
-        Example: 'Сбер банк, +79603548085, 2202205354510650, Баасанжаргал'
+        Examples: 
+        - 'Сбер банк, +79603548085, 2202205354510650, Баасанжаргал'
+        - 'ВТБ , 996 979 52 32 , 2200246009136030 , Батбаяр Эхбаяр'
+        - 'Голомт банк,MN84 0015 001205195640,Тэмүүлэн,+976 9961 3100'
         Returns list of cleaned phone numbers found.
         """
         if not bank_info:
@@ -2068,15 +2071,42 @@ async def lookup_recipient_by_phone(
         phones = []
         parts = bank_info.split(",")
         for part in parts:
-            part = re.sub(r'[\s\-\(\)\.]', '', part.strip())
-            # Check if this part looks like a phone number (starts with + or has 8-12 digits)
-            if part.startswith("+") and 10 <= len(part) <= 16:
-                phones.append(part)
-                phones.append(part.lstrip("+"))
-            # Also check for numbers that could be phones (Russian: 10-11 digits, MN: 8 digits)
-            elif re.match(r"^\d{8,12}$", part):
-                # Likely a phone if it's not too long (card numbers are 16+ digits)
-                phones.append(part)
+            # Clean the part - remove spaces, dashes, parentheses
+            cleaned = re.sub(r'[\s\-\(\)\.]', '', part.strip())
+            
+            # Skip if too short or doesn't look like a number
+            if len(cleaned) < 7:
+                continue
+                
+            # Check if this part looks like a phone number
+            # 1. Starts with + (international format)
+            if cleaned.startswith("+") and 10 <= len(cleaned) <= 16:
+                phones.append(cleaned)
+                phones.append(cleaned.lstrip("+"))
+                continue
+            
+            # 2. Pure digits that could be a phone number
+            digits_only = re.sub(r'\D', '', cleaned)
+            
+            # Skip if looks like a card number (16+ digits)
+            if len(digits_only) >= 16:
+                continue
+            
+            # Skip if looks like an IBAN (starts with MN followed by digits)
+            if cleaned.upper().startswith("MN") and len(digits_only) >= 12:
+                continue
+            
+            # Russian phone numbers: 10-11 digits (with or without leading 7/8)
+            # Mongolian phone numbers: 8 digits
+            if 8 <= len(digits_only) <= 12:
+                phones.append(digits_only)
+                # Also add without leading 7 or 8 for Russian numbers
+                if len(digits_only) == 11 and digits_only[0] in ('7', '8'):
+                    phones.append(digits_only[1:])
+                # Also add with country code variations for Mongolian
+                if len(digits_only) == 8:
+                    phones.append("976" + digits_only)
+        
         return phones
     
     # Helper function for safe phone comparison
@@ -2092,18 +2122,28 @@ async def lookup_recipient_by_phone(
         if not search_digits or not user_digits:
             return False
         
-        # Minimum match length to avoid false positives
-        min_match_length = 8
-        
         # Exact match
         if search_digits == user_digits:
             return True
         
-        # Check if one ends with the other (handles country code variations)
-        # e.g., "79991234567" matches "9991234567"
-        if len(search_digits) >= min_match_length and len(user_digits) >= min_match_length:
-            if search_digits.endswith(user_digits[-min_match_length:]) or user_digits.endswith(search_digits[-min_match_length:]):
+        # Handle Russian numbers: compare last 10 digits
+        # (handles cases like 79991234567 vs 9991234567 vs 89991234567)
+        if len(search_digits) >= 10 and len(user_digits) >= 10:
+            if search_digits[-10:] == user_digits[-10:]:
                 return True
+        
+        # Handle Mongolian numbers: compare last 8 digits
+        # (handles cases like 97699613100 vs 99613100)
+        if len(search_digits) >= 8 and len(user_digits) >= 8:
+            search_last8 = search_digits[-8:]
+            user_last8 = user_digits[-8:]
+            # Only match if both are likely Mongolian (last 8 digits match and neither is 10+ digits without 976 prefix)
+            if search_last8 == user_last8:
+                # Check if both could be Mongolian numbers
+                search_is_mn = len(search_digits) == 8 or (len(search_digits) == 11 and search_digits.startswith("976"))
+                user_is_mn = len(user_digits) == 8 or (len(user_digits) == 11 and user_digits.startswith("976"))
+                if search_is_mn or user_is_mn:
+                    return True
         
         return False
     

@@ -24,18 +24,49 @@ api.interceptors.response.use(
     console.log(`✅ API Response: ${response.status} ${response.config.url}`);
     return response;
   },
-  error => {
+  async error => {
     console.error(`❌ API Error: ${error.response?.status || error.message} ${error.config?.url}`, {
       status: error.response?.status,
       data: error.response?.data,
     });
     
-    // On 401 Unauthorized, clear stored auth and let the app re-authenticate
-    if (error.response?.status === 401) {
-      console.warn('🔒 401 Unauthorized - clearing stored auth');
+    // On 401 Unauthorized, try to re-authenticate using Telegram initData
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true;
+      console.warn('🔒 401 Unauthorized - attempting to re-authenticate');
+      
+      // Check if we can re-authenticate via Telegram
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg?.initData && tg.initData.length > 0) {
+        try {
+          console.log('🔄 Re-authenticating with Telegram initData...');
+          const authResponse = await fetch(
+            (import.meta.env.VITE_API_BASE || '/api') + '/auth',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ init_data: tg.initData }),
+            }
+          );
+          
+          if (authResponse.ok) {
+            const authData = await authResponse.json();
+            localStorage.setItem(JWT_STORAGE_KEY, authData.token);
+            localStorage.setItem('oyuns_user', JSON.stringify(authData.user));
+            console.log('✅ Re-authentication successful, retrying original request');
+            
+            // Retry the original request with new token
+            error.config.headers.Authorization = `Bearer ${authData.token}`;
+            return api.request(error.config);
+          }
+        } catch (authError) {
+          console.error('❌ Re-authentication failed:', authError);
+        }
+      }
+      
+      // If re-auth failed, clear stored auth and dispatch event
       localStorage.removeItem(JWT_STORAGE_KEY);
       localStorage.removeItem('oyuns_user');
-      // Optionally trigger re-auth by dispatching a custom event
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     

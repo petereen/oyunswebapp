@@ -93,9 +93,18 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
         setOwnerName("");
         onGiftConfirmed?.();
       }, 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error confirming gift:", err);
-      setError("Баталгаажуулахад алдаа гарлаа. Дахин оролдоно уу.");
+      // Check for specific error codes
+      if (err?.response?.status === 401) {
+        setError("Нэвтрэлт хугацаа дууссан. Аппыг дахин нээнэ үү.");
+      } else if (err?.response?.status === 403) {
+        setError("Танд энэ бэлгийг авах эрх байхгүй байна.");
+      } else if (err?.response?.status === 400) {
+        setError(err?.response?.data?.detail || "Бэлэг аль хэдийн баталгаажсан байна.");
+      } else {
+        setError("Баталгаажуулахад алдаа гарлаа. Дахин оролдоно уу.");
+      }
     } finally {
       setConfirming(false);
     }
