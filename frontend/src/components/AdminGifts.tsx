@@ -21,7 +21,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import { fetchAdminGifts, approveGift, rejectGift, preapproveGift, finalizeGift, requestPresign, AdminGift } from "../api";
+import { fetchAdminGifts, approveGift, rejectGift, requestPresign, AdminGift } from "../api";
 
 export function AdminGifts() {
   const [gifts, setGifts] = useState<AdminGift[]>([]);
@@ -91,41 +91,16 @@ export function AdminGifts() {
     }
   };
 
-  // Handle preapprove
-  const handlePreapprove = async (giftId: string) => {
-    try {
-      setActionLoading(giftId);
-      await preapproveGift(giftId, billUrls.length > 0 ? billUrls : undefined);
-      setBillUrls([]);
-      await loadGifts();
-    } catch (err) {
-      console.error("Error preapproving gift:", err);
-      setError("Урьдчилан зөвшөөрөхөд алдаа гарлаа");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Handle finalize
-  const handleFinalize = async (giftId: string) => {
-    try {
-      setActionLoading(giftId);
-      await finalizeGift(giftId, billUrls.length > 0 ? billUrls : undefined);
-      setBillUrls([]);
-      await loadGifts();
-    } catch (err) {
-      console.error("Error finalizing gift:", err);
-      setError("Дуусгахад алдаа гарлаа");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Handle approve (legacy)
+  // Handle approve with mandatory bill
   const handleApprove = async (giftId: string) => {
+    if (billUrls.length === 0) {
+      setError("Гүйлгээний баримт оруулах шаардлагатай!");
+      return;
+    }
     try {
       setActionLoading(giftId);
-      await approveGift(giftId);
+      await approveGift(giftId, billUrls);
+      setBillUrls([]);
       await loadGifts();
     } catch (err) {
       console.error("Error approving gift:", err);
@@ -168,8 +143,6 @@ export function AdminGifts() {
         return <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Хүлээн авагч хүлээж байна</span>;
       case "pending_admin":
         return <span className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700">Админ хүлээж байна</span>;
-      case "preapproved":
-        return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Урьдчилан зөвшөөрсөн</span>;
       case "approved":
         return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Зөвшөөрсөн</span>;
       case "completed":
@@ -221,7 +194,7 @@ export function AdminGifts() {
           <option value="all">Бүгд</option>
           <option value="pending_recipient">Хүлээн авагч хүлээж байна</option>
           <option value="pending_admin">Админ хүлээж байна</option>
-          <option value="preapproved">Урьдчилан зөвшөөрсөн</option>
+
           <option value="completed">Дууссан</option>
           <option value="rejected">Татгалзсан</option>
         </select>
@@ -299,7 +272,7 @@ export function AdminGifts() {
                     <div className="space-y-2">
                       <div className="text-xs text-slate-500 font-medium uppercase">Илгээгч</div>
                       <div className="p-3 bg-slate-50 rounded-lg text-sm">
-                        <div className="font-medium">{gift.sender_last_name} {gift.sender_first_name}</div>
+                        <div className="font-medium">{gift.sender_first_name} {gift.sender_last_name}</div>
                         <div className="text-slate-500">ID: {gift.sender_user_id}</div>
                       </div>
                     </div>
@@ -308,7 +281,7 @@ export function AdminGifts() {
                     <div className="space-y-2">
                       <div className="text-xs text-slate-500 font-medium uppercase">Хүлээн авагч</div>
                       <div className="p-3 bg-slate-50 rounded-lg text-sm">
-                        <div className="font-medium">{gift.recipient_last_name} {gift.recipient_first_name}</div>
+                        <div className="font-medium">{gift.recipient_first_name} {gift.recipient_last_name}</div>
                         <div className="flex items-center gap-1 text-slate-500">
                           <Phone className="w-3 h-3" /> {gift.recipient_phone}
                         </div>
@@ -330,19 +303,97 @@ export function AdminGifts() {
                       <div>
                         <div className="text-xs text-slate-500">Хүлээн авах</div>
                         <div className="font-bold text-green-600">
-                          {(gift.direction === "buy" ? gift.amount * gift.rate : gift.amount / gift.rate).toLocaleString("en-US", { maximumFractionDigits: 2 })} {gift.currency_to}
+                          {(gift.direction === "buy" ? gift.amount * gift.rate : gift.amount / gift.rate).toLocaleString("en-US", { maximumFractionDigits: 0 })} {gift.currency_to}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Recipient bank details */}
+                  {/* Recipient bank details - copyable */}
                   {gift.recipient_bank_details && (
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
-                      <div className="text-xs text-green-600 font-medium mb-1 flex items-center gap-1">
+                      <div className="text-xs text-green-600 font-medium mb-2 flex items-center gap-1">
                         <Building className="w-3 h-3" /> Хүлээн авагчийн банк
                       </div>
-                      <div className="font-mono text-sm">{gift.recipient_bank_details}</div>
+                      {/* Parse bank details: Bank | Account | Name format */}
+                      {(() => {
+                        const parts = gift.recipient_bank_details.split('|').map(s => s.trim());
+                        const bankName = parts[0] || '';
+                        const accountNumber = parts[1] || '';
+                        const ownerName = parts[2] || '';
+                        return (
+                          <div className="space-y-2">
+                            {bankName && (
+                              <div className="flex items-center justify-between bg-white p-2 rounded border">
+                                <div>
+                                  <div className="text-xs text-slate-500">Банк</div>
+                                  <div className="font-medium text-sm">{bankName}</div>
+                                </div>
+                                <button
+                                  onClick={() => handleCopy(bankName, `bank-name-${gift.id}`)}
+                                  className="p-1 hover:bg-slate-100 rounded"
+                                >
+                                  {copied === `bank-name-${gift.id}` ? (
+                                    <Check className="w-4 h-4 text-green-500" />
+                                  ) : (
+                                    <Copy className="w-4 h-4 text-slate-400" />
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                            {accountNumber && (
+                              <div className="flex items-center justify-between bg-white p-2 rounded border">
+                                <div>
+                                  <div className="text-xs text-slate-500">Данс/Карт</div>
+                                  <div className="font-mono font-medium text-sm">{accountNumber}</div>
+                                </div>
+                                <button
+                                  onClick={() => handleCopy(accountNumber, `account-${gift.id}`)}
+                                  className="p-1 hover:bg-slate-100 rounded"
+                                >
+                                  {copied === `account-${gift.id}` ? (
+                                    <Check className="w-4 h-4 text-green-500" />
+                                  ) : (
+                                    <Copy className="w-4 h-4 text-slate-400" />
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                            {ownerName && (
+                              <div className="flex items-center justify-between bg-white p-2 rounded border">
+                                <div>
+                                  <div className="text-xs text-slate-500">Эзэмшигч</div>
+                                  <div className="font-medium text-sm">{ownerName}</div>
+                                </div>
+                                <button
+                                  onClick={() => handleCopy(ownerName, `owner-${gift.id}`)}
+                                  className="p-1 hover:bg-slate-100 rounded"
+                                >
+                                  {copied === `owner-${gift.id}` ? (
+                                    <Check className="w-4 h-4 text-green-500" />
+                                  ) : (
+                                    <Copy className="w-4 h-4 text-slate-400" />
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Sender receipt only */}
+                  {gift.sender_receipt_url && (
+                    <div className="mb-4">
+                      <div className="text-xs text-slate-500 mb-1">Илгээгчийн баримт</div>
+                      <a href={gift.sender_receipt_url} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={gift.sender_receipt_url}
+                          alt="Receipt"
+                          className="w-full max-w-[200px] h-auto object-contain rounded-lg border border-slate-200"
+                        />
+                      </a>
                     </div>
                   )}
 
@@ -356,34 +407,6 @@ export function AdminGifts() {
                     </div>
                   )}
 
-                  {/* Images */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    {gift.gift_card_url && (
-                      <div>
-                        <div className="text-xs text-slate-500 mb-1">Бэлгийн карт</div>
-                        <a href={gift.gift_card_url} target="_blank" rel="noopener noreferrer">
-                          <img
-                            src={gift.gift_card_url}
-                            alt="Gift card"
-                            className="w-full h-32 object-cover rounded-lg border border-slate-200"
-                          />
-                        </a>
-                      </div>
-                    )}
-                    {gift.sender_receipt_url && (
-                      <div>
-                        <div className="text-xs text-slate-500 mb-1">Илгээгчийн баримт</div>
-                        <a href={gift.sender_receipt_url} target="_blank" rel="noopener noreferrer">
-                          <img
-                            src={gift.sender_receipt_url}
-                            alt="Receipt"
-                            className="w-full h-32 object-cover rounded-lg border border-slate-200"
-                          />
-                        </a>
-                      </div>
-                    )}
-                  </div>
-
                   {/* Rejection comment */}
                   {gift.rejection_comment && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
@@ -392,11 +415,11 @@ export function AdminGifts() {
                     </div>
                   )}
 
-                  {/* Bill upload section for pending_admin and preapproved status */}
-                  {(gift.status === "pending_admin" || gift.status === "preapproved") && (
+                  {/* Bill upload section for pending_admin - MANDATORY */}
+                  {gift.status === "pending_admin" && (
                     <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="text-xs text-yellow-700 font-medium mb-2 flex items-center gap-1">
-                        <Upload className="w-3 h-3" /> Гүйлгээний баримт оруулах (заавал биш)
+                        <Upload className="w-3 h-3" /> Гүйлгээний баримт оруулах (заавал)
                       </div>
                       
                       {/* Uploaded bills preview */}
@@ -437,6 +460,10 @@ export function AdminGifts() {
                           disabled={uploading}
                         />
                       </label>
+                      
+                      {billUrls.length === 0 && (
+                        <div className="text-xs text-red-500 mt-1">* Баримт оруулах шаардлагатай</div>
+                      )}
                     </div>
                   )}
 
@@ -444,16 +471,16 @@ export function AdminGifts() {
                   {gift.status === "pending_admin" && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handlePreapprove(gift.id)}
-                        disabled={actionLoading === gift.id}
-                        className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        onClick={() => handleApprove(gift.id)}
+                        disabled={actionLoading === gift.id || billUrls.length === 0}
+                        className="flex-1 py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {actionLoading === gift.id ? (
                           <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
                           <>
                             <CheckCircle2 className="w-5 h-5" />
-                            Урьдчилан зөвшөөрөх
+                            Баталгаажуулах
                           </>
                         )}
                       </button>
@@ -464,46 +491,6 @@ export function AdminGifts() {
                       >
                         <XCircle className="w-5 h-5" />
                         Татгалзах
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Actions for preapproved - show bank details and finalize button */}
-                  {gift.status === "preapproved" && gift.recipient_bank_details && (
-                    <div className="space-y-3">
-                      {/* Copyable bank details */}
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="text-xs text-blue-600 font-medium mb-2 flex items-center gap-1">
-                          <Building className="w-3 h-3" /> Хүлээн авагчийн банк (хуулах)
-                        </div>
-                        <div className="flex items-center justify-between bg-white p-2 rounded border">
-                          <span className="font-mono text-sm flex-1 break-all">{gift.recipient_bank_details}</span>
-                          <button
-                            onClick={() => handleCopy(gift.recipient_bank_details || '', `bank-${gift.id}`)}
-                            className="ml-2 p-1 hover:bg-slate-100 rounded"
-                          >
-                            {copied === `bank-${gift.id}` ? (
-                              <Check className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <Copy className="w-4 h-4 text-slate-400" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={() => handleFinalize(gift.id)}
-                        disabled={actionLoading === gift.id}
-                        className="w-full py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {actionLoading === gift.id ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-5 h-5" />
-                            Дуусгах (Шилжүүлсэн)
-                          </>
-                        )}
                       </button>
                     </div>
                   )}

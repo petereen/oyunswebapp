@@ -606,18 +606,8 @@ export async function fetchAdminGifts(status?: string): Promise<{ gifts: AdminGi
   return res.data;
 }
 
-export async function approveGift(giftId: string) {
-  const res = await api.post(`/admin/gift/${giftId}/approve`);
-  return res.data;
-}
-
-export async function preapproveGift(giftId: string, billUrls?: string[]) {
-  const res = await api.post(`/admin/gift/${giftId}/preapprove`, { admin_bill_urls: billUrls });
-  return res.data;
-}
-
-export async function finalizeGift(giftId: string, billUrls?: string[]) {
-  const res = await api.post(`/admin/gift/${giftId}/finalize`, { admin_bill_urls: billUrls });
+export async function approveGift(giftId: string, billUrls: string[]) {
+  const res = await api.post(`/admin/gift/${giftId}/approve`, { admin_bill_urls: billUrls });
   return res.data;
 }
 

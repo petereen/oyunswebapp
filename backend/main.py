@@ -2708,9 +2708,10 @@ async def finalize_gift(
 @app.post("/api/admin/gift/{gift_id}/approve")
 async def approve_gift(
     gift_id: str,
+    payload: GiftPreapproveRequest = None,
     user=Depends(get_jwt_authenticated_user)
 ):
-    """Admin approves a gift transaction (legacy - use preapprove + finalize for full workflow)"""
+    """Admin approves a gift transaction with bill photos"""
     client = get_supabase()
     settings = get_settings()
     
@@ -2718,49 +2719,74 @@ async def approve_gift(
     if user.id not in settings.admin_ids:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Get gift
-    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    try:
+        # Get gift
+        res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Gift not found")
+        
+        gift = res.data
+        
+        if gift.get("status") != "pending_admin":
+            raise HTTPException(status_code=400, detail="Gift cannot be approved")
+        
+        # Store bill URLs if provided
+        import json
+        update_data = {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_by_admin": user.id,
+        }
+        
+        if payload and payload.admin_bill_urls:
+            update_data["admin_bill_url"] = json.dumps(payload.admin_bill_urls)
+        
+        # Update gift status
+        client.table("gifts").update(update_data).eq("id", gift_id).execute()
+        
+        # Get recipient name for notification
+        try:
+            recipient_res = client.table("users").select("first_name, last_name").eq("id", gift.get("recipient_user_id")).single().execute()
+            recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}" if recipient_res.data else "хэрэглэгч"
+        except Exception:
+            recipient_name = "хэрэглэгч"
+        
+        # Get sender name for notification
+        try:
+            sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
+            sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}" if sender_res.data else "хэрэглэгч"
+        except Exception:
+            sender_name = "хэрэглэгч"
+        
+        # Notify sender
+        sender_message = (
+            f"✅ <b>Таны бэлэг {recipient_name.strip()} хэрэглэгчид амжилттай илгээгдлээ!</b>\n\n"
+            f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+            f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}"
+        )
+        send_user_notification(gift.get("sender_user_id"), sender_message)
+        
+        # Notify recipient with bill photos if available
+        recipient_message = (
+            f"✅ <b>{sender_name.strip()} хэрэглэгчээс илгээсэн бэлэг таны дансанд амжилттай шилжлээ!</b>\n\n"
+            f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+            f"🏦 Шилжүүлсэн данс: {gift.get('recipient_bank_details')}"
+        )
+        
+        # Send with bill photos if available
+        if payload and payload.admin_bill_urls and len(payload.admin_bill_urls) > 0:
+            send_user_photos(gift.get("recipient_user_id"), payload.admin_bill_urls, recipient_message)
+        else:
+            send_user_notification(gift.get("recipient_user_id"), recipient_message)
+        
+        return {"ok": True, "status": "completed"}
     
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Gift not found")
-    
-    gift = res.data
-    
-    if gift.get("status") != "pending_admin":
-        raise HTTPException(status_code=400, detail="Gift cannot be approved")
-    
-    # Update gift status
-    client.table("gifts").update({
-        "status": "completed",
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-        "completed_by_admin": user.id,
-    }).eq("id", gift_id).execute()
-    
-    # Get recipient name for notification
-    recipient_res = client.table("users").select("first_name, last_name").eq("id", gift.get("recipient_user_id")).single().execute()
-    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}" if recipient_res.data else "хэрэглэгч"
-    
-    # Get sender name for notification
-    sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
-    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}" if sender_res.data else "хэрэглэгч"
-    
-    # Notify sender
-    sender_message = (
-        f"✅ <b>Таны бэлэг {recipient_name.strip()} хэрэглэгчид амжилттай илгээгдлээ!</b>\n\n"
-        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}"
-    )
-    send_user_notification(gift.get("sender_user_id"), sender_message)
-    
-    # Notify recipient
-    recipient_message = (
-        f"✅ <b>{sender_name.strip()} хэрэглэгчээс илгээсэн бэлэг таны дансанд амжилттай шилжлээ!</b>\n\n"
-        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"🏦 Шилжүүлсэн данс: {gift.get('recipient_bank_details')}"
-    )
-    send_user_notification(gift.get("recipient_user_id"), recipient_message)
-    
-    return {"ok": True, "status": "completed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving gift {gift_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to approve gift: {str(e)}")
 
 
 @app.post("/api/admin/gift/{gift_id}/reject")
@@ -2794,10 +2820,10 @@ async def reject_gift(
     
     # Notify sender
     sender_message = (
-        f"❌ <b>Таны бэлэг цуцлагдлаа</b>\n\n"
+        f"❌ <b>Таны илгээсэн бэлэг цуцлагдлаа</b>\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
         f"📝 Шалтгаан: {payload.comment}\n\n"
-        f"Асуудал байвал админтай холбогдоно уу."
+        f"Та алдаа гарсан гэж үзвэл @Oyuns_Finance хаягаар админтай холбогдоно уу."
     )
     send_user_notification(gift.get("sender_user_id"), sender_message)
     
@@ -2806,7 +2832,8 @@ async def reject_gift(
         recipient_message = (
             f"❌ <b>Таны хүлээж буй бэлэг цуцлагдлаа</b>\n\n"
             f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-            f"📝 Шалтгаан: {payload.comment}"
+            f"📝 Шалтгаан: {payload.comment}\n\n"
+            f"Та алдаа гарсан гэж үзвэл @Oyuns_Finance хаягаар админтай холбогдоно уу."
         )
         send_user_notification(gift.get("recipient_user_id"), recipient_message)
     
