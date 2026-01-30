@@ -27,6 +27,10 @@ class RateResponse(BaseModel):
     updated_at: Optional[datetime]
 
 
+class AppSettingsResponse(BaseModel):
+    min_rub_amount: int = 5000  # Default minimum RUB for MNT->RUB
+
+
 class ExchangeCreateRequest(BaseModel):
     direction: str = Field(..., description="buy or sell")
     amount: Decimal

@@ -22,6 +22,7 @@ import {
   createGift,
   fetchAdminBankAccounts,
   requestPresign,
+  fetchAppSettings,
   AdminBankAccount,
   GiftCard,
   GiftCreateInput,
@@ -86,6 +87,9 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   // From who field (sender's display name on the gift)
   const [fromName, setFromName] = useState("");
 
+  // App settings
+  const [minRubAmount, setMinRubAmount] = useState<number>(5000);
+
   // Load gift cards
   useEffect(() => {
     setCardsLoading(true);
@@ -105,6 +109,11 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
     fetchAdminBankAccounts()
       .then((res) => setAdminBanks(res.accounts || []))
       .catch(() => setAdminBanks([]));
+    
+    // Load app settings (min_rub_amount)
+    fetchAppSettings()
+      .then((res) => setMinRubAmount(res.min_rub_amount || 5000))
+      .catch(() => setMinRubAmount(5000));
   }, []);
 
   // Generate invoice ID
@@ -528,6 +537,14 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                 <div className="text-xs text-slate-400">Ханш: {effectiveRate}</div>
               </div>
             )}
+            
+            {/* Minimum RUB warning for MNT->RUB direction */}
+            {direction === "sell" && convertedAmount > 0 && convertedAmount < minRubAmount && (
+              <div className="mt-2 text-sm text-red-500 flex items-center gap-1">
+                <span>⚠️</span>
+                <span>MNT→RUB чиглэлд хамгийн бага дүн {minRubAmount.toLocaleString()} рубль байх ёстой</span>
+              </div>
+            )}
           </div>
 
           {/* Message */}
@@ -557,7 +574,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                 if (!invoiceId) setInvoiceId(generateInvoiceId());
                 setStep(3);
               }}
-              disabled={!amount || parseFloat(amount) <= 0}
+              disabled={!amount || parseFloat(amount) <= 0 || (direction === "sell" && convertedAmount < minRubAmount)}
               className="flex-1 py-3 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-600 transition disabled:opacity-50"
             >
               Үргэлжлүүлэх

@@ -23,6 +23,7 @@ from models import (
     AdminShiftResponse,
     AdminUser,
     AdminUsersResponse,
+    AppSettingsResponse,
     AuthRequest,
     AuthResponse,
     ExchangeCreateRequest,
@@ -373,6 +374,25 @@ async def get_rates():
         buy_rate=row.get("buy_rate"),
         sell_rate=row.get("sell_rate"),
         updated_at=row.get("updated_at") or row.get("created_at"),
+    )
+
+
+@app.get("/api/settings", response_model=AppSettingsResponse)
+async def get_app_settings():
+    """Public endpoint - fetch configurable app settings"""
+    client = get_supabase()
+    res = (
+        client.table("app_settings")
+        .select("key,value")
+        .in_("key", ["min_rub_amount"])
+        .execute()
+    )
+    
+    # Build settings dict from database
+    settings_dict = {row["key"]: row["value"] for row in (res.data or [])}
+    
+    return AppSettingsResponse(
+        min_rub_amount=int(settings_dict.get("min_rub_amount", 5000))
     )
 
 
@@ -2759,13 +2779,18 @@ async def approve_gift(
         except Exception:
             sender_name = "хэрэглэгч"
         
-        # Notify sender
+        # Notify sender with bill photos
         sender_message = (
             f"✅ <b>Таны бэлэг {recipient_name.strip()} хэрэглэгчид амжилттай илгээгдлээ!</b>\n\n"
             f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
             f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}"
         )
-        send_user_notification(gift.get("sender_user_id"), sender_message)
+        
+        # Send with bill photos if available
+        if payload and payload.admin_bill_urls and len(payload.admin_bill_urls) > 0:
+            send_user_photos(gift.get("sender_user_id"), payload.admin_bill_urls, sender_message)
+        else:
+            send_user_notification(gift.get("sender_user_id"), sender_message)
         
         # Notify recipient with bill photos if available
         recipient_message = (

@@ -158,8 +158,17 @@ export type PresignRequest = {
 
 // NO AUTH MODE - All API calls work without authentication
 
+export type AppSettings = {
+  min_rub_amount: number;
+};
+
 export async function fetchRates() {
   const res = await api.get<Rate>('/rates');
+  return res.data;
+}
+
+export async function fetchAppSettings() {
+  const res = await api.get<AppSettings>('/settings');
   return res.data;
 }
 

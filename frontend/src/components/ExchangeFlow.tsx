@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
-import { createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode } from "../api";
+import { createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 
 interface Props {
@@ -80,6 +80,9 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   // Invoice ID (generated when entering step 3)
   const [invoiceId, setInvoiceId] = useState<string>("");
   
+  // App settings
+  const [minRubAmount, setMinRubAmount] = useState<number>(5000);
+  
   // Final
   const [useSavedBank, setUseSavedBank] = useState<boolean | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -111,6 +114,11 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     fetchAdminBankAccounts()
       .then((res) => setAdminBanks(res.accounts || []))
       .catch(() => setAdminBanks([]));
+    
+    // Load app settings (min_rub_amount)
+    fetchAppSettings()
+      .then((res) => setMinRubAmount(res.min_rub_amount || 5000))
+      .catch(() => setMinRubAmount(5000));
     
     // Load user's promo codes (active codes belonging to this user)
     fetchUserPromoCodes()
@@ -573,6 +581,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             </div>
           )}
           
+          {/* Minimum RUB warning for MNT->RUB direction */}
+          {direction === "sell" && convertedAmount > 0 && convertedAmount < minRubAmount && (
+            <div className="text-sm text-red-500 flex items-center gap-1">
+              <span>⚠️</span>
+              <span>MNT→RUB чиглэлд хамгийн бага дүн {minRubAmount.toLocaleString()} рубль байх ёстой</span>
+            </div>
+          )}
+          
           <button
             className="mt-2 w-full rounded-xl bg-ocean-600 text-white py-3 font-semibold disabled:opacity-50"
             onClick={() => {
@@ -582,7 +598,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               }
               setStep(3);
             }}
-            disabled={amount <= 0}
+            disabled={amount <= 0 || (direction === "sell" && convertedAmount < minRubAmount)}
           >
             Үргэлжлүүлэх
           </button>
