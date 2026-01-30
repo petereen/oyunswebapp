@@ -2329,25 +2329,34 @@ async def create_gift(
                 message_text += f"\n💬 Мессеж:\n<i>\"{payload.message}\"</i>\n"
             
             message_text += (
-                f"\n✨ Бэлгээ хүлээн авахын тулд та зөвхөн апп-руу орж банкны мэдээллээ оруулна уу!"
+                f"\n✨ Бэлгээ хүлээн авахын тулд доорх товчийг дарна уу!"
             )
             
             # Create inline keyboard with app link
             reply_markup = None
-            if settings.webapp_url:
+            webapp_url = settings.webapp_url
+            logger.info(f"Gift notification - webapp_url configured: {webapp_url}")
+            
+            if webapp_url:
+                # Use web_app button for Mini App
                 reply_markup = {
                     "inline_keyboard": [
-                        [{"text": "🎁 Бэлэг хүлээн авах", "web_app": {"url": settings.webapp_url}}]
+                        [{"text": "🎁 Бэлэг хүлээн авах", "web_app": {"url": webapp_url}}]
                     ]
                 }
+                logger.info(f"Gift notification - reply_markup: {reply_markup}")
+            else:
+                # Fallback: Use bot username link if no webapp_url configured
+                logger.warning("WEBAPP_URL not configured - gift notification will not have app launch button")
             
             # Send gift card photo with caption
-            send_user_photo(
+            result = send_user_photo(
                 payload.recipient_user_id,
                 payload.gift_card_url,
                 message_text,
                 reply_markup=reply_markup
             )
+            logger.info(f"Gift notification send result: {result}")
         except Exception as e:
             logger.error(f"Failed to send gift notification: {e}")
         
@@ -2408,64 +2417,77 @@ async def confirm_gift(
     client = get_supabase()
     settings = get_settings()
     
-    # Get the gift
-    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    try:
+        # Get the gift
+        res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Gift not found")
+        
+        gift = res.data
+        
+        # Verify recipient
+        if gift.get("recipient_user_id") != user.id:
+            raise HTTPException(status_code=403, detail="Not your gift")
+        
+        # Verify status
+        if gift.get("status") != "pending_recipient":
+            raise HTTPException(status_code=400, detail="Gift already confirmed")
+        
+        # Update gift with bank details and change status to pending_admin
+        client.table("gifts").update({
+            "recipient_bank_details": payload.bank_details,
+            "status": "pending_admin",
+            "confirmed_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", gift_id).execute()
+        
+        # Get sender and recipient names
+        try:
+            sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
+            sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip() if sender_res.data else "Unknown"
+        except Exception:
+            sender_name = "Unknown"
+        
+        try:
+            recipient_res = client.table("users").select("first_name, last_name").eq("id", user.id).single().execute()
+            recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip() if recipient_res.data else "Unknown"
+        except Exception:
+            recipient_name = "Unknown"
+        
+        # Calculate receive amount
+        direction = gift.get("direction")
+        amount = gift.get("amount", 0)
+        rate = gift.get("rate", 0)
+        if direction == "buy":
+            receive_amount = amount * rate
+        else:
+            receive_amount = amount / rate if rate else 0
+        
+        # Notify admin
+        admin_message = (
+            f"🎁 <b>БЭЛЭГ ШИЛЖҮҮЛЭЛТ!</b>\n\n"
+            f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+            f"👤 Илгээгч: {sender_name} (ID: {gift.get('sender_user_id')})\n"
+            f"🎯 Хүлээн авагч: {recipient_name} (ID: {user.id})\n"
+            f"📞 Утас: {gift.get('recipient_phone')}\n\n"
+            f"💰 Дүн: <b>{amount}</b> {gift.get('currency_from')}\n"
+            f"📦 Шилжүүлэх: <b>{receive_amount:,.2f}</b> {gift.get('currency_to')}\n"
+            f"📈 Ханш: {rate}\n\n"
+            f"🏦 Хүлээн авагчийн банк:\n<code>{payload.bank_details}</code>\n"
+        )
+        
+        if gift.get("message"):
+            admin_message += f"\n💬 Мессеж: <i>\"{gift.get('message')}\"</i>\n"
+        
+        send_admin_notification(admin_message, gift.get("sender_receipt_url"))
+        
+        return {"ok": True, "status": "pending_admin"}
     
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Gift not found")
-    
-    gift = res.data
-    
-    # Verify recipient
-    if gift.get("recipient_user_id") != user.id:
-        raise HTTPException(status_code=403, detail="Not your gift")
-    
-    # Verify status
-    if gift.get("status") != "pending_recipient":
-        raise HTTPException(status_code=400, detail="Gift already confirmed")
-    
-    # Update gift with bank details and change status to pending_admin
-    client.table("gifts").update({
-        "recipient_bank_details": payload.bank_details,
-        "status": "pending_admin",
-        "confirmed_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", gift_id).execute()
-    
-    # Get sender and recipient names
-    sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
-    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip() if sender_res.data else "Unknown"
-    
-    recipient_res = client.table("users").select("first_name, last_name").eq("id", user.id).single().execute()
-    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip() if recipient_res.data else "Unknown"
-    
-    # Calculate receive amount
-    direction = gift.get("direction")
-    amount = gift.get("amount", 0)
-    rate = gift.get("rate", 0)
-    if direction == "buy":
-        receive_amount = amount * rate
-    else:
-        receive_amount = amount / rate if rate else 0
-    
-    # Notify admin
-    admin_message = (
-        f"🎁 <b>БЭЛЭГ ШИЛЖҮҮЛЭЛТ!</b>\n\n"
-        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"👤 Илгээгч: {sender_name} (ID: {gift.get('sender_user_id')})\n"
-        f"🎯 Хүлээн авагч: {recipient_name} (ID: {user.id})\n"
-        f"📞 Утас: {gift.get('recipient_phone')}\n\n"
-        f"💰 Дүн: <b>{amount}</b> {gift.get('currency_from')}\n"
-        f"📦 Шилжүүлэх: <b>{receive_amount:,.2f}</b> {gift.get('currency_to')}\n"
-        f"📈 Ханш: {rate}\n\n"
-        f"🏦 Хүлээн авагчийн банк:\n<code>{payload.bank_details}</code>\n"
-    )
-    
-    if gift.get("message"):
-        admin_message += f"\n💬 Мессеж: <i>\"{gift.get('message')}\"</i>\n"
-    
-    send_admin_notification(admin_message, gift.get("sender_receipt_url"))
-    
-    return {"ok": True, "status": "pending_admin"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error confirming gift {gift_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to confirm gift: {str(e)}")
 
 
 @app.get("/api/admin/gifts", response_model=AdminGiftsResponse)

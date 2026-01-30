@@ -102,6 +102,11 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
         setError("Танд энэ бэлгийг авах эрх байхгүй байна.");
       } else if (err?.response?.status === 400) {
         setError(err?.response?.data?.detail || "Бэлэг аль хэдийн баталгаажсан байна.");
+      } else if (err?.response?.status === 404) {
+        setError("Бэлэг олдсонгүй. Хуудсыг дахин ачааллана уу.");
+      } else if (err?.response?.status === 500) {
+        const detail = err?.response?.data?.detail || "";
+        setError(`Серверийн алдаа: ${detail || "Дахин оролдоно уу."}`);
       } else {
         setError("Баталгаажуулахад алдаа гарлаа. Дахин оролдоно уу.");
       }
