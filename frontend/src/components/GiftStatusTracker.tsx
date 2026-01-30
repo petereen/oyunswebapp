@@ -235,7 +235,7 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
       {/* Support contact for rejected */}
       {status === "rejected" && (
         <a
-          href="https://t.me/Oyuns_support"
+          href="https://t.me/oyuns_finance"
           target="_blank"
           rel="noopener noreferrer"
           className="mt-3 flex items-center justify-center gap-2 text-xs text-red-600 hover:text-red-700 transition"

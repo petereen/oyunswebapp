@@ -17,8 +17,11 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
+  Upload,
+  Copy,
+  Check,
 } from "lucide-react";
-import { fetchAdminGifts, approveGift, rejectGift, AdminGift } from "../api";
+import { fetchAdminGifts, approveGift, rejectGift, preapproveGift, finalizeGift, requestPresign, AdminGift } from "../api";
 
 export function AdminGifts() {
   const [gifts, setGifts] = useState<AdminGift[]>([]);
@@ -29,6 +32,11 @@ export function AdminGifts() {
   const [rejectionComment, setRejectionComment] = useState("");
   const [showRejectModal, setShowRejectModal] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  
+  // Bill upload state
+  const [billUrls, setBillUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
 
   // Load gifts
   const loadGifts = async () => {
@@ -49,7 +57,71 @@ export function AdminGifts() {
     loadGifts();
   }, [statusFilter]);
 
-  // Handle approve
+  // Handle bill upload
+  const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setUploading(true);
+      const uploadedUrls: string[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const ext = file.name.split('.').pop() || 'jpg';
+        const safeFilename = `gift_admin_bill_${Date.now()}_${i}.${ext}`;
+        const path = `gift_bills/${safeFilename}`;
+        const presigned = await requestPresign({ bucket: "bills", path });
+        await fetch(presigned.upload_url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type },
+        });
+        uploadedUrls.push(presigned.public_url);
+      }
+      
+      setBillUrls(prev => [...prev, ...uploadedUrls]);
+    } catch (err) {
+      console.error("Bill upload error:", err);
+      setError("Баримт оруулахад алдаа гарлаа");
+    } finally {
+      setUploading(false);
+      // Reset input
+      e.target.value = '';
+    }
+  };
+
+  // Handle preapprove
+  const handlePreapprove = async (giftId: string) => {
+    try {
+      setActionLoading(giftId);
+      await preapproveGift(giftId, billUrls.length > 0 ? billUrls : undefined);
+      setBillUrls([]);
+      await loadGifts();
+    } catch (err) {
+      console.error("Error preapproving gift:", err);
+      setError("Урьдчилан зөвшөөрөхөд алдаа гарлаа");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle finalize
+  const handleFinalize = async (giftId: string) => {
+    try {
+      setActionLoading(giftId);
+      await finalizeGift(giftId, billUrls.length > 0 ? billUrls : undefined);
+      setBillUrls([]);
+      await loadGifts();
+    } catch (err) {
+      console.error("Error finalizing gift:", err);
+      setError("Дуусгахад алдаа гарлаа");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle approve (legacy)
   const handleApprove = async (giftId: string) => {
     try {
       setActionLoading(giftId);
@@ -82,6 +154,13 @@ export function AdminGifts() {
     }
   };
 
+  // Copy to clipboard
+  const handleCopy = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(field);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
   // Status badge
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -89,6 +168,8 @@ export function AdminGifts() {
         return <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Хүлээн авагч хүлээж байна</span>;
       case "pending_admin":
         return <span className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700">Админ хүлээж байна</span>;
+      case "preapproved":
+        return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Урьдчилан зөвшөөрсөн</span>;
       case "approved":
         return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Зөвшөөрсөн</span>;
       case "completed":
@@ -140,7 +221,7 @@ export function AdminGifts() {
           <option value="all">Бүгд</option>
           <option value="pending_recipient">Хүлээн авагч хүлээж байна</option>
           <option value="pending_admin">Админ хүлээж байна</option>
-          <option value="approved">Зөвшөөрсөн</option>
+          <option value="preapproved">Урьдчилан зөвшөөрсөн</option>
           <option value="completed">Дууссан</option>
           <option value="rejected">Татгалзсан</option>
         </select>
@@ -311,20 +392,68 @@ export function AdminGifts() {
                     </div>
                   )}
 
-                  {/* Actions */}
+                  {/* Bill upload section for pending_admin and preapproved status */}
+                  {(gift.status === "pending_admin" || gift.status === "preapproved") && (
+                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="text-xs text-yellow-700 font-medium mb-2 flex items-center gap-1">
+                        <Upload className="w-3 h-3" /> Гүйлгээний баримт оруулах (заавал биш)
+                      </div>
+                      
+                      {/* Uploaded bills preview */}
+                      {billUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {billUrls.map((url, idx) => (
+                            <div key={idx} className="relative">
+                              <img src={url} alt={`Bill ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border" />
+                              <button
+                                onClick={() => setBillUrls(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      <label className="flex items-center justify-center gap-2 p-2 border-2 border-dashed border-yellow-300 rounded-lg cursor-pointer hover:bg-yellow-100 transition">
+                        {uploading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-yellow-600" />
+                            <span className="text-xs text-yellow-600">Оруулж байна...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-4 h-4 text-yellow-600" />
+                            <span className="text-xs text-yellow-600">Баримт нэмэх</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleBillUpload}
+                          className="hidden"
+                          disabled={uploading}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Actions for pending_admin */}
                   {gift.status === "pending_admin" && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleApprove(gift.id)}
+                        onClick={() => handlePreapprove(gift.id)}
                         disabled={actionLoading === gift.id}
-                        className="flex-1 py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {actionLoading === gift.id ? (
                           <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
                           <>
                             <CheckCircle2 className="w-5 h-5" />
-                            Зөвшөөрөх
+                            Урьдчилан зөвшөөрөх
                           </>
                         )}
                       </button>
@@ -335,6 +464,46 @@ export function AdminGifts() {
                       >
                         <XCircle className="w-5 h-5" />
                         Татгалзах
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Actions for preapproved - show bank details and finalize button */}
+                  {gift.status === "preapproved" && gift.recipient_bank_details && (
+                    <div className="space-y-3">
+                      {/* Copyable bank details */}
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="text-xs text-blue-600 font-medium mb-2 flex items-center gap-1">
+                          <Building className="w-3 h-3" /> Хүлээн авагчийн банк (хуулах)
+                        </div>
+                        <div className="flex items-center justify-between bg-white p-2 rounded border">
+                          <span className="font-mono text-sm flex-1 break-all">{gift.recipient_bank_details}</span>
+                          <button
+                            onClick={() => handleCopy(gift.recipient_bank_details || '', `bank-${gift.id}`)}
+                            className="ml-2 p-1 hover:bg-slate-100 rounded"
+                          >
+                            {copied === `bank-${gift.id}` ? (
+                              <Check className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <Copy className="w-4 h-4 text-slate-400" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={() => handleFinalize(gift.id)}
+                        disabled={actionLoading === gift.id}
+                        className="w-full py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {actionLoading === gift.id ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-5 h-5" />
+                            Дуусгах (Шилжүүлсэн)
+                          </>
+                        )}
                       </button>
                     </div>
                   )}

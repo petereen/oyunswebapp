@@ -580,6 +580,16 @@ export async function approveGift(giftId: string) {
   return res.data;
 }
 
+export async function preapproveGift(giftId: string, billUrls?: string[]) {
+  const res = await api.post(`/admin/gift/${giftId}/preapprove`, { admin_bill_urls: billUrls });
+  return res.data;
+}
+
+export async function finalizeGift(giftId: string, billUrls?: string[]) {
+  const res = await api.post(`/admin/gift/${giftId}/finalize`, { admin_bill_urls: billUrls });
+  return res.data;
+}
+
 export async function rejectGift(giftId: string, comment: string) {
   const res = await api.post(`/admin/gift/${giftId}/reject`, { comment });
   return res.data;

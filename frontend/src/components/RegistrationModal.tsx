@@ -15,10 +15,102 @@ import {
 import { submitRegistration, RegistrationInput, requestPresign } from "../api";
 
 // Bank name options
-const RUB_BANKS = ["Tinkoff", "Sber", "Alfa", "VTB", "Raiffeisen", "Газпромбанк", "Открытие", "Россельхозбанк", "Другой"];
-const MNT_BANKS = ["Хаан банк", "Голомт банк", "Хас банк", "Төрийн банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Капитрон банк", "М банк", "Бусад"];
+const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
+const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
 
 const TERMS_URL = "https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
+
+// Format utility functions
+// Russian phone: +7 XXX XXX XX XX (10 digits after +7)
+export const formatRussianPhone = (value: string): string => {
+  // Extract only digits
+  const digits = value.replace(/\D/g, '');
+  // Remove leading 7 or 8 if present (we'll add +7 prefix)
+  const cleanDigits = digits.startsWith('7') ? digits.slice(1) : digits.startsWith('8') ? digits.slice(1) : digits;
+  // Limit to 10 digits
+  const limitedDigits = cleanDigits.slice(0, 10);
+  
+  if (limitedDigits.length === 0) return '+7 ';
+  
+  let formatted = '+7 ';
+  if (limitedDigits.length > 0) formatted += limitedDigits.slice(0, 3);
+  if (limitedDigits.length > 3) formatted += ' ' + limitedDigits.slice(3, 6);
+  if (limitedDigits.length > 6) formatted += ' ' + limitedDigits.slice(6, 8);
+  if (limitedDigits.length > 8) formatted += ' ' + limitedDigits.slice(8, 10);
+  
+  return formatted;
+};
+
+// Card number: 16 digits only, formatted as XXXX XXXX XXXX XXXX
+export const formatCardNumber = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 16);
+  const parts = digits.match(/.{1,4}/g) || [];
+  return parts.join(' ');
+};
+
+// IBAN: MN XX XXXX XX XXXXXXXXXX (MN + 18 digits)
+export const formatIBAN = (value: string): string => {
+  // Remove all non-alphanumeric
+  const clean = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  
+  // If starts with MN, extract digits after MN
+  let digits: string;
+  if (clean.startsWith('MN')) {
+    digits = clean.slice(2).replace(/\D/g, '');
+  } else {
+    digits = clean.replace(/\D/g, '');
+  }
+  
+  // Limit to 18 digits
+  const limitedDigits = digits.slice(0, 18);
+  
+  if (limitedDigits.length === 0) return 'MN ';
+  
+  let formatted = 'MN ';
+  if (limitedDigits.length > 0) formatted += limitedDigits.slice(0, 2);
+  if (limitedDigits.length > 2) formatted += ' ' + limitedDigits.slice(2, 6);
+  if (limitedDigits.length > 6) formatted += ' ' + limitedDigits.slice(6, 8);
+  if (limitedDigits.length > 8) formatted += ' ' + limitedDigits.slice(8, 18);
+  
+  return formatted;
+};
+
+// Mongolian phone: +976 XXXX XXXX (8 digits after +976)
+export const formatMongolianPhone = (value: string): string => {
+  // Extract only digits
+  const digits = value.replace(/\D/g, '');
+  // Remove leading 976 if present
+  const cleanDigits = digits.startsWith('976') ? digits.slice(3) : digits;
+  // Limit to 8 digits
+  const limitedDigits = cleanDigits.slice(0, 8);
+  
+  if (limitedDigits.length === 0) return '+976 ';
+  
+  let formatted = '+976 ';
+  if (limitedDigits.length > 0) formatted += limitedDigits.slice(0, 4);
+  if (limitedDigits.length > 4) formatted += ' ' + limitedDigits.slice(4, 8);
+  
+  return formatted;
+};
+
+// Get raw value for submission (remove formatting)
+export const getRawRussianPhone = (formatted: string): string => {
+  const digits = formatted.replace(/\D/g, '');
+  return digits.startsWith('7') ? '+' + digits : '+7' + digits;
+};
+
+export const getRawCardNumber = (formatted: string): string => {
+  return formatted.replace(/\s/g, '');
+};
+
+export const getRawIBAN = (formatted: string): string => {
+  return formatted.replace(/\s/g, '');
+};
+
+export const getRawMongolianPhone = (formatted: string): string => {
+  const digits = formatted.replace(/\D/g, '');
+  return digits.startsWith('976') ? '+' + digits : '+976' + digits;
+};
 
 interface Props {
   onRegistered: () => void;
@@ -84,7 +176,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
 
   // Get actual bank names (handle "Other" option)
   const getActualRubBankName = () => {
-    if (rubBankName === "Другой") return rubBankNameOther.trim();
+    if (rubBankName === "Бусад") return rubBankNameOther.trim();
     return rubBankName;
   };
 
@@ -94,8 +186,8 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
   };
 
   const isFormValid = () => {
-    // Personal info required
-    if (!lastName.trim() || !firstName.trim()) return false;
+    // Personal info required (including email)
+    if (!lastName.trim() || !firstName.trim() || !email.trim()) return false;
     
     // Terms agreement required
     if (!agreedTerms) return false;
@@ -216,7 +308,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
 
             <div>
               <label className="text-xs text-slate-500 flex items-center gap-1">
-                <Mail className="w-3 h-3" /> Имэйл хаяг
+                <Mail className="w-3 h-3" /> Имэйл хаяг <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
@@ -224,6 +316,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
                 placeholder="example@email.com"
+                required
               />
             </div>
           </div>
@@ -264,7 +357,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                       <option key={bank} value={bank}>{bank}</option>
                     ))}
                   </select>
-                  {rubBankName === "Другой" && (
+                  {rubBankName === "Бусад" && (
                     <input
                       type="text"
                       value={rubBankNameOther}
@@ -280,9 +373,9 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                   <input
                     type="tel"
                     value={rubPhoneSbp}
-                    onChange={(e) => setRubPhoneSbp(e.target.value)}
+                    onChange={(e) => setRubPhoneSbp(formatRussianPhone(e.target.value))}
                     className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
-                    placeholder="+7 900 123 4567"
+                    placeholder="+7 XXX XXX XX XX"
                   />
                 </div>
 
@@ -291,9 +384,10 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                   <input
                     type="text"
                     value={rubCardNumber}
-                    onChange={(e) => setRubCardNumber(e.target.value)}
+                    onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))}
                     className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
-                    placeholder="2200 1234 5678 9012"
+                    placeholder="XXXX XXXX XXXX XXXX"
+                    maxLength={19}
                   />
                 </div>
 
@@ -346,9 +440,9 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
               <input
                 type="text"
                 value={mntAccountNumber}
-                onChange={(e) => setMntAccountNumber(e.target.value)}
+                onChange={(e) => setMntAccountNumber(formatIBAN(e.target.value))}
                 className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
-                placeholder="MN 00000 000 5001234567"
+                placeholder="MN XX XXXX XX XXXXXXXXXX"
               />
             </div>
 
@@ -368,9 +462,9 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
               <input
                 type="tel"
                 value={mntPhone}
-                onChange={(e) => setMntPhone(e.target.value)}
+                onChange={(e) => setMntPhone(formatMongolianPhone(e.target.value))}
                 className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
-                placeholder="+976 9911 2233"
+                placeholder="+976 XXXX XXXX"
               />
             </div>
           </div>

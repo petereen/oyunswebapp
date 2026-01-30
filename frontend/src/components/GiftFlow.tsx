@@ -35,8 +35,8 @@ interface Props {
 }
 
 // Bank name options
-const RUB_BANKS = ["Tinkoff", "Sber", "Alfa", "VTB", "Raiffeisen", "Газпромбанк", "Открытие", "Россельхозбанк", "Другой"];
-const MNT_BANKS = ["Хаан банк", "Голомт банк", "Хас банк", "Төрийн банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Капитрон банк", "М банк", "Бусад"];
+const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
+const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
 
 export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   // Steps:
@@ -277,7 +277,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           </div>
           <h2 className="text-2xl font-bold text-green-700 mb-2">Бэлэг амжилттай илгээгдлээ!</h2>
           <p className="text-slate-600 mb-4">
-            Таны бэлэг хүлээн авагч руу илгээгдлээ. Тэд банкны мэдээллээ баталгаажуулсны дараа мөнгө шилжүүлэгдэнэ.
+            Таны бэлэг хэрэглэгч рүү илгээгдлээ. Тухайн хэрэглэгч банкны мэдээллээ баталгаажуулсны дараа мөнгө шилжих болно.
           </p>
           <div className="bg-slate-100 rounded-lg p-3 mb-6">
             <div className="text-xs text-slate-500">Invoice ID</div>
@@ -344,11 +344,11 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                   <ChevronLeft className="w-6 h-6 text-ocean-600" />
                 </button>
 
-                <div className="w-64 h-40 relative overflow-hidden rounded-xl shadow-lg">
+                <div className="w-full max-w-[320px] relative overflow-hidden rounded-xl shadow-lg" style={{ aspectRatio: '1280/853' }}>
                   <img
                     src={giftCards[selectedCardIndex]?.image_url}
                     alt={giftCards[selectedCardIndex]?.name || "Gift card"}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 </div>
 
@@ -726,7 +726,8 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             <img
               src={giftCards[selectedCardIndex]?.image_url}
               alt="Gift card"
-              className="w-48 h-28 object-cover rounded-xl mx-auto shadow-lg"
+              className="w-full max-w-[240px] mx-auto rounded-xl shadow-lg"
+              style={{ aspectRatio: '1280/853' }}
             />
           </div>
 

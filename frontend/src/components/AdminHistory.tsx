@@ -190,8 +190,8 @@ export function AdminHistory() {
 
                 {/* Amount & Direction */}
                 <div className="text-right">
-                  <div className={`text-sm font-semibold ${item.currency_from === "RUB" ? "text-green-600" : "text-blue-600"}`}>
-                    {item.currency_from === "RUB" ? "АВАХ" : "ЗАРАХ"}
+                  <div className={`text-sm font-semibold ${item.currency_from === "RUB" ? "text-green-600" : "text-orange-600"}`}>
+                    {item.currency_from === "RUB" ? "ТӨГРӨГ АВАХ" : "РУБЛЬ АВАХ"}
                   </div>
                   <div className="text-lg font-bold">
                     {formatAmount(item.amount, item.currency_from)}

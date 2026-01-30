@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
 import { createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode } from "../api";
+import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 
 interface Props {
   initData: string;
@@ -896,17 +897,18 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <label className="text-xs text-slate-500">Картын дугаар</label>
                   <input
                     value={rubCardNumber}
-                    onChange={(e) => setRubCardNumber(e.target.value)}
+                    onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))}
                     className="rounded-xl border border-ocean-100 p-3"
-                    placeholder="2200 1234 5678 9012"
+                    placeholder="XXXX XXXX XXXX XXXX"
+                    maxLength={19}
                   />
 
                   <label className="text-xs text-slate-500">Утасны дугаар (СБП)</label>
                   <input
                     value={rubPhone}
-                    onChange={(e) => setRubPhone(e.target.value)}
+                    onChange={(e) => setRubPhone(formatRussianPhone(e.target.value))}
                     className="rounded-xl border border-ocean-100 p-3"
-                    placeholder="+7 900 123 4567"
+                    placeholder="+7 XXX XXX XX XX"
                   />
 
                   <label className="text-xs text-slate-500">Данс эзэмшигчийн нэр</label>
@@ -933,9 +935,9 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <label className="text-xs text-slate-500">Дансны дугаар(IBAN)</label>
                   <input
                     value={mntIban}
-                    onChange={(e) => setMntIban(e.target.value)}
+                    onChange={(e) => setMntIban(formatIBAN(e.target.value))}
                     className="rounded-xl border border-ocean-100 p-3"
-                    placeholder="MN 00000 000 5001234567"
+                    placeholder="MN XX XXXX XX XXXXXXXXXX"
                   />
 
                   <label className="text-xs text-slate-500">Данс эзэмшигчийн нэр</label>

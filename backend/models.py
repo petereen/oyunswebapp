@@ -464,3 +464,11 @@ class AdminGiftsResponse(BaseModel):
 
 class GiftRejectRequest(BaseModel):
     comment: str
+
+
+class GiftPreapproveRequest(BaseModel):
+    admin_bill_urls: Optional[list[str]] = None  # Optional bill photos during preapproval
+
+
+class GiftFinalizeRequest(BaseModel):
+    admin_bill_urls: Optional[list[str]] = None  # Bill photos when finalizing

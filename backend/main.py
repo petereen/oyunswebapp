@@ -67,6 +67,8 @@ from models import (
     AdminGift,
     AdminGiftsResponse,
     GiftRejectRequest,
+    GiftPreapproveRequest,
+    GiftFinalizeRequest,
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
@@ -728,6 +730,7 @@ async def register_user(
         "bank_mnt": bank_mnt,
         "passport_storage_url": payload.passport_storage_url,
         "ready_for_verification": True,
+        "agreed_terms": True,  # User agreed to terms during registration
         "updated_at": now,
     }
     
@@ -1109,7 +1112,7 @@ async def admin_action(
                 except Exception as e:
                     logger.error(f"Failed to create compensation promo code: {e}")
         elif payload.status == "rejected":
-            rejection_msg = f"❌ Таны <b>{payload.invoice}</b> дугаартай гүйлгээг татгалзлаа. Та алдаа гарсан гэж үзвэл @Oyuns_support хаягаар холбогдоно уу."
+            rejection_msg = f"❌ Таны <b>{payload.invoice}</b> дугаартай гүйлгээг татгалзлаа. Та алдаа гарсан гэж үзвэл @OYUNS_Finance хаягаар холбогдоно уу."
             if payload.rejection_comment:
                 rejection_msg += f"\n\nШалтгаан: {payload.rejection_comment}"
             send_user_notification(user_id=int(user_id), text=rejection_msg)
@@ -2286,7 +2289,7 @@ async def create_gift(
                 message_text += f"\n💬 Мессеж:\n<i>\"{payload.message}\"</i>\n"
             
             message_text += (
-                f"\n✨ Бэлгээ хүлээн авахын тулд апп-д орж, банкны мэдээллээ оруулна уу!"
+                f"\n✨ Бэлгээ хүлээн авахын тулд та зөвхөн апп-руу орж банкны мэдээллээ оруулна уу!"
             )
             
             # Create inline keyboard with app link
@@ -2481,12 +2484,171 @@ async def get_admin_gifts(
     return AdminGiftsResponse(gifts=gifts)
 
 
+@app.post("/api/admin/gift/{gift_id}/preapprove")
+async def preapprove_gift(
+    gift_id: str,
+    payload: GiftPreapproveRequest = None,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Admin preapproves a gift transaction - shows bank details and allows attaching bills"""
+    client = get_supabase()
+    settings = get_settings()
+    
+    # Check if user is admin
+    if user.id not in settings.admin_ids:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Get gift
+    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Gift not found")
+    
+    gift = res.data
+    
+    if gift.get("status") != "pending_admin":
+        raise HTTPException(status_code=400, detail="Gift cannot be preapproved")
+    
+    # Update gift status to preapproved
+    import json
+    update_data = {
+        "status": "preapproved",
+        "preapproved_at": datetime.now(timezone.utc).isoformat(),
+        "preapproved_by_admin": user.id,
+    }
+    
+    # Store bill URLs if provided
+    if payload and payload.admin_bill_urls:
+        update_data["admin_bill_url"] = json.dumps(payload.admin_bill_urls)
+    
+    client.table("gifts").update(update_data).eq("id", gift_id).execute()
+    
+    # Get sender and recipient names
+    sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
+    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip() if sender_res.data else "хэрэглэгч"
+    
+    recipient_res = client.table("users").select("first_name, last_name").eq("id", gift.get("recipient_user_id")).single().execute()
+    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip() if recipient_res.data else "хэрэглэгч"
+    
+    # Notify sender about preapproval
+    sender_message = (
+        f"⏳ <b>Таны бэлгийн хүсэлт баталгаажлаа!</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"🎯 Хүлээн авагч: {recipient_name}\n"
+        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}\n\n"
+        f"⏳ Админ мөнгө шилжүүлж байна. Шилжүүлэлт дууссаны дараа танд мэдэгдэл илгээнэ."
+    )
+    send_user_notification(gift.get("sender_user_id"), sender_message)
+    
+    # Notify recipient about preapproval
+    recipient_message = (
+        f"⏳ <b>{sender_name} хэрэглэгчээс илгээсэн бэлэг баталгаажлаа!</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}\n"
+        f"🏦 Шилжүүлэх данс: {gift.get('recipient_bank_details')}\n\n"
+        f"⏳ Админ таны данс руу мөнгө шилжүүлж байна. Удахгүй дуусна."
+    )
+    send_user_notification(gift.get("recipient_user_id"), recipient_message)
+    
+    return {"ok": True, "status": "preapproved"}
+
+
+@app.post("/api/admin/gift/{gift_id}/finalize")
+async def finalize_gift(
+    gift_id: str,
+    payload: GiftFinalizeRequest = None,
+    user=Depends(get_jwt_authenticated_user)
+):
+    """Admin finalizes a preapproved gift transaction with bill photos"""
+    client = get_supabase()
+    settings = get_settings()
+    
+    # Check if user is admin
+    if user.id not in settings.admin_ids:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Get gift
+    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Gift not found")
+    
+    gift = res.data
+    
+    if gift.get("status") != "preapproved":
+        raise HTTPException(status_code=400, detail="Gift must be preapproved first")
+    
+    # Update gift status to completed
+    import json
+    update_data = {
+        "status": "completed",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "completed_by_admin": user.id,
+    }
+    
+    # Store bill URLs if provided (merge with existing)
+    existing_bills = []
+    if gift.get("admin_bill_url"):
+        try:
+            parsed = json.loads(gift.get("admin_bill_url"))
+            if isinstance(parsed, list):
+                existing_bills = parsed
+            else:
+                existing_bills = [gift.get("admin_bill_url")]
+        except:
+            existing_bills = [gift.get("admin_bill_url")]
+    
+    if payload and payload.admin_bill_urls:
+        all_bills = existing_bills + payload.admin_bill_urls
+        update_data["admin_bill_url"] = json.dumps(all_bills)
+    
+    client.table("gifts").update(update_data).eq("id", gift_id).execute()
+    
+    # Get sender and recipient names
+    sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
+    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}".strip() if sender_res.data else "хэрэглэгч"
+    
+    recipient_res = client.table("users").select("first_name, last_name").eq("id", gift.get("recipient_user_id")).single().execute()
+    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip() if recipient_res.data else "хэрэглэгч"
+    
+    # Get all bill URLs for sending
+    all_bill_urls = existing_bills
+    if payload and payload.admin_bill_urls:
+        all_bill_urls = existing_bills + payload.admin_bill_urls
+    
+    # Notify sender with photos if available
+    sender_message = (
+        f"✅ <b>Таны бэлэг {recipient_name} хэрэглэгчид амжилттай илгээгдлээ!</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}\n\n"
+        f"Баярлалаа! 🎉"
+    )
+    if all_bill_urls:
+        send_user_photos(gift.get("sender_user_id"), all_bill_urls, sender_message)
+    else:
+        send_user_notification(gift.get("sender_user_id"), sender_message)
+    
+    # Notify recipient with photos if available
+    recipient_message = (
+        f"✅ <b>{sender_name} хэрэглэгчээс илгээсэн бэлэг таны дансанд амжилттай шилжлээ!</b>\n\n"
+        f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
+        f"🏦 Шилжүүлсэн данс: {gift.get('recipient_bank_details')}\n\n"
+        f"Сайхан өдөр өнгөрүүлээрэй! 🎉"
+    )
+    if all_bill_urls:
+        send_user_photos(gift.get("recipient_user_id"), all_bill_urls, recipient_message)
+    else:
+        send_user_notification(gift.get("recipient_user_id"), recipient_message)
+    
+    return {"ok": True, "status": "completed"}
+
+
 @app.post("/api/admin/gift/{gift_id}/approve")
 async def approve_gift(
     gift_id: str,
     user=Depends(get_jwt_authenticated_user)
 ):
-    """Admin approves a gift transaction"""
+    """Admin approves a gift transaction (legacy - use preapprove + finalize for full workflow)"""
     client = get_supabase()
     settings = get_settings()
     
@@ -2512,9 +2674,17 @@ async def approve_gift(
         "completed_by_admin": user.id,
     }).eq("id", gift_id).execute()
     
+    # Get recipient name for notification
+    recipient_res = client.table("users").select("first_name, last_name").eq("id", gift.get("recipient_user_id")).single().execute()
+    recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}" if recipient_res.data else "хэрэглэгч"
+    
+    # Get sender name for notification
+    sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
+    sender_name = f"{sender_res.data.get('first_name', '')} {sender_res.data.get('last_name', '')}" if sender_res.data else "хэрэглэгч"
+    
     # Notify sender
     sender_message = (
-        f"✅ <b>Таны илгээсэн бэлэг амжилттай хүргэгдлээ!</b>\n\n"
+        f"✅ <b>Таны бэлэг {recipient_name.strip()} хэрэглэгчид амжилттай илгээгдлээ!</b>\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
         f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}"
     )
@@ -2522,7 +2692,7 @@ async def approve_gift(
     
     # Notify recipient
     recipient_message = (
-        f"✅ <b>Бэлгийн мөнгө таны дансанд шилжүүлэгдлээ!</b>\n\n"
+        f"✅ <b>{sender_name.strip()} хэрэглэгчээс илгээсэн бэлэг таны дансанд амжилттай шилжлээ!</b>\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
         f"🏦 Шилжүүлсэн данс: {gift.get('recipient_bank_details')}"
     )

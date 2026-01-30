@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { X, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp, Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save } from "lucide-react";
 import { fetchMe, fetchUserPromoCodes, updateBankInfo, UserProfile, UserPromoCode, UpdateBankInfoInput } from "../api";
+import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 
 const TERMS_URL = "https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
 
@@ -86,7 +87,7 @@ export function ProfileModal({ userId, onClose }: Props) {
       
       // Check if bank name is in the predefined list or "Other"
       if (rubBank.bankName && !RUB_BANKS.includes(rubBank.bankName)) {
-        setRubBankName("Другой");
+        setRubBankName("Бусад");
         setRubBankNameOther(rubBank.bankName);
       } else {
         setRubBankName(rubBank.bankName);
@@ -111,7 +112,7 @@ export function ProfileModal({ userId, onClose }: Props) {
 
   // Get actual bank names (handle "Other" option)
   const getActualRubBankName = () => {
-    if (rubBankName === "Другой") return rubBankNameOther.trim();
+    if (rubBankName === "Бусад") return rubBankNameOther.trim();
     return rubBankName;
   };
 
@@ -232,7 +233,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                           <option key={bank} value={bank}>{bank}</option>
                         ))}
                       </select>
-                      {rubBankName === "Другой" && (
+                      {rubBankName === "Бусад" && (
                         <input
                           type="text"
                           value={rubBankNameOther}
@@ -244,16 +245,17 @@ export function ProfileModal({ userId, onClose }: Props) {
                       <input
                         type="tel"
                         value={rubPhoneSbp}
-                        onChange={(e) => setRubPhoneSbp(e.target.value)}
+                        onChange={(e) => setRubPhoneSbp(formatRussianPhone(e.target.value))}
                         className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                        placeholder="СБП утас"
+                        placeholder="+7 XXX XXX XX XX"
                       />
                       <input
                         type="text"
                         value={rubCardNumber}
-                        onChange={(e) => setRubCardNumber(e.target.value)}
+                        onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))}
                         className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                        placeholder="Картын дугаар"
+                        placeholder="XXXX XXXX XXXX XXXX"
+                        maxLength={19}
                       />
                       <input
                         type="text"
@@ -294,9 +296,9 @@ export function ProfileModal({ userId, onClose }: Props) {
                   <input
                     type="text"
                     value={mntAccountNumber}
-                    onChange={(e) => setMntAccountNumber(e.target.value)}
+                    onChange={(e) => setMntAccountNumber(formatIBAN(e.target.value))}
                     className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
-                    placeholder="Дансны дугаар"
+                    placeholder="MN XX XXXX XX XXXXXXXXXX"
                   />
                   <input
                     type="text"

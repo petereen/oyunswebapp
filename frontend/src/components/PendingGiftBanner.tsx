@@ -11,14 +11,15 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { fetchPendingGifts, confirmGiftReceipt, PendingGift } from "../api";
+import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 
 interface Props {
   onGiftConfirmed?: () => void;
 }
 
 // Bank name options
-const RUB_BANKS = ["Tinkoff", "Sber", "Alfa", "VTB", "Raiffeisen", "Газпромбанк", "Открытие", "Россельхозбанк", "Другой"];
-const MNT_BANKS = ["Хаан банк", "Голомт банк", "Хас банк", "Төрийн банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Капитрон банк", "М банк", "Бусад"];
+const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
+const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
 
 export function PendingGiftBanner({ onGiftConfirmed }: Props) {
   const [pendingGifts, setPendingGifts] = useState<PendingGift[]>([]);
@@ -35,7 +36,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
   const [ownerName, setOwnerName] = useState("");
 
   // Determine if custom bank input is needed
-  const isCustomBank = bankName === "Другой" || bankName === "Бусад";
+  const isCustomBank = bankName === "Бусад" || bankName === "Бусад";
 
   // Load pending gifts
   useEffect(() => {
@@ -201,7 +202,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                         value={bankName}
                         onChange={(e) => {
                           setBankName(e.target.value);
-                          if (e.target.value !== "Другой" && e.target.value !== "Бусад") {
+                          if (e.target.value !== "Бусад" && e.target.value !== "Бусад") {
                             setCustomBankName("");
                           }
                         }}
@@ -236,9 +237,19 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                       <input
                         type="text"
                         value={accountNumber}
-                        onChange={(e) => setAccountNumber(e.target.value)}
+                        onChange={(e) => {
+                          // Format based on currency
+                          if (gift.currency_to === "MNT") {
+                            setAccountNumber(formatIBAN(e.target.value));
+                          } else if (gift.currency_to === "RUB") {
+                            setAccountNumber(formatCardNumber(e.target.value));
+                          } else {
+                            setAccountNumber(e.target.value);
+                          }
+                        }}
                         className="w-full rounded-lg border border-ocean-200 p-3 text-sm"
-                        placeholder="1234567890"
+                        placeholder={gift.currency_to === "MNT" ? "MN XX XXXX XX XXXXXXXXXX" : "XXXX XXXX XXXX XXXX"}
+                        maxLength={gift.currency_to === "RUB" ? 19 : undefined}
                       />
                     </div>
 

@@ -68,7 +68,7 @@ export default function App() {
 
       {/* Support Chat Button */}
       <a
-        href="https://t.me/Oyuns_support"
+        href="https://t.me/oyuns_finance"
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-ocean-600 text-white rounded-full shadow-lg hover:bg-ocean-700 transition-all hover:scale-105"
