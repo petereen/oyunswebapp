@@ -18,6 +18,7 @@ import {
   UserCheck,
   Settings,
   Power,
+  AlertCircle,
 } from "lucide-react";
 import { 
   adminAction, 
@@ -50,6 +51,8 @@ interface InboxItem {
   admin_bill_url?: string;
   rejection_comment?: string;
   direction?: string;
+  bank_mismatch?: boolean;
+  saved_bank_info?: string;
 }
 
 type SortOption = "oldest" | "newest" | "amount_asc" | "amount_desc";
@@ -863,6 +866,17 @@ export function AdminInbox() {
                   <div className="p-3 bg-white rounded-lg border border-ocean-200">
                     <div className="text-xs text-slate-500 mb-2">Хэрэглэгчийн банкны мэдээлэл:</div>
                     
+                    {/* Bank Mismatch Warning */}
+                    {item.bank_mismatch && (
+                      <div className="mb-3 p-2 bg-amber-50 border border-amber-300 rounded-lg">
+                        <div className="flex items-center gap-2 text-amber-700 font-medium text-sm">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          <span>⚠️ Хэрэглэгч өөр данс ашигласан</span>
+                        </div>
+
+                      </div>
+                    )}
+                    
                     {parsed.bank && (
                       <div className="flex items-center justify-between py-2 border-b border-slate-100">
                         <div className="text-xs text-slate-500">Банк</div>
@@ -1129,6 +1143,21 @@ export function AdminInbox() {
             <div className="mb-4 p-3 bg-white rounded-lg border border-ocean-200">
               <div className="text-xs text-slate-500 mb-2">Хэрэглэгчийн данс руу шилжүүлэх дүн:</div>
               
+              {/* Bank Mismatch Warning */}
+              {confirmModal.bank_mismatch && (
+                <div className="mb-3 p-2 bg-amber-50 border border-amber-300 rounded-lg">
+                  <div className="flex items-center gap-2 text-amber-700 font-medium text-sm">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>⚠️ Өөр данс ашиглав!</span>
+                  </div>
+                  {confirmModal.saved_bank_info && (
+                    <div className="mt-1 text-xs text-amber-600">
+                      Хадгалсан данс: {confirmModal.saved_bank_info}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Bank Name */}
               {parsed.bank && (
                 <div className="flex items-center justify-between py-1.5 border-b border-slate-100">

@@ -1099,15 +1099,28 @@ async def admin_action(
     if payload.status == "completed":
         update_payload["completed_at"] = now.isoformat()
         
-        # Calculate completion duration from timestamp (when request was created)
-        # Fallback to receipt_submitted_at if timestamp not available
-        request_time_str = trx.get("timestamp") or trx.get("receipt_submitted_at")
-        if request_time_str:
+        # Calculate completion duration from receipt_submitted_at (when user submitted receipt)
+        # This measures how long it took admin to process after user submitted
+        receipt_submitted_str = trx.get("receipt_submitted_at")
+        if receipt_submitted_str:
             try:
-                request_time = datetime.fromisoformat(request_time_str.replace('Z', '+00:00'))
-                duration_minutes = (now - request_time).total_seconds() / 60
+                from zoneinfo import ZoneInfo
+                moscow_tz = ZoneInfo("Europe/Moscow")
+                
+                # Parse the receipt_submitted_at timestamp
+                receipt_time = datetime.fromisoformat(receipt_submitted_str.replace('Z', '+00:00'))
+                
+                # If receipt_time is naive (no timezone), assume it's already in Moscow time
+                if receipt_time.tzinfo is None:
+                    receipt_time = receipt_time.replace(tzinfo=moscow_tz)
+                
+                # Get current time in Moscow timezone
+                now_moscow = datetime.now(moscow_tz)
+                
+                # Calculate duration in minutes
+                duration_minutes = (now_moscow - receipt_time).total_seconds() / 60
                 update_payload["completion_duration_minutes"] = round(duration_minutes, 2)
-                logger.info(f"Completion duration: {duration_minutes:.2f} minutes (from timestamp: {request_time_str})")
+                logger.info(f"Completion duration: {duration_minutes:.2f} minutes (from receipt_submitted_at: {receipt_submitted_str})")
             except Exception as e:
                 logger.warning(f"Could not calculate completion duration: {e}")
 
@@ -1240,10 +1253,65 @@ async def admin_inbox(admin=Depends(require_admin)):
         .limit(100)
         .execute()
     )
+    
+    # Get all unique user IDs to fetch their saved bank info
+    user_ids = list(set(row.get("user_id") for row in res.data or [] if row.get("user_id")))
+    
+    # Fetch saved bank info for all users in one query
+    user_bank_info = {}
+    if user_ids:
+        users_res = client.table("users").select("id,bank_rub,bank_mnt").in_("id", user_ids).execute()
+        for user in users_res.data or []:
+            user_bank_info[user.get("id")] = {
+                "bank_rub": user.get("bank_rub") or "",
+                "bank_mnt": user.get("bank_mnt") or "",
+            }
+    
     items = []
     for row in res.data or []:
         # Determine direction from currency pair
         direction = "buy" if row.get("currency_from") == "RUB" else "sell"
+        
+        # Check for bank mismatch
+        user_id = row.get("user_id")
+        bank_details = row.get("bank_details") or ""
+        bank_mismatch = False
+        saved_bank_info = None
+        
+        if user_id and user_id in user_bank_info:
+            user_banks = user_bank_info[user_id]
+            # For buy (RUB->MNT), user receives MNT, so check bank_mnt
+            # For sell (MNT->RUB), user receives RUB, so check bank_rub
+            if direction == "buy":
+                saved_bank = user_banks.get("bank_mnt", "")
+            else:
+                saved_bank = user_banks.get("bank_rub", "")
+            
+            saved_bank_info = saved_bank
+            
+            # Compare: normalize both strings for comparison
+            if saved_bank and bank_details:
+                # Normalize: lowercase, remove extra spaces
+                saved_normalized = saved_bank.lower().strip()
+                used_normalized = bank_details.lower().strip()
+                
+                # Check if the used bank details differ from saved
+                # They match if one contains the other or they're similar
+                if saved_normalized and used_normalized:
+                    # If saved bank info exists and used bank details don't match
+                    if saved_normalized != used_normalized:
+                        # Check if key parts match (bank name, account number)
+                        saved_parts = [p.strip() for p in saved_normalized.split(',')]
+                        used_parts = [p.strip() for p in used_normalized.split(',')]
+                        
+                        # Consider mismatch if account numbers (part 1 for MNT, part 2/3 for RUB) differ
+                        if len(saved_parts) >= 2 and len(used_parts) >= 2:
+                            # Check account number match
+                            if saved_parts[1] != used_parts[1]:
+                                bank_mismatch = True
+                        else:
+                            bank_mismatch = True
+        
         items.append(AdminInboxItem(
             invoice=row.get("invoice"),
             user_id=row.get("user_id"),
@@ -1259,6 +1327,8 @@ async def admin_inbox(admin=Depends(require_admin)):
             admin_bill_url=row.get("admin_bill_url"),
             rejection_comment=row.get("rejection_comment"),
             direction=direction,
+            bank_mismatch=bank_mismatch,
+            saved_bank_info=saved_bank_info,
         ))
     return AdminInboxResponse(items=items)
 

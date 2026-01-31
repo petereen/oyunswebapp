@@ -127,6 +127,8 @@ class AdminInboxItem(BaseModel):
     admin_bill_url: Optional[str] = None
     rejection_comment: Optional[str] = None
     direction: Optional[str] = None
+    bank_mismatch: bool = False  # True if user used different bank account than saved
+    saved_bank_info: Optional[str] = None  # User's saved bank info for comparison
 
 
 class AdminInboxResponse(BaseModel):
