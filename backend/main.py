@@ -1415,8 +1415,8 @@ async def admin_kyc_action(
         
         # Generate one-time welcome promo code ONLY if user has Russian bank info filled
         promo_code = None
-        if has_russian_bank:
-            try:
+        try:
+            if has_russian_bank:
                 import secrets
                 import string
                 # Generate unique promo code
@@ -1432,11 +1432,11 @@ async def admin_kyc_action(
                 }
                 client.table("promo_codes").insert(promo_payload).execute()
                 logger.info(f"Generated welcome promo code {promo_code} for user {payload.user_id} (has Russian bank info)")
-            except Exception as promo_err:
-                logger.error(f"Failed to generate promo code for user {payload.user_id}: {promo_err}")
-                promo_code = None
-        else:
-            logger.info(f"No promo code generated for user {payload.user_id} - missing Russian bank info")
+            else:
+                logger.info(f"No promo code generated for user {payload.user_id} - missing Russian bank info")
+        except Exception as promo_err:
+            logger.error(f"Promo code logic error for user {payload.user_id}: {promo_err}")
+            promo_code = None
         
         # Notify user via Telegram with webapp button
         promo_text = ""
