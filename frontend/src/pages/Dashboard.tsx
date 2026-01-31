@@ -80,7 +80,8 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
     return parts[3]?.trim() || "";
   };
   const mntPhone = getMntPhone(userProfile?.bank_mnt);
-  const missingPhoneMnt = isVerified && !mntPhone;
+  // Phone in bank_mnt is required for ALL users (not just verified)
+  const missingPhoneMnt = !mntPhone;
   const missingRequiredInfo = missingEmail || missingPhoneMnt;
 
   // State to show registration modal manually

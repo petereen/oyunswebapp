@@ -1397,13 +1397,14 @@ async def admin_kyc_action(
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz).isoformat()
     
-    # Fetch user info first
-    user_res = client.table("users").select("first_name,last_name").eq("id", payload.user_id).limit(1).execute()
+    # Fetch user info first (including bank_rub to check if Russian bank info is filled)
+    user_res = client.table("users").select("first_name,last_name,bank_rub").eq("id", payload.user_id).limit(1).execute()
     if not user_res.data:
         raise HTTPException(status_code=404, detail="User not found")
     
     user_info = user_res.data[0]
     user_name = f"{user_info.get('last_name', '')} {user_info.get('first_name', '')}".strip()
+    has_russian_bank = bool(user_info.get('bank_rub', '').strip())
     
     if payload.action == "approve":
         # Update user to verified
@@ -1412,27 +1413,30 @@ async def admin_kyc_action(
             "updated_at": now,
         }).eq("id", payload.user_id).execute()
         
-        # Generate one-time promo code for newly verified user
+        # Generate one-time welcome promo code ONLY if user has Russian bank info filled
         promo_code = None
-        try:
-            import secrets
-            import string
-            # Generate unique promo code
-            promo_code = "WELCOME" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-            promo_payload = {
-                "code": promo_code,
-                "discount": 1,  # 1 MNT discount
-                "active": True,
-                "one_time": True,
-                "user_id": payload.user_id,
-                "source": "verification",
-                "created_at": now,
-            }
-            client.table("promo_codes").insert(promo_payload).execute()
-            logger.info(f"Generated verification promo code {promo_code} for user {payload.user_id}")
-        except Exception as promo_err:
-            logger.error(f"Failed to generate promo code for user {payload.user_id}: {promo_err}")
-            promo_code = None
+        if has_russian_bank:
+            try:
+                import secrets
+                import string
+                # Generate unique promo code
+                promo_code = "WELCOME" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+                promo_payload = {
+                    "code": promo_code,
+                    "discount": 0.2,  # 0.2 MNT discount
+                    "active": True,
+                    "one_time": True,
+                    "user_id": payload.user_id,
+                    "source": "verification",
+                    "created_at": now,
+                }
+                client.table("promo_codes").insert(promo_payload).execute()
+                logger.info(f"Generated welcome promo code {promo_code} for user {payload.user_id} (has Russian bank info)")
+            except Exception as promo_err:
+                logger.error(f"Failed to generate promo code for user {payload.user_id}: {promo_err}")
+                promo_code = None
+        else:
+            logger.info(f"No promo code generated for user {payload.user_id} - missing Russian bank info")
         
         # Notify user via Telegram with webapp button
         promo_text = ""

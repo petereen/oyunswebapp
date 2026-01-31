@@ -230,9 +230,9 @@ def clear_state(user_id):
 
 def ask_terms_agreement(chat_id):
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📄 Хэрэглэгчийн гэрээ", url="https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/"))
+    markup.add(InlineKeyboardButton("📄 Хэрэглэгчийн гэрээ", url="https://oyunsfinance.com/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/"))
     markup.add(InlineKeyboardButton("✅ Зөвшөөрч байна", callback_data="accept_terms"))
-    bot.send_message(chat_id, "📜 Сайн байна уу, та OYUNS Finance бот ашиглахын өмнө [хэрэглэгчийн гэрээтэй](https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/) уншиж танилцана уу. Хэрвээ зөвшөөрч байвал дараах товчыг дарж үргэлжлүүлээрэй.", parse_mode="Markdown", reply_markup=markup)
+    bot.send_message(chat_id, "📜 Сайн байна уу, та OYUNS Finance бот ашиглахын өмнө [хэрэглэгчийн гэрээтэй](https://oyunsfinance.com/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/) уншиж танилцана уу. Хэрвээ зөвшөөрч байвал дараах товчыг дарж үргэлжлүүлээрэй.", parse_mode="Markdown", reply_markup=markup)
 def has_agreed_terms(user_id):
     response = supabase.table("users").select("agreed_terms").eq("id", user_id).execute()
     return response.data and response.data[0]['agreed_terms'] == True
@@ -262,7 +262,7 @@ def handle_terms_accept(call):
 @bot.message_handler(commands=['geree'])
 def terms_handler(message):
   markup = InlineKeyboardMarkup()
-  markup.add(InlineKeyboardButton("📄 Хэрэглэгчийн гэрээ:", url="https://oyuns.mn/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/"))
+  markup.add(InlineKeyboardButton("📄 Хэрэглэгчийн гэрээ:", url="https://oyunsfinance.com/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/"))
   bot.send_message(message.chat.id, "📄 Та хэрэглэгчийн гэрээг эндээс уншина уу.", reply_markup=markup)
     
 #-------------------GUILGEENII TUUH----------------------
