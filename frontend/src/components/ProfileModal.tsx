@@ -30,12 +30,13 @@ const parseBankRub = (bankStr: string | undefined) => {
 };
 
 const parseBankMnt = (bankStr: string | undefined) => {
-  if (!bankStr) return { bankName: "", accountNumber: "", ownerName: "" };
+  if (!bankStr) return { bankName: "", accountNumber: "", ownerName: "", phone: "" };
   const parts = bankStr.split(",").map(p => p.trim());
   return {
     bankName: parts[0] || "",
     accountNumber: parts[1] || "",
     ownerName: parts[2] || "",
+    phone: parts[3] || "",
   };
 };
 
@@ -58,6 +59,7 @@ export function ProfileModal({ userId, onClose }: Props) {
   const [mntBankNameOther, setMntBankNameOther] = useState("");
   const [mntAccountNumber, setMntAccountNumber] = useState("");
   const [mntOwnerName, setMntOwnerName] = useState("");
+  const [mntPhone, setMntPhone] = useState("");
   
   const { data: profileData, isLoading } = useQuery({
     queryKey: ["me", userId],
@@ -107,6 +109,12 @@ export function ProfileModal({ userId, onClose }: Props) {
       }
       setMntAccountNumber(mntBank.accountNumber);
       setMntOwnerName(mntBank.ownerName);
+      // Format Mongolian phone for display if it exists
+      if (mntBank.phone) {
+        setMntPhone(formatMongolianPhone(mntBank.phone));
+      } else {
+        setMntPhone("");
+      }
     }
   }, [profile, editMode]);
 
@@ -134,6 +142,8 @@ export function ProfileModal({ userId, onClose }: Props) {
         mnt_bank_name: getActualMntBankName(),
         mnt_account_number: mntAccountNumber,
         mnt_owner_name: mntOwnerName,
+        // Store just the 8 digits of Mongolian phone (remove +976 and formatting)
+        mnt_phone: mntPhone.replace(/\D/g, '').replace(/^976/, '').slice(0, 8),
       };
       await updateBankInfo(payload);
       queryClient.invalidateQueries({ queryKey: ["me", userId] });
@@ -306,6 +316,13 @@ export function ProfileModal({ userId, onClose }: Props) {
                     onChange={(e) => setMntOwnerName(e.target.value)}
                     className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
                     placeholder="Эзэмшигчийн нэр"
+                  />
+                  <input
+                    type="tel"
+                    value={mntPhone}
+                    onChange={(e) => setMntPhone(formatMongolianPhone(e.target.value))}
+                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                    placeholder="+976 XXXX XXXX"
                   />
                 </div>
 

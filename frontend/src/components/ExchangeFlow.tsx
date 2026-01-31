@@ -452,9 +452,9 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
                   <div className="text-sm text-amber-800 font-medium mb-2">📋 Бүртгүүлэх заавар:</div>
                   <ol className="text-sm text-amber-700 list-decimal list-inside space-y-1">
-                    <li>Баруун дээр байрлах <span className="font-bold">Профайл</span> товчийг дарна уу</li>
-                    <li>Орос банкны мэдээллээ (СБП утас, карт) оруулна уу</li>
-                    <li>Админы баталгаажуулалт хүлээнэ үү</li>
+                    <li>Баруун дээр байрлах <span className="font-bold">Профайл</span> товчийг дарна</li>
+                    <li>Орос банкны дансны мэдээллээ оруулна</li>
+                    <li>Үүний дараа админы баталгаажуулалт хүлээгээрэй</li>
                   </ol>
                 </div>
               </div>

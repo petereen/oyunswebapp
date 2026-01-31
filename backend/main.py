@@ -1406,7 +1406,7 @@ async def admin_kyc_action(
     user_name = f"{user_info.get('last_name', '')} {user_info.get('first_name', '')}".strip()
     # Safely check if Russian bank info exists (handle None and empty string)
     bank_rub_value = user_info.get('bank_rub') or ''
-    has_russian_bank = bool(bank_rub_value.strip()) and bank_rub_value.strip() != ','*3
+    has_russian_bank = bool(bank_rub_value.strip()) and bank_rub_value.strip() != ',,,'
     
     if payload.action == "approve":
         # Update user to verified
