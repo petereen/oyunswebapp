@@ -433,8 +433,45 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         </button>
       </div>
 
-      {/* Step 0: Direction Selection */}
-      {step === 0 && (
+      {/* Check if user has Russian bank info - show message if not */}
+      {(() => {
+        const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
+        if (!hasRubBank) {
+          return (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+                <CreditCard className="w-8 h-8 text-amber-600" />
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-amber-700 mb-2">
+                  Орос банкны мэдээлэл шаардлагатай
+                </div>
+                <div className="text-sm text-slate-600 mb-4">
+                  Валют солихын тулд та орос банкны мэдээллээ бүртгүүлэх шаардлагатай.
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
+                  <div className="text-sm text-amber-800 font-medium mb-2">📋 Бүртгүүлэх заавар:</div>
+                  <ol className="text-sm text-amber-700 list-decimal list-inside space-y-1">
+                    <li>Баруун дээр байрлах <span className="font-bold">Профайл</span> товчийг дарна уу</li>
+                    <li>Орос банкны мэдээллээ (СБП утас, карт) оруулна уу</li>
+                    <li>Админы баталгаажуулалт хүлээнэ үү</li>
+                  </ol>
+                </div>
+              </div>
+              <button
+                onClick={onBack}
+                className="mt-2 px-6 py-3 bg-ocean-600 text-white rounded-xl font-semibold hover:bg-ocean-700 transition"
+              >
+                Ойлголоо
+              </button>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {/* Step 0: Direction Selection - only show if user has Russian bank info */}
+      {step === 0 && savedBankRub && savedBankRub.trim() && savedBankRub !== ",,," && (
         <div className="flex flex-col gap-4">
           <div className="text-center text-slate-600 mb-2">Валют солих чиглэлээ сонгоно уу</div>
           <button

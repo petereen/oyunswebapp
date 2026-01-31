@@ -235,7 +235,8 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
         mnt_bank_name: getActualMntBankName(),
         mnt_account_number: mntAccountNumber.trim(),
         mnt_owner_name: mntOwnerName.trim(),
-        mnt_phone: mntPhone.trim(),
+        // Store just the 8 digits of Mongolian phone (remove +976 and formatting)
+        mnt_phone: mntPhone.replace(/\D/g, '').replace(/^976/, '').slice(0, 8),
         passport_storage_url: passportUrl,
       };
 

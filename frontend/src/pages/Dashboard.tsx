@@ -320,11 +320,11 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
                         {direction === "buy" ? "RUB → MNT" : "MNT → RUB"} ХАНШ {effectiveRate || "—"}
                       </div>
                     </div>
-                    {/* Disable exchange if no Russian bank info (bank_rub) */}
+                    {/* Exchange button - always clickable for verified users, ExchangeFlow handles Russian bank check */}
                     <button
                       onClick={handleExchangeClick}
-                      disabled={!rate || ratesLoading || !userProfile?.bank_rub || userProfile.bank_rub === ",,,"}
-                      className={`w-full max-w-xs py-4 rounded-xl font-bold text-lg shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed ${!rate || ratesLoading || !userProfile?.bank_rub || userProfile.bank_rub === ",,," ? "bg-slate-300 text-slate-500 cursor-not-allowed" : "bg-ocean-600 text-white shadow-ocean-200 hover:bg-ocean-700"}`}
+                      disabled={!rate || ratesLoading}
+                      className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       ВАЛЮТ СОЛИХ
                     </button>
