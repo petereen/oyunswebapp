@@ -1210,6 +1210,7 @@ async def admin_action(
                     
                     # Notify user about the promo code
                     promo_text = (
+                        f"⏰ Уучлаарай, таны гүйлгээг гүйцэтгэхэд {round(duration_minutes)}+ минутын хугацаа зарцуулагдлаа.\n\n"
                         f"🎁 Танд промокод бэлэглэж байна: <code>{promo_code}</code>\n\n"
                         f"Энэхүү промокодыг дараагийн гүйлгээндээ ашиглаарай! 🙌"
                     )
