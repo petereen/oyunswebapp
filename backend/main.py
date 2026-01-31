@@ -1397,16 +1397,19 @@ async def admin_kyc_action(
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz).isoformat()
     
-    # Fetch user info first (including bank_rub to check if Russian bank info is filled)
-    user_res = client.table("users").select("first_name,last_name,bank_rub").eq("id", payload.user_id).limit(1).execute()
+    # Fetch user info first (including bank_rub and bank_mnt to check if all bank info is filled)
+    user_res = client.table("users").select("first_name,last_name,bank_rub,bank_mnt").eq("id", payload.user_id).limit(1).execute()
     if not user_res.data:
         raise HTTPException(status_code=404, detail="User not found")
     
     user_info = user_res.data[0]
     user_name = f"{user_info.get('last_name', '')} {user_info.get('first_name', '')}".strip()
-    # Safely check if Russian bank info exists (handle None and empty string)
+    # Safely check if BOTH Russian and Mongolian bank info exists (handle None and empty string)
     bank_rub_value = user_info.get('bank_rub') or ''
+    bank_mnt_value = user_info.get('bank_mnt') or ''
     has_russian_bank = bool(bank_rub_value.strip()) and bank_rub_value.strip() != ',,,'
+    has_mongolian_bank = bool(bank_mnt_value.strip()) and bank_mnt_value.strip() != ',,,'
+    has_all_bank_info = has_russian_bank and has_mongolian_bank
     
     if payload.action == "approve":
         # Update user to verified
@@ -1415,27 +1418,27 @@ async def admin_kyc_action(
             "updated_at": now,
         }).eq("id", payload.user_id).execute()
         
-        # Generate one-time welcome promo code ONLY if user has Russian bank info filled
+        # Generate one-time welcome promo code ONLY if user has BOTH bank_rub AND bank_mnt filled
         promo_code = None
         try:
-            if has_russian_bank:
+            if has_all_bank_info:
                 import secrets
                 import string
                 # Generate unique promo code
                 promo_code = "WELCOME" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
                 promo_payload = {
                     "code": promo_code,
+                    "aliases": [],  # Required field in table
                     "discount": 0.2,  # 0.2 MNT discount
                     "active": True,
-                    "one_time": True,
                     "user_id": payload.user_id,
                     "source": "verification",
                     "created_at": now,
                 }
                 client.table("promo_codes").insert(promo_payload).execute()
-                logger.info(f"Generated welcome promo code {promo_code} for user {payload.user_id} (has Russian bank info)")
+                logger.info(f"Generated welcome promo code {promo_code} for user {payload.user_id} (has all bank info)")
             else:
-                logger.info(f"No promo code generated for user {payload.user_id} - missing Russian bank info")
+                logger.info(f"No promo code generated for user {payload.user_id} - missing bank info (RUB: {has_russian_bank}, MNT: {has_mongolian_bank})")
         except Exception as promo_err:
             logger.error(f"Promo code logic error for user {payload.user_id}: {promo_err}")
             promo_code = None
@@ -1444,10 +1447,9 @@ async def admin_kyc_action(
         promo_text = ""
         if promo_code:
             promo_text = (
-                f"\n\n🎁 <b>Бэлэг:</b> Танд зориулсан промокод!\n"
+                f"\n\n🎁 <b>Шинэ хэрэглэгч танд нэг удаа ашиглах промокод бэлэглэж байна</b>\n"
                 f"🎟️ Промокод: <code>{promo_code}</code>\n"
-                f"💰 Хөнгөлөлт: 1 MNT ханшинд нэмэгдэнэ\n"
-                f"📌 Нэг удаа л ашиглах боломжтой."
+                f"📌 Нэг удаагийн гүйлгээнд ашиглах боломжтойг анхаарна уу."
             )
         
         notification_text = (
