@@ -9,6 +9,7 @@ import { ProfileModal } from "../components/ProfileModal";
 import { HistoryModal } from "../components/HistoryModal";
 import { AnalyticsModal } from "../components/AnalyticsModal";
 import { RegistrationModal } from "../components/RegistrationModal";
+import { RequiredInfoModal } from "../components/RequiredInfoModal";
 import { TransactionStatusTracker } from "../components/TransactionStatusTracker";
 import { PendingGiftBanner } from "../components/PendingGiftBanner";
 import { GiftStatusTracker } from "../components/GiftStatusTracker";
@@ -69,14 +70,35 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
   
   // Check if user is waiting for verification
   const pendingVerification = userProfile && userProfile.verified === false && userProfile.ready_for_verification === true;
+  
+  // Check if user is missing required email or Mongolian phone (from bank_mnt 4th part)
+  const missingEmail = isVerified && !userProfile?.email?.trim();
+  // bank_mnt format: "Банк,Данс,Нэр,Утас" - phone is 4th part (index 3)
+  const getMntPhone = (bankMnt: string | undefined) => {
+    if (!bankMnt) return "";
+    const parts = bankMnt.split(",");
+    return parts[3]?.trim() || "";
+  };
+  const mntPhone = getMntPhone(userProfile?.bank_mnt);
+  const missingPhoneMnt = isVerified && !mntPhone;
+  const missingRequiredInfo = missingEmail || missingPhoneMnt;
 
   // State to show registration modal manually
   const [showRegistration, setShowRegistration] = useState(false);
+  
+  // State to show required info modal
+  const [showRequiredInfo, setShowRequiredInfo] = useState(false);
 
   const handleRegistered = () => {
     // Refetch profile to update registration status
     queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
     setShowRegistration(false);
+  };
+  
+  const handleRequiredInfoSaved = () => {
+    // Refetch profile to update info
+    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    setShowRequiredInfo(false);
   };
 
   const handleRefresh = () => {
@@ -89,6 +111,24 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
   const [showProfile, setShowProfile] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  
+  // Handler for exchange button that checks required info
+  const handleExchangeClick = () => {
+    if (missingRequiredInfo) {
+      setShowRequiredInfo(true);
+    } else {
+      setShowExchange(true);
+    }
+  };
+  
+  // Handler for gift button that checks required info
+  const handleGiftClick = () => {
+    if (missingRequiredInfo) {
+      setShowRequiredInfo(true);
+    } else {
+      setShowGift(true);
+    }
+  };
 
   const effectiveRate = useMemo(() => {
     if (!rate) return 0;
@@ -280,14 +320,14 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
                       </div>
                     </div>
                     <button
-                      onClick={() => setShowExchange(true)}
+                      onClick={handleExchangeClick}
                       disabled={!rate || ratesLoading}
                       className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       ВАЛЮТ СОЛИХ
                     </button>
                     <button
-                      onClick={() => setShowGift(true)}
+                      onClick={handleGiftClick}
                       disabled={!rate || ratesLoading}
                       className="w-full max-w-xs bg-gradient-to-r from-pink-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-pink-200 hover:from-pink-600 hover:to-purple-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
@@ -362,6 +402,18 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
       {/* Registration Modal - shown when user clicks register button */}
       {showRegistration && !isVerified && !pendingVerification && (
         <RegistrationModal onRegistered={handleRegistered} onClose={() => setShowRegistration(false)} />
+      )}
+      
+      {/* Required Info Modal - shown when user tries to exchange/gift without email or Mongolian phone */}
+      {showRequiredInfo && (
+        <RequiredInfoModal
+          currentEmail={userProfile?.email}
+          currentPhoneMnt={mntPhone}
+          currentPhone={userProfile?.phone}
+          currentBankMnt={userProfile?.bank_mnt}
+          onSaved={handleRequiredInfoSaved}
+          onClose={() => setShowRequiredInfo(false)}
+        />
       )}
     </div>
   );

@@ -90,6 +90,7 @@ export type UserProfile = {
   last_name?: string;
   email?: string;
   phone?: string;
+  phone_mnt?: string;
   bank_rub?: string;
   bank_mnt?: string;
   verified?: boolean;
@@ -189,6 +190,7 @@ export async function agreeToTerms() {
 
 export type UpdateBankInfoInput = {
   phone: string;
+  email?: string;
   rub_bank_name: string;
   rub_phone_sbp: string;
   rub_card_number: string;
@@ -196,6 +198,7 @@ export type UpdateBankInfoInput = {
   mnt_bank_name: string;
   mnt_account_number: string;
   mnt_owner_name: string;
+  mnt_phone?: string;
 };
 
 export async function updateBankInfo(payload: UpdateBankInfoInput) {
@@ -280,6 +283,8 @@ export interface AdminHistoryItem {
   timestamp: string;
   rate: number;
   bank_details?: string;
+  user_saved_bank?: string;
+  is_custom_bank?: boolean;
   receipt_id?: string;
   bill_url?: string;
   admin_bill_url?: string;

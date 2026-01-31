@@ -338,16 +338,40 @@ export function ProfileModal({ userId, onClose }: Props) {
             ) : (
               /* View Mode */
               <>
-                {/* Contact */}
-                {profile.phone && (
-                  <div className="flex items-center gap-3 p-3 border border-ocean-100 rounded-xl">
-                    <Phone className="w-5 h-5 text-ocean-600" />
-                    <div>
-                      <div className="text-xs text-slate-500">Утас</div>
-                      <div className="font-medium">{profile.phone}</div>
+                {/* Contact Info */}
+                <div className="space-y-2">
+                  {profile.email && (
+                    <div className="flex items-center gap-3 p-3 border border-ocean-100 rounded-xl">
+                      <div className="w-8 h-8 bg-ocean-100 rounded-full flex items-center justify-center">
+                        <span className="text-ocean-600 text-sm">@</span>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">Имэйл</div>
+                        <div className="font-medium">{profile.email}</div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                  
+                  {profile.phone && (
+                    <div className="flex items-center gap-3 p-3 border border-ocean-100 rounded-xl">
+                      <Phone className="w-5 h-5 text-ocean-600" />
+                      <div>
+                        <div className="text-xs text-slate-500">Орос утас</div>
+                        <div className="font-medium">{profile.phone}</div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {profile.phone_mnt && (
+                    <div className="flex items-center gap-3 p-3 border border-ocean-100 rounded-xl">
+                      <Phone className="w-5 h-5 text-green-600" />
+                      <div>
+                        <div className="text-xs text-slate-500">Монгол утас</div>
+                        <div className="font-medium">{profile.phone_mnt}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Banks */}
                 <div className="grid grid-cols-2 gap-3">

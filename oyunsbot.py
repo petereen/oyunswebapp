@@ -1459,7 +1459,9 @@ def profile_menu(call):
         f"👤 Таны мэдээлэл:\n\n"
         f"👤 Овог: {user.get('last_name', '-')}\n"
         f"👤 Нэр: {user.get('first_name', '-')}\n"
-        f"📞 Утас: {user.get('phone', '-')}\n"
+        f"� Имэйл: {user.get('email', '-')}\n"
+        f"📞 Монгол утас: {user.get('phone_mnt', '-')}\n"
+        f"📞 Орос утас: {user.get('phone', '-')}\n"
         f"🪪 Паспортын дугаар: {user.get('registration_number', '-')}\n"
         f"🏦 Монгол банк: {user.get('bank_mnt', '-')}\n"
         f"🇷🇺 Орос банк: {user.get('bank_rub', '-')}\n"
@@ -1853,6 +1855,7 @@ def exchange_menu(call):
     if not user or not user.get("verified"):
         bot.send_message(user_id, "⚠️ Та бүртгэлээ баталгаажуулсны дараа валют солих боломжтой.\n📌 Та эхлээд /start товч даран бүртгүүлэх функц сонгох эсвэл /register команд ашиглан бүртгүүлнэ үү.")
         return
+    
     config = get_current_shift_config()
 
     markup = InlineKeyboardMarkup()
@@ -1937,17 +1940,14 @@ def BUY_RATE(call):
         BANK_DETAILS_RUB = config["bank_rub"]
         BANK_DETAILS_MNT = config["bank_mnt"]
 
-    # Save the direction
-    update_user_session(user_id, {"state": "promo_choice_buy"})
-
-    markup = InlineKeyboardMarkup()
-    markup.add(
-        InlineKeyboardButton("🎟️ Промокод оруулах", callback_data="promo_enter_buy"),
-        InlineKeyboardButton("❌ Промокод байхгүй, цааш үргэлжлүүлэх", callback_data="promo_skip_buy"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="exchange_menu")
-    )
+    # Clear any previous promo discount and go directly to amount selection (removed promo code step from bot)
+    update_user_session(user_id, {
+        "promo_discount": 0.0,
+        "promo_code": None
+    })
+    
     bot.answer_callback_query(call.id)
-    bot.send_message(user_id, "🎁 Та промокодтой бол промокодоо ашиглах боломжтой", reply_markup=markup)
+    show_common_rub_amounts(user_id)
 
 
 # 🇲🇳 MNT → RUB Exchange: Show Common Amounts
@@ -1976,17 +1976,14 @@ def SELL_RATE(call):
         BANK_DETAILS_RUB = config["bank_rub"]
         BANK_DETAILS_MNT = config["bank_mnt"]
 
-    # Save the direction
-    update_user_session(user_id, {"state": "promo_choice_sell"})
-
-    markup = InlineKeyboardMarkup()
-    markup.add(
-        InlineKeyboardButton("🎟️ Промокод оруулах", callback_data="promo_enter_sell"),
-        InlineKeyboardButton("❌ Промокод байхгүй, цааш үргэлжлүүлэх", callback_data="promo_skip_sell"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="exchange_menu")
-    )
+    # Clear any previous promo discount and go directly to amount selection (removed promo code step from bot)
+    update_user_session(user_id, {
+        "promo_discount": 0.0,
+        "promo_code": None
+    })
+    
     bot.answer_callback_query(call.id)
-    bot.send_message(user_id, "🎁 Та промокодтой бол промокодоо ашиглах боломжтой", reply_markup=markup)
+    show_common_mnt_amounts(user_id)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("promo_enter_"))
 def promo_code_request(call):
@@ -2840,7 +2837,7 @@ def notify_operator(user_id, invoice, receipt_id, bank_details, operator_chat_id
         f"💰 Гүйлгээ: *{amount} {currency_from} → {currency_to}*\n"
         f"💱 Хөрвүүлсэн дүн: *{converted} {currency_to}*\n"
         f"🏦 Дансны мэдээлэл: `{bank_details}`\n\n"
-        "✅ Гүйлгээг баталгаажуулах эсвэл татгалзах товчийг дарна уу."
+        "✅ Гүйлгээг баталгаажуулах эсвэл татгалзах товчийг дарна у|у."
     )
 
     markup = InlineKeyboardMarkup()
@@ -4944,7 +4941,9 @@ def show_pending_users(message):
                 f"👤 Хэрэглэгчийн мэдээлэл:\n\n"
                 f"👤 Овог: {user.get('last_name', '-')}\n"
                 f"👤 Нэр: {user.get('first_name', '-')}\n"
-                f"📞 Утас: {user.get('phone', '-')}\n"
+                f"� Имэйл: {user.get('email', '-')}\n"
+                f"📞 Монгол утас: {user.get('phone_mnt', '-')}\n"
+                f"📞 Орос утас: {user.get('phone', '-')}\n"
                 f"🪪 Паспортын дугаар: {user.get('registration_number', '-')}\n"
                 f"🏦 Монгол банк: {user.get('bank_mnt', '-')}\n"
                 f"🇷🇺 Орос банк: {user.get('bank_rub', '-')}\n"

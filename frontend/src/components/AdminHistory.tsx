@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { History, Search, Filter, ChevronLeft, ChevronRight, Copy, Check, ExternalLink } from "lucide-react";
+import { History, Search, Filter, ChevronLeft, ChevronRight, Copy, Check, ExternalLink, AlertTriangle } from "lucide-react";
 import { fetchAdminHistory, AdminHistoryItem } from "../api";
 
 const STATUS_OPTIONS = [
@@ -225,13 +225,31 @@ export function AdminHistory() {
               {/* Expanded details */}
               {expandedItem === item.invoice && (
                 <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-sm">
+                  {/* Custom bank warning */}
+                  {item.is_custom_bank && (
+                    <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                      <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                      <div>
+                        <span className="font-bold">⚠️ АНХААР:</span> Хэрэглэгч хадгалсан дансны мэдээллээ АШИГЛААГҮЙ, шинэ данс оруулсан байна!
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <span className="text-slate-500">Банкны мэдээлэл:</span>
-                      <div className="font-mono text-xs bg-slate-50 p-2 rounded mt-1 break-all">
+                      <span className="text-slate-500">Гүйлгээнд ашигласан данс:</span>
+                      <div className={`font-mono text-xs p-2 rounded mt-1 break-all ${item.is_custom_bank ? 'bg-red-50 border border-red-200' : 'bg-slate-50'}`}>
                         {item.bank_details || "—"}
                       </div>
                     </div>
+                    {item.is_custom_bank && item.user_saved_bank && (
+                      <div>
+                        <span className="text-slate-500">Хэрэглэгчийн хадгалсан данс:</span>
+                        <div className="font-mono text-xs bg-green-50 border border-green-200 p-2 rounded mt-1 break-all">
+                          {item.user_saved_bank}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <span className="text-slate-500">Валют:</span>
                       <div className="mt-1">

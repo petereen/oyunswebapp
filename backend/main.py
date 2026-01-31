@@ -148,7 +148,7 @@ async def stale_transaction_reminder():
                             [
                                 {
                                     "text": "🔗 Админ хэсэгт харах",
-                                    "url": f"{settings.admin_panel_url}{separator}invoice={invoice}",
+                                    "web_app": {"url": f"{settings.admin_panel_url}{separator}invoice={invoice}"},
                                 }
                             ]
                         ]
@@ -774,8 +774,9 @@ async def register_user(
         admin_text = (
             f"📋 <b>Шинэ бүртгэл баталгаажуулалт хүлээгдэж байна</b>\n\n"
             f"👤 Хэрэглэгч: {payload.last_name} {payload.first_name}\n"
-            f"📱 Утас (MN): {payload.mnt_phone}\n"
-            f"📱 Утас СБП (RU): {payload.rub_phone_sbp}\n"
+            f"📧 Имэйл: {payload.email or '-'}\n"
+            f"📱 Монгол утас: {payload.mnt_phone}\n"
+            f"📱 Утас СБП (RU): {payload.rub_phone_sbp or '-'}\n"
             f"🆔 Telegram ID: {user.id}\n"
         )
         send_user_notification(shift_admin_id, admin_text)
@@ -791,31 +792,102 @@ async def update_bank_info(
     payload: UpdateBankInfoRequest,
     user=Depends(get_jwt_authenticated_user),
 ):
-    """Update user's bank info (for verified users to update their banking details)."""
+    """Update user's bank info (for verified users to update their banking details).
+    When bank info is changed, verified is set to FALSE but ready_for_verification stays TRUE,
+    requiring admin re-verification.
+    """
     from zoneinfo import ZoneInfo
     
     client = get_supabase()
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz).isoformat()
     
+    # Check if only email is being updated (no bank info change at all)
+    only_email_update = (
+        payload.email and
+        not payload.rub_bank_name and not payload.rub_phone_sbp and 
+        not payload.rub_card_number and not payload.rub_owner_name and
+        not payload.mnt_bank_name and not payload.mnt_account_number and 
+        not payload.mnt_owner_name and not payload.mnt_phone
+    )
+    
+    if only_email_update:
+        # Only update email without resetting verification
+        update_payload = {"updated_at": now, "email": payload.email}
+        if payload.phone:
+            update_payload["phone"] = payload.phone
+        
+        result = client.table("users").update(update_payload).eq("id", user.id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update user info")
+        
+        return {"ok": True, "message": "Email updated successfully."}
+    
+    # Check if only MNT phone is being updated (adding missing phone to bank_mnt)
+    # This shouldn't reset verification since they're just adding missing required info
+    only_mnt_phone_update = (
+        payload.mnt_bank_name and payload.mnt_account_number and payload.mnt_owner_name and
+        not payload.rub_bank_name and not payload.rub_phone_sbp and 
+        not payload.rub_card_number and not payload.rub_owner_name
+    )
+    
+    if only_mnt_phone_update:
+        # Update MNT bank info (mainly to add phone) without resetting verification
+        bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone or ''}"
+        update_payload = {"updated_at": now, "bank_mnt": bank_mnt}
+        if payload.email:
+            update_payload["email"] = payload.email
+        if payload.phone:
+            update_payload["phone"] = payload.phone
+        
+        result = client.table("users").update(update_payload).eq("id", user.id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update MNT bank info")
+        
+        return {"ok": True, "message": "MNT bank info updated successfully."}
+    
     # Format bank details as comma-separated strings
     bank_rub = f"{payload.rub_bank_name},{payload.rub_phone_sbp},{payload.rub_card_number},{payload.rub_owner_name}"
     bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone or ''}"
     
-    # Update user record with bank info only
+    # Update user record with bank info
+    # Set verified to FALSE since bank info changed, but keep ready_for_verification TRUE for re-verification
     update_payload = {
         "phone": payload.phone,
         "bank_rub": bank_rub,
         "bank_mnt": bank_mnt,
+        "verified": False,  # Reset verification when bank info changes
+        "ready_for_verification": True,  # Keep ready for re-verification
         "updated_at": now,
     }
+    
+    # Also update email if provided
+    if payload.email:
+        update_payload["email"] = payload.email
     
     result = client.table("users").update(update_payload).eq("id", user.id).execute()
     
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to update bank info")
     
-    return {"ok": True, "message": "Bank info updated successfully"}
+    # Notify shift admin about bank info change requiring re-verification
+    shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
+    if shift_res.data and shift_res.data[0].get("current_admin_id"):
+        shift_admin_id = shift_res.data[0].get("current_admin_id")
+        admin_text = (
+            f"🔄 <b>Банкны мэдээлэл өөрчилсөн тул дахин баталгаажуулалт шаардлагатай</b>\n\n"
+            f"🆔 Хэрэглэгчийн ID: {user.id}\n"
+            f"📱 Утас: {payload.phone}\n"
+            f"🏦 MNT банк: {payload.mnt_bank_name}\n"
+            f"🏦 RUB банк: {payload.rub_bank_name}\n\n"
+            f"⚠️ Энэ хэрэглэгчийг дахин баталгаажуулах шаардлагатай."
+        )
+        send_user_notification(shift_admin_id, admin_text)
+        logger.info(f"Sent bank info change notification to shift admin {shift_admin_id}")
+    
+    return {"ok": True, "message": "Bank info updated. Please wait for admin re-verification."}
 
 
 @app.post("/api/exchange/create", response_model=ExchangeCreateResponse)
@@ -924,7 +996,7 @@ async def create_exchange(
                 [
                     {
                         "text": "🔗 Админ хэсэгт харах",
-                        "url": f"{settings.admin_panel_url}{separator}invoice={invoice}",
+                        "web_app": {"url": f"{settings.admin_panel_url}{separator}invoice={invoice}"},
                     }
                 ]
             ]
@@ -1214,30 +1286,51 @@ async def admin_history(
     # Order by timestamp descending (newest first) and apply pagination
     res = query.order("timestamp", desc=True).range(offset, offset + limit - 1).execute()
     
-    # Get user names for all user_ids
+    # Get user names and bank info for all user_ids
     user_ids = list(set([row.get("user_id") for row in res.data or [] if row.get("user_id")]))
-    user_names = {}
+    user_info = {}
     if user_ids:
-        users_res = client.table("users").select("id,first_name,last_name").in_("id", user_ids).execute()
+        users_res = client.table("users").select("id,first_name,last_name,bank_mnt,bank_rub").in_("id", user_ids).execute()
         for u in users_res.data or []:
             name = f"{u.get('last_name', '')} {u.get('first_name', '')}".strip()
-            user_names[u.get("id")] = name if name else None
+            user_info[u.get("id")] = {
+                "name": name if name else None,
+                "bank_mnt": u.get("bank_mnt"),
+                "bank_rub": u.get("bank_rub"),
+            }
     
     items = []
     for row in res.data or []:
         direction = "buy" if row.get("currency_from") == "RUB" else "sell"
         user_id = row.get("user_id")
+        user_data = user_info.get(user_id, {})
+        
+        # Determine user's saved bank based on currency_to
+        currency_to = row.get("currency_to", "").upper()
+        if currency_to == "MNT":
+            user_saved_bank = user_data.get("bank_mnt")
+        else:  # RUB
+            user_saved_bank = user_data.get("bank_rub")
+        
+        # Check if custom bank was used
+        bank_details = row.get("bank_details") or ""
+        is_custom_bank = False
+        if bank_details.strip() and user_saved_bank:
+            is_custom_bank = bank_details.strip() != user_saved_bank.strip()
+        
         items.append(AdminHistoryItem(
             invoice=row.get("invoice"),
             user_id=user_id,
-            user_name=user_names.get(user_id),
+            user_name=user_data.get("name"),
             amount=row.get("amount"),
             currency_from=row.get("currency_from"),
             currency_to=row.get("currency_to"),
             status=row.get("status"),
             timestamp=row.get("timestamp"),
             rate=row.get("rate"),
-            bank_details=row.get("bank_details"),
+            bank_details=bank_details,
+            user_saved_bank=user_saved_bank,
+            is_custom_bank=is_custom_bank,
             receipt_id=row.get("receipt_id"),
             bill_url=row.get("bill_url"),
             admin_bill_url=row.get("admin_bill_url"),
@@ -1319,11 +1412,43 @@ async def admin_kyc_action(
             "updated_at": now,
         }).eq("id", payload.user_id).execute()
         
+        # Generate one-time promo code for newly verified user
+        promo_code = None
+        try:
+            import secrets
+            import string
+            # Generate unique promo code
+            promo_code = "WELCOME" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+            promo_payload = {
+                "code": promo_code,
+                "discount": 1,  # 1 MNT discount
+                "active": True,
+                "one_time": True,
+                "user_id": payload.user_id,
+                "source": "verification",
+                "created_at": now,
+            }
+            client.table("promo_codes").insert(promo_payload).execute()
+            logger.info(f"Generated verification promo code {promo_code} for user {payload.user_id}")
+        except Exception as promo_err:
+            logger.error(f"Failed to generate promo code for user {payload.user_id}: {promo_err}")
+            promo_code = None
+        
         # Notify user via Telegram with webapp button
+        promo_text = ""
+        if promo_code:
+            promo_text = (
+                f"\n\n🎁 <b>Бэлэг:</b> Танд зориулсан промокод!\n"
+                f"🎟️ Промокод: <code>{promo_code}</code>\n"
+                f"💰 Хөнгөлөлт: 1 MNT ханшинд нэмэгдэнэ\n"
+                f"📌 Нэг удаа л ашиглах боломжтой."
+            )
+        
         notification_text = (
             f"✅ <b>Таны бүртгэл амжилттай баталгаажлаа!</b>\n\n"
             f"Та OYUNS FINANCE үйлчилгээг ашиглах боломжтой боллоо.\n"
             f"Доорх товчийг дараад валютаа солиорой!"
+            f"{promo_text}"
         )
         
         # Add webapp launch button if URL is configured
@@ -2181,7 +2306,7 @@ async def lookup_recipient_by_phone(
             if u.get("id") == user.id:
                 continue
             
-            # 1. Check phone column directly
+            # 1. Check phone column directly (Russian phone)
             user_phone = u.get("phone") or ""
             if user_phone and phones_match(clean_phone, user_phone):
                 return RecipientLookupResponse(
@@ -2207,7 +2332,7 @@ async def lookup_recipient_by_phone(
                         }
                     )
             
-            # 3. Check bank_mnt column (may also contain phone in some formats)
+            # 4. Check bank_mnt column (may also contain phone in some formats)
             bank_mnt = u.get("bank_mnt") or ""
             mnt_phones = extract_phone_from_bank_info(bank_mnt)
             for mnt_phone in mnt_phones:

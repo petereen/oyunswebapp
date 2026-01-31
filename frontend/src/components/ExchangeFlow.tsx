@@ -452,21 +452,45 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               <div className="font-bold text-ocean-600">{buyRate}</div>
             </div>
           </button>
-          <button
-            onClick={() => handleSelectDirection("sell")}
-            className="p-4 rounded-xl border-2 border-ocean-200 hover:border-ocean-500 hover:bg-ocean-50 transition flex items-center justify-between"
-          >
-            <div className="text-left">
-              <div className="font-semibold text-ocean-700 flex items-center gap-2">
-                Рубль авах (MNT → RUB)
+          {/* Check if user has RUB bank info - disable sell button if not */}
+          {(() => {
+            const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
+            return hasRubBank ? (
+              <button
+                onClick={() => handleSelectDirection("sell")}
+                className="p-4 rounded-xl border-2 border-ocean-200 hover:border-ocean-500 hover:bg-ocean-50 transition flex items-center justify-between"
+              >
+                <div className="text-left">
+                  <div className="font-semibold text-ocean-700 flex items-center gap-2">
+                    Рубль авах (MNT → RUB)
+                  </div>
+                  <div className="text-sm text-slate-500">MNT илгээж, RUB авна</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-slate-400">Ханш</div>
+                  <div className="font-bold text-ocean-600">{sellRate}</div>
+                </div>
+              </button>
+            ) : (
+              <div className="p-4 rounded-xl border-2 border-slate-200 bg-slate-50 flex items-center justify-between opacity-70">
+                <div className="text-left">
+                  <div className="font-semibold text-slate-500 flex items-center gap-2">
+                    Рубль авах (MNT → RUB) ❌
+                  </div>
+                  <div className="text-sm text-red-500">
+                    Та орос банкны мэдээллээ бүртгүүлээгүй байна
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    Профайл хэсэгт орос банкны мэдээллээ оруулаад админы баталгаажуулалт хийсний дараа валют солиулна уу.
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-slate-400">Ханш</div>
+                  <div className="font-bold text-slate-400">{sellRate}</div>
+                </div>
               </div>
-              <div className="text-sm text-slate-500">MNT илгээж, RUB авна</div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-slate-400">Ханш</div>
-              <div className="font-bold text-ocean-600">{sellRate}</div>
-            </div>
-          </button>
+            );
+          })()}
         </div>
       )}
 

@@ -80,6 +80,7 @@ class UpsertUserPayload(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    phone_mnt: Optional[str] = None  # Mongolian phone number
     bank_rub: Optional[str] = None
     bank_mnt: Optional[str] = None
     passport_storage_url: Optional[str] = None
@@ -169,6 +170,7 @@ class RegistrationRequest(BaseModel):
 class UpdateBankInfoRequest(BaseModel):
     """Request to update only bank info (not name or passport)"""
     phone: str  # Russian phone number
+    email: Optional[str] = None  # Email address
     # RUB bank info
     rub_bank_name: str
     rub_phone_sbp: str
@@ -178,7 +180,7 @@ class UpdateBankInfoRequest(BaseModel):
     mnt_bank_name: str
     mnt_account_number: str
     mnt_owner_name: str
-    mnt_phone: Optional[str] = None  # Mongolian phone number
+    mnt_phone: Optional[str] = None  # Mongolian phone number (4th part of bank_mnt)
 
 
 class KycActionRequest(BaseModel):
@@ -340,6 +342,8 @@ class AdminHistoryItem(BaseModel):
     timestamp: datetime
     rate: Decimal
     bank_details: Optional[str] = None
+    user_saved_bank: Optional[str] = None  # User's saved bank info for comparison (bank_mnt or bank_rub based on currency_to)
+    is_custom_bank: Optional[bool] = None  # True if bank_details differs from user's saved bank
     receipt_id: Optional[str] = None
     bill_url: Optional[str] = None
     admin_bill_url: Optional[str] = None
