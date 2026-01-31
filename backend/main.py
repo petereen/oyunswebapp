@@ -1193,24 +1193,25 @@ async def admin_action(
             if duration_minutes and duration_minutes > 10:
                 try:
                     import secrets
-                    promo_code = f"SORRY{secrets.token_hex(3).upper()}"
-                    expires_at = (now + timedelta(days=30)).isoformat()
+                    import string
+                    # Generate random 10 character code with letters and numbers
+                    chars = string.ascii_uppercase + string.digits
+                    promo_code = ''.join(secrets.choice(chars) for _ in range(10))
                     
-                    # Create promo code for the user
+                    # Create promo code for the user (no expiration)
                     client.table("promo_codes").insert({
                         "code": promo_code,
                         "discount": 0.2,  
                         "active": True,
                         "user_id": user_id,
                         "source": "compensation",
-                        "expires_at": expires_at,
+                        "aliases": [],
                     }).execute()
                     
                     # Notify user about the promo code
                     promo_text = (
-                        f"⏰ Уучлаарай, таны гүйлгээг гүйцэтгэхэд {round(duration_minutes)}+ минутын хугацаа зарцуулагдлаа.\n\n"
-                        f"🎟️ Танд промокод бэлэглэж байна: <code>{promo_code}</code>\n\n"
-                        f"Энэхүү промокодыг дараагийн нэг удаагийн гүйлгээндээ ашиглаарай. Бид үйлчилгээний хурд, чанартаа цаашид илүү анхаарах болно. 🙌"
+                        f"🎁 Танд промокод бэлэглэж байна: <code>{promo_code}</code>\n\n"
+                        f"Энэхүү промокодыг дараагийн гүйлгээндээ ашиглаарай! 🙌"
                     )
                     send_user_notification(user_id=int(user_id), text=promo_text)
                     logger.info(f"Generated compensation promo code {promo_code} for user {user_id}")
