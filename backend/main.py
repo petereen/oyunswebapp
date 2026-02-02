@@ -1271,8 +1271,8 @@ async def admin_inbox(admin=Depends(require_admin)):
     
     items = []
     for row in res.data or []:
-        # Determine direction from currency pair
-        direction = "buy" if row.get("currency_from") == "RUB" else "sell"
+        # Determine direction from currency pair (case-insensitive)
+        direction = "buy" if (row.get("currency_from") or "").upper() == "RUB" else "sell"
         
         # Check for bank mismatch
         user_id = row.get("user_id")
@@ -1373,7 +1373,7 @@ async def admin_history(
     
     items = []
     for row in res.data or []:
-        direction = "buy" if row.get("currency_from") == "RUB" else "sell"
+        direction = "buy" if (row.get("currency_from") or "").upper() == "RUB" else "sell"
         user_id = row.get("user_id")
         user_data = user_info.get(user_id, {})
         
