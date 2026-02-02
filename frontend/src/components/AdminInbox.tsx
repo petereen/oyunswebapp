@@ -276,9 +276,9 @@ export function AdminInbox() {
 
     // Filter
     if (filterBy === "buy") {
-      filtered = filtered.filter((i) => i.direction === "buy" || i.currency_from === "RUB");
+      filtered = filtered.filter((i) => i.direction === "buy" || i.currency_from.toUpperCase() === "RUB");
     } else if (filterBy === "sell") {
-      filtered = filtered.filter((i) => i.direction === "sell" || i.currency_from === "MNT");
+      filtered = filtered.filter((i) => i.direction === "sell" || i.currency_from.toUpperCase() === "MNT");
     }
 
     // Sort
@@ -459,7 +459,7 @@ export function AdminInbox() {
   };
 
   const getDirectionLabel = (item: InboxItem) => {
-    if (item.direction === "buy" || item.currency_from === "RUB") {
+    if (item.direction === "buy" || item.currency_from.toUpperCase() === "RUB") {
       return { label: "BUY", color: "bg-green-100 text-green-700" };
     }
     return { label: "SELL", color: "bg-orange-100 text-orange-700" };
@@ -703,7 +703,7 @@ export function AdminInbox() {
         <div className="flex flex-col gap-2 p-3 max-h-[250px] overflow-auto bg-green-50/30">
           {approvedItems.map((item) => {
             const dirInfo = getDirectionLabel(item);
-            const isBuy = item.direction === "buy" || item.currency_from === "RUB";
+            const isBuy = item.direction === "buy" || item.currency_from.toUpperCase() === "RUB";
             const transferAmt = isBuy 
               ? (Number(item.amount) * Number(item.rate)).toFixed(0)
               : (Number(item.amount) / Number(item.rate)).toFixed(2);
@@ -751,7 +751,7 @@ export function AdminInbox() {
       {/* Detail Modal - Full transaction details popup */}
       {detailModal && (() => {
         const item = detailModal;
-        const isBuy = item.direction === "buy" || item.currency_from === "RUB";
+        const isBuy = item.direction === "buy" || item.currency_from.toUpperCase() === "RUB";
         const parsed = parseBankDetails(item.bank_details || "", isBuy);
         const transferAmount = isBuy 
           ? (Number(item.amount) * Number(item.rate)).toFixed(0)
@@ -1106,7 +1106,7 @@ export function AdminInbox() {
 
       {/* Confirm Transaction Modal */}
       {confirmModal && (() => {
-        const isBuy = confirmModal.direction === "buy" || confirmModal.currency_from === "RUB";
+        const isBuy = confirmModal.direction === "buy" || confirmModal.currency_from.toUpperCase() === "RUB";
         const parsed = parseBankDetails(confirmModal.bank_details || "", isBuy);
         const transferAmount = isBuy 
           ? (Number(confirmModal.amount) * Number(confirmModal.rate)).toFixed(0)

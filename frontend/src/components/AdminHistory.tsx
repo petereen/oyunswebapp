@@ -190,14 +190,19 @@ export function AdminHistory() {
 
                 {/* Amount & Direction */}
                 <div className="text-right">
-                  <div className={`text-sm font-semibold ${item.currency_from === "RUB" ? "text-green-600" : "text-orange-600"}`}>
-                    {item.currency_from === "RUB" ? "ТӨГРӨГ АВАХ" : "РУБЛЬ АВАХ"}
+                  <div className={`text-sm font-semibold ${item.currency_from.toUpperCase() === "RUB" ? "text-green-600" : "text-orange-600"}`}>
+                    {item.currency_from.toUpperCase() === "RUB" ? "ТӨГРӨГ АВАХ" : "РУБЛЬ АВАХ"}
                   </div>
                   <div className="text-lg font-bold">
                     {formatAmount(item.amount, item.currency_from)}
                   </div>
+                  <div className="text-sm text-slate-600">
+                    → {item.currency_from.toUpperCase() === "RUB" 
+                      ? formatAmount(Math.round(item.amount * item.rate), "MNT")
+                      : formatAmount(parseFloat((item.amount / item.rate).toFixed(2)), "RUB")}
+                  </div>
                   <div className="text-xs text-slate-500">
-                    Ханш: {item.rate}
+                    Ханш: {Number(item.rate).toFixed(2)}
                   </div>
                 </div>
 
@@ -254,6 +259,14 @@ export function AdminHistory() {
                       <span className="text-slate-500">Валют:</span>
                       <div className="mt-1">
                         {item.currency_from} → {item.currency_to}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Хэрэглэгчийн авах дүн:</span>
+                      <div className="mt-1 font-semibold">
+                        {item.currency_from.toUpperCase() === "RUB" 
+                          ? formatAmount(Math.round(item.amount * item.rate), "MNT")
+                          : formatAmount(parseFloat((item.amount / item.rate).toFixed(2)), "RUB")}
                       </div>
                     </div>
                   </div>

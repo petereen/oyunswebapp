@@ -145,7 +145,7 @@ export function HistoryModal({ userId, onClose }: Props) {
                 {items.map((item) => {
                   const statusInfo = getStatusInfo(item.status);
                   const StatusIcon = statusInfo.icon;
-                  const isBuy = item.currency_from === "RUB";
+                  const isBuy = item.currency_from.toUpperCase() === "RUB";
                   // Rate is stored as MNT per RUB (e.g., 46.2 means 1 RUB = 46.2 MNT)
                   // RUB->MNT (buy): user sends RUB, receives MNT = RUB * rate
                   // MNT->RUB (sell): user sends MNT, receives RUB = MNT / rate
