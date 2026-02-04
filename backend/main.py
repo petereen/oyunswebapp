@@ -1094,9 +1094,9 @@ async def admin_action(
         update_payload["admin_bill_url"] = payload.admin_bill_url
         update_payload["admin_bill_submitted_at"] = now.isoformat()
     
-    # Handle completion - calculate duration
+    # Handle completion - calculate duration (support both "completed" and "successful" status)
     duration_minutes = None
-    if payload.status == "completed":
+    if payload.status in ["completed", "successful"]:
         update_payload["completed_at"] = now.isoformat()
         
         # Calculate completion duration from receipt_submitted_at (when user submitted receipt)
@@ -1149,7 +1149,7 @@ async def admin_action(
                 user_id=int(user_id),
                 text=f"✅ Таны <b>{payload.invoice}</b> дугаартай гүйлгээ баталгаажлаа!\nАдмин таны гүйлгээг хийх хүртэл түр хүлээнэ үү.",
             )
-        elif payload.status == "completed":
+        elif payload.status in ["completed", "successful"]:
             # Send completion notification with admin's bill photo if available
             completion_text = f"✅ Таны <b>{payload.invoice}</b> дугаартай гүйлгээ амжилттай хийгдлээ!\n\nТа шилжүүлсэн баримтыг хүлээн авна уу.\n\nМанайхыг сонгон үйлчлүүлдэгт баярлалаа!🤗\nӨдрийг сайхан өнгөрүүлээрэй."
             

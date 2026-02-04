@@ -449,7 +449,7 @@ export function AdminInbox() {
     if (!confirmModal) return;
     await adminAction({
       invoice: confirmModal.invoice,
-      status: "completed",
+      status: "successful",
       admin_bill_url: adminBillUrls.length > 0 ? JSON.stringify(adminBillUrls) : undefined,
       completed_by_admin: currentShift?.current_admin_id ?? undefined,
     });
@@ -808,6 +808,27 @@ export function AdminInbox() {
                   </div>
                 </div>
 
+                {/* Invoice ID - Copyable */}
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-slate-500">📋 Гүйлгээний дугаар (Invoice)</div>
+                      <span className="font-mono font-medium text-ocean-700">{item.invoice}</span>
+                    </div>
+                    <button
+                      onClick={() => handleCopy(item.invoice, "detail-invoice")}
+                      className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200"
+                      title="Invoice хуулах"
+                    >
+                      {copiedField === "detail-invoice" ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-ocean-600" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Timestamps */}
                 <div className="text-xs text-slate-500 space-y-1 p-2 bg-slate-50 rounded-lg">
                   <div>УБ: {formatToTimezone(item.timestamp, "Asia/Ulaanbaatar")}</div>
@@ -1117,6 +1138,27 @@ export function AdminInbox() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-5 max-w-md w-full max-h-[90vh] overflow-auto">
             <div className="font-semibold text-ocean-700 mb-3">Гүйлгээг дуусгах</div>
+
+            {/* Invoice ID - Copyable */}
+            <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-slate-500">📋 Invoice</div>
+                  <span className="font-mono font-medium text-ocean-700">{confirmModal.invoice}</span>
+                </div>
+                <button
+                  onClick={() => handleCopy(confirmModal.invoice, "confirm-invoice")}
+                  className="p-2 rounded-lg hover:bg-slate-200 bg-white border border-slate-200"
+                  title="Invoice хуулах"
+                >
+                  {copiedField === "confirm-invoice" ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-ocean-600" />
+                  )}
+                </button>
+              </div>
+            </div>
 
             {/* Transfer Amount */}
             <div className="mb-4 p-3 bg-gradient-to-r from-ocean-50 to-sky-50 rounded-lg border border-ocean-200">
