@@ -429,7 +429,6 @@ def get_current_shift_config():
         bank_rub = admin_data["sberbank_rub"]
     else:
         rub_options = {
-           # "Альфа 1": admin_data["alphabank_rub2"],
             "Альфа": admin_data["alphabank_rub1"]
             
         }
