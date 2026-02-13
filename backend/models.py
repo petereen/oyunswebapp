@@ -384,7 +384,7 @@ class GiftCreateRequest(BaseModel):
     currency_from: str
     currency_to: str
     rate: float
-    admin_bank_id: int
+    admin_bank_id: str
     sender_receipt_url: str
     from_name: Optional[str] = None  # "From who" field displayed on gift
 

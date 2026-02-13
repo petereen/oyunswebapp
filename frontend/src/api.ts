@@ -505,7 +505,7 @@ export interface GiftCreateInput {
   currency_from: string;
   currency_to: string;
   rate: number;
-  admin_bank_id: number;
+  admin_bank_id: string;
   sender_receipt_url: string;
   from_name?: string;
 }

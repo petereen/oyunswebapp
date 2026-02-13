@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS gifts (
     rate DECIMAL(18, 4) NOT NULL,
     
     -- Bank details
-    admin_bank_id INTEGER,
+    admin_bank_id TEXT,
     sender_receipt_url TEXT,
     recipient_bank_details TEXT,
     
