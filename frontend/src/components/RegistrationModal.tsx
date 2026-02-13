@@ -18,7 +18,7 @@ import { submitRegistration, RegistrationInput, requestPresign } from "../api";
 const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
 const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
 
-const TERMS_URL = "https://oyunsfinance.com/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
+const TERMS_URL = "https://oyuns.mn/user-agreement";
 
 // Format utility functions
 // Russian phone: +7 XXX XXX XX XX (10 digits after +7)

@@ -6,7 +6,7 @@ interface Props {
   onAgreed: () => void;
 }
 
-const TERMS_URL = "https://oyunsfinance.com/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
+const TERMS_URL = "https://oyuns.mn/user-agreement";
 
 export function TermsAgreementModal({ onAgreed }: Props) {
   const [loading, setLoading] = useState(false);

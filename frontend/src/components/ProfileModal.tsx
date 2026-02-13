@@ -4,7 +4,7 @@ import { X, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp, 
 import { fetchMe, fetchUserPromoCodes, updateBankInfo, UserProfile, UserPromoCode, UpdateBankInfoInput } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 
-const TERMS_URL = "https://oyunsfinance.com/oyuns-aio-telegram-bot-%d1%85%d1%8d%d1%80%d1%8d%d0%b3%d0%bb%d1%8d%d0%b3%d1%87%d0%b8%d0%b9%d0%bd-%d0%b3%d1%8d%d1%80%d1%8d%d1%8d/";
+const TERMS_URL = "https://oyuns.mn/user-agreement";
 
 // Bank name options
 const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
