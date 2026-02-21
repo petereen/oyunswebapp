@@ -1409,7 +1409,8 @@ def profile_menu(call):
         f"🇷🇺 Орос банк: {user.get('bank_rub', '-')}\n"
         f"📷 Паспорт зураг: {'🟢 Байгаа' if user.get('passport_file_id') else '🔴 Байхгүй'}\n"
         f"\n📤 Баталгаажуулах хүсэлт: {'Илгээсэн' if user.get('ready_for_verification') else 'Илгээгүй'}\n"
-        f"📎 Баталгаажсан: {'✅ Тийм' if is_verified else '❌ Үгүй'}"
+        f"📎 Баталгаажсан: {'✅ Тийм' if is_verified else '❌ Үгүй'}\n"
+        f"\nℹ️ Бот хувилбар: v2.0.0"
     )
     
     # Add promo codes section (collect buttons so user can copy codes easily)
@@ -1635,8 +1636,18 @@ def send_verification_alert_to_operator(user_id, user):
 
 @bot.callback_query_handler(func=lambda call: call.data == "start_registration")
 def start_registration_from_menu(call):
-    call.message.text = "/register"  # fake the message to reuse the handler
-    register(call.message)
+    bot.answer_callback_query(call.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📱 Апп нээх", web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton("🔙 Буцах", callback_data="back_main"))
+    bot.send_message(
+        call.message.chat.id,
+        "📝 *Бүртгүүлэх*\n\n"
+        "Та бүртгүүлэхийн тулд OYUNS FINANCE APP-аар дамжуулан бүртгүүлнэ үү.\n\n"
+        "✅ Апп дээр бүртгүүлснээр та манай үйлчилгээг ашиглах боломжтой болно.",
+        parse_mode="Markdown",
+        reply_markup=markup
+    )
 
 @bot.callback_query_handler(func=lambda call: call.data == "submit_verification")
 def submit_verification(call):
