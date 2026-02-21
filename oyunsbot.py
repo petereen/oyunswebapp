@@ -802,66 +802,9 @@ def normalize_invoice_format(invoice_id):
     
     return None
 
-# 🎁 Award gift for qualifying transactions
+# 🎁 Award gift for qualifying transactions (disabled)
 def award_gift_for_transaction(user_id: int, amount: float, currency_from: str, currency_to: str, rate: float):
-    """Award a gift if transaction is >= 10,000 RUB in either direction."""
-    try:
-        # Ensure we have reference rates for correct RUB-equivalent calculation
-        try:
-            if not exchange_rates.get("BUY_RATE") or not exchange_rates.get("SELL_RATE"):
-                fetch_exchange_rates()
-        except Exception:
-            pass
-
-        buy_rate = float(exchange_rates.get("BUY_RATE") or 0)  # MNT per RUB when buying RUB (user sends MNT)
-        sell_rate = float(exchange_rates.get("SELL_RATE") or 0)  # MNT per RUB when selling RUB (user sends RUB)
-
-        # Calculate RUB equivalent for threshold and message
-        rub_amount = 0.0
-        if currency_from.upper() == "RUB":
-            # RUB → MNT: use SELL rate (RUB * sell_rate gives MNT; keep RUB side as original amount)
-            rub_amount = amount * (sell_rate or rate or 1)
-        elif currency_to.upper() == "RUB":
-            # MNT → RUB: convert MNT to RUB using BUY rate
-            divisor = buy_rate or rate or 1
-            rub_amount = amount / divisor
-        
-        # Award gift if >= 10,000 RUB
-        if rub_amount >= 10000:
-            user_resp = supabase.table("users").select("pending_gifts").eq("id", user_id).limit(1).execute()
-            current_gifts = 0
-            if user_resp.data:
-                current_gifts = int(user_resp.data[0].get("pending_gifts") or 0)
-            
-            new_gifts = current_gifts + 1
-            supabase.table("users").upsert({"id": user_id, "pending_gifts": new_gifts}).execute()
-            
-            # Notify user about the gift with button
-            markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton("🎁 Бэлэг нээх", callback_data="open_gift"))
-            markup.add(InlineKeyboardButton("🔙 Нүүр хуудас", callback_data="back_main"))
-            
-            bot.send_photo(
-                user_id,
-                photo="https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/bot_promo3.png",
-                caption=
-                f"🎁 Баяр хүргэе! Та 10'000 РУБ-ээс дээш гүйлгээ хийснээр шинэ оны бэлэг нээх эрх авлаа! 🎉\n\n"
-                f"🎄 Та одоо {new_gifts} бэлэг нээх боломжтой байна.\n\n"
-                f"🎅 Боломжит бэлгүүд:\n"
-                f" • Мөнгөн шагналт\n"
-                f" • Промокод(алт, мөнгө, хүрэл)\n"
-                f" • Дахин бэлэг нээх эрх\n"
-                f" • Шинэ жилийн мэндчилгээ\n\n"
-                f"✨ Доорх товчийг дараад бэлгээ нээгээрэй.",
-                parse_mode="Markdown",
-                reply_markup=markup
-            )
-            print(f"🎁 Gift awarded to user {user_id} for {rub_amount:,.2f} RUB exchange. Total gifts: {new_gifts}")
-            return True
-        return False
-    except Exception as e:
-        print(f"❌ Error awarding gift: {e}")
-        return False
+    return False
 
 
 # ✅ Function to Record Transactions in Supabase
@@ -2074,103 +2017,7 @@ def copy_promo_callback(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "open_gift")
 def handle_open_gift(call):
-    chat_id = call.message.chat.id
-    user_id = call.from_user.id
-
-    try:
-        user_resp = supabase.table("users").select("pending_gifts").eq("id", user_id).limit(1).execute()
-        user_row = user_resp.data[0] if user_resp.data else None
-        pending_gifts = int(user_row.get("pending_gifts") or 0) if user_row else 0
-
-        if pending_gifts <= 0:
-            bot.answer_callback_query(call.id, "🎁 Нээх бэлэг байхгүй байна. Та ₽10'000-ээс дээш мөнгөн дүн солиулаад бэлэг нээх эрх аваарай.", show_alert=True)
-            bot.send_message(chat_id, "🎄 Та ₽10'000-ээс дээш мөнгөн дүн солиулаад бэлэг нээх эрх аваарай. Ирж буй 2026 онд тань аз жаргал хүсье. ✨")
-            return
-
-        outcome = choose_gift_outcome()
-
-        if outcome == "spin_again":
-            bot.answer_callback_query(call.id)
-            bot.send_message(chat_id, "🎄 Ойрхон байлаа! Танд дахин эргүүлэх эрх олгож байна. 🎲")
-            return
-
-        if outcome == "cash_prize_1000":
-            prize_amount = 1000
-            new_pending = max(pending_gifts - 1, 0)
-            supabase.table("users").upsert({"id": user_id, "pending_gifts": new_pending}).execute()
-            bot.answer_callback_query(call.id)
-            bot.send_message(chat_id, f"🎉 ТАНД БАЯР ХҮРГЭЕ 🎉\n\n 💸 Та {prize_amount} ₽ мөнгөн шагнал хожлоо. Тантай удахгүй мөнгөн шагналыг баталгаажуулж холбогдох болно. 🥳")
-
-            # Notify admins with user contact info
-            try:
-                info_resp = supabase.table("users").select("first_name, last_name, phone").eq("id", user_id).limit(1).execute()
-                info = info_resp.data[0] if info_resp.data else {}
-                first_name = info.get("first_name", "") or "-"
-                last_name = info.get("last_name", "") or "-"
-                phone = info.get("phone", "") or "-"
-
-                admin_message = (
-                    "🎉 ШИНЭ ЖИЛИЙН МӨНГӨН ШАГНАЛ!\n\n"
-                    f"👤 ID: {user_id}\n"
-                    f"👥 Нэр: {first_name} {last_name}\n"
-                    f"📞 Утас: {phone}\n"
-                    f"💵 Мөнгөн дүн: {prize_amount} ₽\n\n"
-                    "Мөнгөн шагналыг баталгаажуулан олгоно уу."
-                )
-
-                for admin_id in [1920453419, 1932946217]:
-                    try:
-                        bot.send_message(admin_id, admin_message)
-                    except Exception as inner_e:
-                        print(f"❌ Failed to notify admin {admin_id}: {inner_e}")
-            except Exception as e:
-                print(f"❌ Error sending cash prize admin notification: {e}")
-            return
-
-        promo_map = {
-            "promo_0_5": (0.5, "🥇 Алтан"),
-            "promo_0_3": (0.3, "🥈 Мөнгөн"),
-            "promo_0_2": (0.2, "🥉 Хүрэл"),
-        }
-
-        if outcome in promo_map:
-            discount, promo_tier = promo_map[outcome]
-            promo_code = generate_promo_code()
-            created = create_promo_code_in_db(promo_code, user_id=user_id, discount=discount, source="new_year_gift")
-            if not created:
-                bot.answer_callback_query(call.id, "⚠️ Алдаа гарлаа. Дахин оролдоод үзээрэй.", show_alert=True)
-                bot.send_message(chat_id, "😔 Уучлаарай, таны бэлгийг хүргэхэд явцад алдаа гарлаа. Та дахин оролдоно уу, бид таны бэлгийг бэлдэж байна. 🎁")
-                return
-
-            new_pending = max(pending_gifts - 1, 0)
-            supabase.table("users").upsert({"id": user_id, "pending_gifts": new_pending}).execute()
-            caption = (
-                f"🎉 ТАНД БАЯР ХҮРГЭЕ 🎉\n"
-                f"ТА {promo_tier} ПРОМОКОДЫН БЭЛЭГ ХОЖЛОО.\n"
-                f"🎟️ Промокод: `{sanitize_markdown(promo_code)}` /промокодыг урамшуулалт хөтөлбөр дуусахаас өмнө ашиглаарай/\n"
-                f"💰 Хөнгөлөлт: {discount} MNT\n"
-                "🎄Улиран өнгөрч буй 2025 онд биднийг сонгон үйлчлүүлсэн хэрэглэгч танд чин сэтгэлийн талархал илэрхийлье. Шинэ оны баярын мэнд хүргэе!\n"
-            )
-            bot.answer_callback_query(call.id)
-            bot.send_animation(chat_id, FESTIVE_GIF_URL, caption=caption, parse_mode="Markdown")
-            return
-
-        if outcome == "no_prize":
-            new_pending = max(pending_gifts - 1, 0)
-            supabase.table("users").upsert({"id": user_id, "pending_gifts": new_pending}).execute()
-            bot.answer_callback_query(call.id)
-            bot.send_message(
-                chat_id,
-                "✨ШИНЭ ЖИЛИЙН МЭНДЧИЛГЭЭ🎄\n\n"
-                "Улиран өнгөрч буй 2025 онд биднийг сонгон үйлчлүүлсэн хэрэглэгч танд чин сэтгэлийн талархал илэрхийлье.\nУгтан авч буй шинэ он танд урам зориг, амжилт бүтээл, аз жаргалын дээдийг бэлэглэг.\n\nШинэ оны мэнд хүргэе!\n\n"
-                "🎁 Та OYUNS FINANCE BOT-оор 10,000 руб-ээс дээш мөнгөө солиулаад дахин бэлэг хожоорой."
-            )
-            return
-
-    except Exception as e:
-        print(f"❌ Error in open_gift handler: {e}")
-        bot.answer_callback_query(call.id)
-        bot.send_message(chat_id, "⚠️ Алдаа гарлаа. Дахин оролдоод үзээрэй! 🎄")
+    bot.answer_callback_query(call.id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_referral:"))
