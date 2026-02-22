@@ -326,6 +326,15 @@ export function AdminInbox() {
     }
   };
 
+  const handleRevertToPending = async (invoice: string) => {
+    try {
+      await adminAction({ invoice, status: "pending" });
+      await load();
+    } catch (err) {
+      console.error("Revert to pending error:", err);
+    }
+  };
+
   const handleReject = async () => {
     if (!rejectModal) return;
     try {
@@ -739,6 +748,19 @@ export function AdminInbox() {
                   <span className="font-bold text-green-800">{Number(transferAmt).toLocaleString()} {transferCur}</span>
                 </div>
                 <div className="mt-1 text-xs text-slate-400 font-mono truncate">#{item.invoice}</div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRevertToPending(item.invoice);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg transition font-medium border border-amber-200"
+                    title="Хүлээгдэж буй төлөвт буцаах"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Буцаах
+                  </button>
+                </div>
               </div>
             );
           })}
