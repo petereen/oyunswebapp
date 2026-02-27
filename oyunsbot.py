@@ -422,7 +422,7 @@ def get_current_shift_config():
     admin_data = bank_info_by_admin[admin_id]
 
     alpha_accounts = []
-    for key in ("alphabank_rub1", "alphabank_rub2"):
+    for key in ("alphabank_rub2", "alphabank_rub1"):
         account = admin_data.get(key)
         if account:
             alpha_accounts.append(account)
