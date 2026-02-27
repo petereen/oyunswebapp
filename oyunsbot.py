@@ -421,6 +421,12 @@ def get_current_shift_config():
 
     admin_data = bank_info_by_admin[admin_id]
 
+    alpha_accounts = []
+    for key in ("alphabank_rub1", "alphabank_rub2"):
+        account = admin_data.get(key)
+        if account:
+            alpha_accounts.append(account)
+
     # only one bank for admin 5564298862
     if admin_id == 5564298862:
         rub_options = {
@@ -428,11 +434,10 @@ def get_current_shift_config():
         }
         bank_rub = admin_data["sberbank_rub"]
     else:
-        rub_options = {
-            "Альфа 1": admin_data["alphabank_rub2"],
-            "Альфа 2": admin_data["alphabank_rub1"]
-        }
-        bank_rub = admin_data["sberbank_rub2"]  # choose default (or whichever you prefer)
+        rub_options = {}
+        for idx, account in enumerate(alpha_accounts, start=1):
+            rub_options[f"Альфа {idx}"] = account
+        bank_rub = admin_data.get("sberbank_rub2")
     
     return {
         "operator_id": admin_id,
@@ -2258,6 +2263,12 @@ def selected_common_amount(call):
         # Show RUB bank options
         markup = InlineKeyboardMarkup()
         rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
+        if not rub_bank_options:
+            bot.send_message(
+                user_id,
+                "❌ Одоогоор ашиглах боломжтой банкны данс байхгүй байна. Дараа дахин оролдоно уу."
+            )
+            return
         for bank in rub_bank_options:
             markup.add(InlineKeyboardButton(bank, callback_data=f"rubmnt_bank_{bank}"))
 
@@ -2388,6 +2399,12 @@ def receive_custom_amount(message):
 
             markup = InlineKeyboardMarkup()
             rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
+            if not rub_bank_options:
+                bot.send_message(
+                    user_id,
+                    "❌ Одоогоор ашиглах боломжтой банкны данс алга. Дараа дахин оролдоно уу."
+                )
+                return
             for bank_key in rub_bank_options:
                 markup.add(InlineKeyboardButton(bank_key, callback_data=f"rubmnt_bank_{bank_key}"))
 
