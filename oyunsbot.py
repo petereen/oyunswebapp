@@ -73,7 +73,7 @@ MODERATOR_ID = 1920453419  # Moderator for referral confirmations
 OPERATOR_CHAT_ID = None
 BANK_DETAILS_RUB = None
 BANK_DETAILS_MNT = None
-CONTACT_SUPPORT = "📞 Холбоо барих: +976 7780 6060\n +7 (977) 801-91-43\n [https://t.me/oyuns_finance]"
+CONTACT_SUPPORT = "📞 Холбоо барих: +976 7230 3060\n +7 (977) 801-91-43\n [https://t.me/oyuns_finance]"
 REFERRAL_REQUIRED_COUNT = 5  # Number of friends needed to invite
 
 # Target referral destination (channel / group)
@@ -894,7 +894,7 @@ def contact_support_handler(call):
     bot.send_message(
         call.message.chat.id,
         "📞 *Холбоо барих мэдээлэл:*\n\n"
-        "📱 +976 7780 6060\n"
+        "📱 +976 7230 3060\n"
         "📱 +7 (977) 801-91-43\n"
         "🔗 Telegram: [@oyuns_finance](https://t.me/oyuns_finance)",
         parse_mode="Markdown"
@@ -1794,7 +1794,7 @@ def how_to_use(call):
                               "9️⃣ Админ таны хүсэлтийг хүлээн авч хэсэг хугацааны дараа таны гүйлгээг баталгаажуулна. Баталгаажсанаас хэсэг хугацааны дараа админ таны хүсэлтийн дагуу гүйлгээ хйиж гүйлгээний баримтыг танд ботоор дамжуулан илгээх болно\n\n"
                               "*Баяр хүргэе!* Та ийнхүү амжилттай ханшаа солиуллаа!\n\n\n"
                               "📞 *Холбоо барих:*\n"
-                              "+976 7780 6060\n"
+                              "+976 7230 3060\n"
                               "+7 (977) 801-91-43\n"
                               "[Telegram: @oyuns_finance](https://t.me/oyuns_finance)",
                               parse_mode="Markdown",
@@ -4899,7 +4899,7 @@ def handle_rejection_comment(message):
     bot.send_message(admin_id, f"❌ Хэрэглэгч `{user_id}` бүртгэл цуцлагдлаа.", parse_mode="Markdown")
     bot.send_message(
         user_id,
-        f"⚠️ Таны бүртгэлийг баталгаажуулах боломжгүй байна.\n📌 Шалтгаан: _{text}_\n\n Та шаардлагатай бол мэдээллээ 👤 *Хэрэглэгчийн тохиргоо* хэсэгт засаж дахин илгээнэ үү.\n\n📞 Тусламж хэрэгтэй бол дараах хаягаар холбогдоно уу:\n+976 7780 6060\n+7 (977) 801-91-43\n📨 [@oyuns_finance](https://t.me/oyuns_finance)",
+        f"⚠️ Таны бүртгэлийг баталгаажуулах боломжгүй байна.\n📌 Шалтгаан: _{text}_\n\n Та шаардлагатай бол мэдээллээ 👤 *Хэрэглэгчийн тохиргоо* хэсэгт засаж дахин илгээнэ үү.\n\n📞 Тусламж хэрэгтэй бол дараах хаягаар холбогдоно уу:\n+976 7230 3060\n+7 (977) 801-91-43\n📨 [@oyuns_finance](https://t.me/oyuns_finance)",
         parse_mode="Markdown"
     )
     clear_state(admin_id)
