@@ -5211,6 +5211,21 @@ def _format_rate(value) -> str:
     num = float(value)
     return f"{num:,.2f}"
 
+def _fetch_all_user_ids() -> list:
+    """Fetch ALL user IDs from the users table, paginating past Supabase's 1000-row limit."""
+    all_ids = []
+    page_size = 1000
+    offset = 0
+    while True:
+        resp = supabase.table("users").select("id").range(offset, offset + page_size - 1).execute()
+        if not resp.data:
+            break
+        all_ids.extend(u["id"] for u in resp.data)
+        if len(resp.data) < page_size:
+            break
+        offset += page_size
+    return all_ids
+
 @bot.message_handler(commands=["broadcast"])
 def broadcast_rates(message):
     """Broadcast current exchange rates with photo to ALL users.
@@ -5253,10 +5268,9 @@ def broadcast_rates(message):
         f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
     )
 
-    # 3. Fetch all user IDs
+    # 3. Fetch all user IDs (paginated)
     try:
-        users_resp = supabase.table("users").select("id").execute()
-        user_ids = [u["id"] for u in users_resp.data] if users_resp.data else []
+        user_ids = _fetch_all_user_ids()
     except Exception as e:
         print(f"❌ Broadcast: failed to fetch users: {e}")
         return bot.reply_to(message, f"❌ Хэрэглэгчдийн жагсаалт татахад алдаа: {e}")
@@ -5346,10 +5360,9 @@ def _auto_broadcast_loop():
                     time_module.sleep(60)
                     continue
 
-                # Fetch all users
+                # Fetch all users (paginated)
                 try:
-                    users_resp = supabase.table("users").select("id").execute()
-                    user_ids = [u["id"] for u in users_resp.data] if users_resp.data else []
+                    user_ids = _fetch_all_user_ids()
                 except Exception as e:
                     print(f"❌ AutoBroadcast: failed to fetch users: {e}")
                     time_module.sleep(60)
