@@ -5373,6 +5373,26 @@ def handle_unknown_text(message):
 # 🏃 Initialize and Run the Bot
 def initialize_bot():
     """Load existing referral links from database into memory cache on startup"""
+
+    # ── Set /start command menu & web app menu button ──
+    try:
+        from telebot.types import BotCommand, BotCommandScopeDefault
+        bot.set_my_commands(
+            [BotCommand("start", "Эхлэх")],
+            scope=BotCommandScopeDefault(),
+        )
+        # Set the "launch app" button next to the text field
+        bot.set_chat_menu_button(
+            menu_button=telebot.types.MenuButtonWebApp(
+                text="OYUNS Finance",
+                web_app=WebAppInfo(url=WEBAPP_URL),
+            )
+        )
+        print("✅ Bot command menu & web app button set")
+    except Exception as e:
+        print(f"⚠️ Failed to set bot menu: {e}")
+
+    # ── Load referral links ──
     try:
         print("🔄 Loading referral links from database...")
         resp = supabase.table("referral_links").select("referrer_id, invite_link").eq("is_active", True).execute()
