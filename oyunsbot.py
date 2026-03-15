@@ -5289,6 +5289,116 @@ def broadcast_rates(message):
     print(f"✅ Broadcast by {sender_id}: {success} sent, {failed} failed")
 
 
+# ── Scheduled daily broadcast (10:00–11:00 MSK, once per day, batched) ──
+_last_auto_broadcast_date = None          # tracks the date of the last auto-broadcast
+BROADCAST_BATCH_SIZE = 25                 # users per batch
+BROADCAST_BATCH_DELAY = 1.0              # seconds between batches
+
+def _build_broadcast_caption() -> str | None:
+    """Fetch rates and build the broadcast caption. Returns None on failure."""
+    try:
+        rate_resp = supabase.table("bot_rates").select("buy_rate, sell_rate").order("updated_at", desc=True).limit(1).execute()
+        if not rate_resp.data:
+            print("❌ AutoBroadcast: no rates found")
+            return None
+        rate = rate_resp.data[0]
+        buy_rate = _format_rate(rate["buy_rate"])
+        sell_rate = _format_rate(rate["sell_rate"])
+    except Exception as e:
+        print(f"❌ AutoBroadcast: failed to fetch rates: {e}")
+        return None
+
+    now = datetime.now(UB_TZ)
+    date_str = now.strftime("%Y/%m/%d")
+    ub_time = now.strftime("%H:%M")
+    msk_time = datetime.now(MOSCOW_TZ).strftime("%H:%M")
+
+    return (
+        f"💸 <b>{_ub_greeting()}!</b>\n"
+        f"\n"
+        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time} | МСК: {msk_time}</b>\n"
+        f"\n"
+        f"🔹 <b>Рубль авах</b>(РУБ-МНТ): <b>{buy_rate}</b>\n"
+        f"🔹 <b>Рубль зарах</b>(МНТ-РУБ): <b>{sell_rate}</b>\n"
+        f"\n"
+        f"💬  Хэрэв танд апп-тай холбоотой ямар нэгэн асуудал гарвал @oyuns_finance хаягааp холбогдоно уу.\n"
+        f"\n"
+        f"⚡️<b>OYUNS FINANCE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
+        f"\n"
+        f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
+    )
+
+def _auto_broadcast_loop():
+    """Background thread: check every 60s, send once between 10:00–11:00 MSK."""
+    global _last_auto_broadcast_date
+    while True:
+        try:
+            now_msk = datetime.now(MOSCOW_TZ)
+            today = now_msk.date()
+
+            # Only fire between 10:00 and 10:59 MSK, and only once per calendar day
+            if 10 <= now_msk.hour < 11 and _last_auto_broadcast_date != today:
+                _last_auto_broadcast_date = today
+                print(f"📡 AutoBroadcast triggered at {now_msk.strftime('%H:%M')} MSK")
+
+                caption = _build_broadcast_caption()
+                if not caption:
+                    time_module.sleep(60)
+                    continue
+
+                # Fetch all users
+                try:
+                    users_resp = supabase.table("users").select("id").execute()
+                    user_ids = [u["id"] for u in users_resp.data] if users_resp.data else []
+                except Exception as e:
+                    print(f"❌ AutoBroadcast: failed to fetch users: {e}")
+                    time_module.sleep(60)
+                    continue
+
+                if not user_ids:
+                    print("⚠️ AutoBroadcast: no users found")
+                    time_module.sleep(60)
+                    continue
+
+                # Send in batches
+                success = 0
+                failed = 0
+                for i in range(0, len(user_ids), BROADCAST_BATCH_SIZE):
+                    batch = user_ids[i : i + BROADCAST_BATCH_SIZE]
+                    for uid in batch:
+                        try:
+                            bot.send_photo(
+                                uid,
+                                photo=BROADCAST_IMAGE_URL,
+                                caption=caption,
+                                parse_mode="HTML",
+                            )
+                            success += 1
+                        except Exception as e:
+                            failed += 1
+                            print(f"⚠️ AutoBroadcast: could not send to {uid}: {e}")
+                    # Pause between batches to respect Telegram rate limits
+                    if i + BROADCAST_BATCH_SIZE < len(user_ids):
+                        time_module.sleep(BROADCAST_BATCH_DELAY)
+
+                print(f"✅ AutoBroadcast done: {success} sent, {failed} failed")
+
+                # Notify admin about the result
+                try:
+                    bot.send_message(
+                        1932946217,
+                        f"📡 Автомат broadcast дууслаа ({now_msk.strftime('%H:%M')} MSK)\n"
+                        f"📤 Амжилттай: {success}\n❌ Алдаатай: {failed}",
+                    )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            print(f"❌ AutoBroadcast loop error: {e}")
+
+        time_module.sleep(60)  # check every 60 seconds
+
+
 @bot.message_handler(commands=["testbroadcast"])
 def test_broadcast_rates(message):
     """Test broadcast – sends the rate photo only to admins and the moderator."""
@@ -5408,6 +5518,11 @@ def initialize_bot():
             print("ℹ️ No active referral links found in database")
     except Exception as e:
         print(f"⚠️ Failed to load referral links from database: {e}")
+
+    # ── Start scheduled auto-broadcast thread ──
+    broadcast_thread = threading.Thread(target=_auto_broadcast_loop, daemon=True)
+    broadcast_thread.start()
+    print("✅ Auto-broadcast scheduler started (10:00–11:00 MSK daily)")
 
 # Initialize bot on startup
 print("🤖 Starting OYUNS Finance Bot...")
