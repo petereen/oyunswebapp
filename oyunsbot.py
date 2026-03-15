@@ -5195,6 +5195,169 @@ def send_message_to_user(message):
         bot.reply_to(message, f"❌ Алдаа гарлаа: {e}")
         print(f"❌ Error in send_message_to_user: {e}")
 
+
+# ── /broadcast – send rate update photo to ALL users (admin & moderator only) ──
+BROADCAST_IMAGE_URL = "https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/RATE_BOT.png"
+
+def _ub_greeting() -> str:
+    h = datetime.now(UB_TZ).hour
+    if 6 <= h < 12:
+        return "Өглөөний мэнд"
+    elif 12 <= h < 18:
+        return "Өдрийн мэнд"
+    return "Оройн мэнд"
+
+def _format_rate(value) -> str:
+    num = float(value)
+    return f"{num:,.2f}"
+
+@bot.message_handler(commands=["broadcast"])
+def broadcast_rates(message):
+    """Broadcast current exchange rates with photo to ALL users.
+    Only admins (ALLOWED_ADMINS) and the moderator (MODERATOR_ID) can use this.
+    """
+    sender_id = message.from_user.id
+    if sender_id not in ALLOWED_ADMINS and sender_id != MODERATOR_ID:
+        return bot.reply_to(message, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+
+    # 1. Fetch latest rates
+    try:
+        rate_resp = supabase.table("bot_rates").select("buy_rate, sell_rate").order("updated_at", desc=True).limit(1).execute()
+        if not rate_resp.data:
+            return bot.reply_to(message, "❌ Ханшийн мэдээлэл олдсонгүй.")
+        rate = rate_resp.data[0]
+        buy_rate = _format_rate(rate["buy_rate"])
+        sell_rate = _format_rate(rate["sell_rate"])
+    except Exception as e:
+        print(f"❌ Broadcast: failed to fetch rates: {e}")
+        return bot.reply_to(message, f"❌ Ханш татахад алдаа: {e}")
+
+    # 2. Build caption
+    now = datetime.now(UB_TZ)
+    date_str = now.strftime("%Y/%m/%d")
+    ub_time = now.strftime("%H:%M")
+    msk_time = datetime.now(MOSCOW_TZ).strftime("%H:%M")
+
+    caption = (
+        f"💸 <b>{_ub_greeting()}!</b>\n"
+        f"\n"
+        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time} | МСК: {msk_time}</b>\n"
+        f"\n"
+        f"🔹 <b>Рубль авах</b>(РУБ-МНТ): <b>{buy_rate}</b>\n"
+        f"🔹 <b>Рубль зарах</b>(МНТ-РУБ): <b>{sell_rate}</b>\n"
+        f"\n"
+        f"💬  Хэрэв танд апп-тай холбоотой ямар нэгэн асуудал гарвал @oyuns_finance хаягааp холбогдоно уу.\n"
+        f"\n"
+        f"⚡️<b>OYUNS FINANCE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
+        f"\n"
+        f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
+    )
+
+    # 3. Fetch all user IDs
+    try:
+        users_resp = supabase.table("users").select("id").execute()
+        user_ids = [u["id"] for u in users_resp.data] if users_resp.data else []
+    except Exception as e:
+        print(f"❌ Broadcast: failed to fetch users: {e}")
+        return bot.reply_to(message, f"❌ Хэрэглэгчдийн жагсаалт татахад алдаа: {e}")
+
+    if not user_ids:
+        return bot.reply_to(message, "⚠️ Хэрэглэгч олдсонгүй.")
+
+    bot.reply_to(message, f"📡 Broadcast эхэллээ... ({len(user_ids)} хэрэглэгч)")
+
+    # 4. Send photo to every user
+    success = 0
+    failed = 0
+    for uid in user_ids:
+        try:
+            bot.send_photo(
+                uid,
+                photo=BROADCAST_IMAGE_URL,
+                caption=caption,
+                parse_mode="HTML",
+            )
+            success += 1
+        except Exception as e:
+            failed += 1
+            print(f"⚠️ Broadcast: could not send to {uid}: {e}")
+
+    bot.send_message(
+        message.chat.id,
+        f"✅ Broadcast дууслаа!\n📤 Амжилттай: {success}\n❌ Алдаатай: {failed}",
+    )
+    print(f"✅ Broadcast by {sender_id}: {success} sent, {failed} failed")
+
+
+@bot.message_handler(commands=["testbroadcast"])
+def test_broadcast_rates(message):
+    """Test broadcast – sends the rate photo only to admins and the moderator."""
+    sender_id = message.from_user.id
+    if sender_id not in ALLOWED_ADMINS and sender_id != MODERATOR_ID:
+        return bot.reply_to(message, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+
+    # 1. Fetch latest rates
+    try:
+        rate_resp = supabase.table("bot_rates").select("buy_rate, sell_rate").order("updated_at", desc=True).limit(1).execute()
+        if not rate_resp.data:
+            return bot.reply_to(message, "❌ Ханшийн мэдээлэл олдсонгүй.")
+        rate = rate_resp.data[0]
+        buy_rate = _format_rate(rate["buy_rate"])
+        sell_rate = _format_rate(rate["sell_rate"])
+    except Exception as e:
+        print(f"❌ TestBroadcast: failed to fetch rates: {e}")
+        return bot.reply_to(message, f"❌ Ханш татахад алдаа: {e}")
+
+    # 2. Build caption
+    now = datetime.now(UB_TZ)
+    date_str = now.strftime("%Y/%m/%d")
+    ub_time = now.strftime("%H:%M")
+    msk_time = datetime.now(MOSCOW_TZ).strftime("%H:%M")
+
+    caption = (
+        f"💸 <b>{_ub_greeting()}!</b>\n"
+        f"\n"
+        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time} | МСК: {msk_time}</b>\n"
+        f"\n"
+        f"🔹 <b>Рубль авах</b>(РУБ-МНТ): <b>{buy_rate}</b>\n"
+        f"🔹 <b>Рубль зарах</b>(МНТ-РУБ): <b>{sell_rate}</b>\n"
+        f"\n"
+        f"💬  Хэрэв танд апп-тай холбоотой ямар нэгэн асуудал гарвал @oyuns_finance хаягааp холбогдоно уу.\n"
+        f"\n"
+        f"⚡️<b>OYUNS FINANCE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
+        f"\n"
+        f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
+    )
+
+    # 3. Send only to admins + moderator
+    test_ids = list(ALLOWED_ADMINS) + [MODERATOR_ID]
+    # Deduplicate
+    test_ids = list(dict.fromkeys(test_ids))
+
+    bot.reply_to(message, f"🧪 Test broadcast эхэллээ... ({len(test_ids)} хүн)")
+
+    success = 0
+    failed = 0
+    for uid in test_ids:
+        try:
+            bot.send_photo(
+                uid,
+                photo=BROADCAST_IMAGE_URL,
+                caption=caption,
+                parse_mode="HTML",
+            )
+            success += 1
+        except Exception as e:
+            failed += 1
+            print(f"⚠️ TestBroadcast: could not send to {uid}: {e}")
+
+    bot.send_message(
+        message.chat.id,
+        f"✅ Test broadcast дууслаа!\n📤 Амжилттай: {success}\n❌ Алдаатай: {failed}",
+    )
+    print(f"✅ TestBroadcast by {sender_id}: {success} sent, {failed} failed")
+
+
 @bot.message_handler(func=lambda m: True, content_types=['text'])
 def handle_unknown_text(message):
     # only fire when we're not in the middle of a flow
