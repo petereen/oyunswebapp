@@ -477,10 +477,10 @@ export function AdminInbox() {
   return (
     <div className="glass-card p-5 rounded-2xl border border-white/60 flex flex-col gap-3">
       {/* Header */}
-      <div className="flex items-center justify-between text-ocean-700 font-semibold">
+      <div className="flex items-center justify-between text-maroon-700 font-semibold">
         <span>Ирсэн гүйлгээний хүсэлтүүд</span>
         <button
-          className="text-xs px-3 py-1 rounded-full bg-ocean-600 text-white"
+          className="text-xs px-3 py-1 rounded-full bg-maroon-600 text-white"
           onClick={load}
           disabled={loading}
         >
@@ -580,7 +580,7 @@ export function AdminInbox() {
               setShowSortMenu(!showSortMenu);
               setShowFilterMenu(false);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-ocean-50 text-ocean-700 hover:bg-ocean-100"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-maroon-50 text-maroon-700 hover:bg-maroon-100"
           >
             <ArrowUpDown className="w-4 h-4" />
             Эрэмбэлэх
@@ -600,8 +600,8 @@ export function AdminInbox() {
                     setSortBy(opt.value as SortOption);
                     setShowSortMenu(false);
                   }}
-                  className={`block w-full text-left px-3 py-2 hover:bg-ocean-50 ${
-                    sortBy === opt.value ? "bg-ocean-100 font-medium" : ""
+                  className={`block w-full text-left px-3 py-2 hover:bg-maroon-50 ${
+                    sortBy === opt.value ? "bg-maroon-100 font-medium" : ""
                   }`}
                 >
                   {opt.label}
@@ -618,7 +618,7 @@ export function AdminInbox() {
               setShowFilterMenu(!showFilterMenu);
               setShowSortMenu(false);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-ocean-50 text-ocean-700 hover:bg-ocean-100"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-maroon-50 text-maroon-700 hover:bg-maroon-100"
           >
             <Filter className="w-4 h-4" />
             Шүүх
@@ -637,8 +637,8 @@ export function AdminInbox() {
                     setFilterBy(opt.value as FilterOption);
                     setShowFilterMenu(false);
                   }}
-                  className={`block w-full text-left px-3 py-2 hover:bg-ocean-50 ${
-                    filterBy === opt.value ? "bg-ocean-100 font-medium" : ""
+                  className={`block w-full text-left px-3 py-2 hover:bg-maroon-50 ${
+                    filterBy === opt.value ? "bg-maroon-100 font-medium" : ""
                   }`}
                 >
                   {opt.label}
@@ -674,7 +674,7 @@ export function AdminInbox() {
                     {dirInfo.label}
                   </span>
                   <div className="flex-1">
-                    <span className="font-semibold text-ocean-700">
+                    <span className="font-semibold text-maroon-700">
                       {Number(item.amount).toLocaleString()} {item.currency_from}
                     </span>
                     <span className="text-slate-400 mx-1">→</span>
@@ -732,7 +732,7 @@ export function AdminInbox() {
                     {dirInfo.label}
                   </span>
                   <div className="flex-1">
-                    <span className="font-semibold text-ocean-700">
+                    <span className="font-semibold text-maroon-700">
                       {Number(item.amount).toLocaleString()} {item.currency_from}
                     </span>
                     <span className="text-slate-400 mx-1">→</span>
@@ -785,12 +785,12 @@ export function AdminInbox() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-auto">
               {/* Header */}
-              <div className="sticky top-0 bg-white border-b border-ocean-100 p-4 flex items-center justify-between">
+              <div className="sticky top-0 bg-white border-b border-maroon-100 p-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
                     {dirInfo.label}
                   </span>
-                  <span className="font-semibold text-ocean-700">
+                  <span className="font-semibold text-maroon-700">
                     {Number(item.amount).toLocaleString()} {item.currency_from} → {item.currency_to}
                   </span>
                 </div>
@@ -835,7 +835,7 @@ export function AdminInbox() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs text-slate-500">📋 Гүйлгээний дугаар (Invoice)</div>
-                      <span className="font-mono font-medium text-ocean-700">{item.invoice}</span>
+                      <span className="font-mono font-medium text-maroon-700">{item.invoice}</span>
                     </div>
                     <button
                       onClick={() => handleCopy(item.invoice, "detail-invoice")}
@@ -845,7 +845,7 @@ export function AdminInbox() {
                       {copiedField === "detail-invoice" ? (
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
                       ) : (
-                        <Copy className="w-4 h-4 text-ocean-600" />
+                        <Copy className="w-4 h-4 text-maroon-600" />
                       )}
                     </button>
                   </div>
@@ -866,7 +866,7 @@ export function AdminInbox() {
                       {parseBillUrls(item.bill_url).map((url, idx) => (
                         <div 
                           key={idx}
-                          className="relative rounded-lg overflow-hidden cursor-pointer border border-ocean-200"
+                          className="relative rounded-lg overflow-hidden cursor-pointer border border-maroon-200"
                           onClick={() => setPhotoModal(url)}
                         >
                           <img 
@@ -881,21 +881,21 @@ export function AdminInbox() {
                 )}
 
                 {/* Transfer Amount - What admin needs to send */}
-                <div className="p-3 bg-gradient-to-r from-ocean-50 to-sky-50 rounded-lg border border-ocean-200">
+                <div className="p-3 bg-gradient-to-r from-maroon-50 to-sky-50 rounded-lg border border-maroon-200">
                   <div className="text-xs text-slate-500 mb-1">Шилжүүлэх дүн:</div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xl font-bold text-ocean-700">
+                    <span className="text-xl font-bold text-maroon-700">
                       {Number(transferAmount).toLocaleString()} {transferCurrency}
                     </span>
                     <button
                       onClick={() => handleCopy(transferAmount, "detail-amount")}
-                      className="p-1.5 rounded-lg hover:bg-ocean-100 bg-white/50"
+                      className="p-1.5 rounded-lg hover:bg-maroon-100 bg-white/50"
                       title="Дүнг хуулбарлах"
                     >
                       {copiedField === "detail-amount" ? (
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
                       ) : (
-                        <Copy className="w-4 h-4 text-ocean-600" />
+                        <Copy className="w-4 h-4 text-maroon-600" />
                       )}
                     </button>
                   </div>
@@ -906,7 +906,7 @@ export function AdminInbox() {
 
                 {/* Bank Details */}
                 {item.bank_details && (
-                  <div className="p-3 bg-white rounded-lg border border-ocean-200">
+                  <div className="p-3 bg-white rounded-lg border border-maroon-200">
                     <div className="text-xs text-slate-500 mb-2">Хэрэглэгчийн банкны мэдээлэл:</div>
                     
                     {/* Bank Mismatch Warning */}
@@ -924,15 +924,15 @@ export function AdminInbox() {
                       <div className="flex items-center justify-between py-2 border-b border-slate-100">
                         <div className="text-xs text-slate-500">Банк</div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-ocean-700">{parsed.bank}</span>
+                          <span className="font-medium text-maroon-700">{parsed.bank}</span>
                           <button
                             onClick={() => handleCopy(parsed.bank!, "detail-bank")}
-                            className="p-1.5 rounded hover:bg-ocean-100"
+                            className="p-1.5 rounded hover:bg-maroon-100"
                           >
                             {copiedField === "detail-bank" ? (
                               <CheckCircle2 className="w-4 h-4 text-green-500" />
                             ) : (
-                              <Copy className="w-4 h-4 text-ocean-500" />
+                              <Copy className="w-4 h-4 text-maroon-500" />
                             )}
                           </button>
                         </div>
@@ -943,15 +943,15 @@ export function AdminInbox() {
                       <div className="flex items-center justify-between py-2 border-b border-slate-100">
                         <div className="text-xs text-slate-500">Данс</div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-medium text-ocean-700">{parsed.account}</span>
+                          <span className="font-mono font-medium text-maroon-700">{parsed.account}</span>
                           <button
                             onClick={() => handleCopy(parsed.account!, "detail-account")}
-                            className="p-1.5 rounded hover:bg-ocean-100"
+                            className="p-1.5 rounded hover:bg-maroon-100"
                           >
                             {copiedField === "detail-account" ? (
                               <CheckCircle2 className="w-4 h-4 text-green-500" />
                             ) : (
-                              <Copy className="w-4 h-4 text-ocean-500" />
+                              <Copy className="w-4 h-4 text-maroon-500" />
                             )}
                           </button>
                         </div>
@@ -962,15 +962,15 @@ export function AdminInbox() {
                       <div className="flex items-center justify-between py-2 border-b border-slate-100">
                         <div className="text-xs text-slate-500">Утасны дугаар</div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-medium text-ocean-700">{parsed.phone}</span>
+                          <span className="font-mono font-medium text-maroon-700">{parsed.phone}</span>
                           <button
                             onClick={() => handleCopy(parsed.phone!, "detail-phone")}
-                            className="p-1.5 rounded hover:bg-ocean-100"
+                            className="p-1.5 rounded hover:bg-maroon-100"
                           >
                             {copiedField === "detail-phone" ? (
                               <CheckCircle2 className="w-4 h-4 text-green-500" />
                             ) : (
-                              <Copy className="w-4 h-4 text-ocean-500" />
+                              <Copy className="w-4 h-4 text-maroon-500" />
                             )}
                           </button>
                         </div>
@@ -981,15 +981,15 @@ export function AdminInbox() {
                       <div className="flex items-center justify-between py-2 border-b border-slate-100">
                         <div className="text-xs text-slate-500">Картын дугаар</div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-medium text-ocean-700">{parsed.card}</span>
+                          <span className="font-mono font-medium text-maroon-700">{parsed.card}</span>
                           <button
                             onClick={() => handleCopy(parsed.card!, "detail-card")}
-                            className="p-1.5 rounded hover:bg-ocean-100"
+                            className="p-1.5 rounded hover:bg-maroon-100"
                           >
                             {copiedField === "detail-card" ? (
                               <CheckCircle2 className="w-4 h-4 text-green-500" />
                             ) : (
-                              <Copy className="w-4 h-4 text-ocean-500" />
+                              <Copy className="w-4 h-4 text-maroon-500" />
                             )}
                           </button>
                         </div>
@@ -1000,15 +1000,15 @@ export function AdminInbox() {
                       <div className="flex items-center justify-between py-2">
                         <div className="text-xs text-slate-500">Данс эзэмшэгчийн нэр</div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-ocean-700">{parsed.owner}</span>
+                          <span className="font-medium text-maroon-700">{parsed.owner}</span>
                           <button
                             onClick={() => handleCopy(parsed.owner!, "detail-owner")}
-                            className="p-1.5 rounded hover:bg-ocean-100"
+                            className="p-1.5 rounded hover:bg-maroon-100"
                           >
                             {copiedField === "detail-owner" ? (
                               <CheckCircle2 className="w-4 h-4 text-green-500" />
                             ) : (
-                              <Copy className="w-4 h-4 text-ocean-500" />
+                              <Copy className="w-4 h-4 text-maroon-500" />
                             )}
                           </button>
                         </div>
@@ -1017,15 +1017,15 @@ export function AdminInbox() {
 
                     {!parsed.bank && !parsed.phone && !parsed.card && !parsed.owner && !parsed.account && (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-ocean-700 whitespace-pre-line">{item.bank_details}</span>
+                        <span className="text-sm font-medium text-maroon-700 whitespace-pre-line">{item.bank_details}</span>
                         <button
                           onClick={() => handleCopy(item.bank_details!, "detail-raw")}
-                          className="p-1.5 rounded hover:bg-ocean-100"
+                          className="p-1.5 rounded hover:bg-maroon-100"
                         >
                           {copiedField === "detail-raw" ? (
                             <CheckCircle2 className="w-4 h-4 text-green-500" />
                           ) : (
-                            <Copy className="w-4 h-4 text-ocean-600" />
+                            <Copy className="w-4 h-4 text-maroon-600" />
                           )}
                         </button>
                       </div>
@@ -1075,7 +1075,7 @@ export function AdminInbox() {
                         setDetailModal(null);
                         setAdminBillUrls([]);
                       }}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-ocean-600 text-white py-3 font-semibold hover:bg-ocean-700"
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"
                     >
                       <Upload className="w-5 h-5" /> Гүйлгээ дуусгах
                     </button>
@@ -1115,14 +1115,14 @@ export function AdminInbox() {
       {rejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-5 max-w-md w-full">
-            <div className="font-semibold text-ocean-700 mb-3">Гүйлгээг татгалзах</div>
+            <div className="font-semibold text-maroon-700 mb-3">Гүйлгээг татгалзах</div>
             <div className="text-sm text-slate-600 mb-2">
               Хэрэглэгчид илгээх шалтгаан/тайлбарыг оруулна уу (Telegram чатаар илгээгдэнэ):
             </div>
             <textarea
               value={rejectComment}
               onChange={(e) => setRejectComment(e.target.value)}
-              className="w-full border border-ocean-200 rounded-lg p-3 text-sm mb-3"
+              className="w-full border border-maroon-200 rounded-lg p-3 text-sm mb-3"
               rows={3}
               placeholder="Татгалзсан шалтгаан..."
             />
@@ -1159,14 +1159,14 @@ export function AdminInbox() {
         return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-5 max-w-md w-full max-h-[90vh] overflow-auto">
-            <div className="font-semibold text-ocean-700 mb-3">Гүйлгээг дуусгах</div>
+            <div className="font-semibold text-maroon-700 mb-3">Гүйлгээг дуусгах</div>
 
             {/* Invoice ID - Copyable */}
             <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs text-slate-500">📋 Invoice</div>
-                  <span className="font-mono font-medium text-ocean-700">{confirmModal.invoice}</span>
+                  <span className="font-mono font-medium text-maroon-700">{confirmModal.invoice}</span>
                 </div>
                 <button
                   onClick={() => handleCopy(confirmModal.invoice, "confirm-invoice")}
@@ -1176,35 +1176,35 @@ export function AdminInbox() {
                   {copiedField === "confirm-invoice" ? (
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                   ) : (
-                    <Copy className="w-4 h-4 text-ocean-600" />
+                    <Copy className="w-4 h-4 text-maroon-600" />
                   )}
                 </button>
               </div>
             </div>
 
             {/* Transfer Amount */}
-            <div className="mb-4 p-3 bg-gradient-to-r from-ocean-50 to-sky-50 rounded-lg border border-ocean-200">
+            <div className="mb-4 p-3 bg-gradient-to-r from-maroon-50 to-sky-50 rounded-lg border border-maroon-200">
               <div className="text-xs text-slate-500 mb-1">Шилжүүлэх дүн:</div>
               <div className="flex items-center justify-between">
-                <span className="text-xl font-bold text-ocean-700">
+                <span className="text-xl font-bold text-maroon-700">
                   {Number(transferAmount).toLocaleString()} {transferCurrency}
                 </span>
                 <button
                   onClick={() => handleCopy(transferAmount, "modal-amount")}
-                  className="p-1.5 rounded-lg hover:bg-ocean-100 bg-white/50"
+                  className="p-1.5 rounded-lg hover:bg-maroon-100 bg-white/50"
                   title="Дүнг хуулбарлах"
                 >
                   {copiedField === "modal-amount" ? (
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                   ) : (
-                    <Copy className="w-4 h-4 text-ocean-600" />
+                    <Copy className="w-4 h-4 text-maroon-600" />
                   )}
                 </button>
               </div>
             </div>
 
             {/* User's Bank Info - Structured */}
-            <div className="mb-4 p-3 bg-white rounded-lg border border-ocean-200">
+            <div className="mb-4 p-3 bg-white rounded-lg border border-maroon-200">
               <div className="text-xs text-slate-500 mb-2">Хэрэглэгчийн данс руу шилжүүлэх дүн:</div>
               
               {/* Bank Mismatch Warning */}
@@ -1227,15 +1227,15 @@ export function AdminInbox() {
                 <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
                   <div className="text-xs text-slate-500">Банк</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-ocean-700">{parsed.bank}</span>
+                    <span className="font-medium text-maroon-700">{parsed.bank}</span>
                     <button
                       onClick={() => handleCopy(parsed.bank!, "modal-bank")}
-                      className="p-1 rounded hover:bg-ocean-100"
+                      className="p-1 rounded hover:bg-maroon-100"
                     >
                       {copiedField === "modal-bank" ? (
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-ocean-500" />
+                        <Copy className="w-3.5 h-3.5 text-maroon-500" />
                       )}
                     </button>
                   </div>
@@ -1247,15 +1247,15 @@ export function AdminInbox() {
                 <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
                   <div className="text-xs text-slate-500">Дансны дугаар</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-medium text-ocean-700">{parsed.account}</span>
+                    <span className="font-mono font-medium text-maroon-700">{parsed.account}</span>
                     <button
                       onClick={() => handleCopy(parsed.account!, "modal-account")}
-                      className="p-1 rounded hover:bg-ocean-100"
+                      className="p-1 rounded hover:bg-maroon-100"
                     >
                       {copiedField === "modal-account" ? (
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-ocean-500" />
+                        <Copy className="w-3.5 h-3.5 text-maroon-500" />
                       )}
                     </button>
                   </div>
@@ -1267,15 +1267,15 @@ export function AdminInbox() {
                 <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
                   <div className="text-xs text-slate-500">Утасны дугаар</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-medium text-ocean-700">{parsed.phone}</span>
+                    <span className="font-mono font-medium text-maroon-700">{parsed.phone}</span>
                     <button
                       onClick={() => handleCopy(parsed.phone!, "modal-phone")}
-                      className="p-1 rounded hover:bg-ocean-100"
+                      className="p-1 rounded hover:bg-maroon-100"
                     >
                       {copiedField === "modal-phone" ? (
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-ocean-500" />
+                        <Copy className="w-3.5 h-3.5 text-maroon-500" />
                       )}
                     </button>
                   </div>
@@ -1287,15 +1287,15 @@ export function AdminInbox() {
                 <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
                   <div className="text-xs text-slate-500">Картын дугаар</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-medium text-ocean-700">{parsed.card}</span>
+                    <span className="font-mono font-medium text-maroon-700">{parsed.card}</span>
                     <button
                       onClick={() => handleCopy(parsed.card!, "modal-card")}
-                      className="p-1 rounded hover:bg-ocean-100"
+                      className="p-1 rounded hover:bg-maroon-100"
                     >
                       {copiedField === "modal-card" ? (
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-ocean-500" />
+                        <Copy className="w-3.5 h-3.5 text-maroon-500" />
                       )}
                     </button>
                   </div>
@@ -1307,15 +1307,15 @@ export function AdminInbox() {
                 <div className="flex items-center justify-between py-1.5">
                   <div className="text-xs text-slate-500">Данс эзэмшигчийн нэр</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-ocean-700">{parsed.owner}</span>
+                    <span className="font-medium text-maroon-700">{parsed.owner}</span>
                     <button
                       onClick={() => handleCopy(parsed.owner!, "modal-owner")}
-                      className="p-1 rounded hover:bg-ocean-100"
+                      className="p-1 rounded hover:bg-maroon-100"
                     >
                       {copiedField === "modal-owner" ? (
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-ocean-500" />
+                        <Copy className="w-3.5 h-3.5 text-maroon-500" />
                       )}
                     </button>
                   </div>
@@ -1325,15 +1325,15 @@ export function AdminInbox() {
               {/* Fallback */}
               {!parsed.bank && !parsed.phone && !parsed.card && !parsed.owner && !parsed.account && confirmModal.bank_details && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-ocean-700 whitespace-pre-line">{confirmModal.bank_details}</span>
+                  <span className="text-sm font-medium text-maroon-700 whitespace-pre-line">{confirmModal.bank_details}</span>
                   <button
                     onClick={() => handleCopy(confirmModal.bank_details || "", "modal-raw")}
-                    className="p-1 rounded hover:bg-ocean-100"
+                    className="p-1 rounded hover:bg-maroon-100"
                   >
                     {copiedField === "modal-raw" ? (
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
                     ) : (
-                      <Copy className="w-4 h-4 text-ocean-600" />
+                      <Copy className="w-4 h-4 text-maroon-600" />
                     )}
                   </button>
                 </div>
@@ -1352,7 +1352,7 @@ export function AdminInbox() {
                       <img 
                         src={url} 
                         alt={`Admin receipt ${idx + 1}`} 
-                        className="w-20 h-20 object-cover rounded-lg border border-ocean-200 cursor-pointer"
+                        className="w-20 h-20 object-cover rounded-lg border border-maroon-200 cursor-pointer"
                         onClick={() => setPhotoModal(url)}
                       />
                       <button
@@ -1366,8 +1366,8 @@ export function AdminInbox() {
                 </div>
               )}
               
-              <label className="flex flex-col items-center justify-center border-2 border-dashed border-ocean-200 rounded-xl py-4 cursor-pointer bg-white/60 hover:bg-ocean-50">
-                <Upload className="w-5 h-5 text-ocean-600" />
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-maroon-200 rounded-xl py-4 cursor-pointer bg-white/60 hover:bg-maroon-50">
+                <Upload className="w-5 h-5 text-maroon-600" />
                 <span className="text-xs text-slate-500 mt-1">
                   {uploading ? "Хуулж байна..." : adminBillUrls.length > 0 ? "Нэмж зураг оруулах" : "Дарж оруулна уу"}
                 </span>
@@ -1413,7 +1413,7 @@ export function AdminInbox() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-5 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
-              <div className="font-semibold text-ocean-700 flex items-center gap-2">
+              <div className="font-semibold text-maroon-700 flex items-center gap-2">
                 <UserCheck className="w-5 h-5" />
                 {currentShift ? "Ээлж шилжүүлэх" : "Ээлж эхлүүлэх"}
               </div>
@@ -1443,7 +1443,7 @@ export function AdminInbox() {
                   <select
                     value={selectedAdminId || ""}
                     onChange={(e) => setSelectedAdminId(e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full border border-ocean-200 rounded-lg p-3 text-sm bg-white"
+                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
                   >
                     <option value="">-- Админ сонгоно уу --</option>
                     {adminUsers
@@ -1474,7 +1474,7 @@ export function AdminInbox() {
                   <select
                     value={selectedAdminId || ""}
                     onChange={(e) => setSelectedAdminId(e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full border border-ocean-200 rounded-lg p-3 text-sm bg-white"
+                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
                   >
                     <option value="">-- Админ сонгоно уу --</option>
                     {adminUsers.map(admin => (
@@ -1503,7 +1503,7 @@ export function AdminInbox() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-5 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
-              <div className="font-semibold text-ocean-700 flex items-center gap-2">
+              <div className="font-semibold text-maroon-700 flex items-center gap-2">
                 <Clock className="w-5 h-5" />
                 Ажлын цаг тохируулах
               </div>
@@ -1547,7 +1547,7 @@ export function AdminInbox() {
                   <select
                     value={editStartHour}
                     onChange={(e) => setEditStartHour(parseInt(e.target.value))}
-                    className="w-full border border-ocean-200 rounded-lg p-3 text-sm bg-white"
+                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
                     disabled={!editIsEnabled}
                   >
                     {Array.from({ length: 24 }, (_, i) => (
@@ -1567,7 +1567,7 @@ export function AdminInbox() {
                   <select
                     value={editEndHour}
                     onChange={(e) => setEditEndHour(parseInt(e.target.value))}
-                    className="w-full border border-ocean-200 rounded-lg p-3 text-sm bg-white"
+                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
                     disabled={!editIsEnabled}
                   >
                     {Array.from({ length: 24 }, (_, i) => (

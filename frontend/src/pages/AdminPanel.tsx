@@ -47,14 +47,14 @@ export function AdminPanel() {
   if (!isAuthenticated) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-ocean-700">
+        <div className="flex items-center gap-2 text-maroon-700">
           <Shield className="w-5 h-5" /> Админ самбар
         </div>
 
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-md mx-auto">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-ocean-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-ocean-600" />
+            <div className="w-16 h-16 bg-maroon-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-maroon-600" />
             </div>
             <h2 className="text-xl font-bold text-slate-800">Админ нэвтрэлт</h2>
             <p className="text-sm text-slate-500 mt-1">API түлхүүр оруулна уу</p>
@@ -71,7 +71,7 @@ export function AdminPanel() {
                 }}
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 placeholder="API түлхүүр"
-                className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-ocean-500"
+                className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-500"
               />
               <button
                 type="button"
@@ -88,7 +88,7 @@ export function AdminPanel() {
 
             <button
               onClick={handleLogin}
-              className="w-full bg-ocean-600 text-white py-3 rounded-xl font-semibold hover:bg-ocean-700 transition"
+              className="w-full bg-maroon-600 text-white py-3 rounded-xl font-semibold hover:bg-maroon-700 transition"
             >
               Нэвтрэх
             </button>
@@ -101,7 +101,7 @@ export function AdminPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-ocean-700">
+        <div className="flex items-center gap-2 text-maroon-700">
           <Shield className="w-5 h-5" /> Админ самбар
         </div>
         <button
@@ -118,8 +118,8 @@ export function AdminPanel() {
           onClick={() => setActiveTab("inbox")}
           className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "inbox"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              ? "bg-maroon-600 text-white"
+              : "bg-white/50 text-maroon-700 hover:bg-maroon-100"
           }`}
         >
           <Inbox className="w-4 h-4" />
@@ -129,8 +129,8 @@ export function AdminPanel() {
           onClick={() => setActiveTab("kyc")}
           className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "kyc"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              ? "bg-maroon-600 text-white"
+              : "bg-white/50 text-maroon-700 hover:bg-maroon-100"
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -140,8 +140,8 @@ export function AdminPanel() {
           onClick={() => setActiveTab("users")}
           className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "users"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              ? "bg-maroon-600 text-white"
+              : "bg-white/50 text-maroon-700 hover:bg-maroon-100"
           }`}
         >
           <Users className="w-4 h-4" />
@@ -151,8 +151,8 @@ export function AdminPanel() {
           onClick={() => setActiveTab("banks")}
           className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "banks"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              ? "bg-maroon-600 text-white"
+              : "bg-white/50 text-maroon-700 hover:bg-maroon-100"
           }`}
         >
           <CreditCard className="w-4 h-4" />
@@ -162,8 +162,8 @@ export function AdminPanel() {
           onClick={() => setActiveTab("history")}
           className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "history"
-              ? "bg-ocean-600 text-white"
-              : "bg-white/50 text-ocean-700 hover:bg-ocean-100"
+              ? "bg-maroon-600 text-white"
+              : "bg-white/50 text-maroon-700 hover:bg-maroon-100"
           }`}
         >
           <History className="w-4 h-4" />

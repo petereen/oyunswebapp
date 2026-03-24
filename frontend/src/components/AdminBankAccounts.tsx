@@ -127,7 +127,7 @@ export function AdminBankAccounts() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <RefreshCw className="w-8 h-8 text-ocean-500 animate-spin" />
+        <RefreshCw className="w-8 h-8 text-maroon-500 animate-spin" />
       </div>
     );
   }
@@ -137,7 +137,7 @@ export function AdminBankAccounts() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-          <CreditCard className="w-5 h-5 text-ocean-600" />
+          <CreditCard className="w-5 h-5 text-maroon-600" />
           Банкны дансны удирдлага
         </h3>
         <div className="flex gap-2">
@@ -149,7 +149,7 @@ export function AdminBankAccounts() {
           </button>
           <button
             onClick={handleAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-700 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-maroon-600 text-white rounded-lg hover:bg-maroon-700 transition"
           >
             <Plus className="w-4 h-4" />
             Данс нэмэх
@@ -179,7 +179,7 @@ export function AdminBankAccounts() {
       {/* Accounts List */}
       <div className="space-y-3">
         {accounts.length === 0 && !editingId && (
-          <div className="text-center py-12 bg-white/50 rounded-xl border border-ocean-100">
+          <div className="text-center py-12 bg-white/50 rounded-xl border border-maroon-100">
             <CreditCard className="w-12 h-12 mx-auto text-slate-300 mb-2" />
             <p className="text-slate-500">Данс бүртгэгдээгүй байна</p>
           </div>
@@ -190,7 +190,7 @@ export function AdminBankAccounts() {
             key={account.id}
             className={`p-4 rounded-xl border ${
               account.is_active
-                ? "bg-white border-ocean-100"
+                ? "bg-white border-maroon-100"
                 : "bg-slate-50 border-slate-200 opacity-75"
             }`}
           >
@@ -401,7 +401,7 @@ function AccountForm({
             type="checkbox"
             checked={account.is_active ?? true}
             onChange={(e) => onChange({ ...account, is_active: e.target.checked })}
-            className="w-4 h-4 text-ocean-600 border-slate-300 rounded"
+            className="w-4 h-4 text-maroon-600 border-slate-300 rounded"
           />
           Идэвхтэй
         </label>
@@ -418,7 +418,7 @@ function AccountForm({
         <button
           onClick={onSave}
           disabled={saving}
-          className="px-4 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-700 transition flex items-center gap-2 disabled:opacity-50"
+          className="px-4 py-2 bg-maroon-600 text-white rounded-lg hover:bg-maroon-700 transition flex items-center gap-2 disabled:opacity-50"
         >
           {saving ? (
             <RefreshCw className="w-4 h-4 animate-spin" />

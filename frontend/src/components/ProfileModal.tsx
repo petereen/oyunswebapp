@@ -170,8 +170,8 @@ export function ProfileModal({ userId, onClose }: Props) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto" onClick={onClose}>
       <div className="glass-card rounded-2xl p-6 w-full max-w-md my-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-ocean-700">{editMode ? "Банкны мэдээлэл засах" : "Миний профайл"}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-ocean-100 rounded-full">
+          <h2 className="text-xl font-bold text-maroon-700">{editMode ? "Банкны мэдээлэл засах" : "Миний профайл"}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-maroon-100 rounded-full">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
@@ -179,12 +179,12 @@ export function ProfileModal({ userId, onClose }: Props) {
         {profile ? (
           <div className="space-y-4">
             {/* User Info - Always shown */}
-            <div className="flex items-center gap-3 p-3 bg-ocean-50 rounded-xl">
-              <div className="w-12 h-12 bg-ocean-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+            <div className="flex items-center gap-3 p-3 bg-maroon-50 rounded-xl">
+              <div className="w-12 h-12 bg-maroon-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
                 {profile.first_name?.[0] || "U"}
               </div>
               <div>
-                <div className="font-semibold text-ocean-700">
+                <div className="font-semibold text-maroon-700">
                   {profile.first_name} {profile.last_name}
                 </div>
                 <div className="text-xs text-slate-500">ID: {profile.id}</div>
@@ -206,14 +206,14 @@ export function ProfileModal({ userId, onClose }: Props) {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                    className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                     placeholder="+7 900 123 4567"
                   />
                 </div>
 
                 {/* RUB Bank Section */}
                 <div className="space-y-2 p-3 bg-slate-50 rounded-xl">
-                  <div className="flex items-center gap-2 text-ocean-700 font-semibold text-sm">
+                  <div className="flex items-center gap-2 text-maroon-700 font-semibold text-sm">
                     <CreditCard className="w-4 h-4" />
                     RUB банкны мэдээлэл
                   </div>
@@ -224,7 +224,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                       type="checkbox"
                       checked={hasRubBank}
                       onChange={(e) => setHasRubBank(e.target.checked)}
-                      className="w-5 h-5 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+                      className="w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
                     />
                     <span className="text-sm text-slate-600">
                       Оросын банкны данс байгаа
@@ -232,11 +232,11 @@ export function ProfileModal({ userId, onClose }: Props) {
                   </label>
 
                   {hasRubBank && (
-                    <div className="space-y-2 pl-2 border-l-2 border-ocean-200">
+                    <div className="space-y-2 pl-2 border-l-2 border-maroon-200">
                       <select
                         value={rubBankName}
                         onChange={(e) => setRubBankName(e.target.value)}
-                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm bg-white"
+                        className="w-full rounded-lg border border-maroon-200 p-2 text-sm bg-white"
                       >
                         <option value="">Банк сонгоно уу</option>
                         {RUB_BANKS.map((bank) => (
@@ -248,7 +248,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                           type="text"
                           value={rubBankNameOther}
                           onChange={(e) => setRubBankNameOther(e.target.value)}
-                          className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                          className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                           placeholder="Банкны нэр"
                         />
                       )}
@@ -256,14 +256,14 @@ export function ProfileModal({ userId, onClose }: Props) {
                         type="tel"
                         value={rubPhoneSbp}
                         onChange={(e) => setRubPhoneSbp(formatRussianPhone(e.target.value))}
-                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                        className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                         placeholder="+7 XXX XXX XX XX"
                       />
                       <input
                         type="text"
                         value={rubCardNumber}
                         onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))}
-                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                        className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                         placeholder="XXXX XXXX XXXX XXXX"
                         maxLength={19}
                       />
@@ -271,7 +271,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                         type="text"
                         value={rubOwnerName}
                         onChange={(e) => setRubOwnerName(e.target.value)}
-                        className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                        className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                         placeholder="Эзэмшигчийн нэр"
                       />
                     </div>
@@ -280,14 +280,14 @@ export function ProfileModal({ userId, onClose }: Props) {
 
                 {/* MNT Bank Section */}
                 <div className="space-y-2 p-3 bg-slate-50 rounded-xl">
-                  <div className="flex items-center gap-2 text-ocean-700 font-semibold text-sm">
+                  <div className="flex items-center gap-2 text-maroon-700 font-semibold text-sm">
                     <Building className="w-4 h-4" />
                     MNT банкны мэдээлэл
                   </div>
                   <select
                     value={mntBankName}
                     onChange={(e) => setMntBankName(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm bg-white"
+                    className="w-full rounded-lg border border-maroon-200 p-2 text-sm bg-white"
                   >
                     <option value="">Банк сонгоно уу</option>
                     {MNT_BANKS.map((bank) => (
@@ -299,7 +299,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                       type="text"
                       value={mntBankNameOther}
                       onChange={(e) => setMntBankNameOther(e.target.value)}
-                      className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                      className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                       placeholder="Банкны нэр"
                     />
                   )}
@@ -307,21 +307,21 @@ export function ProfileModal({ userId, onClose }: Props) {
                     type="text"
                     value={mntAccountNumber}
                     onChange={(e) => setMntAccountNumber(formatIBAN(e.target.value))}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                    className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                     placeholder="MN XX XXXX XX XXXXXXXXXX"
                   />
                   <input
                     type="text"
                     value={mntOwnerName}
                     onChange={(e) => setMntOwnerName(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                    className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                     placeholder="Эзэмшигчийн нэр"
                   />
                   <input
                     type="tel"
                     value={mntPhone}
                     onChange={(e) => setMntPhone(formatMongolianPhone(e.target.value))}
-                    className="w-full rounded-lg border border-ocean-200 p-2 text-sm"
+                    className="w-full rounded-lg border border-maroon-200 p-2 text-sm"
                     placeholder="+976 XXXX XXXX"
                   />
                 </div>
@@ -338,14 +338,14 @@ export function ProfileModal({ userId, onClose }: Props) {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setEditMode(false)}
-                    className="flex-1 py-3 rounded-xl border border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+                    className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
                   >
                     Болих
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-ocean-600 text-white font-medium hover:bg-ocean-700 transition disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-maroon-600 text-white font-medium hover:bg-maroon-700 transition disabled:opacity-50"
                   >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Хадгалах
@@ -358,9 +358,9 @@ export function ProfileModal({ userId, onClose }: Props) {
                 {/* Contact Info */}
                 <div className="space-y-2">
                   {profile.email && (
-                    <div className="flex items-center gap-3 p-3 border border-ocean-100 rounded-xl">
-                      <div className="w-8 h-8 bg-ocean-100 rounded-full flex items-center justify-center">
-                        <span className="text-ocean-600 text-sm">@</span>
+                    <div className="flex items-center gap-3 p-3 border border-maroon-100 rounded-xl">
+                      <div className="w-8 h-8 bg-maroon-100 rounded-full flex items-center justify-center">
+                        <span className="text-maroon-600 text-sm">@</span>
                       </div>
                       <div>
                         <div className="text-xs text-slate-500">Имэйл</div>
@@ -370,8 +370,8 @@ export function ProfileModal({ userId, onClose }: Props) {
                   )}
                   
                   {profile.phone && (
-                    <div className="flex items-center gap-3 p-3 border border-ocean-100 rounded-xl">
-                      <Phone className="w-5 h-5 text-ocean-600" />
+                    <div className="flex items-center gap-3 p-3 border border-maroon-100 rounded-xl">
+                      <Phone className="w-5 h-5 text-maroon-600" />
                       <div>
                         <div className="text-xs text-slate-500">Орос утас</div>
                         <div className="font-medium">{profile.phone}</div>
@@ -380,7 +380,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                   )}
                   
                   {profile.phone_mnt && (
-                    <div className="flex items-center gap-3 p-3 border border-ocean-100 rounded-xl">
+                    <div className="flex items-center gap-3 p-3 border border-maroon-100 rounded-xl">
                       <Phone className="w-5 h-5 text-green-600" />
                       <div>
                         <div className="text-xs text-slate-500">Монгол утас</div>
@@ -393,7 +393,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                 {/* Banks */}
                 <div className="grid grid-cols-2 gap-3">
                   {profile.bank_rub && (
-                    <div className="p-3 border border-ocean-100 rounded-xl">
+                    <div className="p-3 border border-maroon-100 rounded-xl">
                       <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                         <CreditCard className="w-4 h-4" /> RUB банк
                       </div>
@@ -401,7 +401,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                     </div>
                   )}
                   {profile.bank_mnt && (
-                    <div className="p-3 border border-ocean-100 rounded-xl">
+                    <div className="p-3 border border-maroon-100 rounded-xl">
                       <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                         <CreditCard className="w-4 h-4" /> MNT банк
                       </div>
@@ -414,7 +414,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                 {profile.verified && (profile.bank_rub || profile.bank_mnt) && (
                   <button
                     onClick={() => setEditMode(true)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
                   >
                     <Edit2 className="w-4 h-4" />
                     Банкны мэдээлэл засах
@@ -422,7 +422,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                 )}
 
                 {/* Promo Codes Section */}
-                <div className="border border-ocean-100 rounded-xl overflow-hidden">
+                <div className="border border-maroon-100 rounded-xl overflow-hidden">
                   <button
                     onClick={() => setShowPromos(!showPromos)}
                     className="w-full p-3 flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 transition"
@@ -439,7 +439,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                   </button>
                   
                   {showPromos && (
-                    <div className="p-3 bg-white border-t border-ocean-100">
+                    <div className="p-3 bg-white border-t border-maroon-100">
                       {promoLoading ? (
                         <div className="text-center text-slate-500 text-sm py-2">Ачаалж байна...</div>
                       ) : promoCodes?.promo_codes && promoCodes.promo_codes.length > 0 ? (
@@ -452,7 +452,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   <Gift className="w-4 h-4 text-purple-500" />
-                                  <span className="font-mono font-bold text-ocean-700">{promo.code}</span>
+                                  <span className="font-mono font-bold text-maroon-700">{promo.code}</span>
                                 </div>
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${promo.active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500'}`}>
                                   {promo.active ? 'Идэвхтэй' : 'Идэвхгүй'}
@@ -496,11 +496,11 @@ export function ProfileModal({ userId, onClose }: Props) {
                   href={TERMS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 border border-ocean-100 rounded-xl hover:bg-ocean-50 transition"
+                  className="flex items-center justify-between p-3 border border-maroon-100 rounded-xl hover:bg-maroon-50 transition"
                 >
                   <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-ocean-600" />
-                    <span className="font-medium text-ocean-700">Хэрэглэгчийн гэрээ</span>
+                    <FileText className="w-5 h-5 text-maroon-600" />
+                    <span className="font-medium text-maroon-700">Хэрэглэгчийн гэрээ</span>
                   </div>
                   <ExternalLink className="w-4 h-4 text-slate-400" />
                 </a>

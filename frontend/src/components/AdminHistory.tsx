@@ -94,14 +94,14 @@ export function AdminHistory() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-ocean-700">
+        <div className="flex items-center gap-2 text-maroon-700">
           <History className="w-5 h-5" />
           <span className="font-semibold">Гүйлгээний түүх</span>
           <span className="text-sm text-slate-500">({total} гүйлгээ)</span>
         </div>
         <button
           onClick={loadHistory}
-          className="text-sm text-ocean-600 hover:text-ocean-700"
+          className="text-sm text-maroon-600 hover:text-maroon-700"
         >
           Шинэчлэх
         </button>
@@ -117,7 +117,7 @@ export function AdminHistory() {
             placeholder="Invoice, User ID, Нэр хайх..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-ocean-500"
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-500"
           />
         </div>
         
@@ -130,7 +130,7 @@ export function AdminHistory() {
               setStatusFilter(e.target.value);
               setPage(0);
             }}
-            className="px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-ocean-500"
+            className="px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-500"
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -221,7 +221,7 @@ export function AdminHistory() {
                 {/* Expand button */}
                 <button
                   onClick={() => setExpandedItem(expandedItem === item.invoice ? null : item.invoice)}
-                  className="text-ocean-600 text-sm hover:underline"
+                  className="text-maroon-600 text-sm hover:underline"
                 >
                   {expandedItem === item.invoice ? "Хураах" : "Дэлгэрэнгүй"}
                 </button>
@@ -267,7 +267,7 @@ export function AdminHistory() {
                         href={item.receipt_id}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-ocean-600 hover:underline"
+                        className="flex items-center gap-1 text-maroon-600 hover:underline"
                       >
                         <ExternalLink className="w-3 h-3" /> Хэрэглэгчийн баримт
                       </a>
@@ -277,7 +277,7 @@ export function AdminHistory() {
                         href={item.bill_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-ocean-600 hover:underline"
+                        className="flex items-center gap-1 text-maroon-600 hover:underline"
                       >
                         <ExternalLink className="w-3 h-3" /> Bill URL
                       </a>

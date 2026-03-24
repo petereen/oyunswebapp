@@ -140,8 +140,8 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
   if (isAuthenticating) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-        <Loader2 className="w-12 h-12 text-ocean-600 animate-spin" />
-        <div className="text-lg font-medium text-ocean-700">Нэвтэрч байна...</div>
+        <Loader2 className="w-12 h-12 text-maroon-600 animate-spin" />
+        <div className="text-lg font-medium text-maroon-700">Нэвтэрч байна...</div>
         <div className="text-sm text-slate-500">Түр хүлээнэ үү</div>
       </div>
     );
@@ -166,8 +166,8 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
       {/* Header with Profile */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-ocean-600">OYUNS FINANCE</div>
-          <div className="text-2xl font-bold text-ocean-700">ВАЛЮТ СОЛИХ ПЛАТФОРМ</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-maroon-600">OYUNS FINANCE</div>
+          <div className="text-2xl font-bold text-maroon-700">ВАЛЮТ СОЛИХ ПЛАТФОРМ</div>
           {user && (
             <div className="text-sm text-slate-500">Сайн байна уу, {user.first_name}</div>
           )}
@@ -176,7 +176,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
           {/* Refresh Button */}
           <button
             onClick={handleRefresh}
-            className="p-2 rounded-full bg-white text-ocean-700 hover:bg-ocean-50 transition"
+            className="p-2 rounded-full bg-white text-maroon-700 hover:bg-maroon-50 transition"
             title="Шинэчлэх"
           >
             <RefreshCw className="w-5 h-5" />
@@ -185,7 +185,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
           {isVerified ? (
             <button
               onClick={() => setShowProfile(true)}
-              className="p-2 rounded-full bg-ocean-100 text-ocean-700 hover:bg-ocean-200 transition"
+              className="p-2 rounded-full bg-maroon-100 text-maroon-700 hover:bg-maroon-200 transition"
               title="Профайл"
             >
               <User className="w-5 h-5" />
@@ -193,7 +193,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
           ) : (
             <button
               onClick={() => setShowRegistration(true)}
-              className="p-2 rounded-full bg-ocean-600 text-white hover:bg-ocean-700 transition"
+              className="p-2 rounded-full bg-maroon-600 text-white hover:bg-maroon-700 transition"
               title="Бүртгүүлэх"
             >
               <UserPlus className="w-5 h-5" />
@@ -201,14 +201,14 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
           )}
           <button
             onClick={() => setShowHistory(true)}
-            className="p-2 rounded-full bg-white text-ocean-700 hover:bg-ocean-50 transition"
+            className="p-2 rounded-full bg-white text-maroon-700 hover:bg-maroon-50 transition"
             title="Түүх"
           >
             <History className="w-5 h-5" />
           </button>
           <button
             onClick={() => setShowAnalytics(true)}
-            className="p-2 rounded-full bg-white text-ocean-700 hover:bg-ocean-50 transition"
+            className="p-2 rounded-full bg-white text-maroon-700 hover:bg-maroon-50 transition"
             title="Статистик"
           >
             <BarChart3 className="w-5 h-5" />
@@ -274,18 +274,18 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
                 {!isVerified && !pendingVerification ? (
                   // User not registered - can use calculator but not exchange
                   <>
-                    <div className="flex items-center justify-center w-16 h-16 bg-ocean-100 rounded-full">
-                      <UserPlus className="w-8 h-8 text-ocean-600" />
+                    <div className="flex items-center justify-center w-16 h-16 bg-maroon-100 rounded-full">
+                      <UserPlus className="w-8 h-8 text-maroon-600" />
                     </div>
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-ocean-700 mb-2">Бүртгүүлэх шаардлагатай</div>
+                      <div className="text-lg font-semibold text-maroon-700 mb-2">Бүртгүүлэх шаардлагатай</div>
                       <div className="text-sm text-slate-500">
-                        Валют солихын тулд эхлээд бүртгүүлнэ үү. Баруун дээр байрлах <UserPlus className="w-4 h-4 inline-block text-ocean-600" /> товчийг дарна уу.
+                        Валют солихын тулд эхлээд бүртгүүлнэ үү. Баруун дээр байрлах <UserPlus className="w-4 h-4 inline-block text-maroon-600" /> товчийг дарна уу.
                       </div>
                     </div>
                     <button
                       onClick={() => setShowRegistration(true)}
-                      className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition"
+                      className="w-full max-w-xs bg-maroon-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-maroon-200 hover:bg-maroon-700 transition"
                     >
                       БҮРТГҮҮЛЭХ
                     </button>
@@ -315,7 +315,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
                 ) : serviceStatus?.is_open !== false ? (
                   <>
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-ocean-700 mb-2">Та валют солиход бэлэн үү?</div>
+                      <div className="text-lg font-semibold text-maroon-700 mb-2">Та валют солиход бэлэн үү?</div>
                       <div className="text-sm text-slate-500">
                         {direction === "buy" ? "RUB → MNT" : "MNT → RUB"} ХАНШ {effectiveRate || "—"}
                       </div>
@@ -324,7 +324,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
                     <button
                       onClick={handleExchangeClick}
                       disabled={!rate || ratesLoading}
-                      className="w-full max-w-xs bg-ocean-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-ocean-200 hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full max-w-xs bg-maroon-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-maroon-200 hover:bg-maroon-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       ВАЛЮТ СОЛИХ
                     </button>

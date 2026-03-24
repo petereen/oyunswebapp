@@ -290,11 +290,11 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           </p>
           <div className="bg-slate-100 rounded-lg p-3 mb-6">
             <div className="text-xs text-slate-500">Invoice ID</div>
-            <div className="font-mono font-bold text-ocean-700">{successInvoice}</div>
+            <div className="font-mono font-bold text-maroon-700">{successInvoice}</div>
           </div>
           <button
             onClick={onSuccess}
-            className="w-full py-4 rounded-xl bg-ocean-600 text-white font-bold hover:bg-ocean-700 transition"
+            className="w-full py-4 rounded-xl bg-maroon-600 text-white font-bold hover:bg-maroon-700 transition"
           >
             Дуусгах
           </button>
@@ -307,12 +307,12 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
     <div className="glass-card p-6 rounded-2xl border border-white/60">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="p-2 rounded-full hover:bg-ocean-100 transition">
-          <ArrowLeft className="w-5 h-5 text-ocean-600" />
+        <button onClick={onBack} className="p-2 rounded-full hover:bg-maroon-100 transition">
+          <ArrowLeft className="w-5 h-5 text-maroon-600" />
         </button>
         <div className="flex items-center gap-2">
           <Gift className="w-6 h-6 text-pink-500" />
-          <h2 className="text-xl font-bold text-ocean-700">Бэлэг илгээх</h2>
+          <h2 className="text-xl font-bold text-maroon-700">Бэлэг илгээх</h2>
         </div>
       </div>
 
@@ -330,7 +330,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 0 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-ocean-700">Бэлгийн карт сонгох</h3>
+            <h3 className="text-lg font-semibold text-maroon-700">Бэлгийн карт сонгох</h3>
             <p className="text-sm text-slate-500">Хүлээн авагчид илгээх картаа сонгоно уу</p>
           </div>
 
@@ -350,7 +350,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                   onClick={prevCard}
                   className="p-2 rounded-full bg-white shadow-lg hover:bg-slate-50 transition"
                 >
-                  <ChevronLeft className="w-6 h-6 text-ocean-600" />
+                  <ChevronLeft className="w-6 h-6 text-maroon-600" />
                 </button>
 
                 <div className="w-full max-w-[320px] relative overflow-hidden rounded-xl shadow-lg" style={{ aspectRatio: '1280/853' }}>
@@ -365,7 +365,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                   onClick={nextCard}
                   className="p-2 rounded-full bg-white shadow-lg hover:bg-slate-50 transition"
                 >
-                  <ChevronRight className="w-6 h-6 text-ocean-600" />
+                  <ChevronRight className="w-6 h-6 text-maroon-600" />
                 </button>
               </div>
 
@@ -390,7 +390,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               type="text"
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
-              className="w-full rounded-lg border border-ocean-200 p-3 text-sm mt-1"
+              className="w-full rounded-lg border border-maroon-200 p-3 text-sm mt-1"
               placeholder="Жишээ нь: Найзаас нь"
             />
           </div>
@@ -409,7 +409,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 1 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-ocean-700">Хүлээн авагчийн мэдээлэл</h3>
+            <h3 className="text-lg font-semibold text-maroon-700">Хүлээн авагчийн мэдээлэл</h3>
             <p className="text-sm text-slate-500">Бэлэг хүлээн авах хүний бүртгэлтэй утасны дугаарыг оруулна уу</p>
           </div>
 
@@ -426,13 +426,13 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                   setRecipientFound(null);
                   setRecipientError("");
                 }}
-                className="flex-1 rounded-lg border border-ocean-200 p-3 text-sm"
+                className="flex-1 rounded-lg border border-maroon-200 p-3 text-sm"
                 placeholder="+976 9911 2233"
               />
               <button
                 onClick={handleSearchRecipient}
                 disabled={recipientSearching}
-                className="px-4 py-2 rounded-lg bg-ocean-600 text-white font-medium hover:bg-ocean-700 transition disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-maroon-600 text-white font-medium hover:bg-maroon-700 transition disabled:opacity-50"
               >
                 {recipientSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : "Хайх"}
               </button>
@@ -466,7 +466,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           <div className="flex gap-2">
             <button
               onClick={() => setStep(0)}
-              className="flex-1 py-3 rounded-xl border border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+              className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
               Буцах
             </button>
@@ -485,7 +485,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 2 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-ocean-700">Бэлгийн мэдээлэл</h3>
+            <h3 className="text-lg font-semibold text-maroon-700">Бэлгийн мэдээлэл</h3>
             <p className="text-sm text-slate-500">Илгээх валют, дүн болон мессежээ оруулна уу</p>
           </div>
 
@@ -525,13 +525,13 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded-lg border border-ocean-200 p-3 text-lg"
+              className="w-full rounded-lg border border-maroon-200 p-3 text-lg"
               placeholder="0"
             />
             {amount && parseFloat(amount) > 0 && (
               <div className="mt-2 p-3 bg-slate-50 rounded-lg">
                 <div className="text-sm text-slate-500">Хүлээн авах дүн:</div>
-                <div className="text-xl font-bold text-ocean-700">
+                <div className="text-xl font-bold text-maroon-700">
                   {convertedAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })} {currencyTo}
                 </div>
                 <div className="text-xs text-slate-400">Ханш: {effectiveRate}</div>
@@ -555,7 +555,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value.slice(0, 1000))}
-              className="w-full rounded-lg border border-ocean-200 p-3 text-sm resize-none"
+              className="w-full rounded-lg border border-maroon-200 p-3 text-sm resize-none"
               rows={3}
               placeholder="Хүлээн авагчид илгээх мессеж..."
             />
@@ -565,7 +565,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           <div className="flex gap-2">
             <button
               onClick={() => setStep(1)}
-              className="flex-1 py-3 rounded-xl border border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+              className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
               Буцах
             </button>
@@ -587,7 +587,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 3 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-ocean-700">Төлбөр шилжүүлэх</h3>
+            <h3 className="text-lg font-semibold text-maroon-700">Төлбөр шилжүүлэх</h3>
             <p className="text-sm text-slate-500">
               Доорх дансруу {amount} {currencyFrom} шилжүүлээд баримтаа оруулна уу
             </p>
@@ -625,7 +625,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-ocean-700">{bank.bank_name}</span>
+                    <span className="font-semibold text-maroon-700">{bank.bank_name}</span>
                     <span className={`text-xs px-2 py-0.5 rounded ${direction === "buy" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                       {bank.currency}
                     </span>
@@ -683,21 +683,21 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
                   <span className="text-sm text-green-700">Баримт амжилттай оруулсан</span>
-                  <button onClick={() => setReceiptUrl("")} className="ml-auto text-xs text-ocean-600 hover:underline">
+                  <button onClick={() => setReceiptUrl("")} className="ml-auto text-xs text-maroon-600 hover:underline">
                     Өөрчлөх
                   </button>
                 </div>
               ) : (
-                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-ocean-300 rounded-lg cursor-pointer hover:bg-ocean-50 transition">
+                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-maroon-300 rounded-lg cursor-pointer hover:bg-maroon-50 transition">
                   {uploading ? (
                     <>
-                      <Loader2 className="w-5 h-5 animate-spin text-ocean-600" />
-                      <span className="text-sm text-ocean-600">Оруулж байна...</span>
+                      <Loader2 className="w-5 h-5 animate-spin text-maroon-600" />
+                      <span className="text-sm text-maroon-600">Оруулж байна...</span>
                     </>
                   ) : (
                     <>
-                      <Upload className="w-5 h-5 text-ocean-600" />
-                      <span className="text-sm text-ocean-600">Баримтын зургаа оруулна уу</span>
+                      <Upload className="w-5 h-5 text-maroon-600" />
+                      <span className="text-sm text-maroon-600">Баримтын зургаа оруулна уу</span>
                     </>
                   )}
                   <input
@@ -715,7 +715,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           <div className="flex gap-2">
             <button
               onClick={() => setStep(2)}
-              className="flex-1 py-3 rounded-xl border border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+              className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
               Буцах
             </button>
@@ -734,7 +734,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 4 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-ocean-700">Баталгаажуулалт</h3>
+            <h3 className="text-lg font-semibold text-maroon-700">Баталгаажуулалт</h3>
             <p className="text-sm text-slate-500">Мэдээллээ шалгаад баталгаажуулна уу</p>
           </div>
 
@@ -768,7 +768,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-500">Дүн:</span>
-              <span className="font-bold text-ocean-700">
+              <span className="font-bold text-maroon-700">
                 {parseFloat(amount).toLocaleString()} {currencyFrom} → {convertedAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })} {currencyTo}
               </span>
             </div>
@@ -791,7 +791,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           <div className="flex gap-2">
             <button
               onClick={() => setStep(3)}
-              className="flex-1 py-3 rounded-xl border border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+              className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
               Буцах
             </button>

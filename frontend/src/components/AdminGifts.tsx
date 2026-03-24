@@ -172,14 +172,14 @@ export function AdminGifts() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Gift className="w-6 h-6 text-pink-500" />
-          <h2 className="text-xl font-bold text-ocean-700">Бэлгийн хүсэлтүүд</h2>
+          <h2 className="text-xl font-bold text-maroon-700">Бэлгийн хүсэлтүүд</h2>
         </div>
         <button
           onClick={loadGifts}
           disabled={loading}
-          className="p-2 rounded-lg hover:bg-ocean-100 transition"
+          className="p-2 rounded-lg hover:bg-maroon-100 transition"
         >
-          <RefreshCw className={`w-5 h-5 text-ocean-600 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`w-5 h-5 text-maroon-600 ${loading ? "animate-spin" : ""}`} />
         </button>
       </div>
 
@@ -189,7 +189,7 @@ export function AdminGifts() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-ocean-200 px-3 py-2 text-sm"
+          className="rounded-lg border border-maroon-200 px-3 py-2 text-sm"
         >
           <option value="all">Бүгд</option>
           <option value="pending_recipient">Хүлээн авагч хүлээж байна</option>
@@ -211,7 +211,7 @@ export function AdminGifts() {
       {/* Loading */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 text-ocean-600 animate-spin" />
+          <Loader2 className="w-8 h-8 text-maroon-600 animate-spin" />
         </div>
       ) : gifts.length === 0 ? (
         <div className="text-center py-12 text-slate-500">
@@ -222,7 +222,7 @@ export function AdminGifts() {
           {gifts.map((gift) => (
             <div
               key={gift.id}
-              className="bg-white rounded-xl border border-ocean-200 overflow-hidden shadow-sm"
+              className="bg-white rounded-xl border border-maroon-200 overflow-hidden shadow-sm"
             >
               {/* Gift header */}
               <div
@@ -236,7 +236,7 @@ export function AdminGifts() {
                     </div>
                     <div>
                       <div className="font-mono text-sm text-slate-500">{gift.invoice}</div>
-                      <div className="font-bold text-ocean-700">
+                      <div className="font-bold text-maroon-700">
                         {gift.amount.toLocaleString()} {gift.currency_from} → {gift.currency_to}
                       </div>
                     </div>
@@ -290,7 +290,7 @@ export function AdminGifts() {
                   </div>
 
                   {/* Transaction details */}
-                  <div className="p-3 bg-ocean-50 rounded-lg mb-4">
+                  <div className="p-3 bg-maroon-50 rounded-lg mb-4">
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div>
                         <div className="text-xs text-slate-500">Дүн</div>
@@ -505,11 +505,11 @@ export function AdminGifts() {
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-lg font-bold text-ocean-700 mb-4">Татгалзах шалтгаан</h3>
+            <h3 className="text-lg font-bold text-maroon-700 mb-4">Татгалзах шалтгаан</h3>
             <textarea
               value={rejectionComment}
               onChange={(e) => setRejectionComment(e.target.value)}
-              className="w-full rounded-lg border border-ocean-200 p-3 text-sm resize-none"
+              className="w-full rounded-lg border border-maroon-200 p-3 text-sm resize-none"
               rows={3}
               placeholder="Татгалзах шалтгаанаа бичнэ үү..."
             />
@@ -519,7 +519,7 @@ export function AdminGifts() {
                   setShowRejectModal(null);
                   setRejectionComment("");
                 }}
-                className="flex-1 py-3 rounded-xl border border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+                className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
               >
                 Буцах
               </button>

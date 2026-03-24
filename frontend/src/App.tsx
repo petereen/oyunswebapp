@@ -1,9 +1,14 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Dashboard } from "./pages/Dashboard";
 import { AdminPanel } from "./pages/AdminPanel";
+import { HomeTab } from "./pages/HomeTab";
+import { TransactionTab } from "./pages/TransactionTab";
+import { ServicesTab } from "./pages/ServicesTab";
+import { StatsTab } from "./pages/StatsTab";
+import { ProfilePage } from "./pages/ProfilePage";
+import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
-import { Shield, MessageCircle } from "lucide-react";
+import { Shield } from "lucide-react";
 import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
 import { DevToolbar } from "./components/DevToolbar";
 import { fetchMe } from "./api";
@@ -11,6 +16,9 @@ import { fetchMe } from "./api";
 export default function App() {
   const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
   const [view, setView] = useState<"client" | "admin">("client");
+  const [activeTab, setActiveTab] = useState(0);
+  const [showProfile, setShowProfile] = useState(false);
+  const [transactionDirection, setTransactionDirection] = useState<"buy" | "sell" | null>(null);
 
   // Listen for auth:unauthorized events and trigger re-authentication
   useEffect(() => {
@@ -33,60 +41,111 @@ export default function App() {
 
   const isAdmin = profile?.is_admin || false;
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-ocean-50 to-white p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header with Logo */}
-        <div className="flex items-center justify-between mb-6">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <img
-              src="https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/oyuns%20finance%20logo%203%20tp.png"
-              alt="OYUNS FINANCE"
-              className="h-10 w-auto"
-            />
-          </div>
+  const handleNavigateToTransaction = (direction?: "buy" | "sell") => {
+    setTransactionDirection(direction || null);
+    setActiveTab(1);
+  };
 
-          {/* Admin toggle - always visible to admins */}
-          {isAdmin && (
+  const handleNavigateToProfile = () => {
+    setShowProfile(true);
+  };
+
+  const handleBackFromProfile = () => {
+    setShowProfile(false);
+  };
+
+  const handleTabChange = (tab: number) => {
+    setActiveTab(tab);
+    setShowProfile(false);
+    if (tab !== 1) setTransactionDirection(null);
+  };
+
+  // Admin view
+  if (view === "admin" && isAdmin) {
+    return (
+      <div className="min-h-screen bg-surface-50 dark:bg-dark-900 p-4 md:p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <img
+                src="https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/oyuns%20finance%20logo%203%20tp.png"
+                alt="OYUNS FINANCE"
+                className="h-10 w-auto object-contain"
+              />
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setView("client")}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition ${view === "client" ? "bg-ocean-600 text-white" : "bg-white text-ocean-700 hover:bg-ocean-50"}`}
+                className="px-4 py-2 rounded-full text-sm font-semibold transition bg-white dark:bg-dark-700 text-maroon-600 dark:text-gold-400 hover:bg-maroon-50 dark:hover:bg-dark-600"
               >
                 Хэрэглэгч
               </button>
               <button
-                onClick={() => setView("admin")}
-                className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-1 transition ${view === "admin" ? "bg-ocean-600 text-white" : "bg-white text-ocean-700 hover:bg-ocean-50"}`}
+                className="px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-1 transition bg-maroon-600 text-white"
               >
                 <Shield className="w-4 h-4" /> Админ
               </button>
             </div>
-          )}
-        </div>
-
-        {view === "client" || !isAdmin ? (
-          <Dashboard initData={initData} user={user} isAuthenticating={isAuthenticating} authError={authError} />
-        ) : (
+          </div>
           <AdminPanel />
+        </div>
+        <TelegramDiagnostic />
+        <DevToolbar />
+      </div>
+    );
+  }
+
+  // Client view - Tab-based
+  return (
+    <div className="min-h-screen bg-surface-50 dark:bg-dark-900">
+      <div className="max-w-lg mx-auto p-4 pb-28">
+        {/* Admin toggle for admins */}
+        {isAdmin && (
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={() => setView("admin")}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition bg-maroon-700 text-gold-400 hover:bg-maroon-600"
+            >
+              <Shield className="w-3.5 h-3.5" /> Админ
+            </button>
+          </div>
+        )}
+
+        {/* Profile Page (overlays tabs) */}
+        {showProfile ? (
+          <ProfilePage userId={user?.id} onBack={handleBackFromProfile} />
+        ) : (
+          <>
+            {activeTab === 0 && (
+              <HomeTab
+                initData={initData}
+                user={user}
+                isAuthenticating={isAuthenticating}
+                authError={authError}
+                onNavigateToTransaction={handleNavigateToTransaction}
+                onNavigateToProfile={handleNavigateToProfile}
+              />
+            )}
+            {activeTab === 1 && (
+              <TransactionTab
+                initData={initData}
+                user={user}
+                initialDirection={transactionDirection}
+                onResetDirection={() => setTransactionDirection(null)}
+              />
+            )}
+            {activeTab === 2 && <ServicesTab />}
+            {activeTab === 3 && <StatsTab userId={user?.id} />}
+          </>
         )}
       </div>
+
+      {/* Bottom Nav */}
+      <BottomNavBar activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* Diagnostic Helper */}
       <TelegramDiagnostic />
       <DevToolbar />
-
-      {/* Support Chat Button */}
-      <a
-        href="https://t.me/oyuns_finance"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-ocean-600 text-white rounded-full shadow-lg hover:bg-ocean-700 transition-all hover:scale-105"
-      >
-        <MessageCircle className="w-5 h-5" />
-        <span className="font-medium">Тусламж</span>
-      </a>
     </div>
   );
 }

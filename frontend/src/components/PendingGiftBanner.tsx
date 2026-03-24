@@ -203,7 +203,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
 
                   {/* Bank details form */}
                   <div className="bg-white/80 rounded-xl p-4 space-y-3">
-                    <div className="text-sm font-medium text-ocean-700 mb-2">
+                    <div className="text-sm font-medium text-maroon-700 mb-2">
                       💳 Мөнгө хүлээн авах банкны мэдээлэл оруулна уу ({gift.currency_to})
                     </div>
 
@@ -220,7 +220,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                             setCustomBankName("");
                           }
                         }}
-                        className="w-full rounded-lg border border-ocean-200 p-3 text-sm bg-white"
+                        className="w-full rounded-lg border border-maroon-200 p-3 text-sm bg-white"
                       >
                         <option value="">Банк сонгох...</option>
                         {getBankOptions(gift.currency_to).map((bank) => (
@@ -237,7 +237,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                           type="text"
                           value={customBankName}
                           onChange={(e) => setCustomBankName(e.target.value)}
-                          className="w-full rounded-lg border border-ocean-200 p-3 text-sm"
+                          className="w-full rounded-lg border border-maroon-200 p-3 text-sm"
                           placeholder="Банкны нэрээ оруулна уу"
                         />
                       </div>
@@ -261,7 +261,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                             setAccountNumber(e.target.value);
                           }
                         }}
-                        className="w-full rounded-lg border border-ocean-200 p-3 text-sm"
+                        className="w-full rounded-lg border border-maroon-200 p-3 text-sm"
                         placeholder={gift.currency_to === "MNT" ? "MN XX XXXX XX XXXXXXXXXX" : "XXXX XXXX XXXX XXXX"}
                         maxLength={gift.currency_to === "RUB" ? 19 : undefined}
                       />
@@ -274,7 +274,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                         type="text"
                         value={ownerName}
                         onChange={(e) => setOwnerName(e.target.value)}
-                        className="w-full rounded-lg border border-ocean-200 p-3 text-sm"
+                        className="w-full rounded-lg border border-maroon-200 p-3 text-sm"
                         placeholder="IVANOV IVAN"
                       />
                     </div>

@@ -1,0 +1,363 @@
+import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import {
+  TrendingUp, TrendingDown, BarChart3, ChevronLeft, ChevronRight,
+  ArrowRightLeft, Clock, CheckCircle2, XCircle, AlertCircle, Image, X,
+} from "lucide-react";
+import { fetchAnalytics, fetchHistory } from "../api";
+
+interface MonthlyData { month: string; amount: number; }
+interface AnalyticsData {
+  monthly_buy: MonthlyData[];
+  monthly_sell: MonthlyData[];
+  total_buy_rub: number;
+  total_sell_rub: number;
+  total_transactions: number;
+}
+interface HistoryItem {
+  invoice: string;
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  status: string;
+  timestamp: string;
+  rate: number;
+  bill_url?: string;
+  receipt_id?: string;
+  admin_comment?: string;
+}
+
+function getStatusInfo(status: string) {
+  switch (status) {
+    case "completed":
+    case "successful":
+      return { label: "Амжилттай", color: "bg-green-100 text-green-700", icon: CheckCircle2 };
+    case "approved":
+      return { label: "Баталгаажсан", color: "bg-blue-100 text-blue-700", icon: CheckCircle2 };
+    case "pending":
+      return { label: "Хүлээгдэж буй", color: "bg-amber-100 text-amber-700", icon: Clock };
+    case "rejected":
+      return { label: "Татгалзсан", color: "bg-red-100 text-red-700", icon: XCircle };
+    default:
+      return { label: status, color: "bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-300", icon: AlertCircle };
+  }
+}
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr.endsWith("Z") ? dateStr : dateStr + "Z");
+  return date.toLocaleDateString("mn-MN", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function getTimeAgo(dateStr: string): string {
+  const then = new Date(dateStr.endsWith("Z") || dateStr.includes("+") ? dateStr : dateStr + "Z");
+  const diff = Date.now() - then.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Саяхан";
+  if (mins < 60) return `${mins} мин өмнө`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} цаг өмнө`;
+  return `${Math.floor(hrs / 24)} өдрийн өмнө`;
+}
+
+interface Props {
+  userId?: number;
+}
+
+export function StatsTab({ userId }: Props) {
+  const [section, setSection] = useState<"analytics" | "history">("analytics");
+  const [periodOffset, setPeriodOffset] = useState(0);
+  const [photoModal, setPhotoModal] = useState<string | null>(null);
+
+  // Analytics
+  const { data: analyticsData, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
+    queryKey: ["analytics"],
+    queryFn: () => fetchAnalytics(),
+    enabled: Boolean(userId),
+  });
+
+  // History
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ["history", userId],
+    queryFn: () => fetchHistory(),
+    enabled: Boolean(userId),
+    staleTime: 0,
+  });
+
+  const historyItems: HistoryItem[] = historyData?.items || [];
+
+  // Analytics helpers
+  const formatMonth = (m: string) => {
+    const [y, mo] = m.split("-");
+    return new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString("mn-MN", { month: "short" });
+  };
+  const formatMonthFull = (m: string) => {
+    const [y, mo] = m.split("-");
+    return new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString("mn-MN", { year: "numeric", month: "short" });
+  };
+
+  const periodMonths = useMemo(() => {
+    const months: string[] = [];
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - (periodOffset * 6) - 5, 1);
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return months;
+  }, [periodOffset]);
+
+  const periodLabel = useMemo(() => {
+    if (!periodMonths.length) return "";
+    return `${formatMonthFull(periodMonths[0])} - ${formatMonthFull(periodMonths[periodMonths.length - 1])}`;
+  }, [periodMonths]);
+
+  const filteredBuyData = useMemo(() => {
+    if (!analyticsData?.monthly_buy) return [];
+    return periodMonths.map(m => ({ month: m, amount: analyticsData.monthly_buy.find(d => d.month === m)?.amount || 0 }));
+  }, [analyticsData, periodMonths]);
+
+  const filteredSellData = useMemo(() => {
+    if (!analyticsData?.monthly_sell) return [];
+    return periodMonths.map(m => ({ month: m, amount: analyticsData.monthly_sell.find(d => d.month === m)?.amount || 0 }));
+  }, [analyticsData, periodMonths]);
+
+  const maxValue = useMemo(() => Math.max(...filteredBuyData.map(d => d.amount), ...filteredSellData.map(d => d.amount), 1), [filteredBuyData, filteredSellData]);
+  const periodBuyTotal = filteredBuyData.reduce((s, d) => s + d.amount, 0);
+  const periodSellTotal = filteredSellData.reduce((s, d) => s + d.amount, 0);
+
+  const hasOlderData = useMemo(() => {
+    if (!analyticsData) return false;
+    const all = [...(analyticsData.monthly_buy || []).map(d => d.month), ...(analyticsData.monthly_sell || []).map(d => d.month)];
+    const min = all.length ? all.sort()[0] : null;
+    return min ? min < periodMonths[0] : false;
+  }, [analyticsData, periodMonths]);
+
+  return (
+    <div className="animate-fadeIn space-y-5">
+      <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">Статистик</h2>
+
+      {/* Section Toggle */}
+      <div className="flex gap-1 bg-surface-100 dark:bg-dark-700 p-1 rounded-xl">
+        <button
+          onClick={() => setSection("analytics")}
+          className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${section === "analytics" ? "bg-white dark:bg-dark-800 text-dark-800 dark:text-ivory-200 shadow-card-xs" : "text-dark-600 dark:text-ivory-400"}`}
+        >
+          Аналитик
+        </button>
+        <button
+          onClick={() => setSection("history")}
+          className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${section === "history" ? "bg-white dark:bg-dark-800 text-dark-800 dark:text-ivory-200 shadow-card-xs" : "text-dark-600 dark:text-ivory-400"}`}
+        >
+          Гүйлгээний түүх
+        </button>
+      </div>
+
+      {/* ───── Analytics Section ───── */}
+      {section === "analytics" && (
+        <div className="space-y-4">
+          {analyticsLoading && (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-maroon-600 mx-auto" />
+              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">Уншиж байна...</p>
+            </div>
+          )}
+
+          {analyticsData && !analyticsLoading && (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-xl border border-green-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <TrendingUp className="w-4 h-4 text-green-600" />
+                    <span className="text-[10px] font-medium text-green-700">Авсан</span>
+                  </div>
+                  <div className="text-base font-bold text-green-800">{analyticsData.total_buy_rub.toLocaleString()} ₽</div>
+                </div>
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-xl border border-blue-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <TrendingDown className="w-4 h-4 text-blue-600" />
+                    <span className="text-[10px] font-medium text-blue-700">Зарсан</span>
+                  </div>
+                  <div className="text-base font-bold text-blue-800">{analyticsData.total_sell_rub.toLocaleString()} ₮</div>
+                </div>
+                <div className="bg-gradient-to-br from-maroon-50 to-maroon-100 dark:from-maroon-900/30 dark:to-maroon-800/20 p-3 rounded-xl border border-maroon-200 dark:border-maroon-800">
+                  <div className="flex items-center gap-1 mb-1">
+                    <BarChart3 className="w-4 h-4 text-maroon-600 dark:text-maroon-400" />
+                    <span className="text-[10px] font-medium text-maroon-700 dark:text-maroon-300">Нийт</span>
+                  </div>
+                  <div className="text-base font-bold text-maroon-800 dark:text-maroon-200">{analyticsData.total_transactions}</div>
+                </div>
+              </div>
+
+              {/* Period Navigation */}
+              <div className="flex items-center justify-between bg-surface-50 dark:bg-dark-700 rounded-xl p-2.5">
+                <button onClick={() => setPeriodOffset(p => p + 1)} disabled={!hasOlderData} className="p-1.5 rounded-lg hover:bg-surface-200 dark:hover:bg-dark-600 transition disabled:opacity-30">
+                  <ChevronLeft className="w-5 h-5 text-dark-600 dark:text-ivory-300" />
+                </button>
+                <span className="font-medium text-sm text-dark-800 dark:text-ivory-200">{periodLabel}</span>
+                <button onClick={() => setPeriodOffset(p => Math.max(0, p - 1))} disabled={periodOffset === 0} className="p-1.5 rounded-lg hover:bg-surface-200 dark:hover:bg-dark-600 transition disabled:opacity-30">
+                  <ChevronRight className="w-5 h-5 text-dark-600 dark:text-ivory-300" />
+                </button>
+              </div>
+
+              {/* Chart */}
+              {(periodBuyTotal > 0 || periodSellTotal > 0) ? (
+                <>
+                  <div className="bg-surface-50 dark:bg-dark-700 rounded-xl p-3">
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">Рубль (₽)</span></div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">Төгрөг (₮)</span></div>
+                    </div>
+                    <div className="relative h-52">
+                      <svg className="w-full h-full" viewBox="0 0 600 200" preserveAspectRatio="none">
+                        {[0, 25, 50, 75, 100].map(y => (
+                          <line key={y} x1="50" y1={200 - y * 1.8} x2="580" y2={200 - y * 1.8} stroke="#e2e8f0" strokeWidth="1" />
+                        ))}
+                        {[0, 25, 50, 75, 100].map(p => (
+                          <text key={p} x="45" y={200 - p * 1.8 + 4} textAnchor="end" className="text-[10px] fill-dark-600 dark:fill-ivory-400">{Math.round((maxValue * p) / 100).toLocaleString()}</text>
+                        ))}
+                        <polyline fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                          points={filteredBuyData.map((d, i) => `${50 + (i * 530) / (filteredBuyData.length - 1 || 1)},${200 - (d.amount / maxValue) * 180}`).join(" ")} />
+                        {filteredBuyData.map((d, i) => { const x = 50 + (i * 530) / (filteredBuyData.length - 1 || 1); const y = 200 - (d.amount / maxValue) * 180; return <g key={`b${i}`}><circle cx={x} cy={y} r="5" fill="#22c55e" /><circle cx={x} cy={y} r="2.5" fill="white" /></g>; })}
+                        <polyline fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                          points={filteredSellData.map((d, i) => `${50 + (i * 530) / (filteredSellData.length - 1 || 1)},${200 - (d.amount / maxValue) * 180}`).join(" ")} />
+                        {filteredSellData.map((d, i) => { const x = 50 + (i * 530) / (filteredSellData.length - 1 || 1); const y = 200 - (d.amount / maxValue) * 180; return <g key={`s${i}`}><circle cx={x} cy={y} r="5" fill="#3b82f6" /><circle cx={x} cy={y} r="2.5" fill="white" /></g>; })}
+                        {filteredBuyData.map((d, i) => <text key={`l${i}`} x={50 + (i * 530) / (filteredBuyData.length - 1 || 1)} y="218" textAnchor="middle" className="text-[10px] fill-dark-600 dark:fill-ivory-400">{formatMonth(d.month)}</text>)}
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Period Summary */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-green-50 p-3 rounded-xl border border-green-100">
+                      <div className="text-xs text-green-600 mb-1">Энэ үеийн рубль</div>
+                      <div className="text-lg font-bold text-green-700">{periodBuyTotal.toLocaleString()} ₽</div>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                      <div className="text-xs text-blue-600 mb-1">Энэ үеийн төгрөг</div>
+                      <div className="text-lg font-bold text-blue-700">{periodSellTotal.toLocaleString()} ₮</div>
+                    </div>
+                  </div>
+
+                  {/* Monthly Details */}
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm text-dark-800 dark:text-ivory-200">Сар бүрийн задаргаа</h3>
+                    {periodMonths.map(month => {
+                      const b = filteredBuyData.find(d => d.month === month)?.amount || 0;
+                      const s = filteredSellData.find(d => d.month === month)?.amount || 0;
+                      if (!b && !s) return null;
+                      return (
+                        <div key={month} className="flex items-center justify-between p-3 bg-white dark:bg-dark-800 rounded-lg border border-silver/60 dark:border-dark-600">
+                          <span className="text-sm font-medium text-dark-800 dark:text-ivory-200">{formatMonthFull(month)}</span>
+                          <div className="flex gap-3">
+                            {b > 0 && <span className="text-sm text-green-600">+{b.toLocaleString()} ₽</span>}
+                            {s > 0 && <span className="text-sm text-blue-600">+{s.toLocaleString()} ₮</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-10 bg-surface-50 dark:bg-dark-700 rounded-xl">
+                  <BarChart3 className="w-14 h-14 text-silver dark:text-dark-600 mx-auto mb-3" />
+                  <p className="text-dark-600 dark:text-ivory-400 text-sm">Энэ үед гүйлгээний мэдээлэл байхгүй</p>
+                  {hasOlderData && (
+                    <button onClick={() => setPeriodOffset(p => p + 1)} className="mt-3 text-maroon-600 dark:text-gold-400 text-sm font-medium">
+                      ← Өмнөх үе харах
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ───── History Section ───── */}
+      {section === "history" && (
+        <div className="space-y-3">
+          {historyLoading && (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-maroon-600 mx-auto" />
+              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">Уншиж байна...</p>
+            </div>
+          )}
+
+          {!historyLoading && historyItems.length === 0 && (
+            <div className="text-center py-10">
+              <ArrowRightLeft className="w-12 h-12 text-silver dark:text-dark-600 mx-auto mb-3" />
+              <div className="text-dark-600 dark:text-ivory-400 text-sm">Гүйлгээ байхгүй байна</div>
+              <div className="text-xs text-dark-600 dark:text-ivory-400 mt-1">Та гүйлгээ хийсний дараа энд харагдана</div>
+            </div>
+          )}
+
+          {!historyLoading && historyItems.length > 0 && historyItems.map(item => {
+            const statusInfo = getStatusInfo(item.status);
+            const StatusIcon = statusInfo.icon;
+            const isBuy = item.currency_from.toUpperCase() === "RUB";
+            const rate = Number(item.rate);
+            const amount = Number(item.amount);
+            const receiveAmount = isBuy ? Math.round(amount * rate) : parseFloat((amount / rate).toFixed(2));
+
+            return (
+              <div key={item.invoice} className="bg-white dark:bg-dark-800 rounded-2xl p-4 shadow-card-xs border border-silver/60 dark:border-dark-600">
+                <div className="flex items-center justify-between mb-3">
+                  <span className={`text-xs font-bold px-2 py-1 rounded ${isBuy ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                    {isBuy ? "RUB→MNT" : "MNT→RUB"}
+                  </span>
+                  <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded ${statusInfo.color}`}>
+                    <StatusIcon className="w-3.5 h-3.5" />{statusInfo.label}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-lg font-bold text-dark-800">{amount.toLocaleString()} {item.currency_from}</div>
+                    <div className="text-sm text-dark-600 dark:text-ivory-400">→ {receiveAmount.toLocaleString()} {item.currency_to}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-dark-600 dark:text-ivory-400">Ханш</div>
+                    <div className="text-sm font-medium text-maroon-600 dark:text-gold-400">{rate.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-dark-600 dark:text-ivory-400 pt-2 border-t border-silver/60 dark:border-dark-600">
+                  <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{getTimeAgo(item.timestamp)}</div>
+                  <div>{formatDate(item.timestamp)}</div>
+                </div>
+
+                {item.status === "rejected" && item.admin_comment && (
+                  <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-100">
+                    <div className="text-xs text-red-600 font-medium mb-1">Татгалзсан шалтгаан:</div>
+                    <div className="text-sm text-red-700">{item.admin_comment}</div>
+                  </div>
+                )}
+
+                {item.bill_url && (
+                  <button onClick={() => setPhotoModal(item.bill_url!)} className="mt-2 flex items-center gap-1 text-xs text-maroon-600 dark:text-gold-400 hover:text-maroon-700 dark:hover:text-gold-300">
+                    <Image className="w-3.5 h-3.5" />Баримт харах
+                  </button>
+                )}
+
+                <div className="mt-2 text-xs text-dark-600 dark:text-ivory-400 font-mono truncate">#{item.invoice}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Photo Modal */}
+      {photoModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={() => setPhotoModal(null)}>
+          <div className="relative max-w-2xl max-h-[90vh] bg-white dark:bg-dark-800 rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setPhotoModal(null)} className="absolute top-2 right-2 p-2 bg-white/80 dark:bg-dark-700/80 rounded-full hover:bg-white dark:hover:bg-dark-600">
+              <X className="w-5 h-5" />
+            </button>
+            <img src={photoModal} alt="Баримт" className="max-w-full max-h-[85vh] object-contain" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -136,7 +136,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
   const Icon = config.icon;
 
   return (
-    <div className={`relative p-4 rounded-xl border ${status === "rejected" ? "bg-red-50 border-red-200" : "bg-white border-ocean-100"}`}>
+    <div className={`relative p-4 rounded-xl border ${status === "rejected" ? "bg-red-50 border-red-200" : "bg-white border-maroon-100"}`}>
       {/* Dismiss button for completed/rejected */}
       {onDismiss && (
         <button

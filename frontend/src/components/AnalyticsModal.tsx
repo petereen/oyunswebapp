@@ -104,11 +104,11 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-ocean-100 rounded-lg">
-              <BarChart3 className="w-6 h-6 text-ocean-600" />
+            <div className="p-2 bg-maroon-100 rounded-lg">
+              <BarChart3 className="w-6 h-6 text-maroon-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-ocean-700">Гүйлгээний статистик</h2>
+              <h2 className="text-xl font-bold text-maroon-700">Гүйлгээний статистик</h2>
               <p className="text-sm text-slate-500">Сарын гүйлгээний түүх</p>
             </div>
           </div>
@@ -124,7 +124,7 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
         <div className="p-6 space-y-6">
           {isLoading && (
             <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ocean-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-maroon-600 mx-auto"></div>
               <p className="mt-4 text-slate-500">Уншиж байна...</p>
             </div>
           )}
@@ -159,12 +159,12 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
                   </div>
                 </div>
 
-                <div className="bg-gradient-to-br from-ocean-50 to-ocean-100 p-4 rounded-xl border border-ocean-200">
+                <div className="bg-gradient-to-br from-maroon-50 to-maroon-100 p-4 rounded-xl border border-maroon-200">
                   <div className="flex items-center gap-2 mb-2">
-                    <BarChart3 className="w-5 h-5 text-ocean-600" />
-                    <span className="text-sm font-medium text-ocean-700">Нийт гүйлгээ</span>
+                    <BarChart3 className="w-5 h-5 text-maroon-600" />
+                    <span className="text-sm font-medium text-maroon-700">Нийт гүйлгээ</span>
                   </div>
-                  <div className="text-2xl font-bold text-ocean-800">
+                  <div className="text-2xl font-bold text-maroon-800">
                     {data.total_transactions}
                   </div>
                 </div>
@@ -361,7 +361,7 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
                   {hasOlderData && (
                     <button
                       onClick={() => setPeriodOffset(prev => prev + 1)}
-                      className="mt-4 text-ocean-600 hover:text-ocean-700 text-sm font-medium"
+                      className="mt-4 text-maroon-600 hover:text-maroon-700 text-sm font-medium"
                     >
                       ← Өмнөх үе харах
                     </button>
@@ -376,7 +376,7 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
         <div className="border-t p-6 bg-slate-50">
           <button
             onClick={onClose}
-            className="w-full bg-ocean-600 text-white py-3 rounded-xl font-semibold hover:bg-ocean-700 transition"
+            className="w-full bg-maroon-600 text-white py-3 rounded-xl font-semibold hover:bg-maroon-700 transition"
           >
             Хаах
           </button>

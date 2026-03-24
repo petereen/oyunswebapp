@@ -103,14 +103,14 @@ export function HistoryModal({ userId, onClose }: Props) {
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-ocean-100">
+          <div className="flex items-center justify-between p-4 border-b border-maroon-100">
             <div className="flex items-center gap-2">
-              <ArrowRightLeft className="w-5 h-5 text-ocean-600" />
-              <span className="font-bold text-ocean-700">Гүйлгээний түүх</span>
+              <ArrowRightLeft className="w-5 h-5 text-maroon-600" />
+              <span className="font-bold text-maroon-700">Гүйлгээний түүх</span>
             </div>
             <button
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-ocean-50 transition"
+              className="p-2 rounded-full hover:bg-maroon-50 transition"
             >
               <X className="w-5 h-5 text-slate-500" />
             </button>
@@ -120,7 +120,7 @@ export function HistoryModal({ userId, onClose }: Props) {
           <div className="flex-1 overflow-auto p-4">
             {isLoading && (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-ocean-500 animate-spin" />
+                <Loader2 className="w-8 h-8 text-maroon-500 animate-spin" />
               </div>
             )}
 
@@ -158,7 +158,7 @@ export function HistoryModal({ userId, onClose }: Props) {
                   return (
                     <div
                       key={item.invoice}
-                      className="bg-white border border-ocean-100 rounded-xl p-4 shadow-sm"
+                      className="bg-white border border-maroon-100 rounded-xl p-4 shadow-sm"
                     >
                       {/* Top Row: Direction & Status */}
                       <div className="flex items-center justify-between mb-3">
@@ -184,7 +184,7 @@ export function HistoryModal({ userId, onClose }: Props) {
                       {/* Amount Info */}
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <div className="text-lg font-bold text-ocean-700">
+                          <div className="text-lg font-bold text-maroon-700">
                             {Number(item.amount).toLocaleString()} {item.currency_from}
                           </div>
                           <div className="text-sm text-slate-500">
@@ -193,7 +193,7 @@ export function HistoryModal({ userId, onClose }: Props) {
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-slate-400">Ханш</div>
-                          <div className="text-sm font-medium text-ocean-600">
+                          <div className="text-sm font-medium text-maroon-600">
                             {Number(item.rate).toFixed(2)}
                           </div>
                         </div>
@@ -222,7 +222,7 @@ export function HistoryModal({ userId, onClose }: Props) {
                       {item.bill_url && (
                         <button
                           onClick={() => setPhotoModal(item.bill_url!)}
-                          className="mt-2 flex items-center gap-1 text-xs text-ocean-600 hover:text-ocean-700"
+                          className="mt-2 flex items-center gap-1 text-xs text-maroon-600 hover:text-maroon-700"
                         >
                           <Image className="w-3.5 h-3.5" />
                           Баримт харах

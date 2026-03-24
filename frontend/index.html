@@ -2,12 +2,51 @@
 <html lang="mn">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>OYUNS FINANCE</title>
     <link rel="icon" type="image/png" href="https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/oyuns%20finance%20logo%201%20tp.png" />
     <meta name="theme-color" content="#1d4ed8" />
     <!-- Telegram Web App Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--
+      Local-dev fallback: if the Telegram SDK loaded but we are NOT inside
+      Telegram, window.Telegram.WebApp.initData will be an empty string.
+      The useTelegramAuth hook already handles that (Priority 3 path).
+      We only need to make sure the global object exists so that third-party
+      code that reads theme params never throws.
+    -->
+    <script>
+      (function () {
+        if (typeof window.Telegram === 'undefined') {
+          window.Telegram = {
+            WebApp: {
+              initData: '',
+              initDataUnsafe: {},
+              ready: function () {},
+              expand: function () {},
+              close: function () {},
+              platform: 'unknown',
+              version: '0.0',
+              themeParams: {
+                bg_color: '#ffffff',
+                text_color: '#0f172a',
+                hint_color: '#64748b',
+                link_color: '#2563eb',
+                button_color: '#2563eb',
+                button_text_color: '#ffffff',
+                secondary_bg_color: '#f8fafc',
+              },
+              MainButton: {
+                text: '',
+                show: function () {},
+                hide: function () {},
+                onClick: function () {},
+              },
+            },
+          };
+        }
+      })();
+    </script>
   </head>
   <body class="bg-ocean-50">
     <div id="root"></div>

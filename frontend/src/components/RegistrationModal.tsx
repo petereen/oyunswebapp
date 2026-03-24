@@ -254,7 +254,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 overflow-auto">
       <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl my-4">
         {/* Header */}
-        <div className="bg-gradient-to-r from-ocean-600 to-ocean-500 p-5 text-white rounded-t-2xl">
+        <div className="bg-gradient-to-r from-maroon-600 to-maroon-500 p-5 text-white rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
@@ -280,7 +280,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
         <div className="p-5 space-y-4 max-h-[70vh] overflow-auto">
           {/* Personal Info Section */}
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-ocean-700 font-semibold">
+            <div className="flex items-center gap-2 text-maroon-700 font-semibold">
               <User className="w-4 h-4" />
               <span>Хувийн мэдээлэл</span>
             </div>
@@ -291,7 +291,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                 placeholder="Овог"
               />
             </div>
@@ -302,7 +302,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                 placeholder="Нэр"
               />
             </div>
@@ -315,7 +315,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                 placeholder="example@email.com"
                 required
               />
@@ -325,7 +325,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
           {/* RUB Bank Section - Optional */}
           <div className="space-y-3 pt-3 border-t border-slate-100">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-ocean-700 font-semibold">
+              <div className="flex items-center gap-2 text-maroon-700 font-semibold">
                 <CreditCard className="w-4 h-4" />
                 <span>Орос дахь банкны мэдээлэл (RUB)</span>
               </div>
@@ -337,7 +337,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="checkbox"
                 checked={hasRubBank}
                 onChange={(e) => setHasRubBank(e.target.checked)}
-                className="w-5 h-5 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+                className="w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
               />
               <span className="text-sm text-slate-600">
                 Оросын банкны данс байгаа
@@ -345,13 +345,13 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             </label>
 
             {hasRubBank && (
-              <div className="space-y-3 pl-2 border-l-2 border-ocean-200">
+              <div className="space-y-3 pl-2 border-l-2 border-maroon-200">
                 <div>
                   <label className="text-xs text-slate-500">Банкны нэр <span className="text-red-500">*</span></label>
                   <select
                     value={rubBankName}
                     onChange={(e) => setRubBankName(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm bg-white"
+                    className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm bg-white"
                   >
                     <option value="">Банк сонгоно уу</option>
                     {RUB_BANKS.map((bank) => (
@@ -363,7 +363,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                       type="text"
                       value={rubBankNameOther}
                       onChange={(e) => setRubBankNameOther(e.target.value)}
-                      className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm mt-2"
+                      className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm mt-2"
                       placeholder="Банкны нэрийг оруулна уу"
                     />
                   )}
@@ -375,7 +375,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                     type="tel"
                     value={rubPhoneSbp}
                     onChange={(e) => setRubPhoneSbp(formatRussianPhone(e.target.value))}
-                    className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                    className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                     placeholder="+7 XXX XXX XX XX"
                   />
                 </div>
@@ -386,7 +386,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                     type="text"
                     value={rubCardNumber}
                     onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))}
-                    className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                    className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                     placeholder="XXXX XXXX XXXX XXXX"
                     maxLength={19}
                   />
@@ -398,7 +398,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                     type="text"
                     value={rubOwnerName}
                     onChange={(e) => setRubOwnerName(e.target.value)}
-                    className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                    className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                     placeholder="IVAN IVANOV"
                   />
                 </div>
@@ -408,7 +408,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
 
           {/* MNT Bank Section */}
           <div className="space-y-3 pt-3 border-t border-slate-100">
-            <div className="flex items-center gap-2 text-ocean-700 font-semibold">
+            <div className="flex items-center gap-2 text-maroon-700 font-semibold">
               <Building className="w-4 h-4" />
               <span>Монгол дахь банкны мэдээлэл (MNT)</span>
             </div>
@@ -418,7 +418,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
               <select
                 value={mntBankName}
                 onChange={(e) => setMntBankName(e.target.value)}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm bg-white"
+                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm bg-white"
               >
                 <option value="">Банк сонгоно уу</option>
                 {MNT_BANKS.map((bank) => (
@@ -430,7 +430,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                   type="text"
                   value={mntBankNameOther}
                   onChange={(e) => setMntBankNameOther(e.target.value)}
-                  className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm mt-2"
+                  className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm mt-2"
                   placeholder="Банкны нэрийг оруулна уу"
                 />
               )}
@@ -442,7 +442,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="text"
                 value={mntAccountNumber}
                 onChange={(e) => setMntAccountNumber(formatIBAN(e.target.value))}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                 placeholder="MN XX XXXX XX XXXXXXXXXX"
               />
             </div>
@@ -453,7 +453,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="text"
                 value={mntOwnerName}
                 onChange={(e) => setMntOwnerName(e.target.value)}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                 placeholder="БАТ-ЭРДЭНЭ"
               />
             </div>
@@ -464,7 +464,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="tel"
                 value={mntPhone}
                 onChange={(e) => setMntPhone(formatMongolianPhone(e.target.value))}
-                className="w-full rounded-lg border border-ocean-200 p-2.5 text-sm"
+                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
                 placeholder="+976 XXXX XXXX"
               />
             </div>
@@ -472,7 +472,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
 
           {/* Passport Upload Section */}
           <div className="space-y-3 pt-3 border-t border-slate-100">
-            <div className="flex items-center gap-2 text-ocean-700 font-semibold">
+            <div className="flex items-center gap-2 text-maroon-700 font-semibold">
               <FileText className="w-4 h-4" />
               <span>Паспортын зураг</span>
             </div>
@@ -487,22 +487,22 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                     <button
                       type="button"
                       onClick={() => setPassportUrl("")}
-                      className="ml-auto text-xs text-ocean-600 hover:underline"
+                      className="ml-auto text-xs text-maroon-600 hover:underline"
                     >
                       Өөрчлөх
                     </button>
                   </div>
                 ) : (
-                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-ocean-300 rounded-lg cursor-pointer hover:bg-ocean-50 transition">
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-maroon-300 rounded-lg cursor-pointer hover:bg-maroon-50 transition">
                     {uploading ? (
                       <>
-                        <Loader2 className="w-5 h-5 animate-spin text-ocean-600" />
-                        <span className="text-sm text-ocean-600">Оруулж байна...</span>
+                        <Loader2 className="w-5 h-5 animate-spin text-maroon-600" />
+                        <span className="text-sm text-maroon-600">Оруулж байна...</span>
                       </>
                     ) : (
                       <>
-                        <Upload className="w-5 h-5 text-ocean-600" />
-                        <span className="text-sm text-ocean-600">Паспортын зургаа оруулна уу</span>
+                        <Upload className="w-5 h-5 text-maroon-600" />
+                        <span className="text-sm text-maroon-600">Паспортын зургаа оруулна уу</span>
                       </>
                     )}
                     <input
@@ -525,7 +525,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 type="checkbox"
                 checked={agreedTerms}
                 onChange={(e) => setAgreedTerms(e.target.checked)}
-                className="mt-0.5 w-5 h-5 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+                className="mt-0.5 w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
               />
               <span className="text-sm text-slate-600">
                 Би{" "}
@@ -533,7 +533,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                   href={TERMS_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-ocean-600 hover:underline font-medium inline-flex items-center gap-1"
+                  className="text-maroon-600 hover:underline font-medium inline-flex items-center gap-1"
                   onClick={(e) => e.stopPropagation()}
                 >
                   хэрэглэгчийн гэрээ
@@ -556,7 +556,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
           <button
             onClick={handleSubmit}
             disabled={loading || !isFormValid()}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-ocean-600 text-white font-bold text-lg hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-maroon-600 text-white font-bold text-lg hover:bg-maroon-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

@@ -421,14 +421,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {/* Header */}
       <div className="flex items-center gap-2">
         {step > 0 && step < 6 && (
-          <button onClick={handleBack} className="p-2 hover:bg-ocean-100 rounded-full">
-            <ArrowLeft className="w-5 h-5 text-ocean-600" />
+          <button onClick={handleBack} className="p-2 hover:bg-maroon-100 rounded-full">
+            <ArrowLeft className="w-5 h-5 text-maroon-600" />
           </button>
         )}
-        <div className="flex items-center gap-2 text-ocean-700 font-semibold">
+        <div className="flex items-center gap-2 text-maroon-700 font-semibold">
           <CreditCard className="w-5 h-5" /> ВАЛЮТ СОЛИХ
         </div>
-        <button onClick={onBack} className="ml-auto text-sm text-slate-500 hover:text-ocean-600">
+        <button onClick={onBack} className="ml-auto text-sm text-slate-500 hover:text-maroon-600">
           Цуцлах
         </button>
       </div>
@@ -460,7 +460,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               </div>
               <button
                 onClick={onBack}
-                className="mt-2 px-6 py-3 bg-ocean-600 text-white rounded-xl font-semibold hover:bg-ocean-700 transition"
+                className="mt-2 px-6 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition"
               >
                 Ойлголоо
               </button>
@@ -476,17 +476,17 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           <div className="text-center text-slate-600 mb-2">Валют солих чиглэлээ сонгоно уу</div>
           <button
             onClick={() => handleSelectDirection("buy")}
-            className="p-4 rounded-xl border-2 border-ocean-200 hover:border-ocean-500 hover:bg-ocean-50 transition flex items-center justify-between"
+            className="p-4 rounded-xl border-2 border-maroon-200 hover:border-maroon-500 hover:bg-maroon-50 transition flex items-center justify-between"
           >
             <div className="text-left">
-              <div className="font-semibold text-ocean-700 flex items-center gap-2">
+              <div className="font-semibold text-maroon-700 flex items-center gap-2">
                 Төгрөг авах (RUB → MNT)
               </div>
               <div className="text-sm text-slate-500">RUB илгээж, MNT авна</div>
             </div>
             <div className="text-right">
               <div className="text-xs text-slate-400">Ханш</div>
-              <div className="font-bold text-ocean-600">{buyRate}</div>
+              <div className="font-bold text-maroon-600">{buyRate}</div>
             </div>
           </button>
           {/* Check if user has RUB bank info - disable sell button if not */}
@@ -495,17 +495,17 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             return hasRubBank ? (
               <button
                 onClick={() => handleSelectDirection("sell")}
-                className="p-4 rounded-xl border-2 border-ocean-200 hover:border-ocean-500 hover:bg-ocean-50 transition flex items-center justify-between"
+                className="p-4 rounded-xl border-2 border-maroon-200 hover:border-maroon-500 hover:bg-maroon-50 transition flex items-center justify-between"
               >
                 <div className="text-left">
-                  <div className="font-semibold text-ocean-700 flex items-center gap-2">
+                  <div className="font-semibold text-maroon-700 flex items-center gap-2">
                     Рубль авах (MNT → RUB)
                   </div>
                   <div className="text-sm text-slate-500">MNT илгээж, RUB авна</div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-slate-400">Ханш</div>
-                  <div className="font-bold text-ocean-600">{sellRate}</div>
+                  <div className="font-bold text-maroon-600">{sellRate}</div>
                 </div>
               </button>
             ) : (
@@ -538,8 +538,8 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <Tag className="w-4 h-4" /> 1-р алхам — Промо код (заавал биш)
           </div>
           
-          <div className="flex items-center gap-2 p-2 bg-ocean-50 rounded-lg text-sm">
-            <ArrowRightLeft className="w-4 h-4 text-ocean-600" />
+          <div className="flex items-center gap-2 p-2 bg-maroon-50 rounded-lg text-sm">
+            <ArrowRightLeft className="w-4 h-4 text-maroon-600" />
             <span>{currencyFrom} → {currencyTo}</span>
             <span className="ml-auto font-semibold">Суурь ханш: {baseRate}</span>
           </div>
@@ -574,7 +574,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           <input
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-            className="rounded-xl border border-ocean-100 p-3 text-lg uppercase"
+            className="rounded-xl border border-maroon-100 p-3 text-lg uppercase"
             placeholder="Промо код оруулна уу"
           />
           
@@ -599,7 +599,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <button
               onClick={handleValidatePromo}
               disabled={promoValidating}
-              className="flex-1 py-3 rounded-xl bg-ocean-600 text-white font-semibold hover:bg-ocean-700 disabled:opacity-50"
+              className="flex-1 py-3 rounded-xl bg-maroon-600 text-white font-semibold hover:bg-maroon-700 disabled:opacity-50"
             >
               {promoValidating ? "Шалгаж байна..." : "Идэвхжүүлээд үргэлжлэх"}
             </button>
@@ -611,8 +611,8 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {step === 2 && direction && (
         <div className="flex flex-col gap-3">
           <div className="text-sm text-slate-600">2-р алхам — Солих мөнгөн дүн оруулах</div>
-          <div className="flex items-center gap-2 p-2 bg-ocean-50 rounded-lg text-sm">
-            <ArrowRightLeft className="w-4 h-4 text-ocean-600" />
+          <div className="flex items-center gap-2 p-2 bg-maroon-50 rounded-lg text-sm">
+            <ArrowRightLeft className="w-4 h-4 text-maroon-600" />
             <span>{currencyFrom} → {currencyTo}</span>
             <span className="ml-auto font-semibold">
               Ханш: {effectiveRate.toFixed(2)}
@@ -630,13 +630,13 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             min={0}
             value={amount || ""}
             onChange={(e) => setAmount(Number(e.target.value || 0))}
-            className="rounded-xl border border-ocean-100 p-3 text-lg"
+            className="rounded-xl border border-maroon-100 p-3 text-lg"
             placeholder="0"
           />
           
           {amount > 0 && (
             <div className="text-sm text-slate-600">
-              Таны хүлээн авах мөнгөн дүн: <span className="font-bold text-ocean-700">
+              Таны хүлээн авах мөнгөн дүн: <span className="font-bold text-maroon-700">
                 {convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}
               </span>
             </div>
@@ -651,7 +651,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           )}
           
           <button
-            className="mt-2 w-full rounded-xl bg-ocean-600 text-white py-3 font-semibold disabled:opacity-50"
+            className="mt-2 w-full rounded-xl bg-maroon-600 text-white py-3 font-semibold disabled:opacity-50"
             onClick={() => {
               // Generate invoice ID when moving to step 3
               if (!invoiceId) {
@@ -685,11 +685,11 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                       onClick={() => setSelectedAdminBank(bank)}
                       className={`p-4 rounded-xl border-2 text-left transition ${
                         selectedAdminBank?.id === bank.id
-                          ? "border-ocean-500 bg-ocean-50"
-                          : "border-ocean-100 hover:border-ocean-300"
+                          ? "border-maroon-500 bg-maroon-50"
+                          : "border-maroon-100 hover:border-maroon-300"
                       }`}
                     >
-                      <div className="font-semibold text-ocean-700">{bank.bank_name}</div>
+                      <div className="font-semibold text-maroon-700">{bank.bank_name}</div>
                       <div className="text-sm text-slate-600 font-mono">{bank.card_number || bank.account_number}</div>
                       {bank.phone && <div className="text-xs text-slate-500">{bank.phone}</div>}
                       <div className="text-xs text-slate-500">{bank.owner_name}</div>
@@ -716,11 +716,11 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                       onClick={() => setSelectedMntAdminBank(bank)}
                       className={`p-4 rounded-xl border-2 text-left transition ${
                         selectedMntAdminBank?.id === bank.id
-                          ? "border-ocean-500 bg-ocean-50"
-                          : "border-ocean-100 hover:border-ocean-300"
+                          ? "border-maroon-500 bg-maroon-50"
+                          : "border-maroon-100 hover:border-maroon-300"
                       }`}
                     >
-                      <div className="font-semibold text-ocean-700">{bank.bank_name}</div>
+                      <div className="font-semibold text-maroon-700">{bank.bank_name}</div>
                       <div className="text-sm text-slate-600 font-mono">{bank.account_number}</div>
                       <div className="text-xs text-slate-500">{bank.owner_name}</div>
                     </button>
@@ -734,19 +734,19 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
 
               {/* Show selected MNT bank details with copy buttons */}
               {selectedMntAdminBank && (
-                <div className="p-4 bg-ocean-50 border border-ocean-200 rounded-xl space-y-2">
+                <div className="p-4 bg-maroon-50 border border-maroon-200 rounded-xl space-y-2">
                   <div className="text-xs text-slate-500">Шилжүүлгийн мэдээлэл:</div>
                   
                   <div className="flex items-center justify-between p-2 bg-white rounded-lg">
                     <div>
                       <div className="text-xs text-slate-500">Данс</div>
-                      <div className="font-mono font-bold text-ocean-700">{selectedMntAdminBank.account_number}</div>
+                      <div className="font-mono font-bold text-maroon-700">{selectedMntAdminBank.account_number}</div>
                     </div>
                     <button
                       onClick={() => handleCopy(selectedMntAdminBank.account_number, "mnt-account")}
-                      className="p-2 bg-ocean-100 hover:bg-ocean-200 rounded-lg transition"
+                      className="p-2 bg-maroon-100 hover:bg-maroon-200 rounded-lg transition"
                     >
-                      {copied === "mnt-account" ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-ocean-600" />}
+                      {copied === "mnt-account" ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-maroon-600" />}
                     </button>
                   </div>
                   
@@ -772,20 +772,20 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
 
           {/* Selected bank details with copy buttons (for buy direction) */}
           {direction === "buy" && selectedAdminBank && (
-            <div className="p-4 bg-ocean-50 border border-ocean-200 rounded-xl space-y-2">
+            <div className="p-4 bg-maroon-50 border border-maroon-200 rounded-xl space-y-2">
               <div className="text-xs text-slate-500">Шилжүүлгийн мэдээлэл:</div>
               
               {selectedAdminBank.card_number && (
                 <div className="flex items-center justify-between p-2 bg-white rounded-lg">
                   <div>
                     <div className="text-xs text-slate-500">Картын дугаар</div>
-                    <div className="font-mono font-bold text-ocean-700">{selectedAdminBank.card_number}</div>
+                    <div className="font-mono font-bold text-maroon-700">{selectedAdminBank.card_number}</div>
                   </div>
                   <button
                     onClick={() => handleCopy(selectedAdminBank.card_number!, "card")}
-                    className="p-2 bg-ocean-100 hover:bg-ocean-200 rounded-lg transition"
+                    className="p-2 bg-maroon-100 hover:bg-maroon-200 rounded-lg transition"
                   >
-                    {copied === "card" ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-ocean-600" />}
+                    {copied === "card" ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-maroon-600" />}
                   </button>
                 </div>
               )}
@@ -794,13 +794,13 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                 <div className="flex items-center justify-between p-2 bg-white rounded-lg">
                   <div>
                     <div className="text-xs text-slate-500">Утасны дугаар (СБП)</div>
-                    <div className="font-mono font-bold text-ocean-700">{selectedAdminBank.phone}</div>
+                    <div className="font-mono font-bold text-maroon-700">{selectedAdminBank.phone}</div>
                   </div>
                   <button
                     onClick={() => handleCopy(selectedAdminBank.phone!, "phone")}
-                    className="p-2 bg-ocean-100 hover:bg-ocean-200 rounded-lg transition"
+                    className="p-2 bg-maroon-100 hover:bg-maroon-200 rounded-lg transition"
                   >
-                    {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-ocean-600" />}
+                    {copied === "phone" ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-maroon-600" />}
                   </button>
                 </div>
               )}
@@ -824,7 +824,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           )}
 
           <button
-            className="mt-2 w-full rounded-xl bg-ocean-600 text-white py-3 font-semibold disabled:opacity-50"
+            className="mt-2 w-full rounded-xl bg-maroon-600 text-white py-3 font-semibold disabled:opacity-50"
             onClick={() => setStep(4)}
             disabled={direction === "buy" && !selectedAdminBank}
           >
@@ -839,7 +839,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           <div className="text-sm text-slate-600">4-р алхам — Төлбөрийн баримт оруулах (олон зураг хавсаргах боломжтой)</div>
           
           {/* Summary */}
-          <div className="p-3 bg-ocean-50 rounded-xl text-sm">
+          <div className="p-3 bg-maroon-50 rounded-xl text-sm">
             <div className="flex justify-between">
               <span>Таны илгээх мөнгөн дүн:</span>
               <span className="font-bold">{amount.toLocaleString()} {currencyFrom}</span>
@@ -855,7 +855,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <div className="flex flex-wrap gap-2">
               {receiptUrls.map((url, index) => (
                 <div key={index} className="relative">
-                  <img src={url} alt={`Receipt ${index + 1}`} className="w-20 h-20 object-cover rounded-lg border border-ocean-200" />
+                  <img src={url} alt={`Receipt ${index + 1}`} className="w-20 h-20 object-cover rounded-lg border border-maroon-200" />
                   <button
                     onClick={() => removeReceipt(index)}
                     className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
@@ -867,7 +867,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             </div>
           )}
 
-          <label className="flex flex-col items-center justify-center border-2 border-dashed border-ocean-200 rounded-xl py-8 cursor-pointer bg-white/60 hover:bg-ocean-50 transition">
+          <label className="flex flex-col items-center justify-center border-2 border-dashed border-maroon-200 rounded-xl py-8 cursor-pointer bg-white/60 hover:bg-maroon-50 transition">
             {receiptUrls.length > 0 ? (
               <div className="flex flex-col items-center gap-2 text-green-600">
                 <CheckCircle2 className="w-6 h-6" />
@@ -876,7 +876,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               </div>
             ) : (
               <>
-                <Upload className="w-8 h-8 text-ocean-600" />
+                <Upload className="w-8 h-8 text-maroon-600" />
                 <span className="text-sm text-slate-500 mt-2">
                   {uploading ? "Хавсаргаж байна..." : "Төлбөрийн баримтын скриншот зураг оруулах"}
                 </span>
@@ -899,7 +899,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           {error && <div className="text-red-600 text-sm">{error}</div>}
           
           <button
-            className="mt-2 w-full rounded-xl bg-ocean-600 text-white py-3 font-semibold disabled:opacity-50"
+            className="mt-2 w-full rounded-xl bg-maroon-600 text-white py-3 font-semibold disabled:opacity-50"
             onClick={() => {
               const saved = getSavedBankForDirection(direction);
               if (saved) {
@@ -928,9 +928,9 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           {/* Ask about saved bank if available and not yet chosen */}
           {useSavedBank === null && getSavedBankForDirection(direction) && (
             <div className="flex flex-col gap-3">
-              <div className="p-4 bg-ocean-50 rounded-xl border border-ocean-200">
+              <div className="p-4 bg-maroon-50 rounded-xl border border-maroon-200">
                 <div className="text-xs text-slate-500 mb-2">Хадгалсан {currencyTo} банкны мэдээлэл:</div>
-                <div className="text-sm font-medium text-ocean-700 whitespace-pre-wrap">
+                <div className="text-sm font-medium text-maroon-700 whitespace-pre-wrap">
                   {getSavedBankForDirection(direction)}
                 </div>
               </div>
@@ -967,7 +967,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <input
                     value={rubBank}
                     onChange={(e) => setRubBank(e.target.value)}
-                    className="rounded-xl border border-ocean-100 p-3"
+                    className="rounded-xl border border-maroon-100 p-3"
                     placeholder="Tinkoff, Sber, Alfa..."
                   />
 
@@ -975,7 +975,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <input
                     value={rubCardNumber}
                     onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))}
-                    className="rounded-xl border border-ocean-100 p-3"
+                    className="rounded-xl border border-maroon-100 p-3"
                     placeholder="XXXX XXXX XXXX XXXX"
                     maxLength={19}
                   />
@@ -984,7 +984,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <input
                     value={rubPhone}
                     onChange={(e) => setRubPhone(formatRussianPhone(e.target.value))}
-                    className="rounded-xl border border-ocean-100 p-3"
+                    className="rounded-xl border border-maroon-100 p-3"
                     placeholder="+7 XXX XXX XX XX"
                   />
 
@@ -992,7 +992,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <input
                     value={rubOwnerName}
                     onChange={(e) => setRubOwnerName(e.target.value)}
-                    className="rounded-xl border border-ocean-100 p-3"
+                    className="rounded-xl border border-maroon-100 p-3"
                     placeholder="Иван Иванов"
                   />
                 </>
@@ -1005,7 +1005,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <input
                     value={mntBank}
                     onChange={(e) => setMntBank(e.target.value)}
-                    className="rounded-xl border border-ocean-100 p-3"
+                    className="rounded-xl border border-maroon-100 p-3"
                     placeholder="Хаан банк, Голомт банк..."
                   />
 
@@ -1013,7 +1013,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <input
                     value={mntIban}
                     onChange={(e) => setMntIban(formatIBAN(e.target.value))}
-                    className="rounded-xl border border-ocean-100 p-3"
+                    className="rounded-xl border border-maroon-100 p-3"
                     placeholder="MN XX XXXX XX XXXXXXXXXX"
                   />
 
@@ -1021,7 +1021,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   <input
                     value={mntOwnerName}
                     onChange={(e) => setMntOwnerName(e.target.value)}
-                    className="rounded-xl border border-ocean-100 p-3"
+                    className="rounded-xl border border-maroon-100 p-3"
                     placeholder="Бат-Эрдэнэ"
                   />
                 </>
@@ -1045,7 +1045,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {step === 6 && (
         <div className="flex flex-col items-center gap-4 py-6">
           <CheckCircle2 className="w-16 h-16 text-green-500" />
-          <div className="text-xl font-bold text-ocean-700">Хүсэлт илгээгдлээ!</div>
+          <div className="text-xl font-bold text-maroon-700">Хүсэлт илгээгдлээ!</div>
           <div className="text-sm text-slate-600 text-center">
             Invoice: <span className="font-mono font-bold">{successInvoice}</span>
           </div>
@@ -1054,7 +1054,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           </div>
           <button
             onClick={onBack}
-            className="mt-4 px-6 py-2 bg-ocean-100 text-ocean-700 rounded-xl font-semibold hover:bg-ocean-200 transition"
+            className="mt-4 px-6 py-2 bg-maroon-100 text-maroon-700 rounded-xl font-semibold hover:bg-maroon-200 transition"
           >
             Дуусгах
           </button>

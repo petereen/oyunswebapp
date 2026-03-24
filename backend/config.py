@@ -3,6 +3,13 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import List
 
+# Load .env file if present (local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 @dataclass
 class Settings:

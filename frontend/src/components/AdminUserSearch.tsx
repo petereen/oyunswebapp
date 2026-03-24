@@ -62,7 +62,7 @@ export function AdminUserSearch() {
             <input
               type="text"
               placeholder="Хайх: ID, нэр, утас, username..."
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-ocean-100 focus:ring-2 focus:ring-ocean-500 focus:border-ocean-500"
+              className="w-full pl-10 pr-4 py-3 rounded-xl border border-maroon-100 focus:ring-2 focus:ring-maroon-500 focus:border-maroon-500"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -71,7 +71,7 @@ export function AdminUserSearch() {
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="px-4 py-3 bg-ocean-600 text-white rounded-xl font-semibold hover:bg-ocean-700 transition disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition disabled:opacity-50 flex items-center gap-2"
           >
             {loading ? (
               <RefreshCw className="w-5 h-5 animate-spin" />
@@ -86,7 +86,7 @@ export function AdminUserSearch() {
       {/* Results */}
       <div className="space-y-3">
         {users.length === 0 && !loading && (
-          <div className="text-center py-12 bg-white/50 rounded-xl border border-ocean-100">
+          <div className="text-center py-12 bg-white/50 rounded-xl border border-maroon-100">
             <User className="w-12 h-12 mx-auto text-slate-300 mb-2" />
             <p className="text-slate-500">Хэрэглэгч олдсонгүй</p>
           </div>
@@ -100,8 +100,8 @@ export function AdminUserSearch() {
             {/* User Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-ocean-100 flex items-center justify-center">
-                  <User className="w-5 h-5 text-ocean-600" />
+                <div className="w-10 h-10 rounded-full bg-maroon-100 flex items-center justify-center">
+                  <User className="w-5 h-5 text-maroon-600" />
                 </div>
                 <div>
                   <div className="font-semibold text-slate-800">

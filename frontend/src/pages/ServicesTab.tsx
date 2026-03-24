@@ -1,0 +1,63 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Gift, Flame } from "lucide-react";
+import { GiftFlow } from "../components/GiftFlow";
+import { FuelPlaceholder } from "../components/FuelPlaceholder";
+import { fetchRates } from "../api";
+
+export function ServicesTab() {
+  const [activeService, setActiveService] = useState<"gift" | "fuel" | null>(null);
+
+  const { data: rate } = useQuery({
+    queryKey: ["rates"],
+    queryFn: fetchRates,
+    retry: 2,
+  });
+
+  if (activeService === "gift") {
+    return (
+      <div className="animate-fadeIn">
+        <GiftFlow
+          buyRate={rate?.buy_rate || 0}
+          sellRate={rate?.sell_rate || 0}
+          onBack={() => setActiveService(null)}
+          onSuccess={() => setActiveService(null)}
+        />
+      </div>
+    );
+  }
+
+  if (activeService === "fuel") {
+    return <FuelPlaceholder onBack={() => setActiveService(null)} />;
+  }
+
+  return (
+    <div className="animate-fadeIn">
+      <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200 mb-4">Үйлчилгээ</h2>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Gift Flow Card */}
+        <button
+          onClick={() => setActiveService("gift")}
+          className="relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-3xl text-left text-white hover:from-violet-600 hover:to-purple-700 active:scale-[0.97] transition-all shadow-lg shadow-purple-200/50"
+        >
+          <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
+          <Gift className="w-8 h-8 mb-3 opacity-90" />
+          <div className="font-bold text-sm mb-0.5">Бэлэг илгээх</div>
+          <div className="text-[11px] text-white/60 leading-relaxed">Гадаадад буй хүнд мөнгө илгээх</div>
+        </button>
+
+        {/* Fuel Credit Card */}
+        <button
+          onClick={() => setActiveService("fuel")}
+          className="relative overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-3xl text-left text-white hover:from-amber-600 hover:to-orange-700 active:scale-[0.97] transition-all shadow-lg shadow-amber-200/50"
+        >
+          <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
+          <Flame className="w-8 h-8 mb-3 opacity-90" />
+          <div className="font-bold text-sm mb-0.5">Шатахууны хэтэвч цэнэглэх</div>
+          <div className="text-[11px] text-white/60 leading-relaxed">Жолоочд танд зориулсан</div>
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -98,7 +98,7 @@ export function AdminKyc() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ocean-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-maroon-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -108,19 +108,19 @@ export function AdminKyc() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-ocean-600" />
+          <FileText className="w-5 h-5 text-maroon-600" />
           Баталгаажуулалт хүлээж буй ({pending.length})
         </h2>
         <button
           onClick={() => refetch()}
-          className="p-2 rounded-full bg-ocean-100 text-ocean-600 hover:bg-ocean-200 transition"
+          className="p-2 rounded-full bg-maroon-100 text-maroon-600 hover:bg-maroon-200 transition"
         >
           <RefreshCw className="w-5 h-5" />
         </button>
       </div>
 
       {pending.length === 0 ? (
-        <div className="text-center py-12 bg-white/50 rounded-xl border border-ocean-100">
+        <div className="text-center py-12 bg-white/50 rounded-xl border border-maroon-100">
           <CheckCircle2 className="w-12 h-12 mx-auto text-green-500 mb-2" />
           <p className="text-slate-600">Хүлээгдэж буй баталгаажуулалт байхгүй байна</p>
         </div>
@@ -134,16 +134,16 @@ export function AdminKyc() {
             return (
               <div
                 key={item.user_id}
-                className="bg-white/80 rounded-xl border border-ocean-100 overflow-hidden"
+                className="bg-white/80 rounded-xl border border-maroon-100 overflow-hidden"
               >
                 {/* Summary Row */}
                 <div
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-ocean-50/50 transition"
+                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-maroon-50/50 transition"
                   onClick={() => setExpandedId(isExpanded ? null : item.user_id)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-ocean-100 flex items-center justify-center">
-                      <User className="w-5 h-5 text-ocean-600" />
+                    <div className="w-10 h-10 rounded-full bg-maroon-100 flex items-center justify-center">
+                      <User className="w-5 h-5 text-maroon-600" />
                     </div>
                     <div>
                       <p className="font-semibold text-slate-800">
@@ -170,11 +170,11 @@ export function AdminKyc() {
 
                 {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="border-t border-ocean-100 p-4 space-y-4 bg-ocean-50/30">
+                  <div className="border-t border-maroon-100 p-4 space-y-4 bg-maroon-50/30">
                     {/* RUB Bank Details - Only show if available */}
                     {rubBank ? (
                       <div className="space-y-2">
-                        <h4 className="text-sm font-semibold text-ocean-700 flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-maroon-700 flex items-center gap-2">
                           <CreditCard className="w-4 h-4" />
                           RUB банкны мэдээлэл
                         </h4>
@@ -206,7 +206,7 @@ export function AdminKyc() {
 
                     {/* MNT Bank Details */}
                     <div className="space-y-2">
-                      <h4 className="text-sm font-semibold text-ocean-700 flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-maroon-700 flex items-center gap-2">
                         <Building className="w-4 h-4" />
                         MNT банкны мэдээлэл
                       </h4>
@@ -229,7 +229,7 @@ export function AdminKyc() {
                     {/* Passport Photo */}
                     {item.passport_storage_url && (
                       <div className="space-y-2">
-                        <h4 className="text-sm font-semibold text-ocean-700 flex items-center gap-2">
+                        <h4 className="text-sm font-semibold text-maroon-700 flex items-center gap-2">
                           <FileText className="w-4 h-4" />
                           Паспортын зураг
                         </h4>
@@ -242,9 +242,9 @@ export function AdminKyc() {
                           <img
                             src={item.passport_storage_url}
                             alt="Passport"
-                            className="max-h-48 rounded-lg border border-ocean-200 hover:opacity-80 transition"
+                            className="max-h-48 rounded-lg border border-maroon-200 hover:opacity-80 transition"
                           />
-                          <span className="text-xs text-ocean-600 flex items-center gap-1 mt-1">
+                          <span className="text-xs text-maroon-600 flex items-center gap-1 mt-1">
                             <ExternalLink className="w-3 h-3" />
                             Томруулж харах
                           </span>

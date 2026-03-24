@@ -148,14 +148,14 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
           {missingEmail && (
             <div>
               <label className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-2">
-                <Mail className="w-4 h-4 text-ocean-600" />
+                <Mail className="w-4 h-4 text-maroon-600" />
                 Имэйл хаяг
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-ocean-200 p-3 text-base focus:ring-2 focus:ring-ocean-500 focus:border-transparent"
+                className="w-full rounded-lg border border-maroon-200 p-3 text-base focus:ring-2 focus:ring-maroon-500 focus:border-transparent"
                 placeholder="example@email.com"
               />
               <p className="text-xs text-slate-500 mt-1">
@@ -168,14 +168,14 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
           {missingPhoneMnt && (
             <div>
               <label className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-2">
-                <Phone className="w-4 h-4 text-ocean-600" />
+                <Phone className="w-4 h-4 text-maroon-600" />
                 Монгол утасны дугаар
               </label>
               <input
                 type="tel"
                 value={phoneMnt}
                 onChange={(e) => setPhoneMnt(formatMongolianPhone(e.target.value))}
-                className="w-full rounded-lg border border-ocean-200 p-3 text-base focus:ring-2 focus:ring-ocean-500 focus:border-transparent"
+                className="w-full rounded-lg border border-maroon-200 p-3 text-base focus:ring-2 focus:ring-maroon-500 focus:border-transparent"
                 placeholder="9912-3456"
               />
               <p className="text-xs text-slate-500 mt-1">
@@ -211,7 +211,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
           <button
             onClick={handleSave}
             disabled={!isFormValid() || loading}
-            className="flex-1 py-3 px-4 rounded-xl bg-ocean-600 text-white font-medium hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 py-3 px-4 rounded-xl bg-maroon-600 text-white font-medium hover:bg-maroon-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (
               <>

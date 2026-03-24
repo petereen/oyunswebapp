@@ -30,13 +30,17 @@ interface DiagnosticInfo {
 }
 
 export function TelegramDiagnostic() {
+  const isDevMode = import.meta.env.VITE_DEV_MODE === 'true';
+
+  // Hide entirely in dev mode — the diagnostic only matters inside Telegram
+  if (isDevMode) return null;
+
   const [info, setInfo] = useState<DiagnosticInfo | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [debugResult, setDebugResult] = useState<any>(null);
   const [debugLoading, setDebugLoading] = useState(false);
 
   const runDebug = async () => {
-    // Debug function removed - no auth needed
     setDebugResult({ message: "Auth disabled - running in dev mode" });
   };
 

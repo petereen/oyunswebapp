@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
+// Must match the key used in useTelegramAuth.ts
+const DEV_USER_KEY = 'dev_telegram_user';
+const ADMIN_ID = 1932946217;
+
 export const DevToolbar: React.FC = () => {
   // Only show in dev mode
   if (import.meta.env.VITE_DEV_MODE !== 'true') {
@@ -10,26 +14,36 @@ export const DevToolbar: React.FC = () => {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   useEffect(() => {
-    const devUser = localStorage.getItem("oyuns_dev_user");
+    const devUser = localStorage.getItem(DEV_USER_KEY);
     if (devUser) {
       try {
         const parsed = JSON.parse(devUser);
-        setIsAdmin(parsed.id === 1932946217);
+        setIsAdmin(parsed.id === ADMIN_ID);
       } catch {
         setIsAdmin(false);
       }
+    } else {
+      // No stored user yet — default is admin
+      setIsAdmin(true);
     }
     // Check URL for admin mode
     setShowAdminPanel(window.location.search.includes('admin=true'));
   }, []);
 
+  const switchRole = (user: { id: number; first_name: string; last_name: string; username: string }) => {
+    localStorage.setItem(DEV_USER_KEY, JSON.stringify(user));
+    // Clear JWT so useTelegramAuth re-authenticates with the new identity
+    localStorage.removeItem('oyuns_jwt');
+    localStorage.removeItem('oyuns_user');
+  };
+
   const setUserMode = () => {
-    localStorage.setItem("oyuns_dev_user", JSON.stringify({
-      id: 123456789,
+    switchRole({
+      id: 7700012345,
       first_name: "Dev",
       last_name: "User",
       username: "dev_user"
-    }));
+    });
     // Remove admin from URL
     const url = new URL(window.location.href);
     url.searchParams.delete('admin');
@@ -37,12 +51,12 @@ export const DevToolbar: React.FC = () => {
   };
 
   const setAdminMode = () => {
-    localStorage.setItem("oyuns_dev_user", JSON.stringify({
-      id: 1932946217, // ID matched from backend/config.py ADMIN_USER_IDS
+    switchRole({
+      id: ADMIN_ID,
       first_name: "Dev",
       last_name: "Admin",
       username: "dev_admin"
-    }));
+    });
     window.location.reload();
   };
 
@@ -57,7 +71,7 @@ export const DevToolbar: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-4 left-4 bg-gray-800 text-white p-3 rounded-lg shadow-xl z-50 flex flex-col gap-2 border border-gray-600">
+    <div className="fixed top-4 left-4 bg-gray-800 text-white p-3 rounded-lg shadow-xl z-50 flex flex-col gap-2 border border-gray-600">
       <div className="text-xs font-bold text-center border-b border-gray-600 pb-2 mb-1 flex items-center justify-center gap-1">
         <span>🔧</span> Dev Mode
       </div>

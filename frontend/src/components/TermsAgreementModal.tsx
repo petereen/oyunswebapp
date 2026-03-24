@@ -41,7 +41,7 @@ export function TermsAgreementModal({ onAgreed }: Props) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4">
       <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-ocean-600 to-ocean-500 p-6 text-white">
+        <div className="bg-gradient-to-r from-maroon-600 to-maroon-500 p-6 text-white">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
               <FileText className="w-6 h-6" />
@@ -77,7 +77,7 @@ export function TermsAgreementModal({ onAgreed }: Props) {
           {/* Read Terms Button */}
           <button
             onClick={openTerms}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-ocean-200 text-ocean-700 font-medium hover:bg-ocean-50 transition"
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
           >
             <ExternalLink className="w-5 h-5" />
             Хэрэглэгчийн гэрээтэй танилцах
@@ -89,7 +89,7 @@ export function TermsAgreementModal({ onAgreed }: Props) {
               type="checkbox"
               checked={hasReadTerms}
               onChange={(e) => setHasReadTerms(e.target.checked)}
-              className="mt-0.5 w-5 h-5 rounded border-slate-300 text-ocean-600 focus:ring-ocean-500"
+              className="mt-0.5 w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
             />
             <span className="text-sm text-slate-600">
               Би хэрэглэгчийн гэрээтэй танилцаж, зөвшөөрч байна
@@ -107,7 +107,7 @@ export function TermsAgreementModal({ onAgreed }: Props) {
           <button
             onClick={handleAgree}
             disabled={loading || !hasReadTerms}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-ocean-600 text-white font-bold text-lg hover:bg-ocean-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-maroon-600 text-white font-bold text-lg hover:bg-maroon-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

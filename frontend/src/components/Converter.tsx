@@ -32,42 +32,42 @@ export function Converter({ rate, onAmountChange }: Props) {
   const toCurrency = direction === "buy" ? { symbol: "₮", flag: "🇲🇳", code: "MNT" } : { symbol: "₽", flag: "🇷🇺", code: "RUB" };
 
   return (
-    <div className="glass-card p-5 rounded-2xl border border-white/60 flex flex-col gap-3">
-      <div className="flex items-center justify-between text-sm">
-        <div className="font-semibold text-ocean-700">ВАЛЮТ ТООЦООЛУУР</div>
+    <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-bold text-dark-800 dark:text-ivory-200 tracking-wide">Тооцоолуур</div>
         <button
-          className="px-3 py-1 text-xs rounded-full bg-ocean-600 text-white flex items-center gap-1"
+          className="px-3 py-1.5 text-[11px] rounded-xl bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-300 font-medium flex items-center gap-1.5 hover:bg-surface-200 dark:hover:bg-dark-600 transition"
           onClick={() => setDirection(direction === "buy" ? "sell" : "buy")}
         >
-          <ArrowLeftRight className="w-4 h-4" /> 
-          {direction === "buy" ? `₽ RUB → ₮ MNT` : `₮ MNT → ₽ RUB`}
+          <ArrowLeftRight className="w-3.5 h-3.5" /> 
+          {direction === "buy" ? `RUB → MNT` : `MNT → RUB`}
         </button>
       </div>
-      <div className="flex flex-col gap-3">
-        <label className="text-xs text-slate-500 flex items-center gap-1">
-          Та илгээнэ ({fromCurrency.code})
-        </label>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-slate-400">{fromCurrency.symbol}</span>
-          <input
-            type="number"
-            min={0}
-            value={amountFrom}
-            placeholder="0"
-            onChange={(e) => {
-              const val = e.target.value;
-              setAmountFrom(val);
-              compute(direction, val ? Number(val) : 0);
-            }}
-            className="w-full rounded-xl border border-ocean-100 bg-white/70 p-3 pl-8 text-lg focus:outline-none focus:ring-2 focus:ring-ocean-500"
-          />
+      <div className="space-y-3">
+        <div className="bg-surface-50 dark:bg-dark-700 rounded-xl p-3.5">
+          <div className="text-[11px] text-dark-600 dark:text-ivory-300 font-medium mb-1">Илгээх ({fromCurrency.code})</div>
+          <div className="relative">
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-base text-dark-600 dark:text-ivory-300 font-medium">{fromCurrency.flag}</span>
+            <input
+              type="number"
+              min={0}
+              value={amountFrom}
+              placeholder="0"
+              onChange={(e) => {
+                const val = e.target.value;
+                setAmountFrom(val);
+                compute(direction, val ? Number(val) : 0);
+              }}
+              className="w-full bg-transparent pl-7 text-2xl font-bold text-dark-800 dark:text-ivory-200 focus:outline-none"
+            />
+          </div>
         </div>
-        <div className="text-xs text-slate-500 flex items-center gap-1">
-          Та хүлээн авна ({toCurrency.code})
-        </div>
-        <div className="text-2xl font-bold text-ocean-700 flex items-center gap-2">
-          <span className="text-slate-400">{toCurrency.symbol}</span>
-          {formatNumber(amountTo)}
+        <div className="bg-surface-50 dark:bg-dark-700 rounded-xl p-3.5">
+          <div className="text-[11px] text-dark-600 dark:text-ivory-300 font-medium mb-1">Хүлээн авах ({toCurrency.code})</div>
+          <div className="text-2xl font-bold text-dark-800 dark:text-ivory-200 flex items-center gap-2">
+            <span className="text-base">{toCurrency.flag}</span>
+            {formatNumber(amountTo)}
+          </div>
         </div>
       </div>
     </div>
