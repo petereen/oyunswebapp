@@ -377,6 +377,41 @@ async def get_rates():
     )
 
 
+@app.get("/api/rate-history")
+async def get_rate_history(days: int = 30):
+    """Public endpoint - daily rates from bot_rates table (latest entry per day)."""
+    if days < 1 or days > 365:
+        days = 30
+    client = get_supabase()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    res = (
+        client.table("bot_rates")
+        .select("buy_rate,sell_rate,updated_at")
+        .gte("updated_at", cutoff)
+        .order("updated_at", desc=False)
+        .execute()
+    )
+    # Group by date, keep only the latest entry per day
+    daily: dict[str, dict] = {}
+    for row in (res.data or []):
+        ts = row.get("updated_at", "")
+        if not ts:
+            continue
+        date_key = ts[:10]  # YYYY-MM-DD
+        # Data ordered asc, so later entries overwrite earlier ones (keeps latest per day)
+        daily[date_key] = {
+            "buy_rate": round(float(row["buy_rate"]), 2) if row.get("buy_rate") is not None else None,
+            "sell_rate": round(float(row["sell_rate"]), 2) if row.get("sell_rate") is not None else None,
+        }
+
+    points = [
+        {"date": dk, "buy_rate": d["buy_rate"], "sell_rate": d["sell_rate"]}
+        for dk, d in sorted(daily.items())
+    ]
+
+    return {"points": points, "days": days}
+
+
 @app.get("/api/settings", response_model=AppSettingsResponse)
 async def get_app_settings():
     """Public endpoint - fetch configurable app settings"""

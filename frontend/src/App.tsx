@@ -89,7 +89,6 @@ export default function App() {
           </div>
           <AdminPanel />
         </div>
-        <TelegramDiagnostic />
         <DevToolbar />
       </div>
     );
@@ -144,7 +143,6 @@ export default function App() {
       <BottomNavBar activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* Diagnostic Helper */}
-      <TelegramDiagnostic />
       <DevToolbar />
     </div>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { ArrowUpDown, Info } from "lucide-react";
-import { Rate, fetchAppSettings } from "../api";
+import { Rate } from "../api";
 
 interface Props {
   rate?: Rate;
@@ -11,18 +11,14 @@ interface Props {
 export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
   const [direction, setDirection] = useState<"buy" | "sell">(initialDirection || "buy");
   const [inputValue, setInputValue] = useState("");
-  const [minRubAmount, setMinRubAmount] = useState(5000);
   const [swapRotation, setSwapRotation] = useState(0);
 
   useEffect(() => {
     if (initialDirection) setDirection(initialDirection);
   }, [initialDirection]);
 
-  useEffect(() => {
-    fetchAppSettings()
-      .then((res) => setMinRubAmount(res.min_rub_amount || 5000))
-      .catch(() => {});
-  }, []);
+  // RUB→MNT (buy): min 100₽ | MNT→RUB (sell): min 5000₽
+  const effectiveMinRub = direction === "buy" ? 100 : 5000;
 
   const currentRate = useMemo(() => {
     if (!rate) return 0;
@@ -68,8 +64,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
     setInputValue("");
   };
 
-  const minAmount = direction === "buy" ? minRubAmount : minRubAmount * currentRate;
-  const isBelowMin = amount > 0 && (direction === "sell" ? convertedAmount < minRubAmount : amount < minRubAmount);
+  const isBelowMin = amount > 0 && (direction === "sell" ? convertedAmount < effectiveMinRub : amount < effectiveMinRub);
   const canProceed = amount > 0 && !isBelowMin;
 
   const rateDisplay = direction === "buy"
@@ -85,7 +80,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-medium text-dark-600 dark:text-ivory-300 uppercase tracking-wider">Илгээх</span>
             <span className="text-[11px] text-dark-600 dark:text-ivory-300">
-              Мин: {direction === "buy" ? `${minRubAmount.toLocaleString()} ₽` : `${Math.round(minRubAmount * currentRate).toLocaleString()} ₮`}
+              Мин: {direction === "buy" ? `${effectiveMinRub.toLocaleString()} ₽` : `${Math.round(effectiveMinRub * currentRate).toLocaleString()} ₮`}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -148,7 +143,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
       {/* Min amount warning */}
       {isBelowMin && (
         <div className="text-sm text-red-500 text-center font-medium">
-          Хамгийн бага дүн {minRubAmount.toLocaleString()} рубль
+          Хамгийн бага дүн {effectiveMinRub.toLocaleString()} рубль
         </div>
       )}
 

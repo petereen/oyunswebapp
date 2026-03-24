@@ -31,13 +31,13 @@ export function RateCard({ rate }: Props) {
             <div className="text-white/50 flex items-center gap-1 text-[11px] mb-2">
               <TrendingUp className="w-3 h-3" /> RUB → MNT
             </div>
-            <div className="text-2xl font-bold tracking-tight text-gold-400">{rate?.buy_rate ?? "–"}</div>
+            <div className="text-2xl font-bold tracking-tight text-gold-400">{rate?.buy_rate ?? "–"} <span className="text-base font-semibold text-white/50">₮</span></div>
           </div>
           <div className="p-3.5 rounded-2xl bg-white/[0.07] border border-white/[0.06]">
             <div className="text-white/50 flex items-center gap-1 text-[11px] mb-2">
               <TrendingUp className="w-3 h-3" /> MNT → RUB
             </div>
-            <div className="text-2xl font-bold tracking-tight text-gold-400">{rate?.sell_rate ?? "–"}</div>
+            <div className="text-2xl font-bold tracking-tight text-gold-400">{rate?.sell_rate ?? "–"} <span className="text-base font-semibold text-white/50">₮</span></div>
           </div>
         </div>
       </div>

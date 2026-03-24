@@ -1,9 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   TrendingUp, TrendingDown, BarChart3, ChevronLeft, ChevronRight,
   ArrowRightLeft, Clock, CheckCircle2, XCircle, AlertCircle, Image, X,
 } from "lucide-react";
+import {
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend,
+} from "recharts";
 import { fetchAnalytics, fetchHistory } from "../api";
 
 interface MonthlyData { month: string; amount: number; }
@@ -208,23 +212,26 @@ export function StatsTab({ userId }: Props) {
                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">Рубль (₽)</span></div>
                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">Төгрөг (₮)</span></div>
                     </div>
-                    <div className="relative h-52">
-                      <svg className="w-full h-full" viewBox="0 0 600 200" preserveAspectRatio="none">
-                        {[0, 25, 50, 75, 100].map(y => (
-                          <line key={y} x1="50" y1={200 - y * 1.8} x2="580" y2={200 - y * 1.8} stroke="#e2e8f0" strokeWidth="1" />
-                        ))}
-                        {[0, 25, 50, 75, 100].map(p => (
-                          <text key={p} x="45" y={200 - p * 1.8 + 4} textAnchor="end" className="text-[10px] fill-dark-600 dark:fill-ivory-400">{Math.round((maxValue * p) / 100).toLocaleString()}</text>
-                        ))}
-                        <polyline fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                          points={filteredBuyData.map((d, i) => `${50 + (i * 530) / (filteredBuyData.length - 1 || 1)},${200 - (d.amount / maxValue) * 180}`).join(" ")} />
-                        {filteredBuyData.map((d, i) => { const x = 50 + (i * 530) / (filteredBuyData.length - 1 || 1); const y = 200 - (d.amount / maxValue) * 180; return <g key={`b${i}`}><circle cx={x} cy={y} r="5" fill="#22c55e" /><circle cx={x} cy={y} r="2.5" fill="white" /></g>; })}
-                        <polyline fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                          points={filteredSellData.map((d, i) => `${50 + (i * 530) / (filteredSellData.length - 1 || 1)},${200 - (d.amount / maxValue) * 180}`).join(" ")} />
-                        {filteredSellData.map((d, i) => { const x = 50 + (i * 530) / (filteredSellData.length - 1 || 1); const y = 200 - (d.amount / maxValue) * 180; return <g key={`s${i}`}><circle cx={x} cy={y} r="5" fill="#3b82f6" /><circle cx={x} cy={y} r="2.5" fill="white" /></g>; })}
-                        {filteredBuyData.map((d, i) => <text key={`l${i}`} x={50 + (i * 530) / (filteredBuyData.length - 1 || 1)} y="218" textAnchor="middle" className="text-[10px] fill-dark-600 dark:fill-ivory-400">{formatMonth(d.month)}</text>)}
-                      </svg>
-                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <LineChart data={filteredBuyData.map((d, i) => ({
+                        month: formatMonth(d.month),
+                        buy: d.amount,
+                        sell: filteredSellData[i]?.amount || 0,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)} width={40} />
+                        <Tooltip
+                          contentStyle={{ borderRadius: 12, fontSize: 12, border: "1px solid #e2e8f0" }}
+                          formatter={(value, name) => [
+                            `${Number(value).toLocaleString()} ${name === "buy" ? "₽" : "₮"}`,
+                            name === "buy" ? "Авсан (₽)" : "Зарсан (₮)",
+                          ]}
+                        />
+                        <Line type="monotone" dataKey="buy" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: "#22c55e", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                        <Line type="monotone" dataKey="sell" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
 
                   {/* Period Summary */}

@@ -224,14 +224,14 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
       {isVerified && isServiceOpen && (
         <div className="flex gap-3">
           <button
-            onClick={() => handleBuySell("buy")}
+            onClick={() => handleBuySell("sell")}
             className="flex-1 bg-emerald-500 text-white p-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-600 active:scale-[0.97] transition-all shadow-btn-success"
           >
             <ArrowDownLeft className="w-5 h-5" />
             <span>Авах</span>
           </button>
           <button
-            onClick={() => handleBuySell("sell")}
+            onClick={() => handleBuySell("buy")}
             className="flex-1 bg-rose-500 text-white p-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-rose-600 active:scale-[0.97] transition-all shadow-btn-danger"
           >
             <ArrowUpRight className="w-5 h-5" />

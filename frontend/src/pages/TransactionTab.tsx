@@ -5,7 +5,7 @@ import { ExchangeCard } from "../components/ExchangeCard";
 import {
   fetchRates, fetchMe, createExchange, ExchangeCreateInput, requestPresign,
   fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes,
-  UserPromoCode, fetchAppSettings,
+  UserPromoCode,
 } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, RegistrationModal } from "../components/RegistrationModal";
 import { TelegramUser } from "../hooks/useTelegramAuth";
@@ -88,14 +88,10 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const [successInvoice, setSuccessInvoice] = useState("");
-  const [minRubAmount, setMinRubAmount] = useState(5000);
 
   useEffect(() => {
     fetchAdminBankAccounts()
       .then((res) => setAdminBanks(res.accounts || []))
-      .catch(() => {});
-    fetchAppSettings()
-      .then((res) => setMinRubAmount(res.min_rub_amount || 5000))
       .catch(() => {});
     fetchUserPromoCodes()
       .then((res) => {

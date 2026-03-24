@@ -168,6 +168,17 @@ export async function fetchRates() {
   return res.data;
 }
 
+export interface RateHistoryPoint {
+  date: string;
+  buy_rate: number | null;
+  sell_rate: number | null;
+}
+
+export async function fetchRateHistory(days: number = 30) {
+  const res = await api.get<{ points: RateHistoryPoint[]; days: number }>(`/rate-history?days=${days}`);
+  return res.data;
+}
+
 export async function fetchAppSettings() {
   const res = await api.get<AppSettings>('/settings');
   return res.data;
