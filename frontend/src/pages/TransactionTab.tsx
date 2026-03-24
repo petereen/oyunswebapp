@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock } from "lucide-react";
 import { ExchangeCard } from "../components/ExchangeCard";
 import {
   fetchRates, fetchMe, createExchange, ExchangeCreateInput, requestPresign,
   fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes,
-  UserPromoCode,
+  UserPromoCode, fetchServiceStatus,
 } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, RegistrationModal } from "../components/RegistrationModal";
 import { TelegramUser } from "../hooks/useTelegramAuth";
@@ -35,6 +35,11 @@ function parseSavedBank(saved: string | undefined): Record<string, string> {
 
 export function TransactionTab({ initData, user, initialDirection, onResetDirection }: Props) {
   const { data: rate } = useQuery({ queryKey: ["rates"], queryFn: fetchRates, retry: 2 });
+  const { data: serviceStatus } = useQuery({
+    queryKey: ["serviceStatus"],
+    queryFn: fetchServiceStatus,
+    refetchInterval: 60_000,
+  });
   const { data: profile } = useQuery({
     queryKey: ["me", user?.id],
     queryFn: fetchMe,
@@ -353,6 +358,30 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
               <li>Үүний дараа админы баталгаажуулалт хүлээгээрэй</li>
             </ol>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Service closed: block new requests
+  if (flowStep === "card" && serviceStatus && !serviceStatus.is_open) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-5 animate-fadeIn">
+        <div className="w-20 h-20 bg-surface-100 dark:bg-dark-700 rounded-full flex items-center justify-center">
+          <Clock className="w-10 h-10 text-dark-600 dark:text-ivory-300" />
+        </div>
+        <div className="text-center space-y-2 px-4">
+          <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">
+            {!serviceStatus.is_within_hours ? "Ажлын цаг дууссан" : "Идэвхтэй админ байхгүй байна. Та түр хүлээнэ үү."}
+          </div>
+          <div className="text-sm text-dark-600 dark:text-ivory-300">
+            {serviceStatus.message || "Одоогоор шинэ хүсэлт хүлээн авах боломжгүй байна."}
+          </div>
+          {serviceStatus.working_hours && (
+            <div className="mt-3 inline-block bg-surface-100 dark:bg-dark-700 rounded-xl px-4 py-2 text-sm font-medium text-dark-800 dark:text-ivory-200">
+              🕐 Ажлын цаг: {serviceStatus.working_hours}
+            </div>
+          )}
         </div>
       </div>
     );
