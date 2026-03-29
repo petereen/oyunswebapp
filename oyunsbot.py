@@ -337,18 +337,34 @@ def get_current_shift_config():
     if not admin_id:
         return None
 
-    # Fetch active bank accounts from admin_bank_accounts table
+    # Fetch active bank accounts from admin_bank_accounts table, filtered by current admin
     try:
+        # First try to get accounts assigned to this specific admin
         res = (
             supabase
             .table("admin_bank_accounts")
             .select("*")
             .eq("is_active", True)
+            .eq("admin_id", admin_id)
             .order("display_order", desc=False)
             .order("created_at", desc=False)
             .execute()
         )
         accounts = res.data or []
+        
+        # Fallback: if no accounts assigned to this admin, get accounts with no admin_id (shared accounts)
+        if not accounts:
+            res = (
+                supabase
+                .table("admin_bank_accounts")
+                .select("*")
+                .eq("is_active", True)
+                .is_("admin_id", "null")
+                .order("display_order", desc=False)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            accounts = res.data or []
     except Exception as e:
         print(f"❌ Failed to fetch admin bank accounts: {e}")
         return None
