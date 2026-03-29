@@ -21,8 +21,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Default to false (production) - set VITE_DEV_MODE=true in .env for local dev
         VITE_DEV_MODE: ${VITE_DEV_MODE:-false}
+        VITE_FUEL_ADMIN_API_KEY: ${VITE_FUEL_ADMIN_API_KEY:-}
+        VITE_FUEL_ADMIN_USER_IDS: ${VITE_FUEL_ADMIN_USER_IDS:-}
     restart: unless-stopped
 
   nginx:
