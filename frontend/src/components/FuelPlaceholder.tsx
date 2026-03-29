@@ -1,10 +1,23 @@
+import { useRef, useCallback } from "react";
 import { Flame, ArrowLeft, Clock3 } from "lucide-react";
 
 interface Props {
   onBack: () => void;
+  onDevEnter?: () => void;
 }
 
-export function FuelPlaceholder({ onBack }: Props) {
+export function FuelPlaceholder({ onBack, onDevEnter }: Props) {
+  const clickTimestamps = useRef<number[]>([]);
+  const handleIconClick = useCallback(() => {
+    if (!onDevEnter) return;
+    const now = Date.now();
+    clickTimestamps.current = [...clickTimestamps.current.filter(t => now - t < 1500), now];
+    if (clickTimestamps.current.length >= 5) {
+      clickTimestamps.current = [];
+      onDevEnter();
+    }
+  }, [onDevEnter]);
+
   return (
     <div className="animate-slideUp">
       <div className="flex items-center gap-2 mb-5">
@@ -18,9 +31,9 @@ export function FuelPlaceholder({ onBack }: Props) {
       </div>
 
       <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 flex flex-col items-center gap-5">
-        <div className="w-16 h-16 bg-gradient-to-br from-gold-100 to-gold-200 dark:from-gold-900/30 dark:to-gold-800/20 rounded-2xl flex items-center justify-center">
+        <button type="button" onClick={handleIconClick} className="w-16 h-16 bg-gradient-to-br from-gold-100 to-gold-200 dark:from-gold-900/30 dark:to-gold-800/20 rounded-2xl flex items-center justify-center cursor-default">
           <Flame className="w-8 h-8 text-gold-500" />
-        </div>
+        </button>
 
         <div className="text-center space-y-2">
           <h3 className="text-base font-bold text-dark-800 dark:text-ivory-200">Түлш худалдаж авах</h3>

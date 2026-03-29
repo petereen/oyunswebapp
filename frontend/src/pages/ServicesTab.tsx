@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Gift, Flame } from "lucide-react";
 import { GiftFlow } from "../components/GiftFlow";
@@ -8,19 +8,6 @@ import { fetchRates } from "../api";
 
 export function ServicesTab() {
   const [activeService, setActiveService] = useState<"gift" | "fuel" | "fuel-dev" | null>(null);
-
-  // Dev gate: 5 fast clicks within 1.5 seconds opens FuelFlow
-  const fuelClickTimestamps = useRef<number[]>([]);
-  const handleFuelClick = useCallback(() => {
-    const now = Date.now();
-    fuelClickTimestamps.current = [...fuelClickTimestamps.current.filter(t => now - t < 1500), now];
-    if (fuelClickTimestamps.current.length >= 5) {
-      fuelClickTimestamps.current = [];
-      setActiveService("fuel-dev");
-    } else {
-      setActiveService("fuel");
-    }
-  }, []);
 
   const { data: rate } = useQuery({
     queryKey: ["rates"],
@@ -54,7 +41,7 @@ export function ServicesTab() {
   }
 
   if (activeService === "fuel") {
-    return <FuelPlaceholder onBack={() => setActiveService(null)} />;
+    return <FuelPlaceholder onBack={() => setActiveService(null)} onDevEnter={() => setActiveService("fuel-dev")} />;
   }
 
   return (
@@ -75,7 +62,7 @@ export function ServicesTab() {
 
         {/* Fuel Purchase Card */}
         <button
-          onClick={handleFuelClick}
+          onClick={() => setActiveService("fuel")}
           className="relative overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-3xl text-left text-white hover:from-amber-600 hover:to-orange-700 active:scale-[0.97] transition-all shadow-lg shadow-amber-200/50"
         >
           <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
