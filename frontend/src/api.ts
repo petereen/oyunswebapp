@@ -645,3 +645,264 @@ export async function rejectGift(giftId: string, comment: string) {
   const res = await api.post(`/admin/gift/${giftId}/reject`, { comment });
   return res.data;
 }
+
+// ============= Fuel Purchase Feature =============
+
+export interface FuelStation {
+  id: string;
+  name: string;
+  discount_percent: number;
+  is_active: boolean;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Hardcoded fallback (used if API fails)
+export const FUEL_STATIONS_FALLBACK: FuelStation[] = [
+  { id: '', name: 'Роснефть', discount_percent: 13, is_active: true, display_order: 0 },
+  { id: '', name: 'Башнефть', discount_percent: 13, is_active: true, display_order: 1 },
+  { id: '', name: 'ТНК', discount_percent: 13, is_active: true, display_order: 2 },
+  { id: '', name: 'Газпромнефть', discount_percent: 13, is_active: true, display_order: 3 },
+  { id: '', name: 'Лукойл', discount_percent: 13, is_active: true, display_order: 4 },
+  { id: '', name: 'Татнефть', discount_percent: 13, is_active: true, display_order: 5 },
+  { id: '', name: 'Топлайн', discount_percent: 13, is_active: true, display_order: 6 },
+  { id: '', name: 'ННК', discount_percent: 10, is_active: true, display_order: 7 },
+];
+
+export async function fetchFuelStations(): Promise<FuelStation[]> {
+  try {
+    const res = await api.get('/fuel/stations');
+    return res.data.stations || [];
+  } catch {
+    return FUEL_STATIONS_FALLBACK;
+  }
+}
+
+export interface FuelCalculation {
+  station_name: string;
+  liters: number;
+  station_price_per_liter: number;
+  discount_percent: number;
+  gross_amount: number;
+  discount_amount: number;
+  net_amount: number;
+  rounded_amount: number;
+  payment_currency: string;
+  exchange_rate?: number;
+  final_amount: number;
+}
+
+export interface FuelOrderCreateInput {
+  invoice: string;
+  station_name: string;
+  station_latitude?: number;
+  station_longitude?: number;
+  location_text?: string;
+  liters: number;
+  station_price_per_liter: number;
+  payment_currency: string;
+  exchange_rate?: number;
+  payment_receipt_url: string;
+  admin_bank_id?: string;
+}
+
+export interface FuelOrder {
+  id: string;
+  invoice: string;
+  user_id: number;
+  station_name: string;
+  station_latitude?: number;
+  station_longitude?: number;
+  location_text?: string;
+  liters: number;
+  station_price_per_liter: number;
+  discount_percent: number;
+  gross_amount: number;
+  discount_amount: number;
+  net_amount: number;
+  rounded_amount: number;
+  payment_currency: string;
+  exchange_rate?: number;
+  final_amount: number;
+  payment_receipt_url?: string;
+  pump_photo_url?: string;
+  admin_bank_id?: string;
+  status: 'pending_payment' | 'paid' | 'in_progress' | 'fueling_complete' | 'completed' | 'rejected' | 'cancelled';
+  rejection_comment?: string;
+  admin_comment?: string;
+  completed_by_admin?: number;
+  created_at: string;
+  updated_at?: string;
+  completed_at?: string;
+}
+
+export interface FuelChatMessage {
+  id: string;
+  fuel_order_id: string;
+  sender_type: 'user' | 'admin';
+  sender_id: number;
+  message?: string;
+  image_url?: string;
+  created_at: string;
+}
+
+export interface FuelAdminBankAccount {
+  id: string;
+  bank_name: string;
+  account_number?: string;
+  card_number?: string;
+  phone?: string;
+  owner_name: string;
+  currency: 'RUB' | 'MNT';
+  is_active: boolean;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// --- Fuel User API ---
+
+export async function calculateFuel(params: {
+  station_name: string;
+  liters: number;
+  station_price_per_liter: number;
+  payment_currency: string;
+  exchange_rate?: number;
+}): Promise<FuelCalculation> {
+  const res = await api.post('/fuel/calculate', params);
+  return res.data;
+}
+
+export async function createFuelOrder(payload: FuelOrderCreateInput) {
+  const res = await api.post('/fuel/create', payload);
+  return res.data as { id: string; invoice: string; status: string; gross_amount: number; discount_percent: number; discount_amount: number; net_amount: number; rounded_amount: number; final_amount: number; created_at: string };
+}
+
+export async function fetchFuelOrders(): Promise<{ orders: FuelOrder[]; total: number }> {
+  try {
+    const res = await api.get('/fuel/orders');
+    return res.data;
+  } catch {
+    return { orders: [], total: 0 };
+  }
+}
+
+export async function fetchActiveFuelOrders(): Promise<{ orders: FuelOrder[]; total: number }> {
+  try {
+    const res = await api.get('/fuel/active');
+    return res.data;
+  } catch {
+    return { orders: [], total: 0 };
+  }
+}
+
+export async function uploadFuelPumpPhoto(orderId: string, pumpPhotoUrl: string) {
+  const res = await api.post('/fuel/upload-pump-photo', { order_id: orderId, pump_photo_url: pumpPhotoUrl });
+  return res.data;
+}
+
+export async function fetchFuelChat(orderId: string): Promise<{ messages: FuelChatMessage[] }> {
+  try {
+    const res = await api.get(`/fuel/chat/${orderId}`);
+    return res.data;
+  } catch {
+    return { messages: [] };
+  }
+}
+
+export async function sendFuelChatMessage(orderId: string, message?: string, imageUrl?: string) {
+  const res = await api.post(`/fuel/chat/${orderId}`, { message, image_url: imageUrl });
+  return res.data;
+}
+
+export async function fetchFuelAdminBanks(): Promise<{ accounts: FuelAdminBankAccount[] }> {
+  try {
+    const res = await api.get('/fuel/admin-banks');
+    return res.data;
+  } catch {
+    return { accounts: [] };
+  }
+}
+
+// --- Fuel Admin API ---
+
+export async function fetchFuelAdminInbox(): Promise<{ orders: FuelOrder[]; total: number }> {
+  const res = await api.get('/fuel-admin/inbox');
+  return res.data;
+}
+
+export async function fuelAdminAction(params: {
+  order_id: string;
+  status: string;
+  rejection_comment?: string;
+  admin_comment?: string;
+}) {
+  const res = await api.post('/fuel-admin/action', params);
+  return res.data;
+}
+
+export async function fetchFuelAdminHistory(status?: string, limit = 50, offset = 0): Promise<{ orders: FuelOrder[]; total: number }> {
+  const params = new URLSearchParams();
+  if (status && status !== "all") params.append("status", status);
+  params.append("limit", limit.toString());
+  params.append("offset", offset.toString());
+  const res = await api.get(`/fuel-admin/history?${params.toString()}`);
+  return res.data;
+}
+
+export async function fetchFuelAdminBankAccounts(): Promise<{ accounts: FuelAdminBankAccount[] }> {
+  const res = await api.get('/fuel-admin/bank-accounts');
+  return res.data;
+}
+
+export async function createFuelAdminBankAccount(payload: Partial<FuelAdminBankAccount>) {
+  const res = await api.post('/fuel-admin/bank-accounts', payload);
+  return res.data;
+}
+
+export async function updateFuelAdminBankAccount(id: string, payload: Partial<FuelAdminBankAccount>) {
+  const res = await api.put(`/fuel-admin/bank-accounts/${id}`, payload);
+  return res.data;
+}
+
+export async function deleteFuelAdminBankAccount(id: string) {
+  const res = await api.delete(`/fuel-admin/bank-accounts/${id}`);
+  return res.data;
+}
+
+export async function fetchFuelAdminChat(orderId: string): Promise<{ messages: FuelChatMessage[] }> {
+  try {
+    const res = await api.get(`/fuel-admin/chat/${orderId}`);
+    return res.data;
+  } catch {
+    return { messages: [] };
+  }
+}
+
+export async function sendFuelAdminChatMessage(orderId: string, message?: string, imageUrl?: string) {
+  const res = await api.post(`/fuel-admin/chat/${orderId}`, { message, image_url: imageUrl });
+  return res.data;
+}
+
+// --- Fuel Admin: Station Management ---
+
+export async function fetchFuelAdminStations(): Promise<FuelStation[]> {
+  const res = await api.get('/fuel-admin/stations');
+  return res.data.stations || [];
+}
+
+export async function createFuelAdminStation(payload: { name: string; discount_percent: number; is_active?: boolean; display_order?: number }) {
+  const res = await api.post('/fuel-admin/stations', payload);
+  return res.data as FuelStation;
+}
+
+export async function updateFuelAdminStation(id: string, payload: Partial<{ name: string; discount_percent: number; is_active: boolean; display_order: number }>) {
+  const res = await api.put(`/fuel-admin/stations/${id}`, payload);
+  return res.data as FuelStation;
+}
+
+export async function deleteFuelAdminStation(id: string) {
+  const res = await api.delete(`/fuel-admin/stations/${id}`);
+  return res.data;
+}

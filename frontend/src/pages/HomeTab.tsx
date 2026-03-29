@@ -7,6 +7,7 @@ import { RateHistoryChart } from "../components/RateHistoryChart";
 import { TransactionStatusTracker } from "../components/TransactionStatusTracker";
 import { PendingGiftBanner } from "../components/PendingGiftBanner";
 import { GiftStatusTracker } from "../components/GiftStatusTracker";
+import { FuelStatusTracker } from "../components/FuelStatusTracker";
 import { RegistrationModal } from "../components/RegistrationModal";
 import { RequiredInfoModal } from "../components/RequiredInfoModal";
 import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
@@ -172,6 +173,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
       {/* Transaction Status Trackers */}
       {user?.id && <TransactionStatusTracker userId={user.id} />}
       {user?.id && isVerified && <GiftStatusTracker userId={user.id} />}
+      {user?.id && <FuelStatusTracker userId={user.id} />}
       {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: ["me", user?.id] })} />}
 
       {/* Profile Error */}

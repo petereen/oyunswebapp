@@ -28,6 +28,10 @@ class Settings:
     storage_bucket_receipts: str = "bills"
     presigned_ttl_seconds: int = 900  # 15 minutes
     dev_mode: bool = False
+    # Fuel service settings
+    fuel_admin_api_key: str | None = None
+    fuel_admin_user_ids: List[int] | None = None
+    fuel_admin_chat_ids: List[int] | None = None
     
     @property
     def admin_ids(self) -> List[int]:
@@ -51,6 +55,11 @@ def get_settings() -> Settings:
     jwt_secret = os.getenv("JWT_SECRET", "").strip().strip('"').strip("'")
     # DEV MODE: Telegram auth bypass - defaults to FALSE for production safety
     dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
+
+    # Fuel service env vars
+    fuel_admin_api_key = os.getenv("FUEL_ADMIN_API_KEY")
+    fuel_admin_user_ids_env = os.getenv("FUEL_ADMIN_USER_IDS", "").strip().strip('"').strip("'")
+    fuel_admin_chat_ids_env = os.getenv("FUEL_ADMIN_CHAT_IDS", "").strip().strip('"').strip("'")
 
     if not supabase_url or not supabase_key or not bot_token:
         raise RuntimeError("SUPABASE_URL, SUPABASE_KEY, and BOT_TOKEN must be set")
@@ -84,6 +93,22 @@ def get_settings() -> Settings:
         # Default admin user IDs if not set in environment
         admin_user_ids = [1932946217, 1447446407, 5564298862, 1409343588, 6351681039]
 
+    # Parse fuel admin user IDs
+    fuel_admin_user_ids: List[int] | None = None
+    if fuel_admin_user_ids_env:
+        try:
+            fuel_admin_user_ids = [int(x.strip()) for x in fuel_admin_user_ids_env.split(",") if x.strip()]
+        except ValueError:
+            raise RuntimeError("FUEL_ADMIN_USER_IDS must be a comma-separated list of integers")
+
+    # Parse fuel admin chat IDs
+    fuel_admin_chat_ids: List[int] | None = None
+    if fuel_admin_chat_ids_env:
+        try:
+            fuel_admin_chat_ids = [int(x.strip()) for x in fuel_admin_chat_ids_env.split(",") if x.strip()]
+        except ValueError:
+            raise RuntimeError("FUEL_ADMIN_CHAT_IDS must be a comma-separated list of integers")
+
     return Settings(
         supabase_url=supabase_url,
         supabase_key=supabase_key,
@@ -97,4 +122,7 @@ def get_settings() -> Settings:
         webapp_url=webapp_url,
         admin_api_key=admin_api_key,
         dev_mode=dev_mode,
+        fuel_admin_api_key=fuel_admin_api_key,
+        fuel_admin_user_ids=fuel_admin_user_ids,
+        fuel_admin_chat_ids=fuel_admin_chat_ids,
     )

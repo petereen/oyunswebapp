@@ -1,0 +1,1005 @@
+import { useState, useMemo, useEffect, useCallback } from "react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Copy,
+  Upload,
+  MapPin,
+  Fuel,
+  AlertTriangle,
+  Loader2,
+  Navigation,
+  Camera,
+} from "lucide-react";
+import {
+  FUEL_STATIONS_FALLBACK,
+  fetchFuelStations,
+  calculateFuel,
+  createFuelOrder,
+  fetchFuelAdminBanks,
+  requestPresign,
+  uploadFuelPumpPhoto,
+  fetchActiveFuelOrders,
+  FuelAdminBankAccount,
+  FuelCalculation,
+  FuelOrder,
+  FuelStation,
+} from "../api";
+import { FuelChat } from "./FuelChat";
+
+interface Props {
+  sellRate: number;
+  onBack: () => void;
+  onSuccess: () => void;
+}
+
+export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
+  // Steps:
+  // 0: Select gas station
+  // 1: Geolocation
+  // 2: Liters & price
+  // 3: Payment method (RUB/MNT)
+  // 4: Admin bank details & invoice
+  // 5: Upload payment receipt → submit
+  // 6: Waiting / status tracker + chat
+  // 7: Upload pump photo → done
+
+  const [step, setStep] = useState(0);
+
+  // Dynamic stations
+  const [stations, setStations] = useState<FuelStation[]>([]);
+  const [stationsLoading, setStationsLoading] = useState(true);
+
+  // Step 0: Station
+  const [stationName, setStationName] = useState("");
+  const [discountPercent, setDiscountPercent] = useState(13);
+
+  // Step 1: Location
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [locationText, setLocationText] = useState("");
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState("");
+
+  // Step 2: Fuel details
+  const [liters, setLiters] = useState("");
+  const [pricePerLiter, setPricePerLiter] = useState("");
+
+  // Step 3: Payment
+  const [paymentCurrency, setPaymentCurrency] = useState<"RUB" | "MNT" | null>(null);
+
+  // Step 4: Admin bank
+  const [adminBanks, setAdminBanks] = useState<FuelAdminBankAccount[]>([]);
+  const [selectedBank, setSelectedBank] = useState<FuelAdminBankAccount | null>(null);
+  const [invoiceId, setInvoiceId] = useState("");
+
+  // Step 5: Receipt
+  const [receiptUrl, setReceiptUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  // Step 6: Active order tracking
+  const [activeOrder, setActiveOrder] = useState<FuelOrder | null>(null);
+  const [orderPolling, setOrderPolling] = useState(false);
+
+  // Step 7: Pump photo
+  const [pumpPhotoUrl, setPumpPhotoUrl] = useState("");
+  const [pumpUploading, setPumpUploading] = useState(false);
+
+  // General
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+  const [successInvoice, setSuccessInvoice] = useState("");
+
+  // Load admin banks and stations on mount
+  useEffect(() => {
+    fetchFuelAdminBanks()
+      .then((res) => setAdminBanks(res.accounts || []))
+      .catch(() => setAdminBanks([]));
+    fetchFuelStations()
+      .then((data) => setStations(data.length > 0 ? data : FUEL_STATIONS_FALLBACK))
+      .catch(() => setStations(FUEL_STATIONS_FALLBACK))
+      .finally(() => setStationsLoading(false));
+  }, []);
+
+  // Generate invoice ID (Moscow timezone)
+  const generateInvoiceId = useCallback(() => {
+    const now = new Date();
+    const moscowOffset = 3 * 60;
+    const localOffset = now.getTimezoneOffset();
+    const moscowTime = new Date(now.getTime() + (moscowOffset + localOffset) * 60 * 1000);
+    const y = moscowTime.getFullYear();
+    const mo = String(moscowTime.getMonth() + 1).padStart(2, "0");
+    const d = String(moscowTime.getDate()).padStart(2, "0");
+    const h = String(moscowTime.getHours()).padStart(2, "0");
+    const mi = String(moscowTime.getMinutes()).padStart(2, "0");
+    const s = String(moscowTime.getSeconds()).padStart(2, "0");
+    const r = String(Math.floor(Math.random() * 100)).padStart(2, "0");
+    return `F${y}${mo}${d}-${h}${mi}${s}-${r}`;
+  }, []);
+
+  // Calculation
+  const calculation = useMemo((): FuelCalculation | null => {
+    const l = parseFloat(liters);
+    const p = parseFloat(pricePerLiter);
+    if (!l || !p || l <= 0 || p <= 0 || !paymentCurrency) return null;
+
+    const gross = l * p;
+    const discount = gross * discountPercent / 100;
+    const net = gross - discount;
+    const rounded = Math.ceil(net / 100) * 100;
+
+    let exchangeRate: number | undefined;
+    let final_amount = rounded;
+
+    if (paymentCurrency === "MNT" && sellRate > 0) {
+      exchangeRate = sellRate;
+      final_amount = Math.round(rounded * sellRate);
+    }
+
+    return {
+      station_name: stationName,
+      liters: l,
+      station_price_per_liter: p,
+      discount_percent: discountPercent,
+      gross_amount: Math.round(gross * 100) / 100,
+      discount_amount: Math.round(discount * 100) / 100,
+      net_amount: Math.round(net * 100) / 100,
+      rounded_amount: rounded,
+      payment_currency: paymentCurrency,
+      exchange_rate: exchangeRate,
+      final_amount: final_amount,
+    };
+  }, [liters, pricePerLiter, discountPercent, paymentCurrency, sellRate, stationName]);
+
+  // Filtered banks by selected currency
+  const filteredBanks = useMemo(() => {
+    if (!paymentCurrency) return adminBanks;
+    return adminBanks.filter((b) => b.currency === paymentCurrency);
+  }, [adminBanks, paymentCurrency]);
+
+  // Geolocation
+  const requestGeolocation = () => {
+    if (!("geolocation" in navigator)) {
+      setGeoError("Таны төхөөрөмж байршил тодорхойлохыг дэмждэггүй");
+      return;
+    }
+    setGeoLoading(true);
+    setGeoError("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude);
+        setLongitude(pos.coords.longitude);
+        setGeoLoading(false);
+      },
+      (err) => {
+        setGeoError(
+          err.code === 1
+            ? "Байршил тодорхойлох зөвшөөрөл олгоогүй. Гараар оруулна уу."
+            : "Байршил тодорхойлоход алдаа гарлаа. Гараар оруулна уу."
+        );
+        setGeoLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  };
+
+  // Copy helper
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(label);
+    setTimeout(() => setCopied(""), 2000);
+  };
+
+  // File upload helper
+  const handleFileUpload = async (
+    file: File,
+    setUrl: (url: string) => void,
+    setUpl: (v: boolean) => void,
+    prefix: string
+  ) => {
+    if (!file) return;
+    setUpl(true);
+    setError("");
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `fuel/${prefix}/${invoiceId || "unknown"}_${Date.now()}.${ext}`;
+      const presigned = await requestPresign({ bucket: "bills", path });
+      await fetch(presigned.upload_url, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      setUrl(presigned.public_url);
+    } catch {
+      setError("Зураг хуулахад алдаа гарлаа");
+    } finally {
+      setUpl(false);
+    }
+  };
+
+  // Submit fuel order
+  const handleSubmit = async () => {
+    if (!calculation || !receiptUrl) return;
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await createFuelOrder({
+        invoice: invoiceId,
+        station_name: stationName,
+        station_latitude: latitude || undefined,
+        station_longitude: longitude || undefined,
+        location_text: locationText || undefined,
+        liters: calculation.liters,
+        station_price_per_liter: calculation.station_price_per_liter,
+        payment_currency: calculation.payment_currency,
+        exchange_rate: calculation.exchange_rate,
+        payment_receipt_url: receiptUrl,
+        admin_bank_id: selectedBank?.id,
+      });
+      setSuccessInvoice(res.invoice);
+      setActiveOrder({
+        id: res.id,
+        invoice: res.invoice,
+        status: "pending_payment",
+        user_id: 0,
+        station_name: stationName,
+        liters: calculation.liters,
+        station_price_per_liter: calculation.station_price_per_liter,
+        discount_percent: calculation.discount_percent,
+        gross_amount: calculation.gross_amount,
+        discount_amount: calculation.discount_amount,
+        net_amount: calculation.net_amount,
+        rounded_amount: calculation.rounded_amount,
+        payment_currency: calculation.payment_currency,
+        final_amount: calculation.final_amount,
+        created_at: res.created_at,
+      } as FuelOrder);
+      setStep(6);
+      setOrderPolling(true);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Захиалга үүсгэхэд алдаа гарлаа");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Poll active order status
+  useEffect(() => {
+    if (!orderPolling || !activeOrder) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetchActiveFuelOrders();
+        const found = res.orders.find((o) => o.id === activeOrder.id);
+        if (found) {
+          setActiveOrder(found);
+          if (["completed", "rejected", "cancelled"].includes(found.status)) {
+            setOrderPolling(false);
+          }
+        }
+      } catch { /* ignore */ }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [orderPolling, activeOrder]);
+
+  // Handle pump photo upload & submit
+  const handlePumpPhotoSubmit = async () => {
+    if (!pumpPhotoUrl || !activeOrder) return;
+    setLoading(true);
+    setError("");
+    try {
+      await uploadFuelPumpPhoto(activeOrder.id, pumpPhotoUrl);
+      setStep(7);
+    } catch {
+      setError("Зураг илгээхэд алдаа гарлаа");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---- Render helpers ----
+
+  const renderBack = (label: string, onBackFn?: () => void) => (
+    <div className="flex items-center gap-2 mb-5">
+      <button
+        onClick={onBackFn || (() => setStep(step - 1))}
+        className="p-2 hover:bg-surface-100 dark:hover:bg-dark-700 rounded-xl transition"
+      >
+        <ArrowLeft className="w-5 h-5 text-dark-600 dark:text-ivory-300" />
+      </button>
+      <div className="flex items-center gap-2 text-dark-800 dark:text-ivory-200">
+        <Fuel className="w-4 h-4 text-amber-500" />
+        <span className="text-sm font-bold">{label}</span>
+      </div>
+    </div>
+  );
+
+  // ============== STEP 0: Select Station ==============
+  if (step === 0) {
+    return (
+      <div className="animate-slideUp">
+        {renderBack("АЗС сонгох", onBack)}
+        {stationsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
+          </div>
+        ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {stations.map((s) => (
+            <button
+              key={s.name}
+              onClick={() => {
+                setStationName(s.name);
+                setDiscountPercent(s.discount_percent);
+                setStep(1);
+              }}
+              className="relative bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600 text-left hover:border-amber-400 dark:hover:border-amber-500 active:scale-[0.97] transition-all"
+            >
+              <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200 mb-1">{s.name}</div>
+              <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                -{s.discount_percent}% хөнгөлөлт
+              </div>
+              <div className="absolute top-2 right-2 w-6 h-6 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
+                <Fuel className="w-3 h-3 text-amber-600" />
+              </div>
+            </button>
+          ))}
+        </div>
+        )}
+      </div>
+    );
+  }
+
+  // ============== STEP 1: Geolocation ==============
+  if (step === 1) {
+    const hasLocation = (latitude !== null && longitude !== null) || locationText.trim().length > 0;
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Байршил")}
+        <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-4">
+          <div className="text-center">
+            <MapPin className="w-10 h-10 text-amber-500 mx-auto mb-2" />
+            <h3 className="font-bold text-dark-800 dark:text-ivory-200 text-sm">
+              АЗС-ын байршил тодорхойлох
+            </h3>
+            <p className="text-xs text-dark-500 dark:text-ivory-400 mt-1">
+              Бүх АЗС-д түлш нийлүүлэх боломжгүй тул байршил шаардлагатай
+            </p>
+          </div>
+
+          {/* GPS button */}
+          <button
+            onClick={requestGeolocation}
+            disabled={geoLoading}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition disabled:opacity-50"
+          >
+            {geoLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Navigation className="w-4 h-4" />
+            )}
+            {geoLoading ? "Тодорхойлж байна..." : "📍 Байршил тодорхойлох"}
+          </button>
+
+          {latitude !== null && longitude !== null && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
+              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <span className="text-xs text-green-700 dark:text-green-400">
+                Байршил олдлоо: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+              </span>
+            </div>
+          )}
+
+          {geoError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-xs text-red-600 dark:text-red-400">
+              {geoError}
+            </div>
+          )}
+
+          {/* Manual fallback */}
+          <div>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">
+              Эсвэл хаяг гараар оруулах:
+            </label>
+            <input
+              type="text"
+              value={locationText}
+              onChange={(e) => setLocationText(e.target.value)}
+              placeholder="АЗС-ын хаяг, чиглэл..."
+              className="w-full px-4 py-3 border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+
+          <button
+            onClick={() => setStep(2)}
+            disabled={!hasLocation}
+            className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition disabled:opacity-30"
+          >
+            Үргэлжлүүлэх
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============== STEP 2: Liters & Price ==============
+  if (step === 2) {
+    const l = parseFloat(liters);
+    const p = parseFloat(pricePerLiter);
+    const validInput = l > 0 && p > 0;
+    const previewGross = validInput ? l * p : 0;
+    const previewDiscount = previewGross * discountPercent / 100;
+    const previewNet = previewGross - previewDiscount;
+
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Түлшний мэдээлэл")}
+        <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+              {stationName}
+            </span>
+            <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg font-medium">
+              -{discountPercent}%
+            </span>
+          </div>
+
+          <div>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">Литр</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={liters}
+              onChange={(e) => setLiters(e.target.value)}
+              placeholder="Жиш: 100"
+              min="1"
+              className="w-full px-4 py-3 border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">
+              ДТ үнэ (₽/литр)
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={pricePerLiter}
+                onChange={(e) => setPricePerLiter(e.target.value)}
+                placeholder="Жиш: 62.50"
+                min="0.01"
+                step="0.01"
+                className="w-full px-4 py-3 pr-10 border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-dark-400 text-sm">₽</span>
+            </div>
+          </div>
+
+          {/* Calculation preview */}
+          {validInput && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl space-y-1 text-xs">
+              <div className="flex justify-between text-dark-600 dark:text-ivory-400">
+                <span>{l} л × {p}₽</span>
+                <span>{previewGross.toFixed(0)}₽</span>
+              </div>
+              <div className="flex justify-between text-green-600 dark:text-green-400">
+                <span>Хөнгөлөлт (-{discountPercent}%)</span>
+                <span>-{previewDiscount.toFixed(0)}₽</span>
+              </div>
+              <div className="border-t border-amber-200 dark:border-amber-800 pt-1 flex justify-between font-semibold text-dark-800 dark:text-ivory-200">
+                <span>Цэвэр дүн</span>
+                <span>{previewNet.toFixed(0)}₽</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setStep(3)}
+            disabled={!validInput}
+            className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition disabled:opacity-30"
+          >
+            Үргэлжлүүлэх
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============== STEP 3: Payment Method ==============
+  if (step === 3) {
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Төлбөрийн арга")}
+        <div className="space-y-4">
+          {/* RUB option */}
+          <button
+            onClick={() => {
+              setPaymentCurrency("RUB");
+              setStep(4);
+              if (!invoiceId) setInvoiceId(generateInvoiceId());
+            }}
+            className={`w-full p-5 rounded-2xl border-2 text-left transition-all ${
+              paymentCurrency === "RUB"
+                ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                : "border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-lg">
+                ₽
+              </div>
+              <div>
+                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">
+                  Рублиэр төлөх (RUB)
+                </div>
+                {calculation && (
+                  <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">
+                    {calculation.rounded_amount.toLocaleString()}₽
+                  </div>
+                )}
+              </div>
+            </div>
+          </button>
+
+          {/* MNT option */}
+          <button
+            onClick={() => {
+              setPaymentCurrency("MNT");
+              setStep(4);
+              if (!invoiceId) setInvoiceId(generateInvoiceId());
+            }}
+            className={`w-full p-5 rounded-2xl border-2 text-left transition-all ${
+              paymentCurrency === "MNT"
+                ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                : "border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center text-lg">
+                ₮
+              </div>
+              <div>
+                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">
+                  Төгрөгөөр төлөх (MNT)
+                </div>
+                {calculation && sellRate > 0 && (
+                  <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">
+                    {Math.round(calculation.rounded_amount * sellRate).toLocaleString()}₮ (ханш: {sellRate})
+                  </div>
+                )}
+              </div>
+            </div>
+          </button>
+
+          {/* RUB Warning */}
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-sm text-red-700 dark:text-red-400">
+                  🚫 Рублиэр шилжүүлхэд АНХААРУУЛГА
+                </div>
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1 leading-relaxed">
+                  Рублиэр шилжүүлэг хийхдээ <b>КОММЕНТАРЬ / ЗУРВАС бичих хэсэг</b>ийг ХООСОН үлдээнэ үү!
+                  Ямар нэгэн тайлбар бичвэл шилжүүлэг <b>БЛОКЛОГДОХ</b> эрсдэлтэй.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============== STEP 4: Admin Bank + Invoice ==============
+  if (step === 4) {
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Төлбөр хийх")}
+        <div className="space-y-4">
+          {/* Invoice */}
+          <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600">
+            <div className="text-xs text-dark-500 dark:text-ivory-400 mb-1">Invoice дугаар</div>
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-mono text-dark-800 dark:text-ivory-200">{invoiceId}</code>
+              <button
+                onClick={() => copyToClipboard(invoiceId, "invoice")}
+                className="p-1 hover:bg-surface-100 dark:hover:bg-dark-700 rounded"
+              >
+                {copied === "invoice" ? (
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4 text-dark-400" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Calculation summary */}
+          {calculation && (
+            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl space-y-2 text-xs">
+              <div className="flex justify-between text-dark-600 dark:text-ivory-400">
+                <span>🏪 {stationName}</span>
+                <span>-{calculation.discount_percent}%</span>
+              </div>
+              <div className="flex justify-between text-dark-600 dark:text-ivory-400">
+                <span>{calculation.liters}л × {calculation.station_price_per_liter}₽</span>
+                <span>{calculation.gross_amount.toLocaleString()}₽</span>
+              </div>
+              <div className="flex justify-between text-green-600 dark:text-green-400">
+                <span>Хөнгөлөлт</span>
+                <span>-{calculation.discount_amount.toLocaleString()}₽</span>
+              </div>
+              {calculation.payment_currency === "RUB" && calculation.rounded_amount !== calculation.net_amount && (
+                <div className="flex justify-between text-dark-500 dark:text-ivory-400">
+                  <span>Бүхлээр (100₽)</span>
+                  <span>{calculation.rounded_amount.toLocaleString()}₽</span>
+                </div>
+              )}
+              {calculation.payment_currency === "MNT" && calculation.exchange_rate && (
+                <div className="flex justify-between text-dark-500 dark:text-ivory-400">
+                  <span>Ханш: {calculation.exchange_rate}</span>
+                  <span>{calculation.rounded_amount.toLocaleString()}₽ × {calculation.exchange_rate}</span>
+                </div>
+              )}
+              <div className="border-t border-amber-200 dark:border-amber-800 pt-2 flex justify-between font-bold text-dark-800 dark:text-ivory-200 text-sm">
+                <span>Нийт төлөх</span>
+                <span>
+                  {calculation.final_amount.toLocaleString()}
+                  {calculation.payment_currency === "RUB" ? "₽" : "₮"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* RUB warning reminder */}
+          {paymentCurrency === "RUB" && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                🚫 Шилжүүлгийн комментарь ХООСОН байх ёстой!
+              </span>
+            </div>
+          )}
+
+          {/* Bank selection */}
+          <div className="space-y-2">
+            <div className="text-xs text-dark-500 dark:text-ivory-400 font-medium">
+              Доорх данс руу шилжүүлнэ үү:
+            </div>
+            {filteredBanks.length === 0 ? (
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl text-xs text-yellow-700 dark:text-yellow-400">
+                {paymentCurrency} валютын данс олдсонгүй. Админтай холбогдоно уу.
+              </div>
+            ) : (
+              filteredBanks.map((bank) => (
+                <button
+                  key={bank.id}
+                  onClick={() => setSelectedBank(bank)}
+                  className={`w-full p-4 rounded-xl border-2 text-left transition ${
+                    selectedBank?.id === bank.id
+                      ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                      : "border-silver/40 dark:border-dark-600 bg-white dark:bg-dark-800"
+                  }`}
+                >
+                  <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">
+                    {bank.bank_name}
+                  </div>
+                  <div className="text-xs text-dark-500 dark:text-ivory-400 mt-1 space-y-0.5">
+                    {bank.card_number && (
+                      <div className="flex items-center gap-1">
+                        Карт: {bank.card_number}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(bank.card_number!.replace(/\s/g, ""), "card");
+                          }}
+                          className="p-0.5"
+                        >
+                          {copied === "card" ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-dark-400" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    {bank.account_number && (
+                      <div className="flex items-center gap-1">
+                        Данс: {bank.account_number}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(bank.account_number!, "account");
+                          }}
+                          className="p-0.5"
+                        >
+                          {copied === "account" ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-dark-400" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    {bank.phone && (
+                      <div className="flex items-center gap-1">
+                        Утас: {bank.phone}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(bank.phone!, "phone");
+                          }}
+                          className="p-0.5"
+                        >
+                          {copied === "phone" ? (
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-dark-400" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    <div>Эзэмшигч: {bank.owner_name}</div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          <button
+            onClick={() => setStep(5)}
+            disabled={!selectedBank}
+            className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition disabled:opacity-30"
+          >
+            Шилжүүлэг хийсэн → Баримт оруулах
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============== STEP 5: Upload Receipt & Submit ==============
+  if (step === 5) {
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Гүйлгээний баримт")}
+        <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-4">
+          <div className="text-center">
+            <Upload className="w-10 h-10 text-amber-500 mx-auto mb-2" />
+            <h3 className="font-bold text-dark-800 dark:text-ivory-200 text-sm">
+              Шилжүүлгийн баримт оруулна уу
+            </h3>
+            <p className="text-xs text-dark-500 dark:text-ivory-400 mt-1">
+              Гүйлгээний дэлгэцийн зураг (screenshot)
+            </p>
+          </div>
+
+          {/* Upload area */}
+          <label className="block cursor-pointer">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file, setReceiptUrl, setUploading, "receipt");
+              }}
+            />
+            <div
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition ${
+                receiptUrl
+                  ? "border-green-400 bg-green-50 dark:bg-green-900/10"
+                  : "border-silver/60 dark:border-dark-600 hover:border-amber-400"
+              }`}
+            >
+              {uploading ? (
+                <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
+              ) : receiptUrl ? (
+                <div className="space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto" />
+                  <div className="text-xs text-green-600 dark:text-green-400">Баримт хуулагдлаа</div>
+                  <img src={receiptUrl} alt="receipt" className="max-h-32 mx-auto rounded-lg" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Camera className="w-8 h-8 text-dark-400 mx-auto" />
+                  <div className="text-xs text-dark-500 dark:text-ivory-400">
+                    Зураг сонгох
+                  </div>
+                </div>
+              )}
+            </div>
+          </label>
+
+          {error && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-xs text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={!receiptUrl || loading}
+            className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition disabled:opacity-30 flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Fuel className="w-4 h-4" />
+            )}
+            {loading ? "Илгээж байна..." : "Захиалга илгээх"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============== STEP 6: Waiting / Status Tracker + Chat ==============
+  if (step === 6 && activeOrder) {
+    const statusSteps = [
+      { key: "pending_payment", label: "Төлбөр хүлээгдэж байна", emoji: "⏳" },
+      { key: "paid", label: "Төлбөр баталгаажсан", emoji: "✅" },
+      { key: "in_progress", label: "Түлш нийлүүлж байна", emoji: "⛽" },
+      { key: "fueling_complete", label: "Цэнэглэлт дууссан", emoji: "📸" },
+      { key: "completed", label: "Дууссан", emoji: "🎉" },
+    ];
+
+    const currentIdx = statusSteps.findIndex((s) => s.key === activeOrder.status);
+    const isRejected = activeOrder.status === "rejected";
+    const isCompleted = activeOrder.status === "completed";
+    const showPumpUpload = ["in_progress", "fueling_complete"].includes(activeOrder.status);
+
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Захиалгын явц", onBack)}
+        <div className="space-y-4">
+          {/* Status */}
+          <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600">
+            <div className="text-xs text-dark-500 dark:text-ivory-400 mb-1">
+              Invoice: <code className="font-mono">{activeOrder.invoice}</code>
+            </div>
+            <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200 mb-3">
+              {activeOrder.station_name} — {activeOrder.liters}л
+            </div>
+
+            {isRejected ? (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                <div className="text-red-600 dark:text-red-400 font-semibold text-sm">❌ Цуцлагдсан</div>
+                {activeOrder.rejection_comment && (
+                  <div className="text-xs text-red-500 mt-1">{activeOrder.rejection_comment}</div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {statusSteps.map((s, idx) => {
+                  const active = idx === currentIdx;
+                  const done = idx < currentIdx;
+                  return (
+                    <div
+                      key={s.key}
+                      className={`flex items-center gap-3 p-2 rounded-lg transition ${
+                        active
+                          ? "bg-amber-50 dark:bg-amber-900/20"
+                          : done
+                          ? "opacity-60"
+                          : "opacity-30"
+                      }`}
+                    >
+                      <span className="text-base">{done ? "✅" : s.emoji}</span>
+                      <span
+                        className={`text-xs ${
+                          active ? "font-bold text-amber-700 dark:text-amber-400" : "text-dark-600 dark:text-ivory-400"
+                        }`}
+                      >
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Pump photo upload section */}
+          {showPumpUpload && (
+            <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
+              <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                📸 Колонкны зураг оруулах
+              </div>
+              <p className="text-xs text-dark-500 dark:text-ivory-400">
+                Заправка дууссаны дараа колонк дээрх литрийн дүнг зурагт харуулна уу.
+              </p>
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileUpload(file, setPumpPhotoUrl, setPumpUploading, "pump");
+                  }}
+                />
+                <div
+                  className={`border-2 border-dashed rounded-xl p-4 text-center ${
+                    pumpPhotoUrl
+                      ? "border-green-400 bg-green-50 dark:bg-green-900/10"
+                      : "border-silver/60 dark:border-dark-600"
+                  }`}
+                >
+                  {pumpUploading ? (
+                    <Loader2 className="w-6 h-6 text-amber-500 animate-spin mx-auto" />
+                  ) : pumpPhotoUrl ? (
+                    <div className="space-y-1">
+                      <CheckCircle2 className="w-6 h-6 text-green-500 mx-auto" />
+                      <img src={pumpPhotoUrl} alt="pump" className="max-h-24 mx-auto rounded-lg" />
+                    </div>
+                  ) : (
+                    <Camera className="w-6 h-6 text-dark-400 mx-auto" />
+                  )}
+                </div>
+              </label>
+              {pumpPhotoUrl && (
+                <button
+                  onClick={handlePumpPhotoSubmit}
+                  disabled={loading}
+                  className="w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-semibold transition disabled:opacity-50"
+                >
+                  {loading ? "Илгээж байна..." : "Зураг илгээх"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Chat */}
+          {!isCompleted && !isRejected && (
+            <FuelChat orderId={activeOrder.id} isAdmin={false} />
+          )}
+
+          {/* Done / Back */}
+          {(isCompleted || isRejected) && (
+            <button
+              onClick={onSuccess}
+              className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
+            >
+              Буцах
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============== STEP 7: Pump Photo Submitted ==============
+  if (step === 7) {
+    return (
+      <div className="animate-slideUp">
+        <div className="bg-white dark:bg-dark-800 p-8 rounded-2xl border border-silver/60 dark:border-dark-600 text-center space-y-4">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8 text-green-500" />
+          </div>
+          <h3 className="font-bold text-dark-800 dark:text-ivory-200">Колонкны зураг илгээгдлээ!</h3>
+          <p className="text-xs text-dark-500 dark:text-ivory-400">
+            Админ таны захиалгыг баталгаажуулах хүртэл хүлээнэ үү.
+          </p>
+          {successInvoice && (
+            <div className="text-xs text-dark-500 dark:text-ivory-400">
+              Invoice: <code className="font-mono">{successInvoice}</code>
+            </div>
+          )}
+          <button
+            onClick={onSuccess}
+            className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
+          >
+            Буцах
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback
+  return null;
+}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AdminPanel } from "./pages/AdminPanel";
+import { FuelAdminPanel } from "./pages/FuelAdminPanel";
 import { HomeTab } from "./pages/HomeTab";
 import { TransactionTab } from "./pages/TransactionTab";
 import { ServicesTab } from "./pages/ServicesTab";
@@ -14,6 +15,10 @@ import { DevToolbar } from "./components/DevToolbar";
 import { fetchMe } from "./api";
 
 export default function App() {
+  // Check URL for fuel admin panel
+  const isFuelAdmin = new URLSearchParams(window.location.search).has("fuel-admin");
+  if (isFuelAdmin) return <FuelAdminPanel />;
+
   const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
   const [view, setView] = useState<"client" | "admin">("client");
   const [activeTab, setActiveTab] = useState(0);

@@ -490,3 +490,188 @@ class GiftPreapproveRequest(BaseModel):
 
 class GiftFinalizeRequest(BaseModel):
     admin_bill_urls: Optional[list[str]] = None  # Bill photos when finalizing
+
+
+# ============= Fuel Purchase Feature Models =============
+
+# Hardcoded fallback (used only if DB fetch fails)
+FUEL_STATION_DISCOUNTS = {
+    "Роснефть": 13,
+    "Башнефть": 13,
+    "ТНК": 13,
+    "Газпромнефть": 13,
+    "Лукойл": 13,
+    "Татнефть": 13,
+    "Топлайн": 13,
+    "ННК": 10,
+}
+
+FUEL_STATIONS = list(FUEL_STATION_DISCOUNTS.keys())
+
+
+class FuelStationItem(BaseModel):
+    id: str
+    name: str
+    discount_percent: int
+    is_active: bool
+    display_order: int
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class FuelStationsResponse(BaseModel):
+    stations: list[FuelStationItem]
+
+
+class FuelStationCreateRequest(BaseModel):
+    name: str
+    discount_percent: int = 13
+    is_active: bool = True
+    display_order: int = 0
+
+
+class FuelStationUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    discount_percent: Optional[int] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class FuelCalculateRequest(BaseModel):
+    station_name: str
+    liters: float
+    station_price_per_liter: float
+    payment_currency: str  # "RUB" or "MNT"
+    exchange_rate: Optional[float] = None  # sell rate for MNT conversion
+
+
+class FuelCalculateResponse(BaseModel):
+    station_name: str
+    liters: float
+    station_price_per_liter: float
+    discount_percent: int
+    gross_amount: float
+    discount_amount: float
+    net_amount: float
+    rounded_amount: float  # ceil to 100 for RUB
+    payment_currency: str
+    exchange_rate: Optional[float] = None
+    final_amount: float  # what user pays
+
+
+class FuelOrderCreateRequest(BaseModel):
+    invoice: str
+    station_name: str
+    station_latitude: Optional[float] = None
+    station_longitude: Optional[float] = None
+    location_text: Optional[str] = None
+    liters: float
+    station_price_per_liter: float
+    payment_currency: str  # "RUB" or "MNT"
+    exchange_rate: Optional[float] = None
+    payment_receipt_url: str
+    admin_bank_id: Optional[str] = None
+    # Pre-calculated (validated server-side)
+    discount_percent: Optional[int] = None
+    gross_amount: Optional[float] = None
+    discount_amount: Optional[float] = None
+    net_amount: Optional[float] = None
+    rounded_amount: Optional[float] = None
+    final_amount: Optional[float] = None
+
+
+class FuelOrderCreateResponse(BaseModel):
+    id: str
+    invoice: str
+    status: str
+    gross_amount: float
+    discount_percent: int
+    discount_amount: float
+    net_amount: float
+    rounded_amount: float
+    final_amount: float
+    created_at: datetime
+
+
+class FuelOrderItem(BaseModel):
+    id: str
+    invoice: str
+    user_id: int
+    station_name: str
+    station_latitude: Optional[float] = None
+    station_longitude: Optional[float] = None
+    location_text: Optional[str] = None
+    liters: float
+    station_price_per_liter: float
+    discount_percent: int
+    gross_amount: float
+    discount_amount: float
+    net_amount: float
+    rounded_amount: float
+    payment_currency: str
+    exchange_rate: Optional[float] = None
+    final_amount: float
+    payment_receipt_url: Optional[str] = None
+    pump_photo_url: Optional[str] = None
+    admin_bank_id: Optional[str] = None
+    status: str
+    rejection_comment: Optional[str] = None
+    admin_comment: Optional[str] = None
+    completed_by_admin: Optional[int] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class FuelOrdersResponse(BaseModel):
+    orders: list[FuelOrderItem]
+    total: int = 0
+
+
+class FuelAdminActionRequest(BaseModel):
+    order_id: str
+    status: str  # "paid", "in_progress", "fueling_complete", "completed", "rejected"
+    rejection_comment: Optional[str] = None
+    admin_comment: Optional[str] = None
+
+
+class FuelPumpPhotoRequest(BaseModel):
+    order_id: str
+    pump_photo_url: str
+
+
+class FuelChatMessageRequest(BaseModel):
+    message: Optional[str] = None
+    image_url: Optional[str] = None
+
+
+class FuelChatMessage(BaseModel):
+    id: str
+    fuel_order_id: str
+    sender_type: str  # "user" or "admin"
+    sender_id: int
+    message: Optional[str] = None
+    image_url: Optional[str] = None
+    created_at: datetime
+
+
+class FuelChatMessagesResponse(BaseModel):
+    messages: list[FuelChatMessage]
+
+
+class FuelAdminBankAccount(BaseModel):
+    id: str
+    bank_name: str
+    account_number: Optional[str] = None
+    card_number: Optional[str] = None
+    phone: Optional[str] = None
+    owner_name: str
+    currency: str
+    is_active: bool = True
+    display_order: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class FuelAdminBankAccountsResponse(BaseModel):
+    accounts: list[FuelAdminBankAccount]

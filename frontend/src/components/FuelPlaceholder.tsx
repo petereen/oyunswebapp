@@ -13,8 +13,8 @@ export function FuelPlaceholder({ onBack }: Props) {
         </button>
         <div className="flex items-center gap-2 text-dark-800 dark:text-ivory-200">
           <Flame className="w-4 h-4 text-gold-500" />
-          <span className="text-sm font-bold">Шатахууны карт цэнэглэх</span>
-        </div>ы
+          <span className="text-sm font-bold">Түлш худалдаж авах</span>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 flex flex-col items-center gap-5">
@@ -23,14 +23,14 @@ export function FuelPlaceholder({ onBack }: Props) {
         </div>
 
         <div className="text-center space-y-2">
-          <h3 className="text-base font-bold text-dark-800 dark:text-ivory-200">Шатахууны карт цэнэглэх</h3>
+          <h3 className="text-base font-bold text-dark-800 dark:text-ivory-200">Түлш худалдаж авах</h3>
           <p className="text-sm text-dark-600 dark:text-ivory-400 leading-relaxed">
-            Жолооч нарт зориулсан шатахууны карт цэнэглэх үйлчилгээ. Холын тээврийн жолооч нар рубль худалдаж авах,
-            замд шаардлагатай бүх зардлыг төлөх, шатахуун картаараа худалдан авах боломжтой.
+            Жолооч нарт зориулсан түлш худалдан авах үйлчилгээ. Холын тээврийн жолооч нар хөнгөлөлттэй үнээр
+            ОХУ-ын АЗС-уудаас дизель түлш худалдан авах боломжтой.
           </p>
           <p className="text-sm text-dark-600 dark:text-ivory-400">
             Систем нь захиалга авсанаас хойш админд автоматаар дамжуулан таны хүсэлтийг боловсруулна.
-            Админ баталгаажуулсны дараа таны карт цэнэглэгдэнэ.
+            Админ баталгаажуулсны дараа таны түлш цэнэглэгдэнэ.
           </p>
         </div>
 

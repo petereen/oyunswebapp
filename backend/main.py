@@ -3,6 +3,7 @@ from typing import Annotated
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import math
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,6 +72,26 @@ from models import (
     GiftRejectRequest,
     GiftPreapproveRequest,
     GiftFinalizeRequest,
+    # Fuel-related models
+    FUEL_STATION_DISCOUNTS,
+    FUEL_STATIONS,
+    FuelStationItem,
+    FuelStationsResponse,
+    FuelStationCreateRequest,
+    FuelStationUpdateRequest,
+    FuelCalculateRequest,
+    FuelCalculateResponse,
+    FuelOrderCreateRequest,
+    FuelOrderCreateResponse,
+    FuelOrderItem,
+    FuelOrdersResponse,
+    FuelAdminActionRequest,
+    FuelPumpPhotoRequest,
+    FuelChatMessageRequest,
+    FuelChatMessage,
+    FuelChatMessagesResponse,
+    FuelAdminBankAccount,
+    FuelAdminBankAccountsResponse,
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
@@ -3166,3 +3187,618 @@ async def reject_gift(
         send_user_notification(gift.get("recipient_user_id"), recipient_message)
     
     return {"ok": True, "status": "rejected"}
+
+
+# ============================================================
+# FUEL PURCHASE FEATURE ENDPOINTS
+# ============================================================
+
+def _get_fuel_stations_from_db() -> dict[str, int]:
+    """Fetch active fuel stations from DB. Returns {name: discount_percent}. Falls back to hardcoded."""
+    try:
+        client = get_supabase()
+        res = client.table("fuel_stations").select("name, discount_percent").eq("is_active", True).order("display_order").execute()
+        if res.data:
+            return {row["name"]: row["discount_percent"] for row in res.data}
+    except Exception as e:
+        logger.warning(f"Failed to fetch fuel stations from DB, using fallback: {e}")
+    return dict(FUEL_STATION_DISCOUNTS)
+
+
+def _fuel_calculate(station_name: str, liters: float, price_per_liter: float, payment_currency: str, exchange_rate: float | None = None):
+    """Server-side fuel price calculation with discount and rounding."""
+    stations = _get_fuel_stations_from_db()
+    discount_percent = stations.get(station_name, FUEL_STATION_DISCOUNTS.get(station_name, 13))
+    gross = liters * price_per_liter
+    discount = gross * discount_percent / 100
+    net = gross - discount
+    rounded = math.ceil(net / 100) * 100  # Always round up to 100 RUB
+
+    if payment_currency == "MNT" and exchange_rate and exchange_rate > 0:
+        final = round(rounded * exchange_rate, 2)
+    else:
+        final = rounded
+
+    return {
+        "discount_percent": discount_percent,
+        "gross_amount": round(gross, 2),
+        "discount_amount": round(discount, 2),
+        "net_amount": round(net, 2),
+        "rounded_amount": rounded,
+        "exchange_rate": exchange_rate,
+        "final_amount": final,
+    }
+
+
+def _send_fuel_admin_notification(text: str, reply_markup: dict | None = None):
+    """Send notification to fuel admin chat IDs (falls back to main admin if not configured)."""
+    settings = get_settings()
+    chat_ids = settings.fuel_admin_chat_ids or settings.admin_chat_ids
+    for chat_id in chat_ids:
+        payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        try:
+            import requests as req
+            response = req.post(
+                f"https://api.telegram.org/bot{settings.bot_token}/sendMessage",
+                json=payload,
+                timeout=10,
+            )
+            if response.status_code != 200:
+                logger.error(f"Fuel admin notification error for {chat_id}: {response.text}")
+        except Exception as e:
+            logger.error(f"Failed to send fuel admin notification to {chat_id}: {e}")
+
+
+@app.get("/api/fuel/stations")
+async def fuel_get_stations(user=Depends(get_authenticated_user)):
+    """Get active fuel stations for user selection."""
+    try:
+        client = get_supabase()
+        res = client.table("fuel_stations").select("*").eq("is_active", True).order("display_order").execute()
+        stations = [FuelStationItem(**row) for row in (res.data or [])]
+    except Exception:
+        # Fallback to hardcoded
+        stations = [
+            FuelStationItem(id="", name=name, discount_percent=disc, is_active=True, display_order=i)
+            for i, (name, disc) in enumerate(FUEL_STATION_DISCOUNTS.items())
+        ]
+    return FuelStationsResponse(stations=stations)
+
+
+@app.post("/api/fuel/calculate")
+async def fuel_calculate(payload: FuelCalculateRequest, user=Depends(get_authenticated_user)):
+    """Preview fuel cost calculation."""
+    stations = _get_fuel_stations_from_db()
+    if payload.station_name not in stations:
+        raise HTTPException(status_code=400, detail=f"Unknown station: {payload.station_name}")
+    if payload.liters <= 0:
+        raise HTTPException(status_code=400, detail="Liters must be positive")
+    if payload.station_price_per_liter <= 0:
+        raise HTTPException(status_code=400, detail="Price must be positive")
+    if payload.payment_currency not in ("RUB", "MNT"):
+        raise HTTPException(status_code=400, detail="Currency must be RUB or MNT")
+
+    calc = _fuel_calculate(
+        payload.station_name,
+        payload.liters,
+        payload.station_price_per_liter,
+        payload.payment_currency,
+        payload.exchange_rate,
+    )
+
+    return FuelCalculateResponse(
+        station_name=payload.station_name,
+        liters=payload.liters,
+        station_price_per_liter=payload.station_price_per_liter,
+        payment_currency=payload.payment_currency,
+        **calc,
+    )
+
+
+@app.post("/api/fuel/create")
+async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_authenticated_user)):
+    """Create a new fuel purchase order."""
+    settings = get_settings()
+    client = get_supabase()
+
+    stations = _get_fuel_stations_from_db()
+    if payload.station_name not in stations:
+        raise HTTPException(status_code=400, detail=f"Unknown station: {payload.station_name}")
+    if payload.liters <= 0:
+        raise HTTPException(status_code=400, detail="Liters must be positive")
+    if payload.station_price_per_liter <= 0:
+        raise HTTPException(status_code=400, detail="Price must be positive")
+    if payload.payment_currency not in ("RUB", "MNT"):
+        raise HTTPException(status_code=400, detail="Currency must be RUB or MNT")
+    if not payload.payment_receipt_url:
+        raise HTTPException(status_code=400, detail="Payment receipt required")
+    if not payload.station_latitude and not payload.location_text:
+        raise HTTPException(status_code=400, detail="Location (GPS or text) required")
+
+    # Server-side calculation
+    calc = _fuel_calculate(
+        payload.station_name,
+        payload.liters,
+        payload.station_price_per_liter,
+        payload.payment_currency,
+        payload.exchange_rate,
+    )
+
+    now_utc = datetime.now(timezone.utc).isoformat()
+
+    order_data = {
+        "invoice": payload.invoice,
+        "user_id": user.id,
+        "station_name": payload.station_name,
+        "station_latitude": payload.station_latitude,
+        "station_longitude": payload.station_longitude,
+        "location_text": payload.location_text,
+        "liters": payload.liters,
+        "station_price_per_liter": payload.station_price_per_liter,
+        "discount_percent": calc["discount_percent"],
+        "gross_amount": calc["gross_amount"],
+        "discount_amount": calc["discount_amount"],
+        "net_amount": calc["net_amount"],
+        "rounded_amount": calc["rounded_amount"],
+        "payment_currency": payload.payment_currency,
+        "exchange_rate": calc["exchange_rate"],
+        "final_amount": calc["final_amount"],
+        "payment_receipt_url": payload.payment_receipt_url,
+        "admin_bank_id": payload.admin_bank_id,
+        "status": "pending_payment",
+        "created_at": now_utc,
+        "updated_at": now_utc,
+    }
+
+    res = client.table("fuel_orders").insert(order_data).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create fuel order")
+
+    order = res.data[0]
+
+    # Get user name for notification
+    user_res = client.table("users").select("first_name, last_name").eq("id", user.id).limit(1).execute()
+    user_name = "Unknown"
+    if user_res.data:
+        fn = user_res.data[0].get("first_name", "")
+        ln = user_res.data[0].get("last_name", "")
+        user_name = f"{fn} {ln}".strip() or str(user.id)
+
+    # Location string
+    loc_str = payload.location_text or ""
+    if payload.station_latitude and payload.station_longitude:
+        loc_str = f"📍 {payload.station_latitude:.6f}, {payload.station_longitude:.6f}"
+
+    curr_symbol = "₽" if payload.payment_currency == "RUB" else "₮"
+    admin_text = (
+        f"⛽ <b>ШИНЭ ТҮЛШНИЙ ЗАХИАЛГА!</b>\n\n"
+        f"📋 Invoice: <code>{payload.invoice}</code>\n"
+        f"👤 Хэрэглэгч: {user_name} (ID: {user.id})\n"
+        f"🏪 АЗС: <b>{payload.station_name}</b>\n"
+        f"{loc_str}\n"
+        f"⛽ Литр: <b>{payload.liters}</b> л\n"
+        f"💰 Үнэ/л: {payload.station_price_per_liter}₽\n"
+        f"📊 Хөнгөлөлт: -{calc['discount_percent']}%\n"
+        f"💵 Нийт: <b>{calc['final_amount']}{curr_symbol}</b>\n"
+        f"💳 Төлбөр: {payload.payment_currency}\n"
+    )
+
+    _send_fuel_admin_notification(admin_text)
+
+    return FuelOrderCreateResponse(
+        id=order["id"],
+        invoice=order["invoice"],
+        status=order["status"],
+        gross_amount=calc["gross_amount"],
+        discount_percent=calc["discount_percent"],
+        discount_amount=calc["discount_amount"],
+        net_amount=calc["net_amount"],
+        rounded_amount=calc["rounded_amount"],
+        final_amount=calc["final_amount"],
+        created_at=order["created_at"],
+    )
+
+
+@app.get("/api/fuel/orders")
+async def fuel_user_orders(user=Depends(get_authenticated_user)):
+    """Get user's fuel order history."""
+    client = get_supabase()
+    res = client.table("fuel_orders").select("*").eq("user_id", user.id).order("created_at", desc=True).limit(50).execute()
+    orders = [FuelOrderItem(**o) for o in (res.data or [])]
+    return FuelOrdersResponse(orders=orders, total=len(orders))
+
+
+@app.get("/api/fuel/active")
+async def fuel_active_orders(user=Depends(get_authenticated_user)):
+    """Get user's active (non-terminal) fuel orders."""
+    client = get_supabase()
+    res = client.table("fuel_orders").select("*").eq("user_id", user.id).in_(
+        "status", ["pending_payment", "paid", "in_progress", "fueling_complete"]
+    ).order("created_at", desc=True).execute()
+
+    # Also include recently completed/rejected (last 24h)
+    msk_tz = timezone(timedelta(hours=3))
+    cutoff = (datetime.now(msk_tz) - timedelta(hours=24)).isoformat()
+    recent_res = client.table("fuel_orders").select("*").eq("user_id", user.id).in_(
+        "status", ["completed", "rejected"]
+    ).gte("updated_at", cutoff).execute()
+
+    all_orders = (res.data or []) + (recent_res.data or [])
+    # Deduplicate by id
+    seen = set()
+    unique = []
+    for o in all_orders:
+        if o["id"] not in seen:
+            seen.add(o["id"])
+            unique.append(o)
+
+    orders = [FuelOrderItem(**o) for o in unique]
+    return FuelOrdersResponse(orders=orders, total=len(orders))
+
+
+@app.post("/api/fuel/upload-pump-photo")
+async def fuel_upload_pump_photo(payload: FuelPumpPhotoRequest, user=Depends(get_authenticated_user)):
+    """Upload pump completion photo for a fuel order."""
+    client = get_supabase()
+
+    res = client.table("fuel_orders").select("*").eq("id", payload.order_id).eq("user_id", user.id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    client.table("fuel_orders").update({
+        "pump_photo_url": payload.pump_photo_url,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", payload.order_id).execute()
+
+    # Notify fuel admin
+    order = res.data
+    _send_fuel_admin_notification(
+        f"📸 <b>Колонкны зураг ирлээ!</b>\n\n"
+        f"📋 Invoice: <code>{order.get('invoice')}</code>\n"
+        f"🏪 АЗС: {order.get('station_name')}\n"
+        f"⛽ {order.get('liters')} л\n\n"
+        f"Хэрэглэгч колонкны зургийг оруулсан байна."
+    )
+
+    return {"ok": True}
+
+
+# ---- Fuel Chat Endpoints (User side) ----
+
+@app.get("/api/fuel/chat/{order_id}")
+async def fuel_chat_get(order_id: str, user=Depends(get_authenticated_user)):
+    """Get chat messages for a fuel order."""
+    client = get_supabase()
+
+    # Verify user owns this order
+    order_res = client.table("fuel_orders").select("id").eq("id", order_id).eq("user_id", user.id).limit(1).execute()
+    if not order_res.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    res = client.table("fuel_chat_messages").select("*").eq("fuel_order_id", order_id).order("created_at").execute()
+    messages = [FuelChatMessage(**m) for m in (res.data or [])]
+    return FuelChatMessagesResponse(messages=messages)
+
+
+@app.post("/api/fuel/chat/{order_id}")
+async def fuel_chat_send(order_id: str, payload: FuelChatMessageRequest, user=Depends(get_authenticated_user)):
+    """Send a chat message as user."""
+    client = get_supabase()
+
+    order_res = client.table("fuel_orders").select("id, invoice").eq("id", order_id).eq("user_id", user.id).limit(1).execute()
+    if not order_res.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not payload.message and not payload.image_url:
+        raise HTTPException(status_code=400, detail="Message or image required")
+
+    msg_data = {
+        "fuel_order_id": order_id,
+        "sender_type": "user",
+        "sender_id": user.id,
+        "message": payload.message,
+        "image_url": payload.image_url,
+    }
+    res = client.table("fuel_chat_messages").insert(msg_data).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to send message")
+
+    return {"ok": True, "message": FuelChatMessage(**res.data[0])}
+
+
+# ---- Fuel Admin Bank Accounts (public read for users) ----
+
+@app.get("/api/fuel/admin-banks")
+async def fuel_admin_banks(user=Depends(get_authenticated_user)):
+    """Get active fuel admin bank accounts for user to send payment to."""
+    client = get_supabase()
+    res = client.table("fuel_admin_bank_accounts").select("*").eq("is_active", True).order("display_order").execute()
+    accounts = [FuelAdminBankAccount(**a) for a in (res.data or [])]
+    return FuelAdminBankAccountsResponse(accounts=accounts)
+
+
+# ============================================================
+# FUEL ADMIN ENDPOINTS
+# ============================================================
+
+@app.get("/api/fuel-admin/inbox")
+async def fuel_admin_inbox(user=Depends(get_authenticated_user)):
+    """Get pending/active fuel orders for admin."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    res = client.table("fuel_orders").select("*").in_(
+        "status", ["pending_payment", "paid", "in_progress", "fueling_complete"]
+    ).order("created_at").execute()
+
+    orders = [FuelOrderItem(**o) for o in (res.data or [])]
+    return FuelOrdersResponse(orders=orders, total=len(orders))
+
+
+@app.post("/api/fuel-admin/action")
+async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_authenticated_user)):
+    """Admin action on a fuel order."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    valid_statuses = ["paid", "in_progress", "fueling_complete", "completed", "rejected"]
+    if payload.status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {payload.status}")
+
+    client = get_supabase()
+    res = client.table("fuel_orders").select("*").eq("id", payload.order_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order = res.data
+    update_data = {
+        "status": payload.status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if payload.status == "completed":
+        update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+        update_data["completed_by_admin"] = user.id
+    if payload.status == "rejected" and payload.rejection_comment:
+        update_data["rejection_comment"] = payload.rejection_comment
+    if payload.admin_comment:
+        update_data["admin_comment"] = payload.admin_comment
+
+    client.table("fuel_orders").update(update_data).eq("id", payload.order_id).execute()
+
+    # Notify user about status change
+    order_user_id = order.get("user_id")
+    invoice = order.get("invoice")
+
+    status_messages = {
+        "paid": "✅ Таны төлбөр баталгаажлаа. Түлш нийлүүлэлт эхлэхийг хүлээнэ үү.",
+        "in_progress": "⛽ Таны түлш нийлүүлэлт эхэллээ!",
+        "fueling_complete": "✅ Цэнэглэлт дууслаа. Колонкны зургийг оруулна уу.",
+        "completed": "🎉 Таны түлшний захиалга амжилттай дууслаа!",
+        "rejected": f"❌ Таны захиалга цуцлагдлаа.\n📝 Шалтгаан: {payload.rejection_comment or 'Тодорхойгүй'}",
+    }
+
+    msg = status_messages.get(payload.status, "")
+    if msg and order_user_id:
+        user_text = (
+            f"⛽ <b>Түлшний захиалга шинэчлэгдлээ</b>\n\n"
+            f"📋 Invoice: <code>{invoice}</code>\n"
+            f"{msg}"
+        )
+        send_user_notification(order_user_id, user_text)
+
+    return {"ok": True, "status": payload.status}
+
+
+@app.get("/api/fuel-admin/history")
+async def fuel_admin_history(
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    user=Depends(get_authenticated_user),
+):
+    """Get fuel order history for admin."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    query = client.table("fuel_orders").select("*", count="exact")
+
+    if status and status != "all":
+        query = query.eq("status", status)
+
+    query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+    res = query.execute()
+
+    orders = [FuelOrderItem(**o) for o in (res.data or [])]
+    total = res.count if res.count is not None else len(orders)
+    return FuelOrdersResponse(orders=orders, total=total)
+
+
+# ---- Fuel Admin Bank Account CRUD ----
+
+@app.get("/api/fuel-admin/bank-accounts")
+async def fuel_admin_bank_accounts_list(user=Depends(get_authenticated_user)):
+    """List all fuel admin bank accounts (including inactive)."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    res = client.table("fuel_admin_bank_accounts").select("*").order("display_order").execute()
+    accounts = [FuelAdminBankAccount(**a) for a in (res.data or [])]
+    return FuelAdminBankAccountsResponse(accounts=accounts)
+
+
+@app.post("/api/fuel-admin/bank-accounts")
+async def fuel_admin_bank_account_create(payload: dict, user=Depends(get_authenticated_user)):
+    """Create a fuel admin bank account."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order"]
+    data = {k: v for k, v in payload.items() if k in allowed}
+    res = client.table("fuel_admin_bank_accounts").insert(data).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create bank account")
+    return {"ok": True, "account": res.data[0]}
+
+
+@app.put("/api/fuel-admin/bank-accounts/{account_id}")
+async def fuel_admin_bank_account_update(account_id: str, payload: dict, user=Depends(get_authenticated_user)):
+    """Update a fuel admin bank account."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order"]
+    data = {k: v for k, v in payload.items() if k in allowed}
+    res = client.table("fuel_admin_bank_accounts").update(data).eq("id", account_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"ok": True, "account": res.data[0]}
+
+
+@app.delete("/api/fuel-admin/bank-accounts/{account_id}")
+async def fuel_admin_bank_account_delete(account_id: str, user=Depends(get_authenticated_user)):
+    """Delete a fuel admin bank account."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    client.table("fuel_admin_bank_accounts").delete().eq("id", account_id).execute()
+    return {"ok": True}
+
+
+# ---- Fuel Admin Chat ----
+
+@app.get("/api/fuel-admin/chat/{order_id}")
+async def fuel_admin_chat_get(order_id: str, user=Depends(get_authenticated_user)):
+    """Get chat messages for a fuel order (admin)."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    res = client.table("fuel_chat_messages").select("*").eq("fuel_order_id", order_id).order("created_at").execute()
+    messages = [FuelChatMessage(**m) for m in (res.data or [])]
+    return FuelChatMessagesResponse(messages=messages)
+
+
+@app.post("/api/fuel-admin/chat/{order_id}")
+async def fuel_admin_chat_send(order_id: str, payload: FuelChatMessageRequest, user=Depends(get_authenticated_user)):
+    """Send a chat message as admin."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    if not payload.message and not payload.image_url:
+        raise HTTPException(status_code=400, detail="Message or image required")
+
+    client = get_supabase()
+    msg_data = {
+        "fuel_order_id": order_id,
+        "sender_type": "admin",
+        "sender_id": user.id,
+        "message": payload.message,
+        "image_url": payload.image_url,
+    }
+    res = client.table("fuel_chat_messages").insert(msg_data).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to send message")
+
+    # Notify user about new admin message
+    order_res = client.table("fuel_orders").select("user_id, invoice").eq("id", order_id).limit(1).execute()
+    if order_res.data:
+        order_user_id = order_res.data[0].get("user_id")
+        invoice = order_res.data[0].get("invoice")
+        if order_user_id:
+            send_user_notification(
+                order_user_id,
+                f"💬 <b>Түлшний захиалгын чат</b>\n\n"
+                f"📋 Invoice: <code>{invoice}</code>\n"
+                f"Админ танд мессеж илгээлээ."
+            )
+
+    return {"ok": True, "message": FuelChatMessage(**res.data[0])}
+
+
+# ---- Fuel Admin: Station Management ----
+
+@app.get("/api/fuel-admin/stations")
+async def fuel_admin_list_stations(user=Depends(get_authenticated_user)):
+    """List all stations (including inactive) for admin."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    res = client.table("fuel_stations").select("*").order("display_order").execute()
+    return FuelStationsResponse(stations=[FuelStationItem(**r) for r in (res.data or [])])
+
+
+@app.post("/api/fuel-admin/stations")
+async def fuel_admin_create_station(payload: FuelStationCreateRequest, user=Depends(get_authenticated_user)):
+    """Create a new fuel station."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    data = payload.model_dump()
+    res = client.table("fuel_stations").insert(data).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create station")
+    return FuelStationItem(**res.data[0])
+
+
+@app.put("/api/fuel-admin/stations/{station_id}")
+async def fuel_admin_update_station(station_id: str, payload: FuelStationUpdateRequest, user=Depends(get_authenticated_user)):
+    """Update a fuel station."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    update_data = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    res = client.table("fuel_stations").update(update_data).eq("id", station_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Station not found")
+    return FuelStationItem(**res.data[0])
+
+
+@app.delete("/api/fuel-admin/stations/{station_id}")
+async def fuel_admin_delete_station(station_id: str, user=Depends(get_authenticated_user)):
+    """Delete a fuel station."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    client = get_supabase()
+    client.table("fuel_stations").delete().eq("id", station_id).execute()
+    return {"ok": True}
