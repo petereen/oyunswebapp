@@ -31,6 +31,7 @@ import {
   transferShift,
   fetchWorkingHours,
   updateWorkingHours,
+  updateUserLabel,
   ShiftResponse,
   AdminUser,
   WorkingHoursConfig,
@@ -53,6 +54,20 @@ interface InboxItem {
   direction?: string;
   bank_mismatch?: boolean;
   saved_bank_info?: string;
+  admin_label?: string;
+  admin_label_note?: string;
+}
+
+const LABEL_PRESETS: { name: string; color: string; bg: string; border: string }[] = [
+  { name: "Тэмдэглэл", color: "text-green-700", bg: "bg-green-100", border: "border-green-300" },
+  { name: "Сэжигтэй", color: "text-red-700", bg: "bg-red-100", border: "border-red-300" },
+];
+
+function getLabelStyle(label: string | undefined) {
+  if (!label) return { color: "text-slate-500", bg: "bg-slate-100", border: "border-slate-300" };
+  const preset = LABEL_PRESETS.find(p => p.name === label);
+  if (preset) return preset;
+  return { color: "text-yellow-700", bg: "bg-yellow-100", border: "border-yellow-300" };
 }
 
 type SortOption = "oldest" | "newest" | "amount_asc" | "amount_desc";
@@ -113,9 +128,19 @@ export function AdminInbox() {
   const [photoModal, setPhotoModal] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
+  const [rejectBillUrls, setRejectBillUrls] = useState<string[]>([]);
+  const [rejectUploading, setRejectUploading] = useState(false);
   const [confirmModal, setConfirmModal] = useState<InboxItem | null>(null);
   const [adminBillUrls, setAdminBillUrls] = useState<string[]>([]); // Changed to array for multiple photos
   const [uploading, setUploading] = useState(false);
+
+  // Label editing state
+  const [labelModal, setLabelModal] = useState<{ userId: number; currentLabel?: string; currentNote?: string } | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editLabelNote, setEditLabelNote] = useState("");
+  const [editLabelCustom, setEditLabelCustom] = useState("");
+  const [labelSaving, setLabelSaving] = useState(false);
+  const [expandedLabel, setExpandedLabel] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Helper function to parse bill_url (can be JSON array or single URL string)
@@ -342,12 +367,65 @@ export function AdminInbox() {
         invoice: rejectModal,
         status: "rejected",
         rejection_comment: rejectComment,
+        admin_bill_url: rejectBillUrls.length > 0 ? JSON.stringify(rejectBillUrls) : undefined,
       });
       setRejectModal(null);
       setRejectComment("");
+      setRejectBillUrls([]);
       await load();
     } catch (err) {
       console.error("Rejection error:", err);
+    }
+  };
+
+  const handleRejectBillUpload = async (files: FileList) => {
+    if (!rejectModal || files.length === 0) return;
+    setRejectUploading(true);
+    try {
+      const uploadedUrls: string[] = [...rejectBillUrls];
+      for (const file of Array.from(files)) {
+        const path = `admin/${Date.now()}-${file.name}`;
+        const presigned = await requestPresign({ bucket: "bills", path });
+        await fetch(presigned.upload_url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type },
+        });
+        uploadedUrls.push(presigned.public_url);
+      }
+      setRejectBillUrls(uploadedUrls);
+    } catch {
+      alert("Upload failed");
+    } finally {
+      setRejectUploading(false);
+    }
+  };
+
+  const handleSaveLabel = async () => {
+    if (!labelModal) return;
+    setLabelSaving(true);
+    try {
+      const finalLabel = editLabel === "__custom__" ? editLabelCustom.trim() : editLabel;
+      await updateUserLabel({
+        user_id: labelModal.userId,
+        admin_label: finalLabel || null,
+        admin_label_note: editLabelNote || null,
+      });
+      // Update the item in local state
+      setItems(prev => prev.map(it =>
+        it.user_id === labelModal.userId
+          ? { ...it, admin_label: finalLabel || undefined, admin_label_note: editLabelNote || undefined }
+          : it
+      ));
+      if (detailModal && detailModal.user_id === labelModal.userId) {
+        setDetailModal(prev => prev ? { ...prev, admin_label: finalLabel || undefined, admin_label_note: editLabelNote || undefined } : null);
+      }
+      setLabelModal(null);
+    } catch (err) {
+      console.error("Label save error:", err);
+      alert("Тэмдэглэл хадгалахад алдаа гарлаа");
+    } finally {
+      setLabelSaving(false);
     }
   };
 
@@ -825,6 +903,60 @@ export function AdminInbox() {
                       ID хуулах: {item.user_id}
                     </button>
                   </div>
+
+                  {/* User Label */}
+                  <div className="mt-2 pt-2 border-t border-blue-200">
+                    {(() => {
+                      const style = getLabelStyle(item.admin_label);
+                      const hasLabel = !!item.admin_label;
+                      return (
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                if (hasLabel && expandedLabel !== item.user_id) {
+                                  setExpandedLabel(item.user_id);
+                                } else if (expandedLabel === item.user_id) {
+                                  setExpandedLabel(null);
+                                } else {
+                                  setEditLabel(item.admin_label || "");
+                                  setEditLabelNote(item.admin_label_note || "");
+                                  setEditLabelCustom("");
+                                  setLabelModal({ userId: item.user_id, currentLabel: item.admin_label, currentNote: item.admin_label_note });
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border transition ${
+                                hasLabel
+                                  ? `${style.bg} ${style.color} ${style.border}`
+                                  : "bg-slate-50 text-slate-500 border-slate-200 border-dashed hover:bg-slate-100"
+                              }`}
+                            >
+                              🏷️ {hasLabel ? item.admin_label : "Тэмдэглэл"}
+                            </button>
+                            {hasLabel && (
+                              <button
+                                onClick={() => {
+                                  setEditLabel(item.admin_label || "");
+                                  setEditLabelNote(item.admin_label_note || "");
+                                  setEditLabelCustom("");
+                                  setLabelModal({ userId: item.user_id, currentLabel: item.admin_label, currentNote: item.admin_label_note });
+                                }}
+                                className="text-xs text-blue-600 hover:underline"
+                              >
+                                засах
+                              </button>
+                            )}
+                          </div>
+                          {expandedLabel === item.user_id && hasLabel && item.admin_label_note && (
+                            <div className={`mt-1.5 px-2.5 py-1.5 rounded text-xs ${style.bg} ${style.color} border ${style.border}`}>
+                              {item.admin_label_note}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
                   <div className="mt-2 pt-2 border-t border-blue-200 text-xs text-slate-500">
                     💡 Telegram бот дотор ID-г хайж хэрэглэгч рүү мессеж илгээх боломжтой
                   </div>
@@ -1126,11 +1258,55 @@ export function AdminInbox() {
               rows={3}
               placeholder="Татгалзсан шалтгаан..."
             />
+
+            {/* Photo upload for rejection proof */}
+            <div className="mb-3">
+              <div className="text-sm text-slate-600 mb-2">Баримт зураг оруулах (заавал биш):</div>
+              {rejectBillUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {rejectBillUrls.map((url, idx) => (
+                    <div key={idx} className="relative">
+                      <img
+                        src={url}
+                        alt={`Rejection proof ${idx + 1}`}
+                        className="w-20 h-20 object-cover rounded-lg border border-red-200 cursor-pointer"
+                        onClick={() => setPhotoModal(url)}
+                      />
+                      <button
+                        onClick={() => setRejectBillUrls(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-red-200 rounded-xl py-3 cursor-pointer bg-white/60 hover:bg-red-50">
+                <Upload className="w-4 h-4 text-red-500" />
+                <span className="text-xs text-slate-500 mt-1">
+                  {rejectUploading ? "Хуулж байна..." : rejectBillUrls.length > 0 ? "Нэмж зураг оруулах" : "Дарж оруулна уу"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) handleRejectBillUpload(files);
+                  }}
+                  disabled={rejectUploading}
+                />
+              </label>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={() => {
                   setRejectModal(null);
                   setRejectComment("");
+                  setRejectBillUrls([]);
                 }}
                 className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
               >
@@ -1138,9 +1314,101 @@ export function AdminInbox() {
               </button>
               <button
                 onClick={handleReject}
-                className="flex-1 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                disabled={rejectUploading}
+                className="flex-1 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Татгалзах
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Label Edit Modal */}
+      {labelModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-5 max-w-sm w-full">
+            <div className="font-semibold text-maroon-700 mb-3">🏷️ Хэрэглэгчийн тэмдэглэл</div>
+            <div className="text-xs text-slate-500 mb-3">ID: {labelModal.userId}</div>
+
+            {/* Label selection */}
+            <div className="text-sm text-slate-600 mb-2">Тэмдэглэл сонгох:</div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {LABEL_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  onClick={() => { setEditLabel(preset.name); setEditLabelCustom(""); }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md border transition ${
+                    editLabel === preset.name
+                      ? `${preset.bg} ${preset.color} ${preset.border} ring-2 ring-offset-1 ring-current`
+                      : `bg-white ${preset.color} ${preset.border} hover:${preset.bg}`
+                  }`}
+                >
+                  {preset.name}
+                </button>
+              ))}
+              <button
+                onClick={() => setEditLabel("__custom__")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md border transition ${
+                  editLabel === "__custom__"
+                    ? "bg-yellow-100 text-yellow-700 border-yellow-300 ring-2 ring-offset-1 ring-yellow-400"
+                    : "bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50"
+                }`}
+              >
+                ✏️ Бусад
+              </button>
+            </div>
+
+            {editLabel === "__custom__" && (
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={editLabelCustom}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 30) setEditLabelCustom(e.target.value);
+                  }}
+                  className="w-full border border-yellow-300 rounded-lg p-2 text-sm"
+                  placeholder="Тэмдэглэлийн нэр..."
+                />
+                <div className="text-xs text-slate-400 text-right mt-0.5">{editLabelCustom.length}/30</div>
+              </div>
+            )}
+
+            {/* Note */}
+            <div className="text-sm text-slate-600 mb-2">Нэмэлт тайлбар:</div>
+            <textarea
+              value={editLabelNote}
+              onChange={(e) => setEditLabelNote(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg p-2 text-sm mb-3"
+              rows={3}
+              placeholder="Энд тайлбар бичнэ үү..."
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLabelModal(null)}
+                className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm"
+              >
+                Цуцлах
+              </button>
+              {labelModal.currentLabel && (
+                <button
+                  onClick={() => {
+                    setEditLabel("");
+                    setEditLabelNote("");
+                    setEditLabelCustom("");
+                  }}
+                  className="py-2 px-3 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-sm"
+                >
+                  Устгах
+                </button>
+              )}
+              <button
+                onClick={handleSaveLabel}
+                disabled={labelSaving || (editLabel === "__custom__" && !editLabelCustom.trim())}
+                className="flex-1 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 text-sm"
+              >
+                {labelSaving ? "Хадгалж байна..." : "Хадгалах"}
               </button>
             </div>
           </div>

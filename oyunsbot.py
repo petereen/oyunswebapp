@@ -307,142 +307,81 @@ def show_current_shift_admin(message):
 
 
 
+def _format_bank_account(row):
+    """Format a bank account row from admin_bank_accounts into Telegram Markdown."""
+    bank_name = row.get("bank_name", "")
+    owner_name = row.get("owner_name", "")
+    card_number = row.get("card_number", "")
+    phone = row.get("phone", "")
+    account_number = row.get("account_number", "")
+    currency = row.get("currency", "")
+
+    lines = [f"🏦 *{bank_name}*\n"]
+    if currency == "RUB":
+        if card_number:
+            lines.append(f"Картын дугаар: `{card_number}`")
+        if phone:
+            lines.append(f"Утасны дугаар: `{phone}`")
+        if owner_name:
+            lines.append(f"Дансны нэр: *{owner_name}*")
+    else:  # MNT
+        if owner_name:
+            lines.append(f"Дансны нэр: *{owner_name}*")
+        if account_number:
+            lines.append(f"Данс: `{account_number}`")
+    return "\n".join(lines)
+
+
 def get_current_shift_config():
     admin_id = get_current_admin_id()
     if not admin_id:
         return None
 
-    # Define each admin's bank details
-    bank_info_by_admin = {
-        5564298862: {
-            "sberbank_rub": (
-                "🏦 *Сбербанк*\n\n"
-                "Картын дугаар: ``\n"
-                "Утасны дугаар: ``\n"
-                "Дансны нэр: **"
-            ),
-            "vtbbank_rub": (
-                "🏦 *ВТБ*\n\n"
-                "Картын дугаар: ``\n"
-                "Утасны дугаар: ``\n"
-                "Дансны нэр: **"
-            ),
-            "alphabank_rub": (
-                "🏦 *Альфа*\n\n"
-                "Картын дугаар: `2200 1529 1699 8639`\n"
-                "Утасны дугаар: `+7 999 683 02 75`\n"
-                "Дансны нэр: *Emuujin*"
-            ),
-            "bank_mnt": (
-                "🏦 *ХААН БАНК*\n\n"
-                "Дансны нэр: *Амгаланбаатар*\n"
-                "Данс: `MN13000500 5403213664`"
-            )
-        },
-        1932946217: {
-            "sberbank_rub2": (
-                "🏦 *СБЕРБАНК*\n\n"
-                "Картын дугаар: `2202 2084 1034 6242`\n"
-                "Утасны дугаар: `+7 996 437 18 92`\n"
-                "Дансны нэр: *Анужин*"
-            ),
-            "sberbank_rub1": (
-                "🏦 *СБЕРБАНК*\n\n"
-                "Картын дугаар: `2202 2063 0354 3297`\n"
-                "Утасны дугаар: `+7 999 686 78 93`\n"
-                "Дансны нэр: *Анударь*"
-            ),
-            "vtbbank_rub": (
-                "🏦 *ВТБ*\n\n"
-                "Картын дугаар: ``\n"
-                "Утасны дугаар: ``\n"
-                "Дансны нэр: **"
-            ),
-            "alphabank_rub1": (
-                "🏦 *АЛЬФА БАНК*\n\n"
-                "Картын дугаар: `2200 1529 0483 3053`\n"
-                "Утасны дугаар: `+7 950 096 92 87`\n"
-                "Дансны нэр: *Тувшинжаргал Мунхзаяа*"
-            ),
-            "alphabank_rub2": (
-                "🏦 *АЛЬФА БАНК*\n\n"
-                "Картын дугаар: `2200 1529 9148 7847`\n"
-                "Утасны дугаар: `+7 999 642 63 28`\n"
-                "Дансны нэр: *Ачитбаатар*"
-            ),
-            "bank_mnt": (
-                "🏦 *ХААН БАНК*\n\n"
-                "Дансны нэр: *Амгаланбаатар*\n"
-                "Данс: `MN13000500 5403213664`"
-            )
-        },
-
-        1409343588: {
-            "sberbank_rub2": (
-                "🏦 *СБЕРБАНК*\n\n"
-                "Картын дугаар: `2202 2084 1034 6242`\n"
-                "Утасны дугаар: `+7 996 437 18 92`\n"
-                "Дансны нэр: *Анужин*"
-            ),
-            "sberbank_rub1": (
-                "🏦 *СБЕРБАНК*\n\n"
-                "Картын дугаар: `2202 2063 0354 3297`\n"
-                "Утасны дугаар: `+7 999 686 78 93`\n"
-                "Дансны нэр: *Анударь*"
-            ),
-            "vtbbank_rub": (
-                "🏦 *ВТБ*\n\n"
-                "Картын дугаар: ``\n"
-                "Утасны дугаар: ``\n"
-                "Дансны нэр: **"
-            ),
-            "alphabank_rub1": (
-                "🏦 *АЛЬФА БАНК*\n\n"
-                "Картын дугаар: `2200 1529 0483 3053`\n"
-                "Утасны дугаар: `+7 999 682 39 08`\n"
-                "Дансны нэр: *Тувшинжаргал Мунхзаяа*"
-            ),
-            "alphabank_rub2": (
-                "🏦 *АЛЬФА БАНК*\n\n"
-                "Картын дугаар: `2200 1529 9148 7847`\n"
-                "Утасны дугаар: `+7 999 642 63 28`\n"
-                "Дансны нэр: *Ачитбаатар*"
-            ),
-            "bank_mnt": (
-                "🏦 *ХААН БАНК*\n\n"
-                "Дансны нэр: *Амгаланбаатар*\n"
-                "Данс: `MN13000500 5403213664`"
-            )
-        }
-    }
-
-    if admin_id not in bank_info_by_admin:
+    # Fetch active bank accounts from admin_bank_accounts table
+    try:
+        res = (
+            supabase
+            .table("admin_bank_accounts")
+            .select("*")
+            .eq("is_active", True)
+            .order("display_order", desc=False)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        accounts = res.data or []
+    except Exception as e:
+        print(f"❌ Failed to fetch admin bank accounts: {e}")
         return None
 
-    admin_data = bank_info_by_admin[admin_id]
+    if not accounts:
+        return None
 
-    alpha_accounts = []
-    for key in ("alphabank_rub2", "alphabank_rub1"):
-        account = admin_data.get(key)
-        if account:
-            alpha_accounts.append(account)
+    # Separate by currency
+    rub_accounts = [a for a in accounts if a.get("currency") == "RUB"]
+    mnt_accounts = [a for a in accounts if a.get("currency") == "MNT"]
 
-    # only one bank for admin 5564298862
-    if admin_id == 5564298862:
-        rub_options = {
-            "Альфа банк": admin_data["alphabank_rub"]
-        }
-        bank_rub = admin_data["sberbank_rub"]
+    # Build RUB bank options dict (bank_name -> formatted Markdown)
+    rub_options = {}
+    for row in rub_accounts:
+        label = row.get("bank_name", "Банк")
+        # Ensure unique labels by appending owner name if duplicate
+        if label in rub_options:
+            label = f"{label} ({row.get('owner_name', '')})"
+        rub_options[label] = _format_bank_account(row)
+
+    # First RUB account as default
+    bank_rub = _format_bank_account(rub_accounts[0]) if rub_accounts else None
+
+    # Combine all MNT accounts into one display string
+    if mnt_accounts:
+        bank_mnt = "\n\n".join(_format_bank_account(a) for a in mnt_accounts)
     else:
-        rub_options = {}
-        for idx, account in enumerate(alpha_accounts, start=1):
-            rub_options[f"Альфа {idx}"] = account
-        bank_rub = admin_data.get("sberbank_rub2")
-    
+        bank_mnt = None
+
     return {
         "operator_id": admin_id,
         "bank_rub": bank_rub,
-        "bank_mnt": admin_data["bank_mnt"],
+        "bank_mnt": bank_mnt,
         "rub_bank_options": rub_options
     }
 

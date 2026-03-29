@@ -129,6 +129,14 @@ class AdminInboxItem(BaseModel):
     direction: Optional[str] = None
     bank_mismatch: bool = False  # True if user used different bank account than saved
     saved_bank_info: Optional[str] = None  # User's saved bank info for comparison
+    admin_label: Optional[str] = None  # Admin label for user (e.g. Тэмдэглэл, Сэжигтэй)
+    admin_label_note: Optional[str] = None  # Admin note for the label
+
+
+class UserLabelUpdateRequest(BaseModel):
+    user_id: int
+    admin_label: Optional[str] = None  # max 30 chars
+    admin_label_note: Optional[str] = None
 
 
 class AdminInboxResponse(BaseModel):

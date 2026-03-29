@@ -47,6 +47,7 @@ from models import (
     ShiftOpenRequest,
     ShiftTransferRequest,
     UpsertUserPayload,
+    UserLabelUpdateRequest,
     UserPromoCode,
     UserPromoCodesResponse,
     UserSearchItem,
@@ -1257,7 +1258,34 @@ async def admin_action(
             rejection_msg = f"❌ Таны <b>{payload.invoice}</b> дугаартай гүйлгээг татгалзлаа. Та алдаа гарсан гэж үзвэл @OYUNS_Finance хаягаар холбогдоно уу."
             if payload.rejection_comment:
                 rejection_msg += f"\n\nШалтгаан: {payload.rejection_comment}"
-            send_user_notification(user_id=int(user_id), text=rejection_msg)
+            
+            # If admin uploaded rejection proof photos, send them
+            if payload.admin_bill_url:
+                try:
+                    import json as json_module
+                    photo_urls = []
+                    try:
+                        parsed = json_module.loads(payload.admin_bill_url)
+                        if isinstance(parsed, list):
+                            photo_urls = parsed
+                        else:
+                            photo_urls = [payload.admin_bill_url]
+                    except (json_module.JSONDecodeError, TypeError):
+                        photo_urls = [payload.admin_bill_url]
+                    
+                    logger.info(f"Sending {len(photo_urls)} rejection photo(s) to user {user_id}")
+                    photo_sent = send_user_photos(
+                        user_id=int(user_id),
+                        photo_urls=photo_urls,
+                        caption=rejection_msg
+                    )
+                    if not photo_sent:
+                        send_user_notification(user_id=int(user_id), text=rejection_msg)
+                except Exception as e:
+                    logger.warning(f"Failed to send rejection photo, falling back to text: {e}")
+                    send_user_notification(user_id=int(user_id), text=rejection_msg)
+            else:
+                send_user_notification(user_id=int(user_id), text=rejection_msg)
     
     # Log admin action
     if admin_user_id:
@@ -1294,14 +1322,16 @@ async def admin_inbox(admin=Depends(require_admin)):
     # Get all unique user IDs to fetch their saved bank info
     user_ids = list(set(row.get("user_id") for row in res.data or [] if row.get("user_id")))
     
-    # Fetch saved bank info for all users in one query
+    # Fetch saved bank info and labels for all users in one query
     user_bank_info = {}
     if user_ids:
-        users_res = client.table("users").select("id,bank_rub,bank_mnt").in_("id", user_ids).execute()
+        users_res = client.table("users").select("id,bank_rub,bank_mnt,admin_label,admin_label_note").in_("id", user_ids).execute()
         for user in users_res.data or []:
             user_bank_info[user.get("id")] = {
                 "bank_rub": user.get("bank_rub") or "",
                 "bank_mnt": user.get("bank_mnt") or "",
+                "admin_label": user.get("admin_label"),
+                "admin_label_note": user.get("admin_label_note"),
             }
     
     items = []
@@ -1349,6 +1379,13 @@ async def admin_inbox(admin=Depends(require_admin)):
                         else:
                             bank_mismatch = True
         
+        # Get user label info
+        user_label = None
+        user_label_note = None
+        if user_id and user_id in user_bank_info:
+            user_label = user_bank_info[user_id].get("admin_label")
+            user_label_note = user_bank_info[user_id].get("admin_label_note")
+
         items.append(AdminInboxItem(
             invoice=row.get("invoice"),
             user_id=row.get("user_id"),
@@ -1366,8 +1403,34 @@ async def admin_inbox(admin=Depends(require_admin)):
             direction=direction,
             bank_mismatch=bank_mismatch,
             saved_bank_info=saved_bank_info,
+            admin_label=user_label,
+            admin_label_note=user_label_note,
         ))
     return AdminInboxResponse(items=items)
+
+
+@app.put("/api/admin/user-label")
+async def update_user_label(
+    payload: UserLabelUpdateRequest,
+    admin=Depends(require_admin),
+):
+    """Update admin label and note for a user."""
+    client = get_supabase()
+    
+    # Validate label length
+    if payload.admin_label and len(payload.admin_label) > 30:
+        raise HTTPException(status_code=400, detail="Label must be 30 characters or less")
+    
+    update_data = {
+        "admin_label": payload.admin_label,
+        "admin_label_note": payload.admin_label_note,
+    }
+    
+    result = client.table("users").update(update_data).eq("id", payload.user_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"ok": True}
 
 
 @app.get("/api/admin/history", response_model=AdminHistoryResponse)

@@ -341,6 +341,11 @@ export async function adminAction(payload: {
   return res.data;
 }
 
+export async function updateUserLabel(payload: { user_id: number; admin_label: string | null; admin_label_note: string | null }) {
+  const res = await api.put('/admin/user-label', payload);
+  return res.data;
+}
+
 export type UserPromoCode = {
   code: string;
   discount: number;
