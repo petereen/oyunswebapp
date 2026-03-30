@@ -9,6 +9,7 @@ type Tab = "inbox" | "history" | "banks" | "stations";
 
 const FUEL_ADMIN_API_KEY = import.meta.env.VITE_FUEL_ADMIN_API_KEY || "oyuns-fuel-admin-key-2026";
 const STORAGE_KEY = "fuel_admin_authenticated";
+const KEY_STORAGE = "fuel_admin_key";
 
 export function FuelAdminPanel() {
   const [activeTab, setActiveTab] = useState<Tab>("inbox");
@@ -18,7 +19,7 @@ export function FuelAdminPanel() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (localStorage.getItem(STORAGE_KEY) === "true") {
+    if (localStorage.getItem(STORAGE_KEY) === "true" && localStorage.getItem(KEY_STORAGE)) {
       setIsAuthenticated(true);
     }
   }, []);
@@ -27,6 +28,7 @@ export function FuelAdminPanel() {
     if (apiKey === FUEL_ADMIN_API_KEY) {
       setIsAuthenticated(true);
       localStorage.setItem(STORAGE_KEY, "true");
+      localStorage.setItem(KEY_STORAGE, apiKey);
       setError("");
     } else {
       setError("Буруу API түлхүүр");
@@ -36,6 +38,7 @@ export function FuelAdminPanel() {
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(KEY_STORAGE);
     setApiKey("");
   };
 

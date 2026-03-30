@@ -265,6 +265,41 @@ async def get_authenticated_user(
     raise HTTPException(status_code=401, detail="Missing or invalid authorization token")
 
 
+async def get_fuel_admin_auth(
+    authorization: str = Header(None, alias="Authorization"),
+    x_fuel_admin_key: str = Header(None, alias="X-Fuel-Admin-Key"),
+):
+    """
+    Authenticate fuel admin via JWT token OR API key.
+    Allows fuel admin panel to work outside Telegram (regular browser).
+    """
+    from models import AuthenticatedUser
+
+    # First try JWT auth
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            return await get_authenticated_user(authorization)
+        except HTTPException:
+            pass  # Fall through to API key check
+
+    # Then try API key auth
+    settings = get_settings()
+    if x_fuel_admin_key and settings.fuel_admin_api_key:
+        if x_fuel_admin_key == settings.fuel_admin_api_key:
+            fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+            admin_id = fuel_admin_ids[0] if fuel_admin_ids else 0
+            return AuthenticatedUser(
+                id=admin_id,
+                first_name="Fuel",
+                last_name="Admin",
+                username="fuel_admin",
+            )
+        else:
+            raise HTTPException(status_code=401, detail="Invalid fuel admin API key")
+
+    raise HTTPException(status_code=401, detail="Missing authorization token or fuel admin API key")
+
+
 async def get_jwt_authenticated_user(
     authorization: str = Header(None, alias="Authorization")
 ):
@@ -3526,7 +3561,7 @@ async def fuel_admin_banks(user=Depends(get_authenticated_user)):
 # ============================================================
 
 @app.get("/api/fuel-admin/inbox")
-async def fuel_admin_inbox(user=Depends(get_authenticated_user)):
+async def fuel_admin_inbox(user=Depends(get_fuel_admin_auth)):
     """Get pending/active fuel orders for admin."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3543,7 +3578,7 @@ async def fuel_admin_inbox(user=Depends(get_authenticated_user)):
 
 
 @app.post("/api/fuel-admin/action")
-async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_authenticated_user)):
+async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fuel_admin_auth)):
     """Admin action on a fuel order."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3604,7 +3639,7 @@ async def fuel_admin_history(
     status: str | None = None,
     limit: int = 50,
     offset: int = 0,
-    user=Depends(get_authenticated_user),
+    user=Depends(get_fuel_admin_auth),
 ):
     """Get fuel order history for admin."""
     settings = get_settings()
@@ -3629,7 +3664,7 @@ async def fuel_admin_history(
 # ---- Fuel Admin Bank Account CRUD ----
 
 @app.get("/api/fuel-admin/bank-accounts")
-async def fuel_admin_bank_accounts_list(user=Depends(get_authenticated_user)):
+async def fuel_admin_bank_accounts_list(user=Depends(get_fuel_admin_auth)):
     """List all fuel admin bank accounts (including inactive)."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3643,7 +3678,7 @@ async def fuel_admin_bank_accounts_list(user=Depends(get_authenticated_user)):
 
 
 @app.post("/api/fuel-admin/bank-accounts")
-async def fuel_admin_bank_account_create(payload: dict, user=Depends(get_authenticated_user)):
+async def fuel_admin_bank_account_create(payload: dict, user=Depends(get_fuel_admin_auth)):
     """Create a fuel admin bank account."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3660,7 +3695,7 @@ async def fuel_admin_bank_account_create(payload: dict, user=Depends(get_authent
 
 
 @app.put("/api/fuel-admin/bank-accounts/{account_id}")
-async def fuel_admin_bank_account_update(account_id: str, payload: dict, user=Depends(get_authenticated_user)):
+async def fuel_admin_bank_account_update(account_id: str, payload: dict, user=Depends(get_fuel_admin_auth)):
     """Update a fuel admin bank account."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3677,7 +3712,7 @@ async def fuel_admin_bank_account_update(account_id: str, payload: dict, user=De
 
 
 @app.delete("/api/fuel-admin/bank-accounts/{account_id}")
-async def fuel_admin_bank_account_delete(account_id: str, user=Depends(get_authenticated_user)):
+async def fuel_admin_bank_account_delete(account_id: str, user=Depends(get_fuel_admin_auth)):
     """Delete a fuel admin bank account."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3692,7 +3727,7 @@ async def fuel_admin_bank_account_delete(account_id: str, user=Depends(get_authe
 # ---- Fuel Admin Chat ----
 
 @app.get("/api/fuel-admin/chat/{order_id}")
-async def fuel_admin_chat_get(order_id: str, user=Depends(get_authenticated_user)):
+async def fuel_admin_chat_get(order_id: str, user=Depends(get_fuel_admin_auth)):
     """Get chat messages for a fuel order (admin)."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3706,7 +3741,7 @@ async def fuel_admin_chat_get(order_id: str, user=Depends(get_authenticated_user
 
 
 @app.post("/api/fuel-admin/chat/{order_id}")
-async def fuel_admin_chat_send(order_id: str, payload: FuelChatMessageRequest, user=Depends(get_authenticated_user)):
+async def fuel_admin_chat_send(order_id: str, payload: FuelChatMessageRequest, user=Depends(get_fuel_admin_auth)):
     """Send a chat message as admin."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3747,7 +3782,7 @@ async def fuel_admin_chat_send(order_id: str, payload: FuelChatMessageRequest, u
 # ---- Fuel Admin: Station Management ----
 
 @app.get("/api/fuel-admin/stations")
-async def fuel_admin_list_stations(user=Depends(get_authenticated_user)):
+async def fuel_admin_list_stations(user=Depends(get_fuel_admin_auth)):
     """List all stations (including inactive) for admin."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3760,7 +3795,7 @@ async def fuel_admin_list_stations(user=Depends(get_authenticated_user)):
 
 
 @app.post("/api/fuel-admin/stations")
-async def fuel_admin_create_station(payload: FuelStationCreateRequest, user=Depends(get_authenticated_user)):
+async def fuel_admin_create_station(payload: FuelStationCreateRequest, user=Depends(get_fuel_admin_auth)):
     """Create a new fuel station."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3776,7 +3811,7 @@ async def fuel_admin_create_station(payload: FuelStationCreateRequest, user=Depe
 
 
 @app.put("/api/fuel-admin/stations/{station_id}")
-async def fuel_admin_update_station(station_id: str, payload: FuelStationUpdateRequest, user=Depends(get_authenticated_user)):
+async def fuel_admin_update_station(station_id: str, payload: FuelStationUpdateRequest, user=Depends(get_fuel_admin_auth)):
     """Update a fuel station."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
@@ -3794,7 +3829,7 @@ async def fuel_admin_update_station(station_id: str, payload: FuelStationUpdateR
 
 
 @app.delete("/api/fuel-admin/stations/{station_id}")
-async def fuel_admin_delete_station(station_id: str, user=Depends(get_authenticated_user)):
+async def fuel_admin_delete_station(station_id: str, user=Depends(get_fuel_admin_auth)):
     """Delete a fuel station."""
     settings = get_settings()
     fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids

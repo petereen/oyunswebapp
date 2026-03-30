@@ -7,6 +7,26 @@ const api = axios.create({
 });
 
 const JWT_STORAGE_KEY = 'oyuns_jwt';
+const FUEL_ADMIN_KEY_STORAGE = 'fuel_admin_key';
+
+// Fuel admin axios instance - sends API key header for browser-based admin access
+const fuelAdminApi = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE || "/api",
+});
+
+fuelAdminApi.interceptors.request.use(config => {
+  // Try JWT first (if inside Telegram)
+  const token = localStorage.getItem(JWT_STORAGE_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  // Always send API key header for fuel-admin routes
+  const apiKey = localStorage.getItem(FUEL_ADMIN_KEY_STORAGE);
+  if (apiKey) {
+    config.headers['X-Fuel-Admin-Key'] = apiKey;
+  }
+  return config;
+});
 
 // Request interceptor - add JWT token to all requests
 api.interceptors.request.use(config => {
@@ -831,7 +851,7 @@ export async function fetchFuelAdminBanks(): Promise<{ accounts: FuelAdminBankAc
 // --- Fuel Admin API ---
 
 export async function fetchFuelAdminInbox(): Promise<{ orders: FuelOrder[]; total: number }> {
-  const res = await api.get('/fuel-admin/inbox');
+  const res = await fuelAdminApi.get('/fuel-admin/inbox');
   return res.data;
 }
 
@@ -841,7 +861,7 @@ export async function fuelAdminAction(params: {
   rejection_comment?: string;
   admin_comment?: string;
 }) {
-  const res = await api.post('/fuel-admin/action', params);
+  const res = await fuelAdminApi.post('/fuel-admin/action', params);
   return res.data;
 }
 
@@ -850,33 +870,33 @@ export async function fetchFuelAdminHistory(status?: string, limit = 50, offset 
   if (status && status !== "all") params.append("status", status);
   params.append("limit", limit.toString());
   params.append("offset", offset.toString());
-  const res = await api.get(`/fuel-admin/history?${params.toString()}`);
+  const res = await fuelAdminApi.get(`/fuel-admin/history?${params.toString()}`);
   return res.data;
 }
 
 export async function fetchFuelAdminBankAccounts(): Promise<{ accounts: FuelAdminBankAccount[] }> {
-  const res = await api.get('/fuel-admin/bank-accounts');
+  const res = await fuelAdminApi.get('/fuel-admin/bank-accounts');
   return res.data;
 }
 
 export async function createFuelAdminBankAccount(payload: Partial<FuelAdminBankAccount>) {
-  const res = await api.post('/fuel-admin/bank-accounts', payload);
+  const res = await fuelAdminApi.post('/fuel-admin/bank-accounts', payload);
   return res.data;
 }
 
 export async function updateFuelAdminBankAccount(id: string, payload: Partial<FuelAdminBankAccount>) {
-  const res = await api.put(`/fuel-admin/bank-accounts/${id}`, payload);
+  const res = await fuelAdminApi.put(`/fuel-admin/bank-accounts/${id}`, payload);
   return res.data;
 }
 
 export async function deleteFuelAdminBankAccount(id: string) {
-  const res = await api.delete(`/fuel-admin/bank-accounts/${id}`);
+  const res = await fuelAdminApi.delete(`/fuel-admin/bank-accounts/${id}`);
   return res.data;
 }
 
 export async function fetchFuelAdminChat(orderId: string): Promise<{ messages: FuelChatMessage[] }> {
   try {
-    const res = await api.get(`/fuel-admin/chat/${orderId}`);
+    const res = await fuelAdminApi.get(`/fuel-admin/chat/${orderId}`);
     return res.data;
   } catch {
     return { messages: [] };
@@ -884,28 +904,28 @@ export async function fetchFuelAdminChat(orderId: string): Promise<{ messages: F
 }
 
 export async function sendFuelAdminChatMessage(orderId: string, message?: string, imageUrl?: string) {
-  const res = await api.post(`/fuel-admin/chat/${orderId}`, { message, image_url: imageUrl });
+  const res = await fuelAdminApi.post(`/fuel-admin/chat/${orderId}`, { message, image_url: imageUrl });
   return res.data;
 }
 
 // --- Fuel Admin: Station Management ---
 
 export async function fetchFuelAdminStations(): Promise<FuelStation[]> {
-  const res = await api.get('/fuel-admin/stations');
+  const res = await fuelAdminApi.get('/fuel-admin/stations');
   return res.data.stations || [];
 }
 
 export async function createFuelAdminStation(payload: { name: string; discount_percent: number; is_active?: boolean; requires_dispenser?: boolean; display_order?: number }) {
-  const res = await api.post('/fuel-admin/stations', payload);
+  const res = await fuelAdminApi.post('/fuel-admin/stations', payload);
   return res.data as FuelStation;
 }
 
 export async function updateFuelAdminStation(id: string, payload: Partial<{ name: string; discount_percent: number; is_active: boolean; requires_dispenser: boolean; display_order: number }>) {
-  const res = await api.put(`/fuel-admin/stations/${id}`, payload);
+  const res = await fuelAdminApi.put(`/fuel-admin/stations/${id}`, payload);
   return res.data as FuelStation;
 }
 
 export async function deleteFuelAdminStation(id: string) {
-  const res = await api.delete(`/fuel-admin/stations/${id}`);
+  const res = await fuelAdminApi.delete(`/fuel-admin/stations/${id}`);
   return res.data;
 }
