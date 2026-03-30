@@ -3396,7 +3396,7 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
         "final_amount": calc["final_amount"],
         "payment_receipt_url": payload.payment_receipt_url,
         "admin_bank_id": payload.admin_bank_id,
-        "status": "pending_payment",
+        "status": "pending",
         "created_at": now_utc,
         "updated_at": now_utc,
     }
@@ -3465,7 +3465,7 @@ async def fuel_active_orders(user=Depends(get_authenticated_user)):
     """Get user's active (non-terminal) fuel orders."""
     client = get_supabase()
     res = client.table("fuel_orders").select("*").eq("user_id", user.id).in_(
-        "status", ["pending_payment", "paid", "in_progress", "fueling_complete"]
+        "status", ["pending_payment", "pending", "paid", "in_progress", "fueling_complete", "approved"]
     ).order("created_at", desc=True).execute()
 
     # Also include recently completed/rejected (last 24h)
@@ -3499,6 +3499,8 @@ async def fuel_upload_pump_photo(payload: FuelPumpPhotoRequest, user=Depends(get
 
     client.table("fuel_orders").update({
         "pump_photo_url": payload.pump_photo_url,
+        "status": "completed",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", payload.order_id).execute()
 
@@ -3597,7 +3599,7 @@ async def fuel_admin_inbox(user=Depends(get_fuel_admin_auth)):
 
     client = get_supabase()
     res = client.table("fuel_orders").select("*").in_(
-        "status", ["pending_payment", "paid", "in_progress", "fueling_complete"]
+        "status", ["pending_payment", "pending", "paid", "in_progress", "fueling_complete", "approved"]
     ).order("created_at").execute()
 
     orders = [FuelOrderItem(**o) for o in (res.data or [])]
@@ -3612,7 +3614,7 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
     if user.id not in fuel_admin_ids:
         raise HTTPException(status_code=403, detail="Fuel admin access required")
 
-    valid_statuses = ["paid", "in_progress", "fueling_complete", "completed", "rejected"]
+    valid_statuses = ["approved", "completed", "rejected", "paid", "in_progress", "fueling_complete"]
     if payload.status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status: {payload.status}")
 
@@ -3630,6 +3632,8 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
     if payload.status == "completed":
         update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
         update_data["completed_by_admin"] = user.id
+    if payload.status == "approved" and payload.approval_image_url:
+        update_data["approval_image_url"] = payload.approval_image_url
     if payload.status == "rejected" and payload.rejection_comment:
         update_data["rejection_comment"] = payload.rejection_comment
     if payload.admin_comment:
@@ -3642,7 +3646,8 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
     invoice = order.get("invoice")
 
     status_messages = {
-        "paid": "✅ Таны төлбөр баталгаажлаа. Түлш нийлүүлэлт эхлэхийг хүлээнэ үү.",
+        "approved": "✅ Таны захиалга зөвшөөрөгдлөө! Түлш авсны дараа колонкны зургийг оруулна уу.",
+        "paid": "✅ Таны төлбөр баталгаажлаа.",
         "in_progress": "⛽ Таны түлш нийлүүлэлт эхэллээ!",
         "fueling_complete": "✅ Цэнэглэлт дууслаа. Колонкны зургийг оруулна уу.",
         "completed": "🎉 Таны түлшний захиалга амжилттай дууслаа!",
@@ -3798,9 +3803,9 @@ async def fuel_admin_chat_send(order_id: str, payload: FuelChatMessageRequest, u
         if order_user_id:
             send_user_notification(
                 order_user_id,
-                f"💬 <b>Түлшний захиалгын чат</b>\n\n"
+                f"💬 <b>Шинэ мессеж</b>\n\n"
                 f"📋 Invoice: <code>{invoice}</code>\n"
-                f"Админ танд мессеж илгээлээ."
+                f"Танд шинэ мессеж ирлээ."
             )
 
     return {"ok": True, "message": FuelChatMessage(**res.data[0])}

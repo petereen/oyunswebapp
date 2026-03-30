@@ -6,27 +6,31 @@ import { FuelChat } from "./FuelChat";
 const STATUS_OPTIONS = [
   { value: "all", label: "Бүгд" },
   { value: "completed", label: "Дууссан" },
+  { value: "approved", label: "Зөвшөөрсөн" },
+  { value: "pending", label: "Хүлээгдэж байна" },
   { value: "rejected", label: "Цуцалсан" },
   { value: "cancelled", label: "Цуцалсан (хэрэглэгч)" },
-  { value: "in_progress", label: "Цэнэглэж байна" },
-  { value: "paid", label: "Төлсөн" },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700",
   pending_payment: "bg-yellow-100 text-yellow-700",
-  paid: "bg-blue-100 text-blue-700",
-  in_progress: "bg-orange-100 text-orange-700",
-  fueling_complete: "bg-emerald-100 text-emerald-700",
-  completed: "bg-green-100 text-green-700",
+  approved: "bg-green-100 text-green-700",
+  paid: "bg-green-100 text-green-700",
+  in_progress: "bg-green-100 text-green-700",
+  fueling_complete: "bg-green-100 text-green-700",
+  completed: "bg-blue-100 text-blue-700",
   rejected: "bg-red-100 text-red-700",
   cancelled: "bg-slate-100 text-slate-700",
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  pending_payment: "Төлбөр хүлээгдэж",
-  paid: "Төлсөн",
-  in_progress: "Цэнэглэж байна",
-  fueling_complete: "Дууссан (зураг хүлээж)",
+  pending: "Хүлээгдэж байна",
+  pending_payment: "Хүлээгдэж байна",
+  approved: "Зөвшөөрсөн",
+  paid: "Зөвшөөрсөн",
+  in_progress: "Зөвшөөрсөн",
+  fueling_complete: "Зөвшөөрсөн",
   completed: "Дууссан",
   rejected: "Цуцалсан",
   cancelled: "Цуцалсан",

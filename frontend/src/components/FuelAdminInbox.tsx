@@ -11,10 +11,14 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Upload,
+  Loader2,
+  Camera,
 } from "lucide-react";
 import {
   fetchFuelAdminInbox,
   fuelAdminAction,
+  requestPresign,
   FuelOrder,
 } from "../api";
 import { FuelChat } from "./FuelChat";
@@ -35,21 +39,25 @@ function getTimeAgo(dateStr: string): string {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending_payment: "Төлбөр хүлээгдэж буй",
-  paid: "Төлбөр илгээсэн",
-  in_progress: "Цэнэглэж байна",
-  fueling_complete: "Цэнэглэлт дууссан",
+  pending: "Хүлээгдэж байна",
+  pending_payment: "Хүлээгдэж байна",
+  approved: "Зөвшөөрсөн",
+  paid: "Зөвшөөрсөн",
+  in_progress: "Зөвшөөрсөн",
+  fueling_complete: "Зөвшөөрсөн",
   completed: "Дууссан",
   rejected: "Цуцалсан",
   cancelled: "Цуцалсан",
 };
 
 const STATUS_COLORS: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700",
   pending_payment: "bg-yellow-100 text-yellow-700",
-  paid: "bg-blue-100 text-blue-700",
-  in_progress: "bg-orange-100 text-orange-700",
-  fueling_complete: "bg-emerald-100 text-emerald-700",
-  completed: "bg-green-100 text-green-700",
+  approved: "bg-green-100 text-green-700",
+  paid: "bg-green-100 text-green-700",
+  in_progress: "bg-green-100 text-green-700",
+  fueling_complete: "bg-green-100 text-green-700",
+  completed: "bg-blue-100 text-blue-700",
   rejected: "bg-red-100 text-red-700",
   cancelled: "bg-slate-100 text-slate-700",
 };
@@ -62,6 +70,8 @@ export function FuelAdminInbox() {
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [approvalImageUrl, setApprovalImageUrl] = useState<Record<string, string>>({});
+  const [approvalUploading, setApprovalUploading] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -83,7 +93,12 @@ export function FuelAdminInbox() {
   const handleAction = async (orderId: string, status: string, rejectionComment?: string) => {
     setActionLoading(orderId);
     try {
-      await fuelAdminAction({ order_id: orderId, status, rejection_comment: rejectionComment });
+      await fuelAdminAction({
+        order_id: orderId,
+        status,
+        rejection_comment: rejectionComment,
+        approval_image_url: status === "approved" ? approvalImageUrl[orderId] : undefined,
+      });
       await load();
     } catch {
       /* ignore */
@@ -91,6 +106,24 @@ export function FuelAdminInbox() {
     setActionLoading(null);
     setRejectModal(null);
     setRejectComment("");
+  };
+
+  const handleApprovalImageUpload = async (orderId: string, file: File) => {
+    setApprovalUploading(orderId);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `fuel/approval/${orderId}_${Date.now()}.${ext}`;
+      const presigned = await requestPresign({ bucket: "bills", path });
+      await fetch(presigned.upload_url, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      setApprovalImageUrl((prev) => ({ ...prev, [orderId]: presigned.public_url }));
+    } catch {
+      /* ignore */
+    }
+    setApprovalUploading(null);
   };
 
   return (
@@ -162,7 +195,7 @@ export function FuelAdminInbox() {
                     <span className="font-medium text-dark-800 dark:text-ivory-200">{order.user_id}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400">Станц:</span>{" "}
+                    <span className="text-slate-400">ШТС(АЗС):</span>{" "}
                     <span className="font-medium text-dark-800 dark:text-ivory-200">{order.station_name}</span>
                   </div>
                   {order.dispenser_number && (
@@ -251,28 +284,13 @@ export function FuelAdminInbox() {
                 {/* Chat */}
                 <FuelChat orderId={order.id} isAdmin={true} />
 
-                {/* Barcode reminder for non-dispenser stations */}
-                {!order.dispenser_number && ["paid", "in_progress"].includes(order.status) && (
-                  <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl flex items-start gap-2">
-                    <span className="text-base">📱</span>
-                    <div>
-                      <div className="text-xs font-semibold text-purple-700 dark:text-purple-400">
-                        Штрих-код / QR илгээх шаардлагатай
-                      </div>
-                      <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">
-                        Энэ станцад колонк дугаар байхгүй. Чатаар штрих-код эсвэл QR зургийг хэрэглэгчид илгээнэ үү.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {/* Dispenser number highlight for admin */}
-                {order.dispenser_number && ["paid", "in_progress"].includes(order.status) && (
+                {order.dispenser_number && ["pending", "pending_payment", "approved", "paid", "in_progress"].includes(order.status) && (
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-2">
                     <span className="text-2xl">🔢</span>
                     <div>
                       <div className="text-sm font-bold text-blue-700 dark:text-blue-400">
-                        Колонка №{order.dispenser_number} асаах
+                        Колонка №{order.dispenser_number}
                       </div>
                       <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
                         {order.station_name} — колонкыг асаана уу
@@ -281,45 +299,82 @@ export function FuelAdminInbox() {
                   </div>
                 )}
 
-                {/* Action buttons based on status */}
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {order.status === "paid" && (
-                    <>
-                      <button
-                        onClick={() => handleAction(order.id, "in_progress")}
-                        disabled={actionLoading === order.id}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-orange-500 text-white text-xs font-semibold rounded-xl hover:bg-orange-600 transition disabled:opacity-50"
-                      >
-                        <Play className="w-3 h-3" /> Цэнэглэж эхлэх
-                      </button>
-                      <button
-                        onClick={() => setRejectModal(order.id)}
-                        disabled={actionLoading === order.id}
-                        className="flex items-center justify-center gap-1 px-3 py-2 bg-red-500 text-white text-xs font-semibold rounded-xl hover:bg-red-600 transition disabled:opacity-50"
-                      >
-                        <XCircle className="w-3 h-3" /> Цуцлах
-                      </button>
-                    </>
-                  )}
-                  {order.status === "in_progress" && (
+                {/* QR/Barcode upload for non-dispenser stations (before approve) */}
+                {!order.dispenser_number && ["pending", "pending_payment"].includes(order.status) && (
+                  <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📱</span>
+                      <span className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+                        QR/Штрих-код зураг оруулах (зөвшөөрөхийн өмнө)
+                      </span>
+                    </div>
+                    <label className="block cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleApprovalImageUpload(order.id, file);
+                        }}
+                      />
+                      <div className={`border-2 border-dashed rounded-lg p-3 text-center transition ${
+                        approvalImageUrl[order.id]
+                          ? "border-green-400 bg-green-50 dark:bg-green-900/10"
+                          : "border-purple-300 dark:border-purple-700 hover:border-purple-400"
+                      }`}>
+                        {approvalUploading === order.id ? (
+                          <Loader2 className="w-5 h-5 text-purple-500 animate-spin mx-auto" />
+                        ) : approvalImageUrl[order.id] ? (
+                          <div className="space-y-1">
+                            <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
+                            <img src={approvalImageUrl[order.id]} alt="qr" className="max-h-20 mx-auto rounded" />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setApprovalImageUrl((prev) => {
+                                  const next = { ...prev };
+                                  delete next[order.id];
+                                  return next;
+                                });
+                              }}
+                              className="text-[10px] text-red-500 hover:underline"
+                            >
+                              Устгах
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <Camera className="w-5 h-5 text-purple-400 mx-auto" />
+                            <div className="text-[10px] text-purple-600 dark:text-purple-400">QR/Штрих-код зураг</div>
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Approved - waiting for user completion */}
+                {["approved", "paid", "in_progress", "fueling_complete"].includes(order.status) && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="text-xs text-green-700 dark:text-green-400 font-medium">
+                      Зөвшөөрсөн — хэрэглэгч колонкны зураг оруулахыг хүлээж байна
+                    </span>
+                  </div>
+                )}
+
+                {/* Action buttons: Approve + Reject for pending orders */}
+                {["pending", "pending_payment"].includes(order.status) && (
+                  <div className="flex flex-wrap gap-2 pt-2">
                     <button
-                      onClick={() => handleAction(order.id, "fueling_complete")}
-                      disabled={actionLoading === order.id}
-                      className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-emerald-500 text-white text-xs font-semibold rounded-xl hover:bg-emerald-600 transition disabled:opacity-50"
-                    >
-                      <Fuel className="w-3 h-3" /> Цэнэглэлт дууссан
-                    </button>
-                  )}
-                  {order.status === "fueling_complete" && (
-                    <button
-                      onClick={() => handleAction(order.id, "completed")}
+                      onClick={() => handleAction(order.id, "approved")}
                       disabled={actionLoading === order.id}
                       className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-500 text-white text-xs font-semibold rounded-xl hover:bg-green-600 transition disabled:opacity-50"
                     >
-                      <CheckCircle2 className="w-3 h-3" /> Дуусгах
+                      <CheckCircle2 className="w-3 h-3" /> Зөвшөөрөх
                     </button>
-                  )}
-                  {order.status === "pending_payment" && (
                     <button
                       onClick={() => setRejectModal(order.id)}
                       disabled={actionLoading === order.id}
@@ -327,8 +382,8 @@ export function FuelAdminInbox() {
                     >
                       <XCircle className="w-3 h-3" /> Цуцлах
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -11,6 +11,10 @@ import {
   Navigation,
   Camera,
   X,
+  Clock,
+  History,
+  Plus,
+  ChevronRight,
 } from "lucide-react";
 import {
   FUEL_STATIONS_FALLBACK,
@@ -21,6 +25,7 @@ import {
   requestPresign,
   uploadFuelPumpPhoto,
   fetchActiveFuelOrders,
+  fetchFuelOrders,
   fetchFuelShiftStatus,
   FuelAdminBankAccount,
   FuelCalculation,
@@ -35,73 +40,95 @@ interface Props {
   onSuccess: () => void;
 }
 
-export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
-  // Steps:
-  // 0: Select gas station
-  // 1: Geolocation
-  // 2: Liters & price
-  // 3: Payment method (RUB/MNT)
-  // 4: Admin bank details & invoice
-  // 5: Upload payment receipt → submit
-  // 6: Waiting / status tracker + chat
-  // 7: Upload pump photo → done
+type FuelView = "menu" | "history" | "new" | "tracking";
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Хүлээгдэж байна",
+  pending_payment: "Хүлээгдэж байна",
+  approved: "Зөвшөөрсөн",
+  paid: "Зөвшөөрсөн",
+  in_progress: "Зөвшөөрсөн",
+  fueling_complete: "Зөвшөөрсөн",
+  completed: "Дууссан",
+  rejected: "Цуцалсан",
+  cancelled: "Цуцалсан",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  pending_payment: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  approved: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  paid: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  in_progress: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  fueling_complete: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  completed: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  cancelled: "bg-slate-100 text-slate-600 dark:bg-slate-900/30 dark:text-slate-400",
+};
+
+function isActiveStatus(status: string) {
+  return ["pending", "pending_payment", "approved", "paid", "in_progress", "fueling_complete"].includes(status);
+}
+
+export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
+  const [view, setView] = useState<FuelView>("menu");
   const [step, setStep] = useState(0);
 
   // Dynamic stations
   const [stations, setStations] = useState<FuelStation[]>([]);
   const [stationsLoading, setStationsLoading] = useState(true);
 
-  // Step 0: Station
+  // Station selection
   const [stationName, setStationName] = useState("");
   const [discountPercent, setDiscountPercent] = useState(13);
   const [requiresDispenser, setRequiresDispenser] = useState(false);
-
-  // Dispenser number (for stations that require it)
   const [dispenserNumber, setDispenserNumber] = useState("");
 
-  // Step 1: Location
+  // Location
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [locationText, setLocationText] = useState("");
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState("");
 
-  // Step 2: Fuel details
+  // Fuel details
   const [liters, setLiters] = useState("");
   const [pricePerLiter, setPricePerLiter] = useState("");
 
-  // Step 3: Payment
+  // Payment
   const [paymentCurrency, setPaymentCurrency] = useState<"RUB" | "MNT" | null>(null);
 
-  // Step 4: Admin bank
+  // Admin bank
   const [adminBanks, setAdminBanks] = useState<FuelAdminBankAccount[]>([]);
   const [selectedBank, setSelectedBank] = useState<FuelAdminBankAccount | null>(null);
   const [invoiceId, setInvoiceId] = useState("");
 
-  // Step 5: Receipt
+  // Receipt
   const [receiptUrl, setReceiptUrl] = useState("");
   const [uploading, setUploading] = useState(false);
 
-  // Step 6: Active order tracking
+  // Active order tracking
   const [activeOrder, setActiveOrder] = useState<FuelOrder | null>(null);
   const [orderPolling, setOrderPolling] = useState(false);
 
-  // Step 7: Pump photo
+  // Pump photo (completion)
   const [pumpPhotoUrl, setPumpPhotoUrl] = useState("");
   const [pumpUploading, setPumpUploading] = useState(false);
+
+  // History
+  const [historyOrders, setHistoryOrders] = useState<FuelOrder[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // General
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
-  const [successInvoice, setSuccessInvoice] = useState("");
 
   // Shift status
   const [shiftActive, setShiftActive] = useState(true);
   const [shiftLoading, setShiftLoading] = useState(true);
 
-  // Load admin banks, stations, and shift status on mount
+  // Load stations, banks, shift on mount
   useEffect(() => {
     fetchFuelAdminBanks()
       .then((res) => setAdminBanks(res.accounts || []))
@@ -116,7 +143,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
       .finally(() => setShiftLoading(false));
   }, []);
 
-  // Generate invoice ID (Moscow timezone)
+  // Generate invoice ID
   const generateInvoiceId = useCallback(() => {
     const now = new Date();
     const moscowOffset = 3 * 60;
@@ -166,7 +193,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     };
   }, [liters, pricePerLiter, discountPercent, paymentCurrency, sellRate, stationName]);
 
-  // Filtered banks by selected currency
+  // Filtered banks by currency
   const filteredBanks = useMemo(() => {
     if (!paymentCurrency) return adminBanks;
     return adminBanks.filter((b) => b.currency === paymentCurrency);
@@ -253,13 +280,13 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
         payment_receipt_url: receiptUrl,
         admin_bank_id: selectedBank?.id,
       });
-      setSuccessInvoice(res.invoice);
       setActiveOrder({
         id: res.id,
         invoice: res.invoice,
-        status: "pending_payment",
+        status: "pending",
         user_id: 0,
         station_name: stationName,
+        dispenser_number: dispenserNumber.trim() || undefined,
         liters: calculation.liters,
         station_price_per_liter: calculation.station_price_per_liter,
         discount_percent: calculation.discount_percent,
@@ -271,7 +298,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
         final_amount: calculation.final_amount,
         created_at: res.created_at,
       } as FuelOrder);
-      setStep(6);
+      setView("tracking");
       setOrderPolling(true);
     } catch (err: any) {
       setError(err.response?.data?.detail || "Захиалга үүсгэхэд алдаа гарлаа");
@@ -298,14 +325,15 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     return () => clearInterval(interval);
   }, [orderPolling, activeOrder]);
 
-  // Handle pump photo upload & submit
+  // Handle pump photo upload & complete order
   const handlePumpPhotoSubmit = async () => {
     if (!pumpPhotoUrl || !activeOrder) return;
     setLoading(true);
     setError("");
     try {
       await uploadFuelPumpPhoto(activeOrder.id, pumpPhotoUrl);
-      setStep(7);
+      setActiveOrder({ ...activeOrder, status: "completed", pump_photo_url: pumpPhotoUrl });
+      setOrderPolling(false);
     } catch {
       setError("Зураг илгээхэд алдаа гарлаа");
     } finally {
@@ -313,8 +341,27 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     }
   };
 
-  // ---- Render helpers ----
+  // Load user history
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetchFuelOrders();
+      setHistoryOrders(res.orders || []);
+    } catch { /* ignore */ }
+    setHistoryLoading(false);
+  };
 
+  // Open order in tracking view
+  const openOrderTracking = (order: FuelOrder) => {
+    setActiveOrder(order);
+    setPumpPhotoUrl("");
+    setView("tracking");
+    if (isActiveStatus(order.status)) {
+      setOrderPolling(true);
+    }
+  };
+
+  // ---- Render helpers ----
   const renderBack = (label: string, onBackFn?: () => void) => (
     <div className="flex items-center gap-2 mb-5">
       <button
@@ -330,11 +377,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     </div>
   );
 
-  // ============== STEP 0: Select Station ==============
-  if (step === 0) {
+  // ============== VIEW: MENU ==============
+  if (view === "menu") {
     return (
       <div className="animate-slideUp">
-        {renderBack("АЗС сонгох", onBack)}
+        {renderBack("Түлш", onBack)}
         {(stationsLoading || shiftLoading) ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
@@ -356,6 +403,349 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             </button>
           </div>
         ) : (
+          <div className="space-y-3">
+            <button
+              onClick={() => { setView("new"); setStep(0); }}
+              className="w-full flex items-center gap-4 p-5 bg-white dark:bg-dark-800 rounded-2xl border border-silver/60 dark:border-dark-600 hover:border-amber-400 dark:hover:border-amber-500 active:scale-[0.98] transition-all"
+            >
+              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
+                <Plus className="w-6 h-6 text-amber-600" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="font-bold text-dark-800 dark:text-ivory-200">Шинэ захиалга үүсгэх</div>
+                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">Түлшний хүсэлт илгээх</div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-dark-400" />
+            </button>
+
+            <button
+              onClick={() => { setView("history"); loadHistory(); }}
+              className="w-full flex items-center gap-4 p-5 bg-white dark:bg-dark-800 rounded-2xl border border-silver/60 dark:border-dark-600 hover:border-amber-400 dark:hover:border-amber-500 active:scale-[0.98] transition-all"
+            >
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                <History className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1 text-left">
+                <div className="font-bold text-dark-800 dark:text-ivory-200">Захиалгын түүх</div>
+                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">Идэвхтэй болон өмнөх захиалгууд</div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-dark-400" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ============== VIEW: HISTORY ==============
+  if (view === "history") {
+    const activeOrders = historyOrders.filter((o) => isActiveStatus(o.status));
+    const pastOrders = historyOrders.filter((o) => !isActiveStatus(o.status));
+
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Захиалгын түүх", () => setView("menu"))}
+
+        {historyLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
+          </div>
+        ) : historyOrders.length === 0 ? (
+          <div className="text-center py-12 space-y-3">
+            <History className="w-10 h-10 text-dark-300 dark:text-ivory-500 mx-auto" />
+            <p className="text-sm text-dark-500 dark:text-ivory-400">Захиалгын түүх байхгүй</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {activeOrders.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                  Идэвхтэй захиалгууд
+                </div>
+                {activeOrders.map((order) => (
+                  <button
+                    key={order.id}
+                    onClick={() => openOrderTracking(order)}
+                    className="w-full p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-200 dark:border-amber-800 text-left hover:border-amber-400 active:scale-[0.98] transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[order.status] || ""}`}>
+                        {STATUS_LABELS[order.status] || order.status}
+                      </span>
+                      <span className="text-[10px] text-dark-400">#{order.invoice}</span>
+                    </div>
+                    <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                      {order.station_name} • {order.liters}л
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-xs text-dark-500 dark:text-ivory-400">
+                        {order.final_amount.toLocaleString()} {order.payment_currency}
+                      </span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                        Үргэлжлүүлэх <ChevronRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {pastOrders.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-dark-500 dark:text-ivory-400 uppercase tracking-wide">
+                  Өмнөх захиалгууд
+                </div>
+                {pastOrders.map((order) => (
+                  <button
+                    key={order.id}
+                    onClick={() => openOrderTracking(order)}
+                    className="w-full p-3 bg-white dark:bg-dark-800 rounded-2xl border border-silver/60 dark:border-dark-600 text-left"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[order.status] || ""}`}>
+                        {STATUS_LABELS[order.status] || order.status}
+                      </span>
+                      <span className="text-[10px] text-dark-400">
+                        {new Date(order.created_at).toLocaleDateString("mn-MN")}
+                      </span>
+                    </div>
+                    <div className="text-xs text-dark-800 dark:text-ivory-200">
+                      {order.station_name} • {order.liters}л • {order.final_amount.toLocaleString()} {order.payment_currency}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ============== VIEW: TRACKING ==============
+  if (view === "tracking" && activeOrder) {
+    const isApproved = ["approved", "paid", "in_progress", "fueling_complete"].includes(activeOrder.status);
+    const isPending = ["pending", "pending_payment"].includes(activeOrder.status);
+    const isCompleted = activeOrder.status === "completed";
+    const isRejected = activeOrder.status === "rejected";
+    const isCancelled = activeOrder.status === "cancelled";
+    const isTerminal = isCompleted || isRejected || isCancelled;
+
+    const statusSteps = [
+      { key: "pending", label: "Хүлээгдэж байна", emoji: "⏳", active: isPending, done: isApproved || isCompleted },
+      { key: "approved", label: "Зөвшөөрсөн", emoji: "✅", active: isApproved, done: isCompleted },
+      { key: "completed", label: "Дууссан", emoji: "🎉", active: isCompleted, done: false },
+    ];
+
+    return (
+      <div className="animate-slideUp">
+        {renderBack("Захиалгын явц", () => {
+          setOrderPolling(false);
+          setView("menu");
+        })}
+        <div className="space-y-4">
+          {/* Order info */}
+          <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600">
+            <div className="text-xs text-dark-500 dark:text-ivory-400 mb-1">
+              Invoice: <code className="font-mono">{activeOrder.invoice}</code>
+            </div>
+            <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200 mb-3">
+              {activeOrder.station_name} — {activeOrder.liters}л — {activeOrder.final_amount.toLocaleString()} {activeOrder.payment_currency}
+            </div>
+
+            {isRejected ? (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                <div className="text-red-600 dark:text-red-400 font-semibold text-sm">❌ Цуцлагдсан</div>
+                {activeOrder.rejection_comment && (
+                  <div className="text-xs text-red-500 mt-1">{activeOrder.rejection_comment}</div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {statusSteps.map((s) => (
+                  <div
+                    key={s.key}
+                    className={`flex items-center gap-3 p-2 rounded-lg transition ${
+                      s.active
+                        ? "bg-amber-50 dark:bg-amber-900/20"
+                        : s.done
+                        ? "opacity-60"
+                        : "opacity-30"
+                    }`}
+                  >
+                    <span className="text-base">{s.done ? "✅" : s.emoji}</span>
+                    <span
+                      className={`text-xs ${
+                        s.active ? "font-bold text-amber-700 dark:text-amber-400" : "text-dark-600 dark:text-ivory-400"
+                      }`}
+                    >
+                      {s.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Dispenser number display */}
+          {activeOrder.dispenser_number && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-800 flex items-center gap-3">
+              <span className="text-2xl">🔢</span>
+              <div>
+                <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">
+                  Колонка №{activeOrder.dispenser_number}
+                </div>
+                <div className="text-xs text-blue-600 dark:text-blue-400">
+                  {isPending ? "Админ зөвшөөрсний дараа колонкыг асаана" : "Колонк асаагдсан байна"}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Approval image (QR/barcode) from admin */}
+          {isApproved && activeOrder.approval_image_url && (
+            <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-200 dark:border-green-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                  Админ зөвшөөрсөн — QR/Штрих-код
+                </span>
+              </div>
+              <img
+                src={activeOrder.approval_image_url}
+                alt="QR/Barcode"
+                className="max-h-48 mx-auto rounded-lg border border-green-300 dark:border-green-700"
+              />
+            </div>
+          )}
+
+          {/* Waiting notice for pending */}
+          {isPending && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/10 p-4 rounded-2xl border border-yellow-200 dark:border-yellow-800">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="w-4 h-4 text-yellow-600" />
+                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                  Админы зөвшөөрөл хүлээгдэж байна
+                </span>
+              </div>
+              <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                Таны хүсэлтийг админ шалгаж зөвшөөрөх болно. Хүлээнэ үү.
+              </p>
+            </div>
+          )}
+
+          {/* Approved notice without image */}
+          {isApproved && !activeOrder.approval_image_url && (
+            <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                  Захиалга зөвшөөрөгдлөө!
+                </span>
+              </div>
+              <p className="text-xs text-green-700 dark:text-green-400">
+                Түлш авсны дараа колонк дээрх литрийн дүнг зурагт оруулна уу.
+              </p>
+            </div>
+          )}
+
+          {/* Completion photo upload - show when order is approved */}
+          {isApproved && (
+            <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
+              <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                📸 Колонкны зураг оруулж хаах
+              </div>
+              <p className="text-xs text-dark-500 dark:text-ivory-400">
+                Түлш авсны дараа колонк дээрх литрийн тоог зурагт харуулна уу. Зураг илгээснээр захиалга хаагдана.
+              </p>
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileUpload(file, setPumpPhotoUrl, setPumpUploading, "pump");
+                  }}
+                />
+                <div
+                  className={`border-2 border-dashed rounded-xl p-4 text-center ${
+                    pumpPhotoUrl
+                      ? "border-green-400 bg-green-50 dark:bg-green-900/10"
+                      : "border-silver/60 dark:border-dark-600 hover:border-amber-400"
+                  }`}
+                >
+                  {pumpUploading ? (
+                    <Loader2 className="w-6 h-6 text-amber-500 animate-spin mx-auto" />
+                  ) : pumpPhotoUrl ? (
+                    <div className="space-y-2">
+                      <CheckCircle2 className="w-6 h-6 text-green-500 mx-auto" />
+                      <img src={pumpPhotoUrl} alt="pump" className="max-h-24 mx-auto rounded-lg" />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPumpPhotoUrl(""); }}
+                        className="flex items-center gap-1 mx-auto px-3 py-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 transition"
+                      >
+                        <X className="w-3 h-3" /> Устгах
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <Camera className="w-6 h-6 text-dark-400 mx-auto" />
+                      <div className="text-xs text-dark-500 dark:text-ivory-400">Колонкны зураг оруулах</div>
+                    </div>
+                  )}
+                </div>
+              </label>
+              {pumpPhotoUrl && (
+                <button
+                  onClick={handlePumpPhotoSubmit}
+                  disabled={loading}
+                  className="w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {loading ? "Илгээж байна..." : "Зураг илгээж захиалга хаах"}
+                </button>
+              )}
+              {error && (
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-xs text-red-600">{error}</div>
+              )}
+            </div>
+          )}
+
+          {/* Completed success */}
+          {isCompleted && (
+            <div className="bg-green-50 dark:bg-green-900/10 p-5 rounded-2xl border border-green-200 dark:border-green-800 text-center space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto" />
+              <div className="font-bold text-green-700 dark:text-green-400">Захиалга амжилттай дууслаа!</div>
+            </div>
+          )}
+
+          {/* Chat - for support/questions */}
+          {!isTerminal && (
+            <FuelChat orderId={activeOrder.id} isAdmin={false} />
+          )}
+
+          {/* Done / Back */}
+          {isTerminal && (
+            <button
+              onClick={onSuccess}
+              className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
+            >
+              Буцах
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============== VIEW: NEW ORDER ==============
+  // Step 0: Select Station
+  if (view === "new" && step === 0) {
+    return (
+      <div className="animate-slideUp">
+        {renderBack("АЗС сонгох", () => setView("menu"))}
         <div className="grid grid-cols-2 gap-3">
           {stations.map((s) => (
             <button
@@ -381,13 +771,12 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             </button>
           ))}
         </div>
-        )}
       </div>
     );
   }
 
-  // ============== STEP 1: Geolocation ==============
-  if (step === 1) {
+  // Step 1: Geolocation + Dispenser
+  if (view === "new" && step === 1) {
     const hasLocation = (latitude !== null && longitude !== null) || locationText.trim().length > 0;
     const dispenserValid = !requiresDispenser || dispenserNumber.trim().length > 0;
     return (
@@ -404,17 +793,12 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             </p>
           </div>
 
-          {/* GPS button */}
           <button
             onClick={requestGeolocation}
             disabled={geoLoading}
             className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition disabled:opacity-50"
           >
-            {geoLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Navigation className="w-4 h-4" />
-            )}
+            {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
             {geoLoading ? "Тодорхойлж байна..." : "📍 Байршил тодорхойлох"}
           </button>
 
@@ -428,16 +812,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
           )}
 
           {geoError && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-xs text-red-600 dark:text-red-400">
-              {geoError}
-            </div>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-xs text-red-600 dark:text-red-400">{geoError}</div>
           )}
 
-          {/* Manual fallback */}
           <div>
-            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">
-              Эсвэл хаяг гараар оруулах:
-            </label>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">Эсвэл хаяг гараар оруулах:</label>
             <input
               type="text"
               value={locationText}
@@ -447,17 +826,14 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             />
           </div>
 
-          {/* Dispenser number (for stations that require it) */}
           {requiresDispenser && (
             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-base">🔢</span>
-                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                  Колонкны дугаар
-                </span>
+                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">Колонкны дугаар</span>
               </div>
               <p className="text-xs text-dark-500 dark:text-ivory-400">
-                {stationName} станцад колонканы дугаар зайлшгүй шаардлагатай. Админ колонкыг асааж өгөх болно.
+                {stationName} станцад колонканы дугаар зайлшгүй шаардлагатай.
               </p>
               <input
                 type="text"
@@ -482,8 +858,8 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     );
   }
 
-  // ============== STEP 2: Liters & Price ==============
-  if (step === 2) {
+  // Step 2: Liters & Price
+  if (view === "new" && step === 2) {
     const l = parseFloat(liters);
     const p = parseFloat(pricePerLiter);
     const validInput = l > 0 && p > 0;
@@ -496,12 +872,8 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
         {renderBack("Түлшний мэдээлэл")}
         <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-              {stationName}
-            </span>
-            <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg font-medium">
-              -{discountPercent}%
-            </span>
+            <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">{stationName}</span>
+            <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg font-medium">-{discountPercent}%</span>
           </div>
 
           <div>
@@ -518,9 +890,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
           </div>
 
           <div>
-            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">
-              ДТ үнэ (₽/литр)
-            </label>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">ДТ үнэ (₽/литр)</label>
             <div className="relative">
               <input
                 type="number"
@@ -536,35 +906,34 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             </div>
           </div>
 
-          {/* Calculation preview */}
           {validInput && (() => {
             const previewRounded = Math.ceil(previewNet / 100) * 100;
             const roundingDiff = previewRounded - previewNet;
             return (
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl space-y-1 text-xs">
-              <div className="flex justify-between text-dark-600 dark:text-ivory-400">
-                <span>{l} л × {p}₽</span>
-                <span>{previewGross.toFixed(0)}₽</span>
-              </div>
-              <div className="flex justify-between text-green-600 dark:text-green-400">
-                <span>Хөнгөлөлт (-{discountPercent}%)</span>
-                <span>-{previewDiscount.toFixed(0)}₽</span>
-              </div>
-              <div className="flex justify-between text-dark-600 dark:text-ivory-400">
-                <span>Цэвэр дүн</span>
-                <span>{previewNet.toFixed(0)}₽</span>
-              </div>
-              {roundingDiff > 0 && (
-                <div className="flex justify-between text-dark-400 dark:text-ivory-500">
-                  <span>Бүхэлд дугуйлалт (100₽)</span>
-                  <span>+{roundingDiff.toFixed(0)}₽</span>
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl space-y-1 text-xs">
+                <div className="flex justify-between text-dark-600 dark:text-ivory-400">
+                  <span>{l} л × {p}₽</span>
+                  <span>{previewGross.toFixed(0)}₽</span>
                 </div>
-              )}
-              <div className="border-t border-amber-200 dark:border-amber-800 pt-1 flex justify-between font-bold text-dark-800 dark:text-ivory-200">
-                <span>Нийт төлөх (₽)</span>
-                <span>{previewRounded.toLocaleString()}₽</span>
+                <div className="flex justify-between text-green-600 dark:text-green-400">
+                  <span>Хөнгөлөлт (-{discountPercent}%)</span>
+                  <span>-{previewDiscount.toFixed(0)}₽</span>
+                </div>
+                <div className="flex justify-between text-dark-600 dark:text-ivory-400">
+                  <span>Цэвэр дүн</span>
+                  <span>{previewNet.toFixed(0)}₽</span>
+                </div>
+                {roundingDiff > 0 && (
+                  <div className="flex justify-between text-dark-400 dark:text-ivory-500">
+                    <span>Нийт дүнг бүхэлдэх (100₽)</span>
+                    <span>+{roundingDiff.toFixed(0)}₽</span>
+                  </div>
+                )}
+                <div className="border-t border-amber-200 dark:border-amber-800 pt-1 flex justify-between font-bold text-dark-800 dark:text-ivory-200">
+                  <span>Нийт төлөх (₽)</span>
+                  <span>{previewRounded.toLocaleString()}₽</span>
+                </div>
               </div>
-            </div>
             );
           })()}
 
@@ -580,13 +949,12 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     );
   }
 
-  // ============== STEP 3: Payment Method ==============
-  if (step === 3) {
+  // Step 3: Payment Method
+  if (view === "new" && step === 3) {
     return (
       <div className="animate-slideUp">
         {renderBack("Төлбөрийн арга")}
         <div className="space-y-4">
-          {/* RUB option */}
           <button
             onClick={() => {
               setPaymentCurrency("RUB");
@@ -600,23 +968,16 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-lg">
-                ₽
-              </div>
+              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-lg">₽</div>
               <div>
-                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">
-                  Рублиэр төлөх (RUB)
-                </div>
+                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">Рублиэр төлөх (RUB)</div>
                 {calculation && (
-                  <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">
-                    {calculation.rounded_amount.toLocaleString()}₽
-                  </div>
+                  <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">{calculation.rounded_amount.toLocaleString()}₽</div>
                 )}
               </div>
             </div>
           </button>
 
-          {/* MNT option */}
           <button
             onClick={() => {
               setPaymentCurrency("MNT");
@@ -630,13 +991,9 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center text-lg">
-                ₮
-              </div>
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center text-lg">₮</div>
               <div>
-                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">
-                  Төгрөгөөр төлөх (MNT)
-                </div>
+                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">Төгрөгөөр төлөх (MNT)</div>
                 {calculation && sellRate > 0 && (
                   <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">
                     {Math.round(calculation.rounded_amount * sellRate).toLocaleString()}₮ (ханш: {sellRate})
@@ -646,14 +1003,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             </div>
           </button>
 
-          {/* RUB Warning */}
           <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold text-sm text-red-700 dark:text-red-400">
-                  🚫 АНХААРУУЛГА
-                </div>
+                <div className="font-bold text-sm text-red-700 dark:text-red-400">🚫 АНХААРУУЛГА</div>
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1 leading-relaxed">
                   Рублиэр шилжүүлэг хийхдээ <b>СООБЩЕНИЕ / ГҮЙЛГЭЭНИЙ УТГА бичих хэсгийг</b> ХООСОН үлдээнэ үү!
                 </p>
@@ -665,26 +1019,19 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     );
   }
 
-  // ============== STEP 4: Admin Bank + Invoice ==============
-  if (step === 4) {
+  // Step 4: Bank + Receipt + Submit (combined)
+  if (view === "new" && step === 4) {
     return (
       <div className="animate-slideUp">
-        {renderBack("Төлбөр хийх")}
+        {renderBack("Төлбөр хийх & Баримт")}
         <div className="space-y-4">
           {/* Invoice */}
           <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600">
             <div className="text-xs text-dark-500 dark:text-ivory-400 mb-1">Invoice дугаар</div>
             <div className="flex items-center gap-2">
               <code className="text-sm font-mono text-dark-800 dark:text-ivory-200">{invoiceId}</code>
-              <button
-                onClick={() => copyToClipboard(invoiceId, "invoice")}
-                className="p-1 hover:bg-surface-100 dark:hover:bg-dark-700 rounded"
-              >
-                {copied === "invoice" ? (
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Copy className="w-4 h-4 text-dark-400" />
-                )}
+              <button onClick={() => copyToClipboard(invoiceId, "invoice")} className="p-1 hover:bg-surface-100 dark:hover:bg-dark-700 rounded">
+                {copied === "invoice" ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-dark-400" />}
               </button>
             </div>
           </div>
@@ -704,12 +1051,6 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
                 <span>Хөнгөлөлт</span>
                 <span>-{calculation.discount_amount.toLocaleString()}₽</span>
               </div>
-              {calculation.payment_currency === "RUB" && calculation.rounded_amount !== calculation.net_amount && (
-                <div className="flex justify-between text-dark-500 dark:text-ivory-400">
-                  <span>Бүхлээр (100₽)</span>
-                  <span>{calculation.rounded_amount.toLocaleString()}₽</span>
-                </div>
-              )}
               {calculation.payment_currency === "MNT" && calculation.exchange_rate && (
                 <div className="flex justify-between text-dark-500 dark:text-ivory-400">
                   <span>Ханш: {calculation.exchange_rate}</span>
@@ -718,15 +1059,12 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
               )}
               <div className="border-t border-amber-200 dark:border-amber-800 pt-2 flex justify-between font-bold text-dark-800 dark:text-ivory-200 text-sm">
                 <span>Нийт төлөх</span>
-                <span>
-                  {calculation.final_amount.toLocaleString()}
-                  {calculation.payment_currency === "RUB" ? "₽" : "₮"}
-                </span>
+                <span>{calculation.final_amount.toLocaleString()}{calculation.payment_currency === "RUB" ? "₽" : "₮"}</span>
               </div>
             </div>
           )}
 
-          {/* RUB warning reminder */}
+          {/* RUB warning */}
           {paymentCurrency === "RUB" && (
             <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
@@ -738,9 +1076,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
 
           {/* Bank selection */}
           <div className="space-y-2">
-            <div className="text-xs text-dark-500 dark:text-ivory-400 font-medium">
-              Доорх данс руу шилжүүлнэ үү:
-            </div>
+            <div className="text-xs text-dark-500 dark:text-ivory-400 font-medium">Доорх данс руу шилжүүлнэ үү:</div>
             {filteredBanks.length === 0 ? (
               <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl text-xs text-yellow-700 dark:text-yellow-400">
                 {paymentCurrency} валютын данс олдсонгүй. Админтай холбогдоно уу.
@@ -756,61 +1092,29 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
                       : "border-silver/40 dark:border-dark-600 bg-white dark:bg-dark-800"
                   }`}
                 >
-                  <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">
-                    {bank.bank_name}
-                  </div>
+                  <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">{bank.bank_name}</div>
                   <div className="text-xs text-dark-500 dark:text-ivory-400 mt-1 space-y-0.5">
                     {bank.card_number && (
                       <div className="flex items-center gap-1">
                         Карт: {bank.card_number}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(bank.card_number!.replace(/\s/g, ""), "card");
-                          }}
-                          className="p-0.5"
-                        >
-                          {copied === "card" ? (
-                            <CheckCircle2 className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <Copy className="w-3 h-3 text-dark-400" />
-                          )}
+                        <button onClick={(e) => { e.stopPropagation(); copyToClipboard(bank.card_number!.replace(/\s/g, ""), "card"); }} className="p-0.5">
+                          {copied === "card" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-dark-400" />}
                         </button>
                       </div>
                     )}
                     {bank.account_number && (
                       <div className="flex items-center gap-1">
                         Данс: {bank.account_number}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(bank.account_number!, "account");
-                          }}
-                          className="p-0.5"
-                        >
-                          {copied === "account" ? (
-                            <CheckCircle2 className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <Copy className="w-3 h-3 text-dark-400" />
-                          )}
+                        <button onClick={(e) => { e.stopPropagation(); copyToClipboard(bank.account_number!, "account"); }} className="p-0.5">
+                          {copied === "account" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-dark-400" />}
                         </button>
                       </div>
                     )}
                     {bank.phone && (
                       <div className="flex items-center gap-1">
                         Утас: {bank.phone}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(bank.phone!, "phone");
-                          }}
-                          className="p-0.5"
-                        >
-                          {copied === "phone" ? (
-                            <CheckCircle2 className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <Copy className="w-3 h-3 text-dark-400" />
-                          )}
+                        <button onClick={(e) => { e.stopPropagation(); copyToClipboard(bank.phone!, "phone"); }} className="p-0.5">
+                          {copied === "phone" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-dark-400" />}
                         </button>
                       </div>
                     )}
@@ -821,288 +1125,62 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             )}
           </div>
 
-          <button
-            onClick={() => setStep(5)}
-            disabled={!selectedBank}
-            className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition disabled:opacity-30"
-          >
-            Шилжүүлэг хийсэн → Баримт оруулах
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ============== STEP 5: Upload Receipt & Submit ==============
-  if (step === 5) {
-    return (
-      <div className="animate-slideUp">
-        {renderBack("Гүйлгээний баримт")}
-        <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-4">
-          <div className="text-center">
-            <Upload className="w-10 h-10 text-amber-500 mx-auto mb-2" />
-            <h3 className="font-bold text-dark-800 dark:text-ivory-200 text-sm">
-              Шилжүүлгийн баримт оруулна уу
-            </h3>
-            <p className="text-xs text-dark-500 dark:text-ivory-400 mt-1">
-              Гүйлгээний дэлгэцийн зураг (screenshot)
-            </p>
-          </div>
-
-          {/* Upload area */}
-          <label className="block cursor-pointer">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file, setReceiptUrl, setUploading, "receipt");
-              }}
-            />
-            <div
-              className={`border-2 border-dashed rounded-xl p-6 text-center transition ${
+          {/* Receipt upload */}
+          <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
+            <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+              <Upload className="w-4 h-4 inline mr-1 text-amber-500" /> Шилжүүлгийн баримт
+            </div>
+            <label className="block cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file, setReceiptUrl, setUploading, "receipt");
+                }}
+              />
+              <div className={`border-2 border-dashed rounded-xl p-6 text-center transition ${
                 receiptUrl
                   ? "border-green-400 bg-green-50 dark:bg-green-900/10"
                   : "border-silver/60 dark:border-dark-600 hover:border-amber-400"
-              }`}
-            >
-              {uploading ? (
-                <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
-              ) : receiptUrl ? (
-                <div className="space-y-2">
-                  <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto" />
-                  <div className="text-xs text-green-600 dark:text-green-400">Баримт хуулагдлаа</div>
-                  <img src={receiptUrl} alt="receipt" className="max-h-32 mx-auto rounded-lg" />
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setReceiptUrl(""); }}
-                    className="flex items-center gap-1 mx-auto px-3 py-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition"
-                  >
-                    <X className="w-3 h-3" /> Зураг устгах
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Camera className="w-8 h-8 text-dark-400 mx-auto" />
-                  <div className="text-xs text-dark-500 dark:text-ivory-400">
-                    Зураг сонгох
+              }`}>
+                {uploading ? (
+                  <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto" />
+                ) : receiptUrl ? (
+                  <div className="space-y-2">
+                    <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto" />
+                    <div className="text-xs text-green-600 dark:text-green-400">Баримт хуулагдлаа</div>
+                    <img src={receiptUrl} alt="receipt" className="max-h-32 mx-auto rounded-lg" />
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setReceiptUrl(""); }}
+                      className="flex items-center gap-1 mx-auto px-3 py-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 transition"
+                    >
+                      <X className="w-3 h-3" /> Зураг устгах
+                    </button>
                   </div>
-                </div>
-              )}
-            </div>
-          </label>
+                ) : (
+                  <div className="space-y-2">
+                    <Camera className="w-8 h-8 text-dark-400 mx-auto" />
+                    <div className="text-xs text-dark-500 dark:text-ivory-400">Зураг сонгох</div>
+                  </div>
+                )}
+              </div>
+            </label>
+          </div>
 
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-xs text-red-600 dark:text-red-400">
-              {error}
-            </div>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-xs text-red-600 dark:text-red-400">{error}</div>
           )}
 
           <button
             onClick={handleSubmit}
-            disabled={!receiptUrl || loading}
+            disabled={!receiptUrl || !selectedBank || loading}
             className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition disabled:opacity-30 flex items-center justify-center gap-2"
           >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Fuel className="w-4 h-4" />
-            )}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fuel className="w-4 h-4" />}
             {loading ? "Илгээж байна..." : "Захиалга илгээх"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ============== STEP 6: Waiting / Status Tracker + Chat ==============
-  if (step === 6 && activeOrder) {
-    const statusSteps = [
-      { key: "pending_payment", label: "Төлбөр хүлээгдэж байна", emoji: "⏳" },
-      { key: "paid", label: "Төлбөр баталгаажсан", emoji: "✅" },
-      { key: "in_progress", label: "Түлш нийлүүлж байна", emoji: "⛽" },
-      { key: "fueling_complete", label: "Цэнэглэлт дууссан", emoji: "📸" },
-      { key: "completed", label: "Дууссан", emoji: "🎉" },
-    ];
-
-    const currentIdx = statusSteps.findIndex((s) => s.key === activeOrder.status);
-    const isRejected = activeOrder.status === "rejected";
-    const isCompleted = activeOrder.status === "completed";
-    const showPumpUpload = ["in_progress", "fueling_complete"].includes(activeOrder.status);
-
-    return (
-      <div className="animate-slideUp">
-        {renderBack("Захиалгын явц", onBack)}
-        <div className="space-y-4">
-          {/* Status */}
-          <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600">
-            <div className="text-xs text-dark-500 dark:text-ivory-400 mb-1">
-              Invoice: <code className="font-mono">{activeOrder.invoice}</code>
-            </div>
-            <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200 mb-3">
-              {activeOrder.station_name} — {activeOrder.liters}л
-            </div>
-
-            {isRejected ? (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
-                <div className="text-red-600 dark:text-red-400 font-semibold text-sm">❌ Цуцлагдсан</div>
-                {activeOrder.rejection_comment && (
-                  <div className="text-xs text-red-500 mt-1">{activeOrder.rejection_comment}</div>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {statusSteps.map((s, idx) => {
-                  const active = idx === currentIdx;
-                  const done = idx < currentIdx;
-                  return (
-                    <div
-                      key={s.key}
-                      className={`flex items-center gap-3 p-2 rounded-lg transition ${
-                        active
-                          ? "bg-amber-50 dark:bg-amber-900/20"
-                          : done
-                          ? "opacity-60"
-                          : "opacity-30"
-                      }`}
-                    >
-                      <span className="text-base">{done ? "✅" : s.emoji}</span>
-                      <span
-                        className={`text-xs ${
-                          active ? "font-bold text-amber-700 dark:text-amber-400" : "text-dark-600 dark:text-ivory-400"
-                        }`}
-                      >
-                        {s.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Dispenser number display */}
-          {requiresDispenser && dispenserNumber && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-800 flex items-center gap-3">
-              <span className="text-2xl">🔢</span>
-              <div>
-                <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">
-                  Колонка №{dispenserNumber}
-                </div>
-                <div className="text-xs text-blue-600 dark:text-blue-400">
-                  Админ колонкыг асааж өгнө
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Barcode/QR waiting notice for non-dispenser stations */}
-          {!requiresDispenser && ["pending_payment", "paid"].includes(activeOrder.status) && (
-            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl border border-purple-200 dark:border-purple-800">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-base">📱</span>
-                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                  Штрих-код / QR хүлээж байна
-                </span>
-              </div>
-              <p className="text-xs text-purple-700 dark:text-purple-400">
-                Админ таны захиалгыг баталгаажуулсны дараа штрих-код эсвэл QR кодын зургийг чат-аар илгээнэ. Хүлээнэ үү.
-              </p>
-            </div>
-          )}
-
-          {/* Pump photo upload section */}
-          {showPumpUpload && (
-            <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
-              <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                📸 Колонкны зураг оруулах
-              </div>
-              <p className="text-xs text-dark-500 dark:text-ivory-400">
-                Заправка дууссаны дараа колонк дээрх литрийн дүнг зурагт харуулна уу.
-              </p>
-              <label className="block cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload(file, setPumpPhotoUrl, setPumpUploading, "pump");
-                  }}
-                />
-                <div
-                  className={`border-2 border-dashed rounded-xl p-4 text-center ${
-                    pumpPhotoUrl
-                      ? "border-green-400 bg-green-50 dark:bg-green-900/10"
-                      : "border-silver/60 dark:border-dark-600"
-                  }`}
-                >
-                  {pumpUploading ? (
-                    <Loader2 className="w-6 h-6 text-amber-500 animate-spin mx-auto" />
-                  ) : pumpPhotoUrl ? (
-                    <div className="space-y-1">
-                      <CheckCircle2 className="w-6 h-6 text-green-500 mx-auto" />
-                      <img src={pumpPhotoUrl} alt="pump" className="max-h-24 mx-auto rounded-lg" />
-                    </div>
-                  ) : (
-                    <Camera className="w-6 h-6 text-dark-400 mx-auto" />
-                  )}
-                </div>
-              </label>
-              {pumpPhotoUrl && (
-                <button
-                  onClick={handlePumpPhotoSubmit}
-                  disabled={loading}
-                  className="w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-semibold transition disabled:opacity-50"
-                >
-                  {loading ? "Илгээж байна..." : "Зураг илгээх"}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Chat */}
-          {!isCompleted && !isRejected && (
-            <FuelChat orderId={activeOrder.id} isAdmin={false} />
-          )}
-
-          {/* Done / Back */}
-          {(isCompleted || isRejected) && (
-            <button
-              onClick={onSuccess}
-              className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
-            >
-              Буцах
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // ============== STEP 7: Pump Photo Submitted ==============
-  if (step === 7) {
-    return (
-      <div className="animate-slideUp">
-        <div className="bg-white dark:bg-dark-800 p-8 rounded-2xl border border-silver/60 dark:border-dark-600 text-center space-y-4">
-          <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-8 h-8 text-green-500" />
-          </div>
-          <h3 className="font-bold text-dark-800 dark:text-ivory-200">Колонкны зураг илгээгдлээ!</h3>
-          <p className="text-xs text-dark-500 dark:text-ivory-400">
-            Админ таны захиалгыг баталгаажуулах хүртэл хүлээнэ үү.
-          </p>
-          {successInvoice && (
-            <div className="text-xs text-dark-500 dark:text-ivory-400">
-              Invoice: <code className="font-mono">{successInvoice}</code>
-            </div>
-          )}
-          <button
-            onClick={onSuccess}
-            className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
-          >
-            Буцах
           </button>
         </div>
       </div>

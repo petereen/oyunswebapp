@@ -618,6 +618,7 @@ class FuelOrderItem(BaseModel):
     final_amount: float
     payment_receipt_url: Optional[str] = None
     pump_photo_url: Optional[str] = None
+    approval_image_url: Optional[str] = None
     admin_bank_id: Optional[str] = None
     status: str
     rejection_comment: Optional[str] = None
@@ -635,9 +636,10 @@ class FuelOrdersResponse(BaseModel):
 
 class FuelAdminActionRequest(BaseModel):
     order_id: str
-    status: str  # "paid", "in_progress", "fueling_complete", "completed", "rejected"
+    status: str  # "approved", "completed", "rejected"
     rejection_comment: Optional[str] = None
     admin_comment: Optional[str] = None
+    approval_image_url: Optional[str] = None
 
 
 class FuelPumpPhotoRequest(BaseModel):

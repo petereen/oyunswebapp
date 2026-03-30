@@ -37,7 +37,7 @@ export function FuelAdminStations() {
       const data = await fetchFuelAdminStations();
       setStations(data);
     } catch {
-      setError("Станцуудыг ачаалахад алдаа гарлаа");
+      setError("ШТС ачаалахад алдаа гарлаа");
     }
     setLoading(false);
   };
@@ -145,11 +145,11 @@ export function FuelAdminStations() {
       {editing && (
         <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 border border-amber-200 dark:border-amber-800 space-y-3">
           <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-            {editing.isNew ? "Шинэ станц нэмэх" : "Станц засах"}
+            {editing.isNew ? "Шинэ АЗС нэмэх" : "АЗС засах"}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <input
-              placeholder="Станцын нэр *"
+              placeholder="АЗС-ын нэр *"
               value={editing.name || ""}
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               className="col-span-2 px-3 py-2 text-xs border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200"

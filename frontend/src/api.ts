@@ -750,8 +750,9 @@ export interface FuelOrder {
   final_amount: number;
   payment_receipt_url?: string;
   pump_photo_url?: string;
+  approval_image_url?: string;
   admin_bank_id?: string;
-  status: 'pending_payment' | 'paid' | 'in_progress' | 'fueling_complete' | 'completed' | 'rejected' | 'cancelled';
+  status: 'pending' | 'pending_payment' | 'approved' | 'paid' | 'in_progress' | 'fueling_complete' | 'completed' | 'rejected' | 'cancelled';
   rejection_comment?: string;
   admin_comment?: string;
   completed_by_admin?: number;
@@ -873,6 +874,7 @@ export async function fuelAdminAction(params: {
   status: string;
   rejection_comment?: string;
   admin_comment?: string;
+  approval_image_url?: string;
 }) {
   const res = await fuelAdminApi.post('/fuel-admin/action', params);
   return res.data;

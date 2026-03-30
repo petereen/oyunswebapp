@@ -51,7 +51,7 @@ export function FuelAdminPanel() {
             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8 text-amber-600" />
             </div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-ivory-200">⛽ Түлшний админ</h2>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-ivory-200">⛽ OYUNS FINANCE ADMIN-F</h2>
             <p className="text-sm text-slate-500 dark:text-ivory-400 mt-1">API түлхүүр оруулна уу</p>
           </div>
 
@@ -90,7 +90,7 @@ export function FuelAdminPanel() {
     { key: "inbox", label: "Хүсэлт", icon: Inbox },
     { key: "history", label: "Түүх", icon: History },
     { key: "banks", label: "Данс", icon: CreditCard },
-    { key: "stations", label: "Станц", icon: MapPin },
+    { key: "stations", label: "АЗС", icon: MapPin },
     { key: "shift", label: "Ээлж", icon: Power },
   ];
 
@@ -100,7 +100,7 @@ export function FuelAdminPanel() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-lg">
-            <Fuel className="w-5 h-5" /> Түлшний админ
+            <Fuel className="w-5 h-5" /> OYUNS FINANCE ADMIN-F
           </div>
           <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700 underline">
             Гарах
