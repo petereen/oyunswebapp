@@ -3606,6 +3606,19 @@ async def fuel_admin_inbox(user=Depends(get_fuel_admin_auth)):
     return FuelOrdersResponse(orders=orders, total=len(orders))
 
 
+@app.post("/api/fuel-admin/presign", response_model=PresignResponse)
+async def fuel_admin_presign(payload: PresignRequest, user=Depends(get_fuel_admin_auth)):
+    """Presign upload URL for fuel admin (supports API key auth)."""
+    settings = get_settings()
+    client = get_supabase()
+    bucket = payload.bucket
+    if bucket not in {settings.storage_bucket_passports, settings.storage_bucket_receipts}:
+        raise HTTPException(status_code=400, detail="Invalid bucket")
+    signed_url, ttl = presign_upload(client, bucket, payload.path, payload.expires_in)
+    public = public_url(client, bucket, payload.path)
+    return PresignResponse(upload_url=signed_url, public_url=public, expires_in=ttl, path=payload.path)
+
+
 @app.post("/api/fuel-admin/action")
 async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fuel_admin_auth)):
     """Admin action on a fuel order."""

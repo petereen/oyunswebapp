@@ -247,6 +247,11 @@ export async function requestPresign(payload: PresignRequest) {
   return res.data as { upload_url: string; public_url: string; path: string };
 }
 
+export async function requestPresignAdmin(payload: PresignRequest) {
+  const res = await fuelAdminApi.post('/fuel-admin/presign', payload);
+  return res.data as { upload_url: string; public_url: string; path: string };
+}
+
 export async function fetchHistory() {
   const res = await api.get('/history');
   return res.data as { items: any[] };

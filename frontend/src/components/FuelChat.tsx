@@ -6,6 +6,7 @@ import {
   fetchFuelAdminChat,
   sendFuelAdminChatMessage,
   requestPresign,
+  requestPresignAdmin,
   FuelChatMessage,
 } from "../api";
 
@@ -63,7 +64,9 @@ export function FuelChat({ orderId, isAdmin }: Props) {
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `fuel/chat/${orderId}_${Date.now()}.${ext}`;
-      const presigned = await requestPresign({ bucket: "bills", path });
+      const presigned = isAdmin
+        ? await requestPresignAdmin({ bucket: "bills", path })
+        : await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,

@@ -3,8 +3,6 @@ import { useState, useEffect } from "react";
 import {
   Fuel,
   Clock,
-  CreditCard,
-  Wrench,
   CheckCircle2,
   X,
   AlertTriangle,
@@ -143,39 +141,21 @@ function FuelStatusCard({
 
 function getStatusConfig(status: string, rejectionComment?: string) {
   switch (status) {
+    case "pending":
     case "pending_payment":
       return {
-        icon: CreditCard,
+        icon: Clock,
         iconBg: "bg-amber-100 dark:bg-amber-900/40",
         iconColor: "text-amber-600",
         barColor: "bg-amber-400",
         barBg: "bg-amber-100 dark:bg-amber-900/40",
-        progress: 15,
-        label: "Төлбөр хүлээгдэж байна",
-        description: "Төлбөрийн баримтаа илгээнэ үү",
+        progress: 33,
+        label: "Хүлээгдэж байна",
+        description: "Админ таны хүсэлтийг шалгаж байна",
       };
+    case "approved":
     case "paid":
-      return {
-        icon: Clock,
-        iconBg: "bg-blue-100 dark:bg-blue-900/40",
-        iconColor: "text-blue-600",
-        barColor: "bg-blue-400",
-        barBg: "bg-blue-100 dark:bg-blue-900/40",
-        progress: 35,
-        label: "Төлбөр илгээгдсэн",
-        description: "Админ баталгаажуулж байна",
-      };
     case "in_progress":
-      return {
-        icon: Wrench,
-        iconBg: "bg-orange-100 dark:bg-orange-900/40",
-        iconColor: "text-orange-600",
-        barColor: "bg-orange-400",
-        barBg: "bg-orange-100 dark:bg-orange-900/40",
-        progress: 60,
-        label: "Түлш цэнэглэж байна",
-        description: "Админ түлш цэнэглэж байна, түр хүлээнэ үү",
-      };
     case "fueling_complete":
       return {
         icon: Fuel,
@@ -183,9 +163,9 @@ function getStatusConfig(status: string, rejectionComment?: string) {
         iconColor: "text-green-500",
         barColor: "bg-green-400",
         barBg: "bg-green-100 dark:bg-green-900/40",
-        progress: 80,
-        label: "Цэнэглэлт дууссан",
-        description: "Насосны зургаа илгээнэ үү",
+        progress: 66,
+        label: "Зөвшөөрсөн",
+        description: "Колонкны дэлгэцийн зургаа оруулна уу",
       };
     case "completed":
       return {

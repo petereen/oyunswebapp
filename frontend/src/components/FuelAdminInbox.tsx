@@ -18,7 +18,7 @@ import {
 import {
   fetchFuelAdminInbox,
   fuelAdminAction,
-  requestPresign,
+  requestPresignAdmin,
   FuelOrder,
 } from "../api";
 import { FuelChat } from "./FuelChat";
@@ -113,7 +113,7 @@ export function FuelAdminInbox() {
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `fuel/approval/${orderId}_${Date.now()}.${ext}`;
-      const presigned = await requestPresign({ bucket: "bills", path });
+      const presigned = await requestPresignAdmin({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,
