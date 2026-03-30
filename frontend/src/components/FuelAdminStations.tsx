@@ -51,6 +51,7 @@ export function FuelAdminStations() {
       name: "",
       discount_percent: 13,
       is_active: true,
+      requires_dispenser: false,
       display_order: stations.length,
     });
   };
@@ -70,6 +71,7 @@ export function FuelAdminStations() {
           name: editing.name!.trim(),
           discount_percent: editing.discount_percent ?? 13,
           is_active: editing.is_active ?? true,
+          requires_dispenser: editing.requires_dispenser ?? false,
           display_order: editing.display_order ?? 0,
         });
       } else {
@@ -77,6 +79,7 @@ export function FuelAdminStations() {
           name: editing.name?.trim(),
           discount_percent: editing.discount_percent,
           is_active: editing.is_active,
+          requires_dispenser: editing.requires_dispenser,
           display_order: editing.display_order,
         });
       }
@@ -182,6 +185,15 @@ export function FuelAdminStations() {
             />
             Идэвхтэй
           </label>
+          <label className="flex items-center gap-2 text-xs text-dark-800 dark:text-ivory-200">
+            <input
+              type="checkbox"
+              checked={editing.requires_dispenser === true}
+              onChange={(e) => setEditing({ ...editing, requires_dispenser: e.target.checked })}
+              className="accent-blue-600"
+            />
+            🔢 Колонка дугаар шаардах (админ асаана)
+          </label>
           <div className="flex gap-2">
             <button
               onClick={handleSave}
@@ -227,7 +239,15 @@ export function FuelAdminStations() {
                     <XCircle className="w-3 h-3 text-red-500" />
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400">Эрэмбэ: {station.display_order}</div>
+                <div className="text-[10px] text-slate-400">
+                  Эрэмбэ: {station.display_order}
+                  {station.requires_dispenser && (
+                    <span className="ml-2 text-blue-500">🔢 Колонка</span>
+                  )}
+                  {!station.requires_dispenser && (
+                    <span className="ml-2 text-purple-500">📱 QR/Штрих-код</span>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">

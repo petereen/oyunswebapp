@@ -165,6 +165,12 @@ export function FuelAdminInbox() {
                     <span className="text-slate-400">Станц:</span>{" "}
                     <span className="font-medium text-dark-800 dark:text-ivory-200">{order.station_name}</span>
                   </div>
+                  {order.dispenser_number && (
+                  <div>
+                    <span className="text-slate-400">Колонка:</span>{" "}
+                    <span className="font-bold text-blue-600 dark:text-blue-400">№{order.dispenser_number}</span>
+                  </div>
+                  )}
                   <div>
                     <span className="text-slate-400">Литр:</span>{" "}
                     <span className="font-medium text-dark-800 dark:text-ivory-200">{order.liters}л</span>
@@ -244,6 +250,36 @@ export function FuelAdminInbox() {
 
                 {/* Chat */}
                 <FuelChat orderId={order.id} isAdmin={true} />
+
+                {/* Barcode reminder for non-dispenser stations */}
+                {!order.dispenser_number && ["paid", "in_progress"].includes(order.status) && (
+                  <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl flex items-start gap-2">
+                    <span className="text-base">📱</span>
+                    <div>
+                      <div className="text-xs font-semibold text-purple-700 dark:text-purple-400">
+                        Штрих-код / QR илгээх шаардлагатай
+                      </div>
+                      <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5">
+                        Энэ станцад колонк дугаар байхгүй. Чатаар штрих-код эсвэл QR зургийг хэрэглэгчид илгээнэ үү.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dispenser number highlight for admin */}
+                {order.dispenser_number && ["paid", "in_progress"].includes(order.status) && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-2">
+                    <span className="text-2xl">🔢</span>
+                    <div>
+                      <div className="text-sm font-bold text-blue-700 dark:text-blue-400">
+                        Колонка №{order.dispenser_number} асаах
+                      </div>
+                      <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
+                        {order.station_name} — колонкыг асаана уу
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Action buttons based on status */}
                 <div className="flex flex-wrap gap-2 pt-2">

@@ -3332,6 +3332,7 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
         "invoice": payload.invoice,
         "user_id": user.id,
         "station_name": payload.station_name,
+        "dispenser_number": payload.dispenser_number,
         "station_latitude": payload.station_latitude,
         "station_longitude": payload.station_longitude,
         "location_text": payload.location_text,
@@ -3372,11 +3373,12 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
         loc_str = f"📍 {payload.station_latitude:.6f}, {payload.station_longitude:.6f}"
 
     curr_symbol = "₽" if payload.payment_currency == "RUB" else "₮"
+    dispenser_line = f"\n🔢 Колонка: <b>№{payload.dispenser_number}</b>" if payload.dispenser_number else ""
     admin_text = (
         f"⛽ <b>ШИНЭ ТҮЛШНИЙ ЗАХИАЛГА!</b>\n\n"
         f"📋 Invoice: <code>{payload.invoice}</code>\n"
         f"👤 Хэрэглэгч: {user_name} (ID: {user.id})\n"
-        f"🏪 АЗС: <b>{payload.station_name}</b>\n"
+        f"🏪 АЗС: <b>{payload.station_name}</b>{dispenser_line}\n"
         f"{loc_str}\n"
         f"⛽ Литр: <b>{payload.liters}</b> л\n"
         f"💰 Үнэ/л: {payload.station_price_per_liter}₽\n"

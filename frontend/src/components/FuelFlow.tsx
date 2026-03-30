@@ -53,6 +53,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
   // Step 0: Station
   const [stationName, setStationName] = useState("");
   const [discountPercent, setDiscountPercent] = useState(13);
+  const [requiresDispenser, setRequiresDispenser] = useState(false);
+
+  // Dispenser number (for stations that require it)
+  const [dispenserNumber, setDispenserNumber] = useState("");
 
   // Step 1: Location
   const [latitude, setLatitude] = useState<number | null>(null);
@@ -228,6 +232,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
       const res = await createFuelOrder({
         invoice: invoiceId,
         station_name: stationName,
+        dispenser_number: dispenserNumber.trim() || undefined,
         station_latitude: latitude || undefined,
         station_longitude: longitude || undefined,
         location_text: locationText || undefined,
@@ -332,6 +337,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
               onClick={() => {
                 setStationName(s.name);
                 setDiscountPercent(s.discount_percent);
+                setRequiresDispenser(s.requires_dispenser);
                 setStep(1);
               }}
               className="relative bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600 text-left hover:border-amber-400 dark:hover:border-amber-500 active:scale-[0.97] transition-all"
@@ -340,6 +346,9 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
               <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">
                 -{s.discount_percent}% хөнгөлөлт
               </div>
+              {s.requires_dispenser && (
+                <div className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">🔢 Колонка дугаар</div>
+              )}
               <div className="absolute top-2 right-2 w-6 h-6 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
                 <Fuel className="w-3 h-3 text-amber-600" />
               </div>
@@ -354,6 +363,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
   // ============== STEP 1: Geolocation ==============
   if (step === 1) {
     const hasLocation = (latitude !== null && longitude !== null) || locationText.trim().length > 0;
+    const dispenserValid = !requiresDispenser || dispenserNumber.trim().length > 0;
     return (
       <div className="animate-slideUp">
         {renderBack("Байршил")}
@@ -411,9 +421,32 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             />
           </div>
 
+          {/* Dispenser number (for stations that require it) */}
+          {requiresDispenser && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🔢</span>
+                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                  Колонкны дугаар
+                </span>
+              </div>
+              <p className="text-xs text-dark-500 dark:text-ivory-400">
+                {stationName} станцад колонкны дугаар зайлшгүй шаардлагатай. Админ колонкыг асаана.
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={dispenserNumber}
+                onChange={(e) => setDispenserNumber(e.target.value)}
+                placeholder="Жиш: 3"
+                className="w-full px-4 py-3 border border-blue-300 dark:border-blue-700 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+          )}
+
           <button
             onClick={() => setStep(2)}
-            disabled={!hasLocation}
+            disabled={!hasLocation || !dispenserValid}
             className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition disabled:opacity-30"
           >
             Үргэлжлүүлэх
@@ -902,6 +935,36 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
               </div>
             )}
           </div>
+
+          {/* Dispenser number display */}
+          {requiresDispenser && dispenserNumber && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-800 flex items-center gap-3">
+              <span className="text-2xl">🔢</span>
+              <div>
+                <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">
+                  Колонка №{dispenserNumber}
+                </div>
+                <div className="text-xs text-blue-600 dark:text-blue-400">
+                  Админ колонкыг асааж өгнө
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Barcode/QR waiting notice for non-dispenser stations */}
+          {!requiresDispenser && ["pending_payment", "paid"].includes(activeOrder.status) && (
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-2xl border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-base">📱</span>
+                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+                  Штрих-код / QR хүлээж байна
+                </span>
+              </div>
+              <p className="text-xs text-purple-700 dark:text-purple-400">
+                Админ таны захиалгыг баталгаажуулсны дараа штрих-код эсвэл QR кодын зургийг чат-аар илгээнэ. Хүлээнэ үү.
+              </p>
+            </div>
+          )}
 
           {/* Pump photo upload section */}
           {showPumpUpload && (

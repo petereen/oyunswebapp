@@ -653,6 +653,7 @@ export interface FuelStation {
   name: string;
   discount_percent: number;
   is_active: boolean;
+  requires_dispenser: boolean;
   display_order: number;
   created_at?: string;
   updated_at?: string;
@@ -660,14 +661,14 @@ export interface FuelStation {
 
 // Hardcoded fallback (used if API fails)
 export const FUEL_STATIONS_FALLBACK: FuelStation[] = [
-  { id: '', name: 'Роснефть', discount_percent: 13, is_active: true, display_order: 0 },
-  { id: '', name: 'Башнефть', discount_percent: 13, is_active: true, display_order: 1 },
-  { id: '', name: 'ТНК', discount_percent: 13, is_active: true, display_order: 2 },
-  { id: '', name: 'Газпромнефть', discount_percent: 13, is_active: true, display_order: 3 },
-  { id: '', name: 'Лукойл', discount_percent: 13, is_active: true, display_order: 4 },
-  { id: '', name: 'Татнефть', discount_percent: 13, is_active: true, display_order: 5 },
-  { id: '', name: 'Топлайн', discount_percent: 13, is_active: true, display_order: 6 },
-  { id: '', name: 'ННК', discount_percent: 10, is_active: true, display_order: 7 },
+  { id: '', name: 'Роснефть', discount_percent: 13, is_active: true, requires_dispenser: false, display_order: 0 },
+  { id: '', name: 'Башнефть', discount_percent: 13, is_active: true, requires_dispenser: false, display_order: 1 },
+  { id: '', name: 'ТНК', discount_percent: 13, is_active: true, requires_dispenser: false, display_order: 2 },
+  { id: '', name: 'Газпромнефть', discount_percent: 13, is_active: true, requires_dispenser: false, display_order: 3 },
+  { id: '', name: 'Лукойл', discount_percent: 13, is_active: true, requires_dispenser: false, display_order: 4 },
+  { id: '', name: 'Татнефть', discount_percent: 13, is_active: true, requires_dispenser: true, display_order: 5 },
+  { id: '', name: 'Топлайн', discount_percent: 13, is_active: true, requires_dispenser: true, display_order: 6 },
+  { id: '', name: 'ННК', discount_percent: 10, is_active: true, requires_dispenser: true, display_order: 7 },
 ];
 
 export async function fetchFuelStations(): Promise<FuelStation[]> {
@@ -696,6 +697,7 @@ export interface FuelCalculation {
 export interface FuelOrderCreateInput {
   invoice: string;
   station_name: string;
+  dispenser_number?: string;
   station_latitude?: number;
   station_longitude?: number;
   location_text?: string;
@@ -712,6 +714,7 @@ export interface FuelOrder {
   invoice: string;
   user_id: number;
   station_name: string;
+  dispenser_number?: string;
   station_latitude?: number;
   station_longitude?: number;
   location_text?: string;
@@ -892,12 +895,12 @@ export async function fetchFuelAdminStations(): Promise<FuelStation[]> {
   return res.data.stations || [];
 }
 
-export async function createFuelAdminStation(payload: { name: string; discount_percent: number; is_active?: boolean; display_order?: number }) {
+export async function createFuelAdminStation(payload: { name: string; discount_percent: number; is_active?: boolean; requires_dispenser?: boolean; display_order?: number }) {
   const res = await api.post('/fuel-admin/stations', payload);
   return res.data as FuelStation;
 }
 
-export async function updateFuelAdminStation(id: string, payload: Partial<{ name: string; discount_percent: number; is_active: boolean; display_order: number }>) {
+export async function updateFuelAdminStation(id: string, payload: Partial<{ name: string; discount_percent: number; is_active: boolean; requires_dispenser: boolean; display_order: number }>) {
   const res = await api.put(`/fuel-admin/stations/${id}`, payload);
   return res.data as FuelStation;
 }

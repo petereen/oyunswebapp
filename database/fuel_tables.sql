@@ -11,21 +11,22 @@ CREATE TABLE IF NOT EXISTS fuel_stations (
     name VARCHAR(100) UNIQUE NOT NULL,
     discount_percent INT NOT NULL DEFAULT 13,
     is_active BOOLEAN DEFAULT TRUE,
+    requires_dispenser BOOLEAN DEFAULT FALSE,
     display_order INT DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Seed default stations
-INSERT INTO fuel_stations (name, discount_percent, display_order) VALUES
-    ('Роснефть', 13, 0),
-    ('Башнефть', 13, 1),
-    ('ТНК', 13, 2),
-    ('Газпромнефть', 13, 3),
-    ('Лукойл', 13, 4),
-    ('Татнефть', 13, 5),
-    ('Топлайн', 13, 6),
-    ('ННК', 10, 7)
+INSERT INTO fuel_stations (name, discount_percent, requires_dispenser, display_order) VALUES
+    ('Роснефть', 13, FALSE, 0),
+    ('Башнефть', 13, FALSE, 1),
+    ('ТНК', 13, FALSE, 2),
+    ('Газпромнефть', 13, FALSE, 3),
+    ('Лукойл', 13, FALSE, 4),
+    ('Татнефть', 13, TRUE, 5),
+    ('Топлайн', 13, TRUE, 6),
+    ('ННК', 10, TRUE, 7)
 ON CONFLICT (name) DO NOTHING;
 
 ALTER TABLE fuel_stations ENABLE ROW LEVEL SECURITY;
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS fuel_orders (
 
     -- Station info
     station_name VARCHAR(100) NOT NULL,
+    dispenser_number VARCHAR(20),            -- pump/dispenser number (for stations that require it)
     station_latitude DOUBLE PRECISION,
     station_longitude DOUBLE PRECISION,
     location_text TEXT,  -- fallback manual address

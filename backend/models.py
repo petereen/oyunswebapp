@@ -514,6 +514,7 @@ class FuelStationItem(BaseModel):
     name: str
     discount_percent: int
     is_active: bool
+    requires_dispenser: bool = False
     display_order: int
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -527,6 +528,7 @@ class FuelStationCreateRequest(BaseModel):
     name: str
     discount_percent: int = 13
     is_active: bool = True
+    requires_dispenser: bool = False
     display_order: int = 0
 
 
@@ -534,6 +536,7 @@ class FuelStationUpdateRequest(BaseModel):
     name: Optional[str] = None
     discount_percent: Optional[int] = None
     is_active: Optional[bool] = None
+    requires_dispenser: Optional[bool] = None
     display_order: Optional[int] = None
 
 
@@ -562,6 +565,7 @@ class FuelCalculateResponse(BaseModel):
 class FuelOrderCreateRequest(BaseModel):
     invoice: str
     station_name: str
+    dispenser_number: Optional[str] = None
     station_latitude: Optional[float] = None
     station_longitude: Optional[float] = None
     location_text: Optional[str] = None
@@ -598,6 +602,7 @@ class FuelOrderItem(BaseModel):
     invoice: str
     user_id: int
     station_name: str
+    dispenser_number: Optional[str] = None
     station_latitude: Optional[float] = None
     station_longitude: Optional[float] = None
     location_text: Optional[str] = None
