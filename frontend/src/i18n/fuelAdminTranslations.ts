@@ -1,0 +1,141 @@
+export type FuelLang = "ru" | "mn";
+
+const translations: Record<string, Record<FuelLang, string>> = {
+  // ─── Login ───
+  "login.title": { ru: "⛽ OYUNS FINANCE ADMIN-F", mn: "⛽ OYUNS FINANCE ADMIN-F" },
+  "login.subtitle": { ru: "Введите API ключ", mn: "API түлхүүр оруулна уу" },
+  "login.placeholder": { ru: "API ключ", mn: "API түлхүүр" },
+  "login.button": { ru: "Войти", mn: "Нэвтрэх" },
+  "login.error": { ru: "Неверный API ключ", mn: "Буруу API түлхүүр" },
+
+  // ─── Tabs ───
+  "tab.inbox": { ru: "Заявки", mn: "Хүсэлт" },
+  "tab.history": { ru: "История", mn: "Түүх" },
+  "tab.banks": { ru: "Счета", mn: "Данс" },
+  "tab.stations": { ru: "АЗС", mn: "АЗС" },
+  "tab.shift": { ru: "Смена", mn: "Ээлж" },
+  "header.logout": { ru: "Выйти", mn: "Гарах" },
+
+  // ─── Common ───
+  "common.loading": { ru: "Загрузка...", mn: "Ачааллаж байна..." },
+  "common.saving": { ru: "Сохранение...", mn: "Хадгалж байна..." },
+  "common.save": { ru: "Сохранить", mn: "Хадгалах" },
+  "common.cancel": { ru: "Отмена", mn: "Болих" },
+  "common.add": { ru: "Добавить", mn: "Нэмэх" },
+  "common.delete": { ru: "Удалить", mn: "Устгах" },
+  "common.confirmDelete": { ru: "Удалить?", mn: "Устгах уу?" },
+  "common.active": { ru: "Активен", mn: "Идэвхтэй" },
+  "common.saveError": { ru: "Ошибка сохранения", mn: "Хадгалахад алдаа гарлаа" },
+  "common.deleteError": { ru: "Ошибка удаления", mn: "Устгахад алдаа гарлаа" },
+
+  // ─── Bank Accounts ───
+  "banks.title": { ru: "Банковские счета", mn: "Банкны дансууд" },
+  "banks.loadError": { ru: "Ошибка загрузки счетов", mn: "Дансны мэдээлэл ачаалахад алдаа гарлаа" },
+  "banks.addNew": { ru: "Добавить новый счёт", mn: "Шинэ данс нэмэх" },
+  "banks.edit": { ru: "Редактировать счёт", mn: "Данс засах" },
+  "banks.bankName": { ru: "Название банка *", mn: "Банкны нэр *" },
+  "banks.owner": { ru: "Владелец *", mn: "Эзэмшигч *" },
+  "banks.accountNumber": { ru: "Номер счёта", mn: "Дансны дугаар" },
+  "banks.cardNumber": { ru: "Номер карты", mn: "Картын дугаар" },
+  "banks.phone": { ru: "Номер телефона", mn: "Утасны дугаар" },
+  "banks.adminId": { ru: "Админ ID (TG)", mn: "Админ ID (TG)" },
+  "banks.ownerLabel": { ru: "Владелец:", mn: "Эзэмшигч:" },
+  "banks.cardLabel": { ru: "Карта:", mn: "Карт:" },
+  "banks.accountLabel": { ru: "Счёт:", mn: "Данс:" },
+  "banks.phoneLabel": { ru: "Тел:", mn: "Утас:" },
+  "banks.adminIdLabel": { ru: "Админ ID:", mn: "Админ ID:" },
+
+  // ─── History ───
+  "history.title": { ru: "История", mn: "Түүх" },
+  "history.empty": { ru: "Нет истории", mn: "Түүх байхгүй" },
+  "history.filterAll": { ru: "Все", mn: "Бүгд" },
+  "history.filterCompleted": { ru: "Завершено", mn: "Амжилттай" },
+  "history.filterApproved": { ru: "Одобрено", mn: "Зөвшөөрсөн" },
+  "history.filterPending": { ru: "Ожидание", mn: "Хүлээгдэж байна" },
+  "history.filterRejected": { ru: "Отклонено", mn: "Цуцалсан" },
+  "history.filterCancelled": { ru: "Отменено (клиент)", mn: "Цуцалсан (хэрэглэгч)" },
+  "history.pricePerLiter": { ru: "Цена/л:", mn: "Үнэ/л:" },
+  "history.total": { ru: "Итого:", mn: "Нийт:" },
+  "history.discount": { ru: "Скидка:", mn: "Хөнгөлөлт:" },
+  "history.rounded": { ru: "Округлено:", mn: "Бүхэл:" },
+  "history.rate": { ru: "Курс:", mn: "Ханш:" },
+  "history.receipt": { ru: "Чек:", mn: "Баримт:" },
+  "history.pump": { ru: "Колонка:", mn: "Насос:" },
+  "history.rejectionReason": { ru: "Причина отклонения:", mn: "Цуцлах шалтгаан:" },
+
+  // ─── Status labels ───
+  "status.pending": { ru: "Ожидание", mn: "Хүлээгдэж байна" },
+  "status.approved": { ru: "Одобрено", mn: "Зөвшөөрсөн" },
+  "status.completed": { ru: "Завершено", mn: "Амжилттай" },
+  "status.rejected": { ru: "Отклонено", mn: "Цуцалсан" },
+  "status.cancelled": { ru: "Отменено", mn: "Цуцалсан" },
+
+  // ─── Inbox ───
+  "inbox.title": { ru: "Входящие заявки", mn: "Ирсэн хүсэлтүүд" },
+  "inbox.empty": { ru: "Нет заявок", mn: "Хүсэлт байхгүй" },
+  "inbox.station": { ru: "АЗС:", mn: "ШТС(АЗС):" },
+  "inbox.dispenser": { ru: "Колонка:", mn: "Колонка:" },
+  "inbox.liters": { ru: "Литры:", mn: "Литр:" },
+  "inbox.pricePerLiter": { ru: "Цена/л:", mn: "Үнэ/л:" },
+  "inbox.total": { ru: "Итого:", mn: "Нийт:" },
+  "inbox.discount": { ru: "Скидка:", mn: "Хөнгөлөлт:" },
+  "inbox.netAmount": { ru: "Нетто:", mn: "Бодит дүн:" },
+  "inbox.roundedAmount": { ru: "Округлено:", mn: "Бүхэл дүн:" },
+  "inbox.rate": { ru: "Курс:", mn: "Ханш:" },
+  "inbox.toPay": { ru: "→ К оплате:", mn: "→ Төлөх:" },
+  "inbox.viewOnMap": { ru: "Показать на карте", mn: "Газрын зураг дээр харах" },
+  "inbox.paymentReceipt": { ru: "Чек оплаты:", mn: "Төлбөрийн баримт:" },
+  "inbox.pumpPhoto": { ru: "Фото колонки:", mn: "Насосны зураг:" },
+  "inbox.dispenserTitle": { ru: "Колонка", mn: "Колонка" },
+  "inbox.turnOnDispenser": { ru: "включите колонку", mn: "колонкыг асаана уу" },
+  "inbox.qrUploadTitle": { ru: "Загрузить QR/штрих-код (перед одобрением)", mn: "QR/Штрих-код зураг оруулах (зөвшөөрөхийн өмнө)" },
+  "inbox.qrLabel": { ru: "QR/штрих-код", mn: "QR/Штрих-код зураг" },
+  "inbox.approvedWaiting": { ru: "Одобрено — ожидаем фото колонки от клиента.", mn: "Зөвшөөрсөн — хэрэглэгч хүсэлтээ хаахын тулд колонкны зураг илгээхийг хүлээнэ үү." },
+  "inbox.approve": { ru: "Одобрить", mn: "Зөвшөөрөх" },
+  "inbox.reject": { ru: "Отклонить", mn: "Цуцлах" },
+  "inbox.rejectTitle": { ru: "Отклонить заявку", mn: "Хүсэлт цуцлах" },
+  "inbox.rejectReason": { ru: "Причина (необязательно)", mn: "Шалтгаан (заавал биш)" },
+
+  // ─── Time ago ───
+  "time.justNow": { ru: "только что", mn: "дөнгөж сая" },
+  "time.minAgo": { ru: "мин назад", mn: "мин өмнө" },
+  "time.hrMin": { ru: "ч {remainMins} мин назад", mn: "цаг {remainMins} мин өмнө" },
+  "time.dayHr": { ru: "дн {remainHrs} ч назад", mn: "өдөр {remainHrs} цаг өмнө" },
+
+  // ─── Shift ───
+  "shift.loadError": { ru: "Ошибка загрузки смены", mn: "Ээлжийн мэдээлэл ачаалахад алдаа гарлаа" },
+  "shift.notFound": { ru: "Данные не найдены", mn: "Мэдээлэл олдсонгүй" },
+  "shift.active": { ru: "Смена: АКТИВНА", mn: "Ээлж: ИДЭВХТЭЙ" },
+  "shift.inactive": { ru: "Смена: ВЫКЛЮЧЕНА", mn: "Ээлж: УНТАРСАН" },
+  "shift.onDuty": { ru: "На смене:", mn: "Ээлжинд:" },
+  "shift.offWarning": { ru: "Когда смена выключена, клиенты не могут заказать топливо", mn: "Ээлж унтарсан үед хэрэглэгчид түлш захиалах боломжгүй" },
+  "shift.turnOff": { ru: "Выключить смену", mn: "Ээлж унтраах" },
+  "shift.turnOn": { ru: "Включить смену", mn: "Ээлж асаах" },
+  "shift.changeAdmin": { ru: "Сменить администратора", mn: "Ээлжийн админ солих" },
+  "shift.current": { ru: "Текущий", mn: "Одоогийн" },
+  "shift.updateError": { ru: "Ошибка обновления смены", mn: "Ээлж шинэчлэхэд алдаа гарлаа" },
+  "shift.changeAdminError": { ru: "Ошибка смены администратора", mn: "Админ сольоход алдаа гарлаа" },
+
+  // ─── Stations ───
+  "stations.title": { ru: "Станции АЗС", mn: "АЗС станцууд" },
+  "stations.loadError": { ru: "Ошибка загрузки АЗС", mn: "ШТС ачаалахад алдаа гарлаа" },
+  "stations.addNew": { ru: "Добавить новую АЗС", mn: "Шинэ АЗС нэмэх" },
+  "stations.edit": { ru: "Редактировать АЗС", mn: "АЗС засах" },
+  "stations.name": { ru: "Название АЗС *", mn: "АЗС-ын нэр *" },
+  "stations.discountPercent": { ru: "Скидка %", mn: "Хөнгөлөлт %" },
+  "stations.order": { ru: "Порядок", mn: "Эрэмбэ" },
+  "stations.requireDispenser": { ru: "🔢 Требовать номер колонки (админ включит)", mn: "🔢 Колонка дугаар шаардах (админ асаана)" },
+  "stations.orderLabel": { ru: "Порядок:", mn: "Эрэмбэ:" },
+  "stations.dispenserTag": { ru: "🔢 Колонка", mn: "🔢 Колонка" },
+  "stations.qrTag": { ru: "📱 QR/Штрих-код", mn: "📱 QR/Штрих-код" },
+  "stations.deactivate": { ru: "Деактивировать", mn: "Идэвхгүй болгох" },
+  "stations.activate": { ru: "Активировать", mn: "Идэвхжүүлэх" },
+  "stations.toggleError": { ru: "Ошибка изменения статуса", mn: "Идэвхжүүлэлт солиход алдаа гарлаа" },
+
+  // ─── Chat ───
+  "chat.title": { ru: "💬 Чат", mn: "💬 Чат" },
+  "chat.empty": { ru: "Нет сообщений", mn: "Мессеж байхгүй" },
+  "chat.placeholder": { ru: "Написать сообщение...", mn: "Мессеж бичих..." },
+};
+
+export default translations;

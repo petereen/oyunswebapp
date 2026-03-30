@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Fuel, Inbox, History, CreditCard, Lock, Eye, EyeOff, MapPin, Power } from "lucide-react";
+import { Fuel, Inbox, History, CreditCard, Lock, Eye, EyeOff, MapPin, Power, Globe } from "lucide-react";
 import { FuelAdminInbox } from "../components/FuelAdminInbox";
 import { FuelAdminHistory } from "../components/FuelAdminHistory";
 import { FuelAdminBankAccounts } from "../components/FuelAdminBankAccounts";
 import { FuelAdminStations } from "../components/FuelAdminStations";
 import { FuelAdminShift } from "../components/FuelAdminShift";
+import { FuelLangProvider, useFuelLang } from "../i18n/useFuelLang";
 
 type Tab = "inbox" | "history" | "banks" | "stations" | "shift";
 
@@ -13,6 +14,15 @@ const STORAGE_KEY = "fuel_admin_authenticated";
 const KEY_STORAGE = "fuel_admin_key";
 
 export function FuelAdminPanel() {
+  return (
+    <FuelLangProvider>
+      <FuelAdminPanelInner />
+    </FuelLangProvider>
+  );
+}
+
+function FuelAdminPanelInner() {
+  const { t, lang, setLang } = useFuelLang();
   const [activeTab, setActiveTab] = useState<Tab>("inbox");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -32,7 +42,7 @@ export function FuelAdminPanel() {
       localStorage.setItem(KEY_STORAGE, apiKey);
       setError("");
     } else {
-      setError("Буруу API түлхүүр");
+      setError(t("login.error"));
     }
   };
 
@@ -51,8 +61,24 @@ export function FuelAdminPanel() {
             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8 text-amber-600" />
             </div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-ivory-200">⛽ OYUNS FINANCE ADMIN-F</h2>
-            <p className="text-sm text-slate-500 dark:text-ivory-400 mt-1">API түлхүүр оруулна уу</p>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-ivory-200">{t("login.title")}</h2>
+            <p className="text-sm text-slate-500 dark:text-ivory-400 mt-1">{t("login.subtitle")}</p>
+          </div>
+
+          {/* Language toggle */}
+          <div className="flex justify-center gap-1 mb-4">
+            <button
+              onClick={() => setLang("ru")}
+              className={`px-3 py-1 text-xs rounded-lg font-medium transition ${lang === "ru" ? "bg-amber-600 text-white" : "bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-400"}`}
+            >
+              RU
+            </button>
+            <button
+              onClick={() => setLang("mn")}
+              className={`px-3 py-1 text-xs rounded-lg font-medium transition ${lang === "mn" ? "bg-amber-600 text-white" : "bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-400"}`}
+            >
+              MN
+            </button>
           </div>
 
           <div className="space-y-4">
@@ -62,7 +88,7 @@ export function FuelAdminPanel() {
                 value={apiKey}
                 onChange={(e) => { setApiKey(e.target.value); setError(""); }}
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                placeholder="API түлхүүр"
+                placeholder={t("login.placeholder")}
                 className="w-full px-4 py-3 pr-12 border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <button
@@ -78,7 +104,7 @@ export function FuelAdminPanel() {
               onClick={handleLogin}
               className="w-full bg-amber-600 text-white py-3 rounded-xl font-semibold hover:bg-amber-700 transition"
             >
-              Нэвтрэх
+              {t("login.button")}
             </button>
           </div>
         </div>
@@ -87,11 +113,11 @@ export function FuelAdminPanel() {
   }
 
   const tabs: { key: Tab; label: string; icon: typeof Fuel }[] = [
-    { key: "inbox", label: "Хүсэлт", icon: Inbox },
-    { key: "history", label: "Түүх", icon: History },
-    { key: "banks", label: "Данс", icon: CreditCard },
-    { key: "stations", label: "АЗС", icon: MapPin },
-    { key: "shift", label: "Ээлж", icon: Power },
+    { key: "inbox", label: t("tab.inbox"), icon: Inbox },
+    { key: "history", label: t("tab.history"), icon: History },
+    { key: "banks", label: t("tab.banks"), icon: CreditCard },
+    { key: "stations", label: t("tab.stations"), icon: MapPin },
+    { key: "shift", label: t("tab.shift"), icon: Power },
   ];
 
   return (
@@ -102,9 +128,26 @@ export function FuelAdminPanel() {
           <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-lg">
             <Fuel className="w-5 h-5" /> OYUNS FINANCE ADMIN-F
           </div>
-          <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700 underline">
-            Гарах
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <Globe className="w-3.5 h-3.5 text-slate-400" />
+              <button
+                onClick={() => setLang("ru")}
+                className={`px-2 py-0.5 text-[10px] rounded font-medium transition ${lang === "ru" ? "bg-amber-600 text-white" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                RU
+              </button>
+              <button
+                onClick={() => setLang("mn")}
+                className={`px-2 py-0.5 text-[10px] rounded font-medium transition ${lang === "mn" ? "bg-amber-600 text-white" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                MN
+              </button>
+            </div>
+            <button onClick={handleLogout} className="text-sm text-slate-500 hover:text-slate-700 underline">
+              {t("header.logout")}
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}

@@ -2,15 +2,7 @@ import { useState, useEffect } from "react";
 import { History, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MapPin, Image, X, Clock } from "lucide-react";
 import { fetchFuelAdminHistory, FuelOrder } from "../api";
 import { FuelChat } from "./FuelChat";
-
-const STATUS_OPTIONS = [
-  { value: "all", label: "Бүгд" },
-  { value: "completed", label: "Дууссан" },
-  { value: "approved", label: "Зөвшөөрсөн" },
-  { value: "pending", label: "Хүлээгдэж байна" },
-  { value: "rejected", label: "Цуцалсан" },
-  { value: "cancelled", label: "Цуцалсан (хэрэглэгч)" },
-];
+import { useFuelLang } from "../i18n/useFuelLang";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -24,21 +16,31 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-slate-100 text-slate-700",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Хүлээгдэж байна",
-  pending_payment: "Хүлээгдэж байна",
-  approved: "Зөвшөөрсөн",
-  paid: "Зөвшөөрсөн",
-  in_progress: "Зөвшөөрсөн",
-  fueling_complete: "Зөвшөөрсөн",
-  completed: "Дууссан",
-  rejected: "Цуцалсан",
-  cancelled: "Цуцалсан",
-};
-
 const PAGE_SIZE = 20;
 
 export function FuelAdminHistory() {
+  const { t } = useFuelLang();
+
+  const STATUS_OPTIONS = [
+    { value: "all", label: t("history.filterAll") },
+    { value: "completed", label: t("history.filterCompleted") },
+    { value: "approved", label: t("history.filterApproved") },
+    { value: "pending", label: t("history.filterPending") },
+    { value: "rejected", label: t("history.filterRejected") },
+    { value: "cancelled", label: t("history.filterCancelled") },
+  ];
+
+  const STATUS_LABELS: Record<string, string> = {
+    pending: t("status.pending"),
+    pending_payment: t("status.pending"),
+    approved: t("status.approved"),
+    paid: t("status.approved"),
+    in_progress: t("status.approved"),
+    fueling_complete: t("status.approved"),
+    completed: t("status.completed"),
+    rejected: t("status.rejected"),
+    cancelled: t("status.cancelled"),
+  };
   const [orders, setOrders] = useState<FuelOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,7 @@ export function FuelAdminHistory() {
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         <History className="w-4 h-4 text-amber-600" />
-        <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">Түүх ({total})</div>
+        <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">{t("history.title")} ({total})</div>
         <div className="ml-auto">
           <select
             value={statusFilter}
@@ -85,10 +87,10 @@ export function FuelAdminHistory() {
         </div>
       </div>
 
-      {loading && <div className="text-center text-sm text-slate-500 py-8">Ачааллаж байна...</div>}
+      {loading && <div className="text-center text-sm text-slate-500 py-8">{t("common.loading")}</div>}
 
       {!loading && orders.length === 0 && (
-        <div className="text-center text-sm text-slate-500 py-8">Түүх байхгүй</div>
+        <div className="text-center text-sm text-slate-500 py-8">{t("history.empty")}</div>
       )}
 
       {orders.map((order) => {
@@ -123,12 +125,12 @@ export function FuelAdminHistory() {
               <div className="px-3 pb-3 space-y-3 border-t border-silver/40 dark:border-dark-600 pt-3">
                 <div className="grid grid-cols-2 gap-1.5 text-xs">
                   <div><span className="text-slate-400">User ID:</span> <span className="font-medium">{order.user_id}</span></div>
-                  <div><span className="text-slate-400">Үнэ/л:</span> <span className="font-medium">{order.station_price_per_liter}₽</span></div>
-                  <div><span className="text-slate-400">Нийт:</span> <span className="font-medium">{order.gross_amount.toLocaleString()}₽</span></div>
-                  <div><span className="text-slate-400">Хөнгөлөлт:</span> <span className="font-medium text-green-600">{order.discount_percent}%</span></div>
-                  <div><span className="text-slate-400">Бүхэл:</span> <span className="font-bold text-amber-600">{order.rounded_amount.toLocaleString()}₽</span></div>
+                  <div><span className="text-slate-400">{t("history.pricePerLiter")}</span> <span className="font-medium">{order.station_price_per_liter}₽</span></div>
+                  <div><span className="text-slate-400">{t("history.total")}</span> <span className="font-medium">{order.gross_amount.toLocaleString()}₽</span></div>
+                  <div><span className="text-slate-400">{t("history.discount")}</span> <span className="font-medium text-green-600">{order.discount_percent}%</span></div>
+                  <div><span className="text-slate-400">{t("history.rounded")}</span> <span className="font-bold text-amber-600">{order.rounded_amount.toLocaleString()}₽</span></div>
                   {order.exchange_rate && (
-                    <div><span className="text-slate-400">Ханш:</span> <span className="font-medium">{order.exchange_rate}</span></div>
+                    <div><span className="text-slate-400">{t("history.rate")}</span> <span className="font-medium">{order.exchange_rate}</span></div>
                   )}
                 </div>
 
@@ -142,7 +144,7 @@ export function FuelAdminHistory() {
                 <div className="flex gap-2">
                   {order.payment_receipt_url && (
                     <div>
-                      <div className="text-[10px] text-slate-400 mb-1">Баримт:</div>
+                      <div className="text-[10px] text-slate-400 mb-1">{t("history.receipt")}</div>
                       <img
                         src={order.payment_receipt_url}
                         alt="receipt"
@@ -153,7 +155,7 @@ export function FuelAdminHistory() {
                   )}
                   {order.pump_photo_url && (
                     <div>
-                      <div className="text-[10px] text-slate-400 mb-1">Насос:</div>
+                      <div className="text-[10px] text-slate-400 mb-1">{t("history.pump")}</div>
                       <img
                         src={order.pump_photo_url}
                         alt="pump"
@@ -166,7 +168,7 @@ export function FuelAdminHistory() {
 
                 {order.rejection_comment && (
                   <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">
-                    Цуцлах шалтгаан: {order.rejection_comment}
+                    {t("history.rejectionReason")} {order.rejection_comment}
                   </div>
                 )}
 

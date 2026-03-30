@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Gift, Flame } from "lucide-react";
 import { GiftFlow } from "../components/GiftFlow";
@@ -6,7 +6,12 @@ import { FuelPlaceholder } from "../components/FuelPlaceholder";
 import { FuelFlow } from "../components/FuelFlow";
 import { fetchRates } from "../api";
 
-export function ServicesTab() {
+interface Props {
+  initialFuelOrderId?: string | null;
+  onFuelOrderOpened?: () => void;
+}
+
+export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {}) {
   const [activeService, setActiveService] = useState<"gift" | "fuel" | "fuel-dev" | null>(null);
 
   const { data: rate } = useQuery({
@@ -14,6 +19,14 @@ export function ServicesTab() {
     queryFn: fetchRates,
     retry: 2,
   });
+
+  // Auto-open FuelFlow when navigating from status card
+  useEffect(() => {
+    if (initialFuelOrderId) {
+      setActiveService("fuel-dev");
+      onFuelOrderOpened?.();
+    }
+  }, [initialFuelOrderId]);
 
   if (activeService === "gift") {
     return (
@@ -35,6 +48,7 @@ export function ServicesTab() {
           sellRate={rate?.sell_rate || 0}
           onBack={() => setActiveService(null)}
           onSuccess={() => setActiveService(null)}
+          initialOrderId={initialFuelOrderId || undefined}
         />
       </div>
     );

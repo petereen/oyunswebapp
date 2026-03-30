@@ -3423,7 +3423,7 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
     curr_symbol = "₽" if payload.payment_currency == "RUB" else "₮"
     dispenser_line = f"\n🔢 Колонка: <b>№{payload.dispenser_number}</b>" if payload.dispenser_number else ""
     admin_text = (
-        f"⛽ <b>ШИНЭ ТҮЛШНИЙ ЗАХИАЛГА!</b>\n\n"
+        f"⛽ <b>ШИНЭ ТҮЛШ ХУДАЛДАЖ АВАХ ЗАХИАЛГА!</b>\n\n"
         f"📋 Invoice: <code>{payload.invoice}</code>\n"
         f"👤 Хэрэглэгч: {user_name} (ID: {user.id})\n"
         f"🏪 АЗС: <b>{payload.station_name}</b>{dispenser_line}\n"
@@ -3657,9 +3657,18 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
     # Notify user about status change
     order_user_id = order.get("user_id")
     invoice = order.get("invoice")
+    has_dispenser = bool(order.get("dispenser_number"))
+    approval_img = payload.approval_image_url or order.get("approval_image_url")
+
+    if payload.status == "approved":
+        if has_dispenser:
+            approved_msg = "✅ Таны захиалга зөвшөөрөгдлөө! Админ бензин түгээгүүрийг удахгүй асаах болно."
+        else:
+            approved_msg = "✅ Таны захиалга зөвшөөрөгдлөө! QR кодыг ашиглан түлшээ аваарай.\n\nТүлшээ хийсний дараа колонкны дэлгэцийн зургийг оруулна уу."
+    else:
+        approved_msg = None
 
     status_messages = {
-        "approved": "✅ Таны захиалга зөвшөөрөгдлөө! Түлш авсны дараа колонкны зургийг оруулна уу.",
         "paid": "✅ Таны төлбөр баталгаажлаа.",
         "in_progress": "⛽ Таны түлш нийлүүлэлт эхэллээ!",
         "fueling_complete": "✅ Цэнэглэлт дууслаа. Колонкны зургийг оруулна уу.",
@@ -3667,14 +3676,27 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
         "rejected": f"❌ Таны захиалга цуцлагдлаа.\n📝 Шалтгаан: {payload.rejection_comment or 'Тодорхойгүй'}",
     }
 
-    msg = status_messages.get(payload.status, "")
-    if msg and order_user_id:
-        user_text = (
-            f"⛽ <b>Түлшний захиалга шинэчлэгдлээ</b>\n\n"
-            f"📋 Invoice: <code>{invoice}</code>\n"
-            f"{msg}"
-        )
-        send_user_notification(order_user_id, user_text)
+    if order_user_id:
+        if payload.status == "approved" and approved_msg:
+            header = (
+                f"⛽ <b>Түлш худалдаж авах захиалга шинэчлэгдлээ</b>\n\n"
+                f"📋 Invoice: <code>{invoice}</code>\n"
+                f"{approved_msg}"
+            )
+            # For QR/barcode stations, send the image with the message
+            if not has_dispenser and approval_img:
+                send_user_photo(order_user_id, approval_img, caption=header)
+            else:
+                send_user_notification(order_user_id, header)
+        else:
+            msg = status_messages.get(payload.status, "")
+            if msg:
+                user_text = (
+                    f"⛽ <b>Түлш худалдаж авах захиалга шинэчлэгдлээ</b>\n\n"
+                    f"📋 Invoice: <code>{invoice}</code>\n"
+                    f"{msg}"
+                )
+                send_user_notification(order_user_id, user_text)
 
     return {"ok": True, "status": payload.status}
 

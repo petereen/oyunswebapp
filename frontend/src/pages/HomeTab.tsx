@@ -21,9 +21,10 @@ interface Props {
   authError?: string | null;
   onNavigateToTransaction: (direction?: "buy" | "sell") => void;
   onNavigateToProfile: () => void;
+  onNavigateToFuelOrder?: (orderId: string) => void;
 }
 
-export function HomeTab({ initData, user, isAuthenticating, authError, onNavigateToTransaction, onNavigateToProfile }: Props) {
+export function HomeTab({ initData, user, isAuthenticating, authError, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder }: Props) {
   const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
 
@@ -173,7 +174,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
       {/* Transaction Status Trackers */}
       {user?.id && <TransactionStatusTracker userId={user.id} />}
       {user?.id && isVerified && <GiftStatusTracker userId={user.id} />}
-      {user?.id && <FuelStatusTracker userId={user.id} />}
+      {user?.id && <FuelStatusTracker userId={user.id} onOpenOrder={onNavigateToFuelOrder} />}
       {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: ["me", user?.id] })} />}
 
       {/* Profile Error */}

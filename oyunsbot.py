@@ -4067,7 +4067,7 @@ def cmd_status(message):
     )
 
     if txn.get("completed_at"):
-        message_text += f"✅ **Дууссан:** {txn['completed_at'][:19]}\n"
+        message_text += f"✅ **Амжилттай:** {txn['completed_at'][:19]}\n"
     if txn.get("completed_by_admin"):
         message_text += f"👨‍💼 **Баталгаажуулсан:** {txn['completed_by_admin']}\n"
     if txn.get("admin_comment"):

@@ -7,14 +7,16 @@ import {
   X,
   AlertTriangle,
   MessageCircle,
+  ChevronRight,
 } from "lucide-react";
 import { fetchActiveFuelOrders, FuelOrder } from "../api";
 
 interface Props {
   userId?: number;
+  onOpenOrder?: (orderId: string) => void;
 }
 
-export function FuelStatusTracker({ userId }: Props) {
+export function FuelStatusTracker({ userId, onOpenOrder }: Props) {
   const [dismissed, setDismissed] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem("dismissedFuelOrders");
@@ -55,6 +57,7 @@ export function FuelStatusTracker({ userId }: Props) {
         <FuelStatusCard
           key={order.id}
           order={order}
+          onOpen={onOpenOrder ? () => onOpenOrder(order.id) : undefined}
           onDismiss={
             ["completed", "rejected", "cancelled"].includes(order.status)
               ? () => handleDismiss(order.id)
@@ -68,9 +71,11 @@ export function FuelStatusTracker({ userId }: Props) {
 
 function FuelStatusCard({
   order,
+  onOpen,
   onDismiss,
 }: {
   order: FuelOrder;
+  onOpen?: () => void;
   onDismiss?: () => void;
 }) {
   const cfg = getStatusConfig(order.status, order.rejection_comment);
@@ -78,7 +83,8 @@ function FuelStatusCard({
 
   return (
     <div
-      className={`relative p-4 rounded-xl border ${
+      onClick={onOpen}
+      className={`relative p-4 rounded-xl border ${onOpen ? "cursor-pointer active:scale-[0.98] transition-transform" : ""} ${
         order.status === "rejected" || order.status === "cancelled"
           ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
           : "bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-amber-200 dark:border-amber-800"
@@ -123,6 +129,13 @@ function FuelStatusCard({
       <p className="text-xs text-slate-500 dark:text-ivory-400 mt-2">
         {cfg.description}
       </p>
+
+      {onOpen && (
+        <div className="flex items-center justify-end gap-1 mt-2 text-xs text-amber-600 dark:text-amber-400 font-medium">
+          <span>Дэлгэрэнгүй</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </div>
+      )}
 
       {(order.status === "rejected" || order.status === "cancelled") && (
         <a

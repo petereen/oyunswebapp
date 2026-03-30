@@ -223,7 +223,7 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
         >
           Баталгаажсан
         </span>
-        <span className={status === "completed" ? "text-green-500 font-medium" : ""}>Дууссан</span>
+        <span className={status === "completed" ? "text-green-500 font-medium" : ""}>Амжилттай</span>
       </div>
 
       {/* Description */}

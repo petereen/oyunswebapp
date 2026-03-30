@@ -24,6 +24,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(0);
   const [showProfile, setShowProfile] = useState(false);
   const [transactionDirection, setTransactionDirection] = useState<"buy" | "sell" | null>(null);
+  const [fuelOrderId, setFuelOrderId] = useState<string | null>(null);
 
   // Listen for auth:unauthorized events and trigger re-authentication
   useEffect(() => {
@@ -59,10 +60,17 @@ export default function App() {
     setShowProfile(false);
   };
 
+  const handleNavigateToFuelOrder = (orderId: string) => {
+    setFuelOrderId(orderId);
+    setActiveTab(2);
+    setShowProfile(false);
+  };
+
   const handleTabChange = (tab: number) => {
     setActiveTab(tab);
     setShowProfile(false);
     if (tab !== 1) setTransactionDirection(null);
+    if (tab !== 2) setFuelOrderId(null);
   };
 
   // Admin view
@@ -128,6 +136,7 @@ export default function App() {
                 authError={authError}
                 onNavigateToTransaction={handleNavigateToTransaction}
                 onNavigateToProfile={handleNavigateToProfile}
+                onNavigateToFuelOrder={handleNavigateToFuelOrder}
               />
             )}
             {activeTab === 1 && (
@@ -138,7 +147,7 @@ export default function App() {
                 onResetDirection={() => setTransactionDirection(null)}
               />
             )}
-            {activeTab === 2 && <ServicesTab />}
+            {activeTab === 2 && <ServicesTab initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />}
             {activeTab === 3 && <StatsTab userId={user?.id} />}
           </>
         )}

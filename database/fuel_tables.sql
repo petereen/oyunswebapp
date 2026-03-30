@@ -81,13 +81,14 @@ CREATE TABLE IF NOT EXISTS fuel_orders (
     -- Receipts & photos
     payment_receipt_url TEXT,                    -- user's transfer receipt
     pump_photo_url TEXT,                         -- pump display photo after fueling
+    approval_image_url TEXT,                     -- QR/barcode image from admin approval
 
     -- Admin bank used
     admin_bank_id UUID,
 
-    -- Status flow: pending_payment -> paid -> in_progress -> fueling_complete -> completed | rejected
-    status VARCHAR(30) NOT NULL DEFAULT 'pending_payment'
-        CHECK (status IN ('pending_payment', 'paid', 'in_progress', 'fueling_complete', 'completed', 'rejected', 'cancelled')),
+    -- Status flow: pending -> approved -> completed | rejected
+    status VARCHAR(30) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'pending_payment', 'paid', 'approved', 'in_progress', 'fueling_complete', 'completed', 'rejected', 'cancelled')),
 
     rejection_comment TEXT,
     admin_comment TEXT,

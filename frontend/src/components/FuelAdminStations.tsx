@@ -18,12 +18,14 @@ import {
   deleteFuelAdminStation,
   FuelStation,
 } from "../api";
+import { useFuelLang } from "../i18n/useFuelLang";
 
 interface EditingStation extends Partial<FuelStation> {
   isNew?: boolean;
 }
 
 export function FuelAdminStations() {
+  const { t } = useFuelLang();
   const [stations, setStations] = useState<FuelStation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,7 +39,7 @@ export function FuelAdminStations() {
       const data = await fetchFuelAdminStations();
       setStations(data);
     } catch {
-      setError("ШТС ачаалахад алдаа гарлаа");
+      setError(t("stations.loadError"));
     }
     setLoading(false);
   };
@@ -87,18 +89,18 @@ export function FuelAdminStations() {
       setEditing(null);
       await load();
     } catch {
-      setError("Хадгалахад алдаа гарлаа");
+      setError(t("common.saveError"));
     }
     setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Устгах уу?")) return;
+    if (!confirm(t("common.confirmDelete"))) return;
     try {
       await deleteFuelAdminStation(id);
       await load();
     } catch {
-      setError("Устгахад алдаа гарлаа");
+      setError(t("common.deleteError"));
     }
   };
 
@@ -112,7 +114,7 @@ export function FuelAdminStations() {
       await updateFuelAdminStation(station.id, { is_active: !station.is_active });
       await load();
     } catch {
-      setError("Идэвхжүүлэлт солиход алдаа гарлаа");
+      setError(t("stations.toggleError"));
     }
   };
 
@@ -122,7 +124,7 @@ export function FuelAdminStations() {
         <div className="flex items-center gap-2">
           <Fuel className="w-4 h-4 text-amber-600" />
           <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-            АЗС станцууд ({stations.length})
+            {t("stations.title")} ({stations.length})
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -133,29 +135,29 @@ export function FuelAdminStations() {
             onClick={handleAdd}
             className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-xl hover:bg-amber-700 transition"
           >
-            <Plus className="w-3 h-3" /> Нэмэх
+            <Plus className="w-3 h-3" /> {t("common.add")}
           </button>
         </div>
       </div>
 
       {error && <div className="text-red-500 text-sm">{error}</div>}
-      {loading && <div className="text-center text-sm text-slate-500 py-8">Ачааллаж байна...</div>}
+      {loading && <div className="text-center text-sm text-slate-500 py-8">{t("common.loading")}</div>}
 
       {/* Edit form */}
       {editing && (
         <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 border border-amber-200 dark:border-amber-800 space-y-3">
           <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-            {editing.isNew ? "Шинэ АЗС нэмэх" : "АЗС засах"}
+            {editing.isNew ? t("stations.addNew") : t("stations.edit")}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <input
-              placeholder="АЗС-ын нэр *"
+              placeholder={t("stations.name")}
               value={editing.name || ""}
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               className="col-span-2 px-3 py-2 text-xs border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200"
             />
             <div>
-              <label className="text-[10px] text-slate-400 mb-1 block">Хөнгөлөлт %</label>
+              <label className="text-[10px] text-slate-400 mb-1 block">{t("stations.discountPercent")}</label>
               <input
                 type="number"
                 min={0}
@@ -166,7 +168,7 @@ export function FuelAdminStations() {
               />
             </div>
             <div>
-              <label className="text-[10px] text-slate-400 mb-1 block">Эрэмбэ</label>
+              <label className="text-[10px] text-slate-400 mb-1 block">{t("stations.order")}</label>
               <input
                 type="number"
                 min={0}
@@ -183,7 +185,7 @@ export function FuelAdminStations() {
               onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })}
               className="accent-amber-600"
             />
-            Идэвхтэй
+            {t("common.active")}
           </label>
           <label className="flex items-center gap-2 text-xs text-dark-800 dark:text-ivory-200">
             <input
@@ -192,7 +194,7 @@ export function FuelAdminStations() {
               onChange={(e) => setEditing({ ...editing, requires_dispenser: e.target.checked })}
               className="accent-blue-600"
             />
-            🔢 Колонка дугаар шаардах (админ асаана)
+            {t("stations.requireDispenser")}
           </label>
           <div className="flex gap-2">
             <button
@@ -200,13 +202,13 @@ export function FuelAdminStations() {
               disabled={saving || !editing.name?.trim()}
               className="flex items-center gap-1 px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl hover:bg-amber-700 transition disabled:opacity-50"
             >
-              <Save className="w-3 h-3" /> {saving ? "Хадгалж байна..." : "Хадгалах"}
+              <Save className="w-3 h-3" /> {saving ? t("common.saving") : t("common.save")}
             </button>
             <button
               onClick={handleCancel}
               className="flex items-center gap-1 px-4 py-2 bg-slate-200 dark:bg-dark-600 text-dark-800 dark:text-ivory-200 text-xs font-semibold rounded-xl hover:bg-slate-300 dark:hover:bg-dark-500 transition"
             >
-              <X className="w-3 h-3" /> Болих
+              <X className="w-3 h-3" /> {t("common.cancel")}
             </button>
           </div>
         </div>
@@ -240,12 +242,12 @@ export function FuelAdminStations() {
                   )}
                 </div>
                 <div className="text-[10px] text-slate-400">
-                  Эрэмбэ: {station.display_order}
+                  {t("stations.orderLabel")} {station.display_order}
                   {station.requires_dispenser && (
-                    <span className="ml-2 text-blue-500">🔢 Колонка</span>
+                    <span className="ml-2 text-blue-500">{t("stations.dispenserTag")}</span>
                   )}
                   {!station.requires_dispenser && (
-                    <span className="ml-2 text-purple-500">📱 QR/Штрих-код</span>
+                    <span className="ml-2 text-purple-500">{t("stations.qrTag")}</span>
                   )}
                 </div>
               </div>
@@ -258,7 +260,7 @@ export function FuelAdminStations() {
                     ? "hover:bg-red-100 dark:hover:bg-red-900/20"
                     : "hover:bg-green-100 dark:hover:bg-green-900/20"
                 }`}
-                title={station.is_active ? "Идэвхгүй болгох" : "Идэвхжүүлэх"}
+                title={station.is_active ? t("stations.deactivate") : t("stations.activate")}
               >
                 {station.is_active ? (
                   <XCircle className="w-3.5 h-3.5 text-red-500" />

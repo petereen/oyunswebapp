@@ -9,6 +9,7 @@ import {
   requestPresignAdmin,
   FuelChatMessage,
 } from "../api";
+import { useFuelLang } from "../i18n/useFuelLang";
 
 interface Props {
   orderId: string;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function FuelChat({ orderId, isAdmin }: Props) {
+  const { t } = useFuelLang();
   const [messages, setMessages] = useState<FuelChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -87,7 +89,7 @@ export function FuelChat({ orderId, isAdmin }: Props) {
     <div className="bg-white dark:bg-dark-800 rounded-2xl border border-silver/60 dark:border-dark-600 overflow-hidden">
       <div className="px-4 py-3 border-b border-silver/40 dark:border-dark-600">
         <div className="text-xs font-semibold text-dark-800 dark:text-ivory-200">
-          💬 Чат
+          {t("chat.title")}
         </div>
       </div>
 
@@ -95,7 +97,7 @@ export function FuelChat({ orderId, isAdmin }: Props) {
       <div className="h-48 overflow-y-auto p-3 space-y-2">
         {messages.length === 0 && (
           <div className="text-center text-xs text-dark-400 dark:text-ivory-500 py-8">
-            Мессеж байхгүй
+            {t("chat.empty")}
           </div>
         )}
         {messages.map((m) => {
@@ -164,7 +166,7 @@ export function FuelChat({ orderId, isAdmin }: Props) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Мессеж бичих..."
+          placeholder={t("chat.placeholder")}
           className="flex-1 px-3 py-2 text-xs bg-surface-50 dark:bg-dark-700 rounded-xl border border-silver/40 dark:border-dark-600 text-dark-800 dark:text-ivory-200 focus:outline-none focus:ring-1 focus:ring-amber-400"
         />
 

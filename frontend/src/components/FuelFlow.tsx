@@ -38,6 +38,7 @@ interface Props {
   sellRate: number;
   onBack: () => void;
   onSuccess: () => void;
+  initialOrderId?: string;
 }
 
 type FuelView = "menu" | "history" | "new" | "tracking";
@@ -49,7 +50,7 @@ const STATUS_LABELS: Record<string, string> = {
   paid: "Зөвшөөрсөн",
   in_progress: "Зөвшөөрсөн",
   fueling_complete: "Зөвшөөрсөн",
-  completed: "Дууссан",
+  completed: "Амжилттай",
   rejected: "Цуцалсан",
   cancelled: "Цуцалсан",
 };
@@ -70,7 +71,7 @@ function isActiveStatus(status: string) {
   return ["pending", "pending_payment", "approved", "paid", "in_progress", "fueling_complete"].includes(status);
 }
 
-export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
+export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props) {
   const [view, setView] = useState<FuelView>("menu");
   const [step, setStep] = useState(0);
 
@@ -142,6 +143,31 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
       .catch(() => setShiftActive(true))
       .finally(() => setShiftLoading(false));
   }, []);
+
+  // Auto-open specific order from navigation
+  useEffect(() => {
+    if (initialOrderId) {
+      const loadOrder = async () => {
+        try {
+          // Try active orders first, then all orders
+          let found: FuelOrder | undefined;
+          const active = await fetchActiveFuelOrders();
+          found = (active.orders || []).find((o) => o.id === initialOrderId);
+          if (!found) {
+            const all = await fetchFuelOrders();
+            found = (all.orders || []).find((o) => o.id === initialOrderId);
+          }
+          if (found) {
+            setActiveOrder(found);
+            setPumpPhotoUrl("");
+            setView("tracking");
+            if (isActiveStatus(found.status)) setOrderPolling(true);
+          }
+        } catch { /* ignore */ }
+      };
+      loadOrder();
+    }
+  }, [initialOrderId]);
 
   // Generate invoice ID
   const generateInvoiceId = useCallback(() => {
@@ -413,7 +439,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
               </div>
               <div className="flex-1 text-left">
                 <div className="font-bold text-dark-800 dark:text-ivory-200">Шинэ захиалга үүсгэх</div>
-                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">Түлшний хүсэлт илгээх</div>
+                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">Түлш худалдаж авах</div>
               </div>
               <ChevronRight className="w-5 h-5 text-dark-400" />
             </button>
@@ -534,7 +560,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     const statusSteps = [
       { key: "pending", label: "Хүлээгдэж байна", emoji: "⏳", active: isPending, done: isApproved || isCompleted },
       { key: "approved", label: "Зөвшөөрсөн", emoji: "✅", active: isApproved, done: isCompleted },
-      { key: "completed", label: "Дууссан", emoji: "🎉", active: isCompleted, done: false },
+      { key: "completed", label: "Амжилттай", emoji: "🎉", active: isCompleted, done: false },
     ];
 
     return (
@@ -625,11 +651,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
               <div className="flex items-center gap-2 mb-1">
                 <Clock className="w-4 h-4 text-yellow-600" />
                 <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                  Админы зөвшөөрөл хүлээгдэж байна
+                  Таны хүсэлтийг админ шалгаж байна
                 </span>
               </div>
               <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                Таны хүсэлтийг админ шалгаж зөвшөөрөх болно. Хүлээнэ үү.
+                Та түр хүлээнэ үү.
               </p>
             </div>
           )}

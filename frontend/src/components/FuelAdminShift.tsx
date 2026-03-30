@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { Power, User, RefreshCw, AlertTriangle } from "lucide-react";
 import { fetchFuelAdminShift, updateFuelAdminShift, FuelShiftStatus } from "../api";
+import { useFuelLang } from "../i18n/useFuelLang";
 
 export function FuelAdminShift() {
+  const { t } = useFuelLang();
   const [shift, setShift] = useState<FuelShiftStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -14,7 +16,7 @@ export function FuelAdminShift() {
       const data = await fetchFuelAdminShift();
       setShift(data);
     } catch {
-      setError("Ээлжийн мэдээлэл ачаалахад алдаа гарлаа");
+      setError(t("shift.loadError"));
     }
     setLoading(false);
   };
@@ -33,7 +35,7 @@ export function FuelAdminShift() {
       });
       await load();
     } catch {
-      setError("Ээлж шинэчлэхэд алдаа гарлаа");
+      setError(t("shift.updateError"));
     }
     setSaving(false);
   };
@@ -46,17 +48,17 @@ export function FuelAdminShift() {
       await updateFuelAdminShift({ is_active: shift.is_active, admin_id: adminId });
       await load();
     } catch {
-      setError("Админ сольоход алдаа гарлаа");
+      setError(t("shift.changeAdminError"));
     }
     setSaving(false);
   };
 
   if (loading) {
-    return <div className="text-center text-sm text-slate-500 py-8">Ачааллаж байна...</div>;
+    return <div className="text-center text-sm text-slate-500 py-8">{t("common.loading")}</div>;
   }
 
   if (!shift) {
-    return <div className="text-red-500 text-sm text-center py-4">{error || "Мэдээлэл олдсонгүй"}</div>;
+    return <div className="text-red-500 text-sm text-center py-4">{error || t("shift.notFound")}</div>;
   }
 
   return (
@@ -71,7 +73,7 @@ export function FuelAdminShift() {
           <div className="flex items-center gap-2">
             <Power className={`w-5 h-5 ${shift.is_active ? "text-green-600" : "text-red-500"}`} />
             <span className="font-bold text-dark-800 dark:text-ivory-200">
-              Ээлж: {shift.is_active ? "ИДЭВХТЭЙ" : "УНТАРСАН"}
+              {shift.is_active ? t("shift.active") : t("shift.inactive")}
             </span>
           </div>
           <button onClick={load} className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-dark-700 transition">
@@ -83,7 +85,7 @@ export function FuelAdminShift() {
           <div className="flex items-center gap-2 p-3 bg-white/70 dark:bg-dark-800/70 rounded-xl">
             <User className="w-4 h-4 text-green-600" />
             <span className="text-sm text-dark-800 dark:text-ivory-200">
-              Ээлжинд: <b>{shift.current_admin.admin_name}</b> (ID: {shift.current_admin.admin_id})
+              {t("shift.onDuty")} <b>{shift.current_admin.admin_name}</b> (ID: {shift.current_admin.admin_id})
             </span>
           </div>
         )}
@@ -92,7 +94,7 @@ export function FuelAdminShift() {
           <div className="flex items-center gap-2 p-3 bg-white/70 dark:bg-dark-800/70 rounded-xl">
             <AlertTriangle className="w-4 h-4 text-red-500" />
             <span className="text-xs text-red-600 dark:text-red-400">
-              Ээлж унтарсан үед хэрэглэгчид түлш захиалах боломжгүй
+              {t("shift.offWarning")}
             </span>
           </div>
         )}
@@ -106,7 +108,7 @@ export function FuelAdminShift() {
               : "bg-green-500 hover:bg-green-600 text-white"
           }`}
         >
-          {saving ? "Хадгалж байна..." : shift.is_active ? "Ээлж унтраах" : "Ээлж асаах"}
+          {saving ? t("common.saving") : shift.is_active ? t("shift.turnOff") : t("shift.turnOn")}
         </button>
       </div>
 
@@ -114,7 +116,7 @@ export function FuelAdminShift() {
       {shift.admins.length > 0 && (
         <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
           <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-            Ээлжийн админ солих
+            {t("shift.changeAdmin")}
           </div>
           <div className="space-y-2">
             {shift.admins.map((admin) => {
@@ -143,7 +145,7 @@ export function FuelAdminShift() {
                   </div>
                   {isCurrent && (
                     <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                      Одоогийн
+                      {t("shift.current")}
                     </span>
                   )}
                 </button>

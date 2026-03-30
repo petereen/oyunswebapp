@@ -146,7 +146,7 @@ export function AdminGifts() {
       case "approved":
         return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Зөвшөөрсөн</span>;
       case "completed":
-        return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Дууссан</span>;
+        return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Амжилттай</span>;
       case "rejected":
         return <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">Татгалзсан</span>;
       default:
@@ -195,7 +195,7 @@ export function AdminGifts() {
           <option value="pending_recipient">Хүлээн авагч хүлээж байна</option>
           <option value="pending_admin">Админ хүлээж байна</option>
 
-          <option value="completed">Дууссан</option>
+          <option value="completed">Амжилттай</option>
           <option value="rejected">Татгалзсан</option>
         </select>
       </div>

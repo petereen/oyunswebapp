@@ -186,7 +186,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           className="mt-3 flex items-center justify-center gap-2 text-xs text-red-600 hover:text-red-700 transition"
         >
           <MessageCircle className="w-4 h-4" />
-          <span>Асуудалтай гэж бодвол тусламжтай холбогдоорой</span>
+          <span>Асуудал гарсан гэж үзвэл support хаягтай холбогдоорой</span>
         </a>
       )}
     </div>
