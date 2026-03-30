@@ -780,8 +780,21 @@ export interface FuelAdminBankAccount {
   currency: 'RUB' | 'MNT';
   is_active: boolean;
   display_order: number;
+  admin_id?: number;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface FuelShiftAdmin {
+  admin_id: number;
+  admin_name: string;
+  chat_id?: number;
+}
+
+export interface FuelShiftStatus {
+  is_active: boolean;
+  current_admin?: FuelShiftAdmin;
+  admins: FuelShiftAdmin[];
 }
 
 // --- Fuel User API ---
@@ -927,5 +940,28 @@ export async function updateFuelAdminStation(id: string, payload: Partial<{ name
 
 export async function deleteFuelAdminStation(id: string) {
   const res = await fuelAdminApi.delete(`/fuel-admin/stations/${id}`);
+  return res.data;
+}
+
+// --- Fuel: Shift Status (user-facing) ---
+
+export async function fetchFuelShiftStatus(): Promise<{ is_active: boolean }> {
+  try {
+    const res = await api.get('/fuel/shift-status');
+    return res.data;
+  } catch {
+    return { is_active: true };
+  }
+}
+
+// --- Fuel Admin: Shift Management ---
+
+export async function fetchFuelAdminShift(): Promise<FuelShiftStatus> {
+  const res = await fuelAdminApi.get('/fuel-admin/shift');
+  return res.data;
+}
+
+export async function updateFuelAdminShift(params: { is_active: boolean; admin_id?: number }) {
+  const res = await fuelAdminApi.put('/fuel-admin/shift', params);
   return res.data;
 }

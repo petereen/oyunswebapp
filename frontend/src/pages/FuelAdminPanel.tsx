@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Fuel, Inbox, History, CreditCard, Lock, Eye, EyeOff, MapPin } from "lucide-react";
+import { Fuel, Inbox, History, CreditCard, Lock, Eye, EyeOff, MapPin, Power } from "lucide-react";
 import { FuelAdminInbox } from "../components/FuelAdminInbox";
 import { FuelAdminHistory } from "../components/FuelAdminHistory";
 import { FuelAdminBankAccounts } from "../components/FuelAdminBankAccounts";
 import { FuelAdminStations } from "../components/FuelAdminStations";
+import { FuelAdminShift } from "../components/FuelAdminShift";
 
-type Tab = "inbox" | "history" | "banks" | "stations";
+type Tab = "inbox" | "history" | "banks" | "stations" | "shift";
 
 const FUEL_ADMIN_API_KEY = import.meta.env.VITE_FUEL_ADMIN_API_KEY || "oyuns-fuel-admin-key-2026";
 const STORAGE_KEY = "fuel_admin_authenticated";
@@ -90,6 +91,7 @@ export function FuelAdminPanel() {
     { key: "history", label: "Түүх", icon: History },
     { key: "banks", label: "Данс", icon: CreditCard },
     { key: "stations", label: "Станц", icon: MapPin },
+    { key: "shift", label: "Ээлж", icon: Power },
   ];
 
   return (
@@ -131,6 +133,7 @@ export function FuelAdminPanel() {
         {activeTab === "history" && <FuelAdminHistory />}
         {activeTab === "banks" && <FuelAdminBankAccounts />}
         {activeTab === "stations" && <FuelAdminStations />}
+        {activeTab === "shift" && <FuelAdminShift />}
       </div>
     </div>
   );

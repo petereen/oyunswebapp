@@ -674,9 +674,27 @@ class FuelAdminBankAccount(BaseModel):
     currency: str
     is_active: bool = True
     display_order: int = 0
+    admin_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
 
 class FuelAdminBankAccountsResponse(BaseModel):
     accounts: list[FuelAdminBankAccount]
+
+
+class FuelShiftAdmin(BaseModel):
+    admin_id: int
+    admin_name: str
+    chat_id: Optional[int] = None
+
+
+class FuelShiftStatus(BaseModel):
+    is_active: bool
+    current_admin: Optional[FuelShiftAdmin] = None
+    admins: list[FuelShiftAdmin] = []
+
+
+class FuelShiftUpdateRequest(BaseModel):
+    is_active: bool
+    admin_id: Optional[int] = None

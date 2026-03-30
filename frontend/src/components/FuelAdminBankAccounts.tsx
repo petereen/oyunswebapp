@@ -55,6 +55,7 @@ export function FuelAdminBankAccounts() {
       currency: "RUB",
       is_active: true,
       display_order: accounts.length,
+      admin_id: undefined,
     });
   };
 
@@ -77,6 +78,7 @@ export function FuelAdminBankAccounts() {
         currency: editingAccount.currency,
         is_active: editingAccount.is_active,
         display_order: editingAccount.display_order,
+        admin_id: editingAccount.admin_id || undefined,
       };
       if (editingAccount.isNew) {
         await createFuelAdminBankAccount(payload);
@@ -176,6 +178,13 @@ export function FuelAdminBankAccounts() {
               <option value="RUB">RUB ₽</option>
               <option value="MNT">MNT ₮</option>
             </select>
+            <input
+              type="number"
+              placeholder="Админ ID (TG)"
+              value={editingAccount.admin_id ?? ""}
+              onChange={(e) => setEditingAccount({ ...editingAccount, admin_id: e.target.value ? parseInt(e.target.value) : undefined })}
+              className="px-3 py-2 text-xs border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200"
+            />
           </div>
           <label className="flex items-center gap-2 text-xs text-dark-800 dark:text-ivory-200">
             <input
@@ -246,6 +255,7 @@ export function FuelAdminBankAccounts() {
             {account.card_number && <div>Карт: {account.card_number}</div>}
             {account.account_number && <div>Данс: {account.account_number}</div>}
             {account.phone && <div>Утас: {account.phone}</div>}
+            {account.admin_id && <div>Админ ID: {account.admin_id}</div>}
           </div>
         </div>
       ))}

@@ -92,6 +92,9 @@ from models import (
     FuelChatMessagesResponse,
     FuelAdminBankAccount,
     FuelAdminBankAccountsResponse,
+    FuelShiftAdmin,
+    FuelShiftStatus,
+    FuelShiftUpdateRequest,
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
@@ -3266,9 +3269,19 @@ def _fuel_calculate(station_name: str, liters: float, price_per_liter: float, pa
 
 
 def _send_fuel_admin_notification(text: str, reply_markup: dict | None = None):
-    """Send notification to fuel admin chat IDs (falls back to main admin if not configured)."""
+    """Send notification to the on-shift fuel admin's chat ID. Falls back to all fuel admin chats if no shift."""
     settings = get_settings()
+    
+    # Check if there's an active shift with a specific admin
     chat_ids = settings.fuel_admin_chat_ids or settings.admin_chat_ids
+    try:
+        client = get_supabase()
+        shift_res = client.table("fuel_admin_shift").select("*").eq("id", "current").single().execute()
+        if shift_res.data and shift_res.data.get("is_active") and shift_res.data.get("chat_id"):
+            chat_ids = [shift_res.data["chat_id"]]
+    except Exception:
+        pass  # Fall back to default chat IDs
+
     for chat_id in chat_ids:
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
         if reply_markup:
@@ -3549,9 +3562,23 @@ async def fuel_chat_send(order_id: str, payload: FuelChatMessageRequest, user=De
 
 @app.get("/api/fuel/admin-banks")
 async def fuel_admin_banks(user=Depends(get_authenticated_user)):
-    """Get active fuel admin bank accounts for user to send payment to."""
+    """Get active fuel admin bank accounts for user to send payment to.
+    Filters by on-shift admin's bank accounts if a shift is active."""
     client = get_supabase()
-    res = client.table("fuel_admin_bank_accounts").select("*").eq("is_active", True).order("display_order").execute()
+
+    # Check if there's an on-shift admin → only show their bank accounts
+    shift_admin_id = None
+    try:
+        shift_res = client.table("fuel_admin_shift").select("admin_id, is_active").eq("id", "current").single().execute()
+        if shift_res.data and shift_res.data.get("is_active") and shift_res.data.get("admin_id"):
+            shift_admin_id = shift_res.data["admin_id"]
+    except Exception:
+        pass
+
+    query = client.table("fuel_admin_bank_accounts").select("*").eq("is_active", True)
+    if shift_admin_id:
+        query = query.eq("admin_id", shift_admin_id)
+    res = query.order("display_order").execute()
     accounts = [FuelAdminBankAccount(**a) for a in (res.data or [])]
     return FuelAdminBankAccountsResponse(accounts=accounts)
 
@@ -3686,7 +3713,7 @@ async def fuel_admin_bank_account_create(payload: dict, user=Depends(get_fuel_ad
         raise HTTPException(status_code=403, detail="Fuel admin access required")
 
     client = get_supabase()
-    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order"]
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id"]
     data = {k: v for k, v in payload.items() if k in allowed}
     res = client.table("fuel_admin_bank_accounts").insert(data).execute()
     if not res.data:
@@ -3703,7 +3730,7 @@ async def fuel_admin_bank_account_update(account_id: str, payload: dict, user=De
         raise HTTPException(status_code=403, detail="Fuel admin access required")
 
     client = get_supabase()
-    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order"]
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id"]
     data = {k: v for k, v in payload.items() if k in allowed}
     res = client.table("fuel_admin_bank_accounts").update(data).eq("id", account_id).execute()
     if not res.data:
@@ -3839,3 +3866,94 @@ async def fuel_admin_delete_station(station_id: str, user=Depends(get_fuel_admin
     client = get_supabase()
     client.table("fuel_stations").delete().eq("id", station_id).execute()
     return {"ok": True}
+
+
+# ---- Fuel Admin: Shift Management ----
+
+def _get_fuel_admin_list() -> list[FuelShiftAdmin]:
+    """Build the list of known fuel admins from config."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    chat_ids = settings.fuel_admin_chat_ids or settings.admin_chat_ids
+    admins = []
+    for i, uid in enumerate(fuel_admin_ids):
+        chat_id = chat_ids[i] if i < len(chat_ids) else None
+        admins.append(FuelShiftAdmin(admin_id=uid, admin_name=f"Admin {uid}", chat_id=chat_id))
+    return admins
+
+
+@app.get("/api/fuel/shift-status")
+async def fuel_shift_status_public(user=Depends(get_authenticated_user)):
+    """Check if fuel service is available (shift is active). For user-facing check."""
+    client = get_supabase()
+    try:
+        res = client.table("fuel_admin_shift").select("*").eq("id", "current").single().execute()
+        if res.data:
+            return {"is_active": res.data.get("is_active", False)}
+    except Exception:
+        pass
+    return {"is_active": True}  # Default to active if table doesn't exist yet
+
+
+@app.get("/api/fuel-admin/shift")
+async def fuel_admin_get_shift(user=Depends(get_fuel_admin_auth)):
+    """Get current shift status."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    admins = _get_fuel_admin_list()
+    client = get_supabase()
+
+    try:
+        res = client.table("fuel_admin_shift").select("*").eq("id", "current").single().execute()
+        if res.data:
+            is_active = res.data.get("is_active", False)
+            current_admin_id = res.data.get("admin_id")
+            current_admin = None
+            if current_admin_id:
+                current_admin = next((a for a in admins if a.admin_id == current_admin_id), None)
+            return FuelShiftStatus(is_active=is_active, current_admin=current_admin, admins=admins)
+    except Exception:
+        pass
+
+    return FuelShiftStatus(is_active=False, current_admin=None, admins=admins)
+
+
+@app.put("/api/fuel-admin/shift")
+async def fuel_admin_update_shift(payload: FuelShiftUpdateRequest, user=Depends(get_fuel_admin_auth)):
+    """Update shift status (on/off) and assign admin."""
+    settings = get_settings()
+    fuel_admin_ids = settings.fuel_admin_user_ids or settings.admin_user_ids
+    if user.id not in fuel_admin_ids:
+        raise HTTPException(status_code=403, detail="Fuel admin access required")
+
+    admins = _get_fuel_admin_list()
+    client = get_supabase()
+
+    # Find the admin's chat_id
+    chat_id = None
+    admin_name = None
+    if payload.admin_id:
+        admin = next((a for a in admins if a.admin_id == payload.admin_id), None)
+        if admin:
+            chat_id = admin.chat_id
+            admin_name = admin.admin_name
+
+    shift_data = {
+        "id": "current",
+        "is_active": payload.is_active,
+        "admin_id": payload.admin_id,
+        "admin_name": admin_name,
+        "chat_id": chat_id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        client.table("fuel_admin_shift").upsert(shift_data).execute()
+    except Exception as e:
+        logger.error(f"Failed to update fuel admin shift: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update shift")
+
+    return {"ok": True, "is_active": payload.is_active, "admin_id": payload.admin_id}

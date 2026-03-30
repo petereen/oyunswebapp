@@ -10,6 +10,7 @@ import {
   Loader2,
   Navigation,
   Camera,
+  X,
 } from "lucide-react";
 import {
   FUEL_STATIONS_FALLBACK,
@@ -20,6 +21,7 @@ import {
   requestPresign,
   uploadFuelPumpPhoto,
   fetchActiveFuelOrders,
+  fetchFuelShiftStatus,
   FuelAdminBankAccount,
   FuelCalculation,
   FuelOrder,
@@ -95,7 +97,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
   const [copied, setCopied] = useState("");
   const [successInvoice, setSuccessInvoice] = useState("");
 
-  // Load admin banks and stations on mount
+  // Shift status
+  const [shiftActive, setShiftActive] = useState(true);
+  const [shiftLoading, setShiftLoading] = useState(true);
+
+  // Load admin banks, stations, and shift status on mount
   useEffect(() => {
     fetchFuelAdminBanks()
       .then((res) => setAdminBanks(res.accounts || []))
@@ -104,6 +110,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
       .then((data) => setStations(data.length > 0 ? data : FUEL_STATIONS_FALLBACK))
       .catch(() => setStations(FUEL_STATIONS_FALLBACK))
       .finally(() => setStationsLoading(false));
+    fetchFuelShiftStatus()
+      .then((res) => setShiftActive(res.is_active))
+      .catch(() => setShiftActive(true))
+      .finally(() => setShiftLoading(false));
   }, []);
 
   // Generate invoice ID (Moscow timezone)
@@ -325,9 +335,25 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
     return (
       <div className="animate-slideUp">
         {renderBack("АЗС сонгох", onBack)}
-        {stationsLoading ? (
+        {(stationsLoading || shiftLoading) ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
+          </div>
+        ) : !shiftActive ? (
+          <div className="bg-white dark:bg-dark-800 p-8 rounded-2xl border border-silver/60 dark:border-dark-600 text-center space-y-4">
+            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-8 h-8 text-amber-500" />
+            </div>
+            <h3 className="font-bold text-dark-800 dark:text-ivory-200">Түр ажиллахгүй байна</h3>
+            <p className="text-sm text-dark-500 dark:text-ivory-400">
+              Түр хугацаанд ажиллахгүй байна. Та дараа дахин оролдоно уу.
+            </p>
+            <button
+              onClick={onBack}
+              className="px-6 py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
+            >
+              Буцах
+            </button>
           </div>
         ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -431,7 +457,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
                 </span>
               </div>
               <p className="text-xs text-dark-500 dark:text-ivory-400">
-                {stationName} станцад колонкны дугаар зайлшгүй шаардлагатай. Админ колонкыг асаана.
+                {stationName} станцад колонканы дугаар зайлшгүй шаардлагатай. Админ колонкыг асааж өгөх болно.
               </p>
               <input
                 type="text"
@@ -511,7 +537,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
           </div>
 
           {/* Calculation preview */}
-          {validInput && (
+          {validInput && (() => {
+            const previewRounded = Math.ceil(previewNet / 100) * 100;
+            const roundingDiff = previewRounded - previewNet;
+            return (
             <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl space-y-1 text-xs">
               <div className="flex justify-between text-dark-600 dark:text-ivory-400">
                 <span>{l} л × {p}₽</span>
@@ -521,12 +550,23 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
                 <span>Хөнгөлөлт (-{discountPercent}%)</span>
                 <span>-{previewDiscount.toFixed(0)}₽</span>
               </div>
-              <div className="border-t border-amber-200 dark:border-amber-800 pt-1 flex justify-between font-semibold text-dark-800 dark:text-ivory-200">
+              <div className="flex justify-between text-dark-600 dark:text-ivory-400">
                 <span>Цэвэр дүн</span>
                 <span>{previewNet.toFixed(0)}₽</span>
               </div>
+              {roundingDiff > 0 && (
+                <div className="flex justify-between text-dark-400 dark:text-ivory-500">
+                  <span>Бүхэлд дугуйлалт (100₽)</span>
+                  <span>+{roundingDiff.toFixed(0)}₽</span>
+                </div>
+              )}
+              <div className="border-t border-amber-200 dark:border-amber-800 pt-1 flex justify-between font-bold text-dark-800 dark:text-ivory-200">
+                <span>Нийт төлөх (₽)</span>
+                <span>{previewRounded.toLocaleString()}₽</span>
+              </div>
             </div>
-          )}
+            );
+          })()}
 
           <button
             onClick={() => setStep(3)}
@@ -612,11 +652,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
               <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-bold text-sm text-red-700 dark:text-red-400">
-                  🚫 Рублиэр шилжүүлхэд АНХААРУУЛГА
+                  🚫 АНХААРУУЛГА
                 </div>
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1 leading-relaxed">
-                  Рублиэр шилжүүлэг хийхдээ <b>КОММЕНТАРЬ / ЗУРВАС бичих хэсэг</b>ийг ХООСОН үлдээнэ үү!
-                  Ямар нэгэн тайлбар бичвэл шилжүүлэг <b>БЛОКЛОГДОХ</b> эрсдэлтэй.
+                  Рублиэр шилжүүлэг хийхдээ <b>СООБЩЕНИЕ / ГҮЙЛГЭЭНИЙ УТГА бичих хэсгийг</b> ХООСОН үлдээнэ үү!
                 </p>
               </div>
             </div>
@@ -692,7 +731,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
             <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
               <span className="text-xs text-red-600 dark:text-red-400 font-medium">
-                🚫 Шилжүүлгийн комментарь ХООСОН байх ёстой!
+                🚫 Шилжүүлгийн гүйлгээний утга хэсэгт ямар нэг зүйл бичилгүй ХООСОН орхино уу!
               </span>
             </div>
           )}
@@ -835,6 +874,13 @@ export function FuelFlow({ sellRate, onBack, onSuccess }: Props) {
                   <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto" />
                   <div className="text-xs text-green-600 dark:text-green-400">Баримт хуулагдлаа</div>
                   <img src={receiptUrl} alt="receipt" className="max-h-32 mx-auto rounded-lg" />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setReceiptUrl(""); }}
+                    className="flex items-center gap-1 mx-auto px-3 py-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition"
+                  >
+                    <X className="w-3 h-3" /> Зураг устгах
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
