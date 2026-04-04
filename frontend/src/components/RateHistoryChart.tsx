@@ -5,16 +5,18 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import { fetchRateHistory } from "../api";
-
-const PERIODS = [
-  { label: "7 хоног", days: 7 },
-  { label: "1 сар", days: 30 },
-  { label: "3 сар", days: 90 },
-  { label: "6 сар", days: 180 },
-] as const;
+import { useLang } from "../i18n/useLang";
 
 export function RateHistoryChart() {
+  const { t, lang } = useLang();
   const [selectedDays, setSelectedDays] = useState(30);
+
+  const PERIODS = [
+    { label: t("chart.7d"), days: 7 },
+    { label: t("chart.1m"), days: 30 },
+    { label: t("chart.3m"), days: 90 },
+    { label: t("chart.6m"), days: 180 },
+  ];
 
   const { data, isLoading } = useQuery({
     queryKey: ["rateHistory", selectedDays],
@@ -26,7 +28,7 @@ export function RateHistoryChart() {
 
   const formatDate = (d: string) => {
     const date = new Date(d + "T00:00:00");
-    return date.toLocaleDateString("mn-MN", { month: "short", day: "numeric" });
+    return date.toLocaleDateString(lang === "ru" ? "ru-RU" : "mn-MN", { month: "short", day: "numeric" });
   };
 
   const hasData = points.some(p => p.buy_rate !== null || p.sell_rate !== null);
@@ -36,11 +38,11 @@ export function RateHistoryChart() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-dark-800 dark:text-ivory-200">
           <TrendingUp className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
-          <span className="text-sm font-bold">Ханшийн түүх</span>
+          <span className="text-sm font-bold">{t("chart.title")}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-[9px] text-dark-600 dark:text-ivory-400">Авах</span></div>
-          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><span className="text-[9px] text-dark-600 dark:text-ivory-400">Зарах</span></div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-[9px] text-dark-600 dark:text-ivory-400">{t("chart.buy")}</span></div>
+          <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><span className="text-[9px] text-dark-600 dark:text-ivory-400">{t("chart.sell")}</span></div>
         </div>
       </div>
 
@@ -68,7 +70,7 @@ export function RateHistoryChart() {
       ) : !hasData ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <BarChart3 className="w-10 h-10 text-silver dark:text-dark-600 mb-2" />
-          <p className="text-xs text-dark-600 dark:text-ivory-400">Энэ хугацааны мэдээлэл байхгүй</p>
+          <p className="text-xs text-dark-600 dark:text-ivory-400">{t("chart.no_data")}</p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
@@ -89,7 +91,7 @@ export function RateHistoryChart() {
               contentStyle={{ borderRadius: 12, fontSize: 12, border: "1px solid #e2e8f0" }}
               formatter={(value: number, name: string) => [
                 `${value} ₮`,
-                name === "buy" ? "Авах (RUB→MNT)" : "Зарах (MNT→RUB)",
+                name === "buy" ? t("chart.tooltip_buy") : t("chart.tooltip_sell"),
               ]}
             />
             <Line type="monotone" dataKey="buy" stroke="#22c55e" strokeWidth={2} dot={false} connectNulls />

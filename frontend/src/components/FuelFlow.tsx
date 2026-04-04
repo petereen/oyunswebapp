@@ -33,6 +33,7 @@ import {
   FuelStation,
 } from "../api";
 import { FuelChat } from "./FuelChat";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   sellRate: number;
@@ -42,18 +43,6 @@ interface Props {
 }
 
 type FuelView = "menu" | "history" | "new" | "tracking";
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Хүлээгдэж байна",
-  pending_payment: "Хүлээгдэж байна",
-  approved: "Зөвшөөрсөн",
-  paid: "Зөвшөөрсөн",
-  in_progress: "Зөвшөөрсөн",
-  fueling_complete: "Зөвшөөрсөн",
-  completed: "Амжилттай",
-  rejected: "Цуцалсан",
-  cancelled: "Цуцалсан",
-};
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
@@ -72,6 +61,23 @@ function isActiveStatus(status: string) {
 }
 
 export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props) {
+  const { t, lang } = useLang();
+
+  const getStatusLabel = (status: string): string => {
+    const map: Record<string, string> = {
+      pending: t("fuel.status_pending"),
+      pending_payment: t("fuel.status_pending"),
+      approved: t("fuel.status_approved"),
+      paid: t("fuel.status_approved"),
+      in_progress: t("fuel.status_approved"),
+      fueling_complete: t("fuel.status_approved"),
+      completed: t("fuel.status_completed"),
+      rejected: t("fuel.status_rejected"),
+      cancelled: t("fuel.status_cancelled"),
+    };
+    return map[status] || status;
+  };
+
   const [view, setView] = useState<FuelView>("menu");
   const [step, setStep] = useState(0);
 
@@ -228,7 +234,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
   // Geolocation
   const requestGeolocation = () => {
     if (!("geolocation" in navigator)) {
-      setGeoError("Таны төхөөрөмж байршил тодорхойлохыг дэмждэггүй");
+      setGeoError(t("fuel.geo_not_supported"));
       return;
     }
     setGeoLoading(true);
@@ -242,8 +248,8 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
       (err) => {
         setGeoError(
           err.code === 1
-            ? "Байршил тодорхойлох зөвшөөрөл олгоогүй. Гараар оруулна уу."
-            : "Байршил тодорхойлоход алдаа гарлаа. Гараар оруулна уу."
+            ? t("fuel.geo_denied")
+            : t("fuel.geo_error")
         );
         setGeoLoading(false);
       },
@@ -279,7 +285,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
       });
       setUrl(presigned.public_url);
     } catch {
-      setError("Зураг хуулахад алдаа гарлаа");
+      setError(t("fuel.photo_error"));
     } finally {
       setUpl(false);
     }
@@ -327,7 +333,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
       setView("tracking");
       setOrderPolling(true);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Захиалга үүсгэхэд алдаа гарлаа");
+      setError(err.response?.data?.detail || t("fuel.order_error"));
     } finally {
       setLoading(false);
     }
@@ -361,7 +367,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
       setActiveOrder({ ...activeOrder, status: "completed", pump_photo_url: pumpPhotoUrl });
       setOrderPolling(false);
     } catch {
-      setError("Зураг илгээхэд алдаа гарлаа");
+      setError(t("fuel.send_photo_error"));
     } finally {
       setLoading(false);
     }
@@ -407,7 +413,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
   if (view === "menu") {
     return (
       <div className="animate-slideUp">
-        {renderBack("Түлш", onBack)}
+        {renderBack(t("fuel.title"), onBack)}
         {(stationsLoading || shiftLoading) ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
@@ -417,15 +423,15 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-amber-500" />
             </div>
-            <h3 className="font-bold text-dark-800 dark:text-ivory-200">Түр ажиллахгүй байна</h3>
+            <h3 className="font-bold text-dark-800 dark:text-ivory-200">{t("fuel.not_working")}</h3>
             <p className="text-sm text-dark-500 dark:text-ivory-400">
-              Түр хугацаанд ажиллахгүй байна. Та дараа дахин оролдоно уу.
+              {t("fuel.not_working_desc")}
             </p>
             <button
               onClick={onBack}
               className="px-6 py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
             >
-              Буцах
+              {t("fuel.back")}
             </button>
           </div>
         ) : (
@@ -438,8 +444,8 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                 <Plus className="w-6 h-6 text-amber-600" />
               </div>
               <div className="flex-1 text-left">
-                <div className="font-bold text-dark-800 dark:text-ivory-200">Шинэ захиалга үүсгэх</div>
-                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">Түлш худалдаж авах</div>
+                <div className="font-bold text-dark-800 dark:text-ivory-200">{t("fuel.new_order")}</div>
+                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">{t("fuel.new_order_desc")}</div>
               </div>
               <ChevronRight className="w-5 h-5 text-dark-400" />
             </button>
@@ -452,8 +458,8 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                 <History className="w-6 h-6 text-blue-600" />
               </div>
               <div className="flex-1 text-left">
-                <div className="font-bold text-dark-800 dark:text-ivory-200">Захиалгын түүх</div>
-                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">Идэвхтэй болон өмнөх захиалгууд</div>
+                <div className="font-bold text-dark-800 dark:text-ivory-200">{t("fuel.order_history")}</div>
+                <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">{t("fuel.order_history_desc")}</div>
               </div>
               <ChevronRight className="w-5 h-5 text-dark-400" />
             </button>
@@ -470,7 +476,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
 
     return (
       <div className="animate-slideUp">
-        {renderBack("Захиалгын түүх", () => setView("menu"))}
+        {renderBack(t("fuel.order_history"), () => setView("menu"))}
 
         {historyLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -479,14 +485,14 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
         ) : historyOrders.length === 0 ? (
           <div className="text-center py-12 space-y-3">
             <History className="w-10 h-10 text-dark-300 dark:text-ivory-500 mx-auto" />
-            <p className="text-sm text-dark-500 dark:text-ivory-400">Захиалгын түүх байхгүй</p>
+            <p className="text-sm text-dark-500 dark:text-ivory-400">{t("fuel.no_history")}</p>
           </div>
         ) : (
           <div className="space-y-4">
             {activeOrders.length > 0 && (
               <div className="space-y-2">
                 <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-                  Идэвхтэй захиалгууд
+                  {t("fuel.active_orders")}
                 </div>
                 {activeOrders.map((order) => (
                   <button
@@ -496,19 +502,19 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[order.status] || ""}`}>
-                        {STATUS_LABELS[order.status] || order.status}
+                        {getStatusLabel(order.status)}
                       </span>
                       <span className="text-[10px] text-dark-400">#{order.invoice}</span>
                     </div>
                     <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                      {order.station_name} • {order.liters}л
+                      {order.station_name} • {order.liters}{t("fuel.liters_input")}
                     </div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-xs text-dark-500 dark:text-ivory-400">
                         {order.final_amount.toLocaleString()} {order.payment_currency}
                       </span>
                       <span className="text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
-                        Үргэлжлүүлэх <ChevronRight className="w-3 h-3" />
+                        {t("txn.continue")} <ChevronRight className="w-3 h-3" />
                       </span>
                     </div>
                   </button>
@@ -519,7 +525,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             {pastOrders.length > 0 && (
               <div className="space-y-2">
                 <div className="text-xs font-semibold text-dark-500 dark:text-ivory-400 uppercase tracking-wide">
-                  Өмнөх захиалгууд
+                  {t("fuel.past_orders")}
                 </div>
                 {pastOrders.map((order) => (
                   <button
@@ -529,14 +535,14 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[order.status] || ""}`}>
-                        {STATUS_LABELS[order.status] || order.status}
+                        {getStatusLabel(order.status)}
                       </span>
                       <span className="text-[10px] text-dark-400">
-                        {new Date(order.created_at).toLocaleDateString("mn-MN")}
+                        {new Date(order.created_at).toLocaleDateString(lang === "ru" ? "ru-RU" : "mn-MN")}
                       </span>
                     </div>
                     <div className="text-xs text-dark-800 dark:text-ivory-200">
-                      {order.station_name} • {order.liters}л • {order.final_amount.toLocaleString()} {order.payment_currency}
+                      {order.station_name} • {order.liters}{t("fuel.liters_input")} • {order.final_amount.toLocaleString()} {order.payment_currency}
                     </div>
                   </button>
                 ))}
@@ -558,14 +564,14 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
     const isTerminal = isCompleted || isRejected || isCancelled;
 
     const statusSteps = [
-      { key: "pending", label: "Хүлээгдэж байна", emoji: "⏳", active: isPending, done: isApproved || isCompleted },
-      { key: "approved", label: "Зөвшөөрсөн", emoji: "✅", active: isApproved, done: isCompleted },
-      { key: "completed", label: "Амжилттай", emoji: "🎉", active: isCompleted, done: false },
+      { key: "pending", label: t("fuel.status_pending"), emoji: "⏳", active: isPending, done: isApproved || isCompleted },
+      { key: "approved", label: t("fuel.status_approved"), emoji: "✅", active: isApproved, done: isCompleted },
+      { key: "completed", label: t("fuel.status_completed"), emoji: "🎉", active: isCompleted, done: false },
     ];
 
     return (
       <div className="animate-slideUp">
-        {renderBack("Захиалгын явц", () => {
+        {renderBack(t("fuel.order_progress"), () => {
           setOrderPolling(false);
           setView("menu");
         })}
@@ -576,12 +582,12 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
               Invoice: <code className="font-mono">{activeOrder.invoice}</code>
             </div>
             <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200 mb-3">
-              {activeOrder.station_name} — {activeOrder.liters}л — {activeOrder.final_amount.toLocaleString()} {activeOrder.payment_currency}
+              {activeOrder.station_name} — {activeOrder.liters}{t("fuel.liters_input")} — {activeOrder.final_amount.toLocaleString()} {activeOrder.payment_currency}
             </div>
 
             {isRejected ? (
               <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
-                <div className="text-red-600 dark:text-red-400 font-semibold text-sm">❌ Цуцлагдсан</div>
+                <div className="text-red-600 dark:text-red-400 font-semibold text-sm">{t("fuel.cancelled_title")}</div>
                 {activeOrder.rejection_comment && (
                   <div className="text-xs text-red-500 mt-1">{activeOrder.rejection_comment}</div>
                 )}
@@ -619,10 +625,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
               <span className="text-2xl">🔢</span>
               <div>
                 <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">
-                  Колонка №{activeOrder.dispenser_number}
+                  {t("fuel.dispenser_col", { number: activeOrder.dispenser_number })}
                 </div>
                 <div className="text-xs text-blue-600 dark:text-blue-400">
-                  {isPending ? "Админ зөвшөөрсний дараа колонкыг асаана" : "Колонк асаагдсан байна"}
+                  {isPending ? t("fuel.dispenser_pending") : t("fuel.dispenser_active")}
                 </div>
               </div>
             </div>
@@ -634,7 +640,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-green-600" />
                 <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                  Админ зөвшөөрсөн — QR/Штрих-код
+                  {t("fuel.admin_qr")}
                 </span>
               </div>
               <img
@@ -651,11 +657,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
               <div className="flex items-center gap-2 mb-1">
                 <Clock className="w-4 h-4 text-yellow-600" />
                 <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                  Таны хүсэлтийг админ шалгаж байна
+                  {t("fuel.admin_checking")}
                 </span>
               </div>
               <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                Та түр хүлээнэ үү.
+                {t("fuel.please_wait")}
               </p>
             </div>
           )}
@@ -666,11 +672,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle2 className="w-5 h-5 text-green-600" />
                 <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                  Захиалга зөвшөөрөгдлөө!
+                  {t("fuel.order_approved")}
                 </span>
               </div>
               <p className="text-xs text-green-700 dark:text-green-400">
-                Түлш авсны дараа колонк дээрх литрийн дүнг зурагт оруулна уу.
+                {t("fuel.photo_after_fuel")}
               </p>
             </div>
           )}
@@ -679,10 +685,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
           {isApproved && (
             <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
               <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-                📸 Колонкны зураг оруулж хаах
+                {t("fuel.upload_pump_title")}
               </div>
               <p className="text-xs text-dark-500 dark:text-ivory-400">
-                Түлш авсны дараа колонк дээрх литрийн тоог зурагт харуулна уу. Зураг илгээснээр захиалга хаагдана.
+                {t("fuel.upload_pump_desc")}
               </p>
               <label className="block cursor-pointer">
                 <input
@@ -712,13 +718,13 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                         onClick={(e) => { e.stopPropagation(); setPumpPhotoUrl(""); }}
                         className="flex items-center gap-1 mx-auto px-3 py-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 transition"
                       >
-                        <X className="w-3 h-3" /> Устгах
+                        <X className="w-3 h-3" /> {t("fuel.delete_btn")}
                       </button>
                     </div>
                   ) : (
                     <div className="space-y-1">
                       <Camera className="w-6 h-6 text-dark-400 mx-auto" />
-                      <div className="text-xs text-dark-500 dark:text-ivory-400">Колонкны зураг оруулах</div>
+                      <div className="text-xs text-dark-500 dark:text-ivory-400">{t("fuel.upload_pump_btn")}</div>
                     </div>
                   )}
                 </div>
@@ -730,7 +736,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                   className="w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  {loading ? "Илгээж байна..." : "Зураг илгээж захиалга хаах"}
+                  {loading ? t("fuel.sending") : t("fuel.send_close_order")}
                 </button>
               )}
               {error && (
@@ -743,7 +749,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
           {isCompleted && (
             <div className="bg-green-50 dark:bg-green-900/10 p-5 rounded-2xl border border-green-200 dark:border-green-800 text-center space-y-2">
               <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto" />
-              <div className="font-bold text-green-700 dark:text-green-400">Захиалга амжилттай дууслаа!</div>
+              <div className="font-bold text-green-700 dark:text-green-400">{t("fuel.order_completed")}</div>
             </div>
           )}
 
@@ -758,7 +764,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
               onClick={onSuccess}
               className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition"
             >
-              Буцах
+              {t("fuel.back")}
             </button>
           )}
         </div>
@@ -771,7 +777,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
   if (view === "new" && step === 0) {
     return (
       <div className="animate-slideUp">
-        {renderBack("АЗС сонгох", () => setView("menu"))}
+        {renderBack(t("fuel.select_station"), () => setView("menu"))}
         <div className="grid grid-cols-2 gap-3">
           {stations.map((s) => (
             <button
@@ -786,10 +792,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             >
               <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200 mb-1">{s.name}</div>
               <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                -{s.discount_percent}% хөнгөлөлт
+                {t("fuel.discount_badge", { percent: String(s.discount_percent) })}
               </div>
               {s.requires_dispenser && (
-                <div className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">🔢 Колонка дугаар</div>
+                <div className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">{t("fuel.dispenser_badge")}</div>
               )}
               <div className="absolute top-2 right-2 w-6 h-6 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
                 <Fuel className="w-3 h-3 text-amber-600" />
@@ -807,15 +813,15 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
     const dispenserValid = !requiresDispenser || dispenserNumber.trim().length > 0;
     return (
       <div className="animate-slideUp">
-        {renderBack("Байршил")}
+        {renderBack(t("fuel.location"))}
         <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-4">
           <div className="text-center">
             <MapPin className="w-10 h-10 text-amber-500 mx-auto mb-2" />
             <h3 className="font-bold text-dark-800 dark:text-ivory-200 text-sm">
-              АЗС-ын байршил тодорхойлох
+              {t("fuel.location_title")}
             </h3>
             <p className="text-xs text-dark-500 dark:text-ivory-400 mt-1">
-              Бүх АЗС-д түлш нийлүүлэх боломжгүй тул байршил шаардлагатай
+              {t("fuel.location_desc")}
             </p>
           </div>
 
@@ -825,14 +831,14 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition disabled:opacity-50"
           >
             {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
-            {geoLoading ? "Тодорхойлж байна..." : "📍 Байршил тодорхойлох"}
+            {geoLoading ? t("fuel.detecting") : t("fuel.detect_location")}
           </button>
 
           {latitude !== null && longitude !== null && (
             <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
               <CheckCircle2 className="w-4 h-4 text-green-600" />
               <span className="text-xs text-green-700 dark:text-green-400">
-                Байршил олдлоо: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                {t("fuel.location_found")} {latitude.toFixed(6)}, {longitude.toFixed(6)}
               </span>
             </div>
           )}
@@ -842,12 +848,12 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
           )}
 
           <div>
-            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">Эсвэл хаяг гараар оруулах:</label>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">{t("fuel.enter_address")}</label>
             <input
               type="text"
               value={locationText}
               onChange={(e) => setLocationText(e.target.value)}
-              placeholder="АЗС-ын хаяг, чиглэл..."
+              placeholder={t("fuel.address_placeholder")}
               className="w-full px-4 py-3 border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
@@ -856,17 +862,17 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-base">🔢</span>
-                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">Колонкны дугаар</span>
+                <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">{t("fuel.dispenser_number")}</span>
               </div>
               <p className="text-xs text-dark-500 dark:text-ivory-400">
-                {stationName} станцад колонканы дугаар зайлшгүй шаардлагатай.
+                {t("fuel.dispenser_required", { station: stationName })}
               </p>
               <input
                 type="text"
                 inputMode="numeric"
                 value={dispenserNumber}
                 onChange={(e) => setDispenserNumber(e.target.value)}
-                placeholder="Жиш: 3"
+                placeholder={t("fuel.dispenser_example")}
                 className="w-full px-4 py-3 border border-blue-300 dark:border-blue-700 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
@@ -877,7 +883,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             disabled={!hasLocation || !dispenserValid}
             className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition disabled:opacity-30"
           >
-            Үргэлжлүүлэх
+            {t("txn.continue")}
           </button>
         </div>
       </div>
@@ -895,7 +901,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
 
     return (
       <div className="animate-slideUp">
-        {renderBack("Түлшний мэдээлэл")}
+        {renderBack(t("fuel.fuel_info"))}
         <div className="bg-white dark:bg-dark-800 p-5 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">{stationName}</span>
@@ -903,27 +909,27 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
           </div>
 
           <div>
-            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">Литр</label>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">{t("fuel.liters_input")}</label>
             <input
               type="number"
               inputMode="decimal"
               value={liters}
               onChange={(e) => setLiters(e.target.value)}
-              placeholder="Жиш: 100"
+              placeholder={t("fuel.liters_example")}
               min="1"
               className="w-full px-4 py-3 border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
 
           <div>
-            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">ДТ үнэ (₽/литр)</label>
+            <label className="text-xs text-dark-500 dark:text-ivory-400 mb-1 block">{t("fuel.dt_price")}</label>
             <div className="relative">
               <input
                 type="number"
                 inputMode="decimal"
                 value={pricePerLiter}
                 onChange={(e) => setPricePerLiter(e.target.value)}
-                placeholder="Жиш: 62.50"
+                placeholder={t("fuel.price_example")}
                 min="0.01"
                 step="0.01"
                 className="w-full px-4 py-3 pr-10 border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -938,25 +944,25 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             return (
               <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl space-y-1 text-xs">
                 <div className="flex justify-between text-dark-600 dark:text-ivory-400">
-                  <span>{l} л × {p}₽</span>
+                  <span>{l} {t("fuel.liters_short")} × {p}₽</span>
                   <span>{previewGross.toFixed(0)}₽</span>
                 </div>
                 <div className="flex justify-between text-green-600 dark:text-green-400">
-                  <span>Хөнгөлөлт (-{discountPercent}%)</span>
+                  <span>{t("fuel.discount_label", { percent: String(discountPercent) })}</span>
                   <span>-{previewDiscount.toFixed(0)}₽</span>
                 </div>
                 <div className="flex justify-between text-dark-600 dark:text-ivory-400">
-                  <span>Цэвэр дүн</span>
+                  <span>{t("fuel.net_amount")}</span>
                   <span>{previewNet.toFixed(0)}₽</span>
                 </div>
                 {roundingDiff > 0 && (
                   <div className="flex justify-between text-dark-400 dark:text-ivory-500">
-                    <span>Нийт дүнг бүхэлдэх (100₽)</span>
+                    <span>{t("fuel.rounding")}</span>
                     <span>+{roundingDiff.toFixed(0)}₽</span>
                   </div>
                 )}
                 <div className="border-t border-amber-200 dark:border-amber-800 pt-1 flex justify-between font-bold text-dark-800 dark:text-ivory-200">
-                  <span>Нийт төлөх (₽)</span>
+                  <span>{t("fuel.total_pay_rub")}</span>
                   <span>{previewRounded.toLocaleString()}₽</span>
                 </div>
               </div>
@@ -968,7 +974,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             disabled={!validInput}
             className="w-full py-3 bg-dark-800 dark:bg-ivory-200 text-white dark:text-dark-800 rounded-xl font-semibold transition disabled:opacity-30"
           >
-            Үргэлжлүүлэх
+            {t("txn.continue")}
           </button>
         </div>
       </div>
@@ -979,7 +985,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
   if (view === "new" && step === 3) {
     return (
       <div className="animate-slideUp">
-        {renderBack("Төлбөрийн арга")}
+        {renderBack(t("fuel.payment_method"))}
         <div className="space-y-4">
           <button
             onClick={() => {
@@ -996,7 +1002,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-lg">₽</div>
               <div>
-                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">Рублиэр төлөх (RUB)</div>
+                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">{t("fuel.pay_rub")}</div>
                 {calculation && (
                   <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">{calculation.rounded_amount.toLocaleString()}₽</div>
                 )}
@@ -1019,10 +1025,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center text-lg">₮</div>
               <div>
-                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">Төгрөгөөр төлөх (MNT)</div>
+                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">{t("fuel.pay_mnt")}</div>
                 {calculation && sellRate > 0 && (
                   <div className="text-xs text-dark-500 dark:text-ivory-400 mt-0.5">
-                    {Math.round(calculation.rounded_amount * sellRate).toLocaleString()}₮ (ханш: {sellRate})
+                    {Math.round(calculation.rounded_amount * sellRate).toLocaleString()}₮ ({t("fuel.rate_hint", { rate: String(sellRate) })})
                   </div>
                 )}
               </div>
@@ -1033,9 +1039,9 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold text-sm text-red-700 dark:text-red-400">🚫 АНХААРУУЛГА</div>
+                <div className="font-bold text-sm text-red-700 dark:text-red-400">{t("fuel.rub_warning_title")}</div>
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1 leading-relaxed">
-                  Рублиэр шилжүүлэг хийхдээ <b>СООБЩЕНИЕ / ГҮЙЛГЭЭНИЙ УТГА бичих хэсгийг</b> ХООСОН үлдээнэ үү!
+                  {t("fuel.rub_warning_text")}
                 </p>
               </div>
             </div>
@@ -1049,11 +1055,11 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
   if (view === "new" && step === 4) {
     return (
       <div className="animate-slideUp">
-        {renderBack("Төлбөр хийх & Баримт")}
+        {renderBack(t("fuel.payment_receipt_step"))}
         <div className="space-y-4">
           {/* Invoice */}
           <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600">
-            <div className="text-xs text-dark-500 dark:text-ivory-400 mb-1">Invoice дугаар</div>
+            <div className="text-xs text-dark-500 dark:text-ivory-400 mb-1">{t("fuel.invoice_number")}</div>
             <div className="flex items-center gap-2">
               <code className="text-sm font-mono text-dark-800 dark:text-ivory-200">{invoiceId}</code>
               <button onClick={() => copyToClipboard(invoiceId, "invoice")} className="p-1 hover:bg-surface-100 dark:hover:bg-dark-700 rounded">
@@ -1070,21 +1076,21 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                 <span>-{calculation.discount_percent}%</span>
               </div>
               <div className="flex justify-between text-dark-600 dark:text-ivory-400">
-                <span>{calculation.liters}л × {calculation.station_price_per_liter}₽</span>
+                <span>{calculation.liters}{t("fuel.liters_short")} × {calculation.station_price_per_liter}₽</span>
                 <span>{calculation.gross_amount.toLocaleString()}₽</span>
               </div>
               <div className="flex justify-between text-green-600 dark:text-green-400">
-                <span>Хөнгөлөлт</span>
+                <span>{t("fuel.discount_short")}</span>
                 <span>-{calculation.discount_amount.toLocaleString()}₽</span>
               </div>
               {calculation.payment_currency === "MNT" && calculation.exchange_rate && (
                 <div className="flex justify-between text-dark-500 dark:text-ivory-400">
-                  <span>Ханш: {calculation.exchange_rate}</span>
+                  <span>{t("fuel.rate_prefix")} {calculation.exchange_rate}</span>
                   <span>{calculation.rounded_amount.toLocaleString()}₽ × {calculation.exchange_rate}</span>
                 </div>
               )}
               <div className="border-t border-amber-200 dark:border-amber-800 pt-2 flex justify-between font-bold text-dark-800 dark:text-ivory-200 text-sm">
-                <span>Нийт төлөх</span>
+                <span>{t("fuel.total_pay")}</span>
                 <span>{calculation.final_amount.toLocaleString()}{calculation.payment_currency === "RUB" ? "₽" : "₮"}</span>
               </div>
             </div>
@@ -1095,17 +1101,17 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
               <span className="text-xs text-red-600 dark:text-red-400 font-medium">
-                🚫 Шилжүүлгийн гүйлгээний утга хэсэгт ямар нэг зүйл бичилгүй ХООСОН орхино уу!
+                {t("fuel.rub_warning_short")}
               </span>
             </div>
           )}
 
           {/* Bank selection */}
           <div className="space-y-2">
-            <div className="text-xs text-dark-500 dark:text-ivory-400 font-medium">Доорх данс руу шилжүүлнэ үү:</div>
+            <div className="text-xs text-dark-500 dark:text-ivory-400 font-medium">{t("fuel.transfer_to")}</div>
             {filteredBanks.length === 0 ? (
               <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl text-xs text-yellow-700 dark:text-yellow-400">
-                {paymentCurrency} валютын данс олдсонгүй. Админтай холбогдоно уу.
+                {t("fuel.no_bank_found", { currency: paymentCurrency || "" })}
               </div>
             ) : (
               filteredBanks.map((bank) => (
@@ -1122,7 +1128,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                   <div className="text-xs text-dark-500 dark:text-ivory-400 mt-1 space-y-0.5">
                     {bank.card_number && (
                       <div className="flex items-center gap-1">
-                        Карт: {bank.card_number}
+                        {t("fuel.card_label")} {bank.card_number}
                         <button onClick={(e) => { e.stopPropagation(); copyToClipboard(bank.card_number!.replace(/\s/g, ""), "card"); }} className="p-0.5">
                           {copied === "card" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-dark-400" />}
                         </button>
@@ -1130,7 +1136,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                     )}
                     {bank.account_number && (
                       <div className="flex items-center gap-1">
-                        Данс: {bank.account_number}
+                        {t("fuel.account_number_label")} {bank.account_number}
                         <button onClick={(e) => { e.stopPropagation(); copyToClipboard(bank.account_number!, "account"); }} className="p-0.5">
                           {copied === "account" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-dark-400" />}
                         </button>
@@ -1138,13 +1144,13 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                     )}
                     {bank.phone && (
                       <div className="flex items-center gap-1">
-                        Утас: {bank.phone}
+                        {t("fuel.phone_number_label")} {bank.phone}
                         <button onClick={(e) => { e.stopPropagation(); copyToClipboard(bank.phone!, "phone"); }} className="p-0.5">
                           {copied === "phone" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-dark-400" />}
                         </button>
                       </div>
                     )}
-                    <div>Эзэмшигч: {bank.owner_name}</div>
+                    <div>{t("fuel.owner_label")} {bank.owner_name}</div>
                   </div>
                 </button>
               ))
@@ -1154,7 +1160,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
           {/* Receipt upload */}
           <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
             <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
-              <Upload className="w-4 h-4 inline mr-1 text-amber-500" /> Шилжүүлгийн баримт
+              <Upload className="w-4 h-4 inline mr-1 text-amber-500" /> {t("fuel.receipt_title")}
             </div>
             <label className="block cursor-pointer">
               <input
@@ -1176,20 +1182,20 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                 ) : receiptUrl ? (
                   <div className="space-y-2">
                     <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto" />
-                    <div className="text-xs text-green-600 dark:text-green-400">Баримт хуулагдлаа</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">{t("fuel.receipt_uploaded")}</div>
                     <img src={receiptUrl} alt="receipt" className="max-h-32 mx-auto rounded-lg" />
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setReceiptUrl(""); }}
                       className="flex items-center gap-1 mx-auto px-3 py-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 transition"
                     >
-                      <X className="w-3 h-3" /> Зураг устгах
+                      <X className="w-3 h-3" /> {t("fuel.delete_photo")}
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <Camera className="w-8 h-8 text-dark-400 mx-auto" />
-                    <div className="text-xs text-dark-500 dark:text-ivory-400">Зураг сонгох</div>
+                    <div className="text-xs text-dark-500 dark:text-ivory-400">{t("fuel.select_photo")}</div>
                   </div>
                 )}
               </div>
@@ -1206,7 +1212,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
             className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold transition disabled:opacity-30 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fuel className="w-4 h-4" />}
-            {loading ? "Илгээж байна..." : "Захиалга илгээх"}
+            {loading ? t("fuel.submitting") : t("fuel.submit_order")}
           </button>
         </div>
       </div>

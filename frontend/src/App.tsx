@@ -11,6 +11,7 @@ import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
 import { Shield } from "lucide-react";
 import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
+import { useLang } from "./i18n/useLang";
 import { DevToolbar } from "./components/DevToolbar";
 import { fetchMe } from "./api";
 
@@ -20,6 +21,7 @@ export default function App() {
   if (isFuelAdmin) return <FuelAdminPanel />;
 
   const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
+  const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
   const [activeTab, setActiveTab] = useState(0);
   const [showProfile, setShowProfile] = useState(false);
@@ -91,12 +93,12 @@ export default function App() {
                 onClick={() => setView("client")}
                 className="px-4 py-2 rounded-full text-sm font-semibold transition bg-white dark:bg-dark-700 text-maroon-600 dark:text-gold-400 hover:bg-maroon-50 dark:hover:bg-dark-600"
               >
-                Хэрэглэгч
+                {t("app.user")}
               </button>
               <button
                 className="px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-1 transition bg-maroon-600 text-white"
               >
-                <Shield className="w-4 h-4" /> Админ
+                <Shield className="w-4 h-4" /> {t("app.admin")}
               </button>
             </div>
           </div>
@@ -118,7 +120,7 @@ export default function App() {
               onClick={() => setView("admin")}
               className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition bg-maroon-700 text-gold-400 hover:bg-maroon-600"
             >
-              <Shield className="w-3.5 h-3.5" /> Админ
+              <Shield className="w-3.5 h-3.5" /> {t("app.admin")}
             </button>
           </div>
         )}

@@ -47,8 +47,18 @@ export function FuelLangProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const defaultTranslate = (key: string): string => {
+  const entry = translations[key];
+  return entry ? entry["mn"] || key : key;
+};
+
+const fallback: FuelLangContextType = {
+  lang: "mn",
+  setLang: () => {},
+  t: defaultTranslate,
+};
+
 export function useFuelLang() {
   const ctx = useContext(FuelLangContext);
-  if (!ctx) throw new Error("useFuelLang must be used within FuelLangProvider");
-  return ctx;
+  return ctx ?? fallback;
 }

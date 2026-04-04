@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FileText, ExternalLink, CheckCircle2, Loader2 } from "lucide-react";
 import { agreeToTerms } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   onAgreed: () => void;
@@ -12,10 +13,11 @@ export function TermsAgreementModal({ onAgreed }: Props) {
   const [loading, setLoading] = useState(false);
   const [hasReadTerms, setHasReadTerms] = useState(false);
   const [error, setError] = useState("");
+  const { t } = useLang();
 
   const handleAgree = async () => {
     if (!hasReadTerms) {
-      setError("Та эхлээд үйлчилгээний нөхцөлтэй танилцана уу");
+      setError(t("terms.read_first"));
       return;
     }
 
@@ -26,7 +28,7 @@ export function TermsAgreementModal({ onAgreed }: Props) {
       onAgreed();
     } catch (err) {
       console.error("Failed to agree to terms:", err);
-      setError("Алдаа гарлаа. Дахин оролдоно уу.");
+      setError(t("terms.error"));
     } finally {
       setLoading(false);
     }
@@ -47,8 +49,8 @@ export function TermsAgreementModal({ onAgreed }: Props) {
               <FileText className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Үйлчилгээний нөхцөл</h2>
-              <p className="text-sm text-white/80">Манай үйлчилгээг ашиглахын тулд зөвшөөрөх шаардлагатай</p>
+              <h2 className="text-xl font-bold">{t("terms.title")}</h2>
+              <p className="text-sm text-white/80">{t("terms.subtitle")}</p>
             </div>
           </div>
         </div>
@@ -57,20 +59,20 @@ export function TermsAgreementModal({ onAgreed }: Props) {
         <div className="p-6 space-y-4">
           <div className="text-slate-600 text-sm leading-relaxed">
             <p className="mb-3">
-              OYUNS FINANCE платформыг ашиглахын тулд та манай үйлчилгээний нөхцөлтэй танилцаж, зөвшөөрөх шаардлагатай.
+              {t("terms.intro")}
             </p>
             <p>
-              Үйлчилгээний нөхцөлд дараах мэдээллүүд багтана:
+              {t("terms.includes")}
             </p>
             <ul className="list-disc list-inside mt-2 space-y-1 text-slate-500">
-              <li>Ерөнхий үндэслэл</li>
-              <li>Хувийн мэдээлэл цуглуулах, ашиглах, хамгаалах журам</li>
-              <li>Үйлчилгээний нөхцөл</li>
-              <li>Хэрэглэгчийн үүрэг, хариуцлага</li>
-              <li>Гэрээний хүчин төгөлдөр байдал ба өөрчлөлт</li>
-              <li>Маргаан шийдвэрлэх журам</li>
-              <li>Холбоо барих мэдээлэл</li>
-              <li>Зөвшөөрөл</li>
+              <li>{t("terms.item1")}</li>
+              <li>{t("terms.item2")}</li>
+              <li>{t("terms.item3")}</li>
+              <li>{t("terms.item4")}</li>
+              <li>{t("terms.item5")}</li>
+              <li>{t("terms.item6")}</li>
+              <li>{t("terms.item7")}</li>
+              <li>{t("terms.item8")}</li>
             </ul>
           </div>
 
@@ -80,7 +82,7 @@ export function TermsAgreementModal({ onAgreed }: Props) {
             className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
           >
             <ExternalLink className="w-5 h-5" />
-            Хэрэглэгчийн гэрээтэй танилцах
+            {t("terms.read_button")}
           </button>
 
           {/* Checkbox */}
@@ -92,7 +94,7 @@ export function TermsAgreementModal({ onAgreed }: Props) {
               className="mt-0.5 w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
             />
             <span className="text-sm text-slate-600">
-              Би хэрэглэгчийн гэрээтэй танилцаж, зөвшөөрч байна
+              {t("terms.checkbox")}
             </span>
           </label>
 
@@ -112,18 +114,18 @@ export function TermsAgreementModal({ onAgreed }: Props) {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Боловсруулж байна...
+                {t("terms.processing")}
               </>
             ) : (
               <>
                 <CheckCircle2 className="w-5 h-5" />
-                Зөвшөөрч үргэлжлүүлэх
+                {t("terms.agree")}
               </>
             )}
           </button>
 
           <p className="text-xs text-center text-slate-400">
-            Хэрэглэгчийн гэрээтэй танилцахгүй бол та манай үйлчилгээг ашиглах боломжгүй болохыг анхаарна уу.
+            {t("terms.notice")}
           </p>
         </div>
       </div>

@@ -10,6 +10,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { fetchActiveFuelOrders, FuelOrder } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   userId?: number;
@@ -78,7 +79,8 @@ function FuelStatusCard({
   onOpen?: () => void;
   onDismiss?: () => void;
 }) {
-  const cfg = getStatusConfig(order.status, order.rejection_comment);
+  const { t } = useLang();
+  const cfg = getStatusConfig(order.status, order.rejection_comment, t);
   const Icon = cfg.icon;
 
   return (
@@ -94,7 +96,7 @@ function FuelStatusCard({
         <button
           onClick={onDismiss}
           className="absolute top-2 right-2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-dark-700 transition"
-          title="Хаах"
+          title={t("status.close")}
         >
           <X className="w-4 h-4 text-slate-400" />
         </button>
@@ -132,7 +134,7 @@ function FuelStatusCard({
 
       {onOpen && (
         <div className="flex items-center justify-end gap-1 mt-2 text-xs text-amber-600 dark:text-amber-400 font-medium">
-          <span>Дэлгэрэнгүй</span>
+          <span>{t("fuel_status.details")}</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </div>
       )}
@@ -145,14 +147,14 @@ function FuelStatusCard({
           className="mt-3 flex items-center justify-center gap-2 text-xs text-red-600 hover:text-red-700 transition"
         >
           <MessageCircle className="w-4 h-4" />
-          <span>Тусламж авах</span>
+          <span>{t("fuel_status.get_help")}</span>
         </a>
       )}
     </div>
   );
 }
 
-function getStatusConfig(status: string, rejectionComment?: string) {
+function getStatusConfig(status: string, rejectionComment?: string, t?: (key: string) => string) {
   switch (status) {
     case "pending":
     case "pending_payment":
@@ -163,8 +165,8 @@ function getStatusConfig(status: string, rejectionComment?: string) {
         barColor: "bg-amber-400",
         barBg: "bg-amber-100 dark:bg-amber-900/40",
         progress: 33,
-        label: "Хүлээгдэж байна",
-        description: "Админ таны хүсэлтийг шалгаж байна",
+        label: t?.("fuel_status.pending") ?? "Хүлээгдэж байна",
+        description: t?.("fuel_status.pending_desc") ?? "Админ таны хүсэлтийг шалгаж байна",
       };
     case "approved":
     case "paid":
@@ -177,8 +179,8 @@ function getStatusConfig(status: string, rejectionComment?: string) {
         barColor: "bg-green-400",
         barBg: "bg-green-100 dark:bg-green-900/40",
         progress: 66,
-        label: "Зөвшөөрсөн",
-        description: "Колонкны дэлгэцийн зургаа оруулна уу",
+        label: t?.("fuel_status.approved") ?? "Зөвшөөрсөн",
+        description: t?.("fuel_status.approved_desc") ?? "Колонкны дэлгэцийн зургаа оруулна уу",
       };
     case "completed":
       return {
@@ -188,8 +190,8 @@ function getStatusConfig(status: string, rejectionComment?: string) {
         barColor: "bg-green-500",
         barBg: "bg-green-100 dark:bg-green-900/40",
         progress: 100,
-        label: "Амжилттай",
-        description: "Түлш амжилттай цэнэглэгдлээ!",
+        label: t?.("fuel_status.completed") ?? "Амжилттай",
+        description: t?.("fuel_status.completed_desc") ?? "Түлш амжилттай цэнэглэгдлээ!",
       };
     case "rejected":
       return {
@@ -199,8 +201,8 @@ function getStatusConfig(status: string, rejectionComment?: string) {
         barColor: "bg-red-500",
         barBg: "bg-red-100 dark:bg-red-900/40",
         progress: 100,
-        label: "Цуцлагдсан",
-        description: rejectionComment || "Таны хүсэлт цуцлагдсан",
+        label: t?.("fuel_status.rejected") ?? "Цуцлагдсан",
+        description: rejectionComment || (t?.("fuel_status.rejected_desc") ?? "Хүсэлт цуцлагдсан"),
       };
     case "cancelled":
       return {
@@ -210,8 +212,8 @@ function getStatusConfig(status: string, rejectionComment?: string) {
         barColor: "bg-slate-400",
         barBg: "bg-slate-100 dark:bg-slate-800",
         progress: 100,
-        label: "Цуцалсан",
-        description: "Хүсэлт цуцлагдсан",
+        label: t?.("fuel_status.cancelled") ?? "Цуцалсан",
+        description: t?.("fuel_status.cancelled_desc") ?? "Захиалга цуцлагдсан",
       };
     default:
       return {
@@ -221,7 +223,7 @@ function getStatusConfig(status: string, rejectionComment?: string) {
         barColor: "bg-slate-400",
         barBg: "bg-slate-100",
         progress: 0,
-        label: "Тодорхойгүй",
+        label: t?.("status.unknown") ?? "Тодорхойгүй",
         description: "",
       };
   }

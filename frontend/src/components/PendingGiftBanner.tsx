@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { fetchPendingGifts, confirmGiftReceipt, PendingGift } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   onGiftConfirmed?: () => void;
@@ -22,6 +23,7 @@ const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "В
 const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
 
 export function PendingGiftBanner({ onGiftConfirmed }: Props) {
+  const { t } = useLang();
   const [pendingGifts, setPendingGifts] = useState<PendingGift[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -62,15 +64,15 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
     const finalBankName = isCustomBank ? customBankName : bankName;
     
     if (!finalBankName.trim()) {
-      setError("Банкны нэр оруулна уу");
+      setError(t("gift_banner.bank_required"));
       return;
     }
     if (!accountNumber.trim()) {
-      setError("Дансны дугаар эсвэл картын дугаар оруулна уу");
+      setError(t("gift_banner.account_required"));
       return;
     }
     if (!ownerName.trim()) {
-      setError("Эзэмшигчийн нэр оруулна уу");
+      setError(t("gift_banner.owner_required"));
       return;
     }
 
@@ -97,18 +99,18 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
       console.error("Error confirming gift:", err);
       // Check for specific error codes
       if (err?.response?.status === 401) {
-        setError("Нэвтрэлт хугацаа дууссан. Аппыг дахин нээнэ үү.");
+        setError(t("gift_banner.auth_expired"));
       } else if (err?.response?.status === 403) {
-        setError("Танд энэ бэлгийг авах эрх байхгүй байна.");
+        setError(t("gift_banner.no_permission"));
       } else if (err?.response?.status === 400) {
-        setError(err?.response?.data?.detail || "Бэлэг аль хэдийн баталгаажсан байна.");
+        setError(err?.response?.data?.detail || t("gift_banner.already_confirmed"));
       } else if (err?.response?.status === 404) {
-        setError("Бэлэг олдсонгүй. Хуудсыг дахин ачааллана уу.");
+        setError(t("gift_banner.not_found"));
       } else if (err?.response?.status === 500) {
         const detail = err?.response?.data?.detail || "";
-        setError(`Серверийн алдаа: ${detail || "Дахин оролдоно уу."}`);
+        setError(t("gift_banner.server_error", { detail: detail || "Дахин оролдоно уу." }));
       } else {
-        setError("Баталгаажуулахад алдаа гарлаа. Дахин оролдоно уу.");
+        setError(t("gift_banner.confirm_error"));
       }
     } finally {
       setConfirming(false);
@@ -145,7 +147,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                   <Gift className="w-6 h-6 text-pink-600" />
                 </div>
                 <div>
-                  <div className="text-sm text-pink-700">🎁 Танд бэлэг ирлээ!</div>
+                  <div className="text-sm text-pink-700">{t("gift_banner.you_have_gift")}</div>
                   <div className="text-lg font-bold text-purple-800">
                     {gift.from_name || `${gift.sender_first_name} ${gift.sender_last_name}`}
                   </div>
@@ -175,9 +177,9 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
               {successGiftId === gift.id ? (
                 <div className="text-center py-6">
                   <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-3" />
-                  <div className="text-lg font-bold text-green-700">Баталгаажууллаа!</div>
+                  <div className="text-lg font-bold text-green-700">{t("gift_banner.confirmed")}</div>
                   <div className="text-sm text-slate-600">
-                    Админ таны хүсэлтийг удахгүй шийдвэрлэнэ
+                    {t("gift_banner.admin_process")}
                   </div>
                 </div>
               ) : (
@@ -196,7 +198,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                   {/* Message */}
                   {gift.message && (
                     <div className="mb-4 p-4 bg-white/60 rounded-xl">
-                      <div className="text-xs text-slate-500 mb-1">Мессеж:</div>
+                      <div className="text-xs text-slate-500 mb-1">{t("gift_banner.message")}</div>
                       <div className="text-slate-700 italic">"{gift.message}"</div>
                     </div>
                   )}
@@ -204,13 +206,13 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                   {/* Bank details form */}
                   <div className="bg-white/80 rounded-xl p-4 space-y-3">
                     <div className="text-sm font-medium text-maroon-700 mb-2">
-                      💳 Мөнгө хүлээн авах банкны мэдээлэл оруулна уу ({gift.currency_to})
+                      {t("gift_banner.bank_info_title")} ({gift.currency_to})
                     </div>
 
                     {/* Bank name dropdown */}
                     <div>
                       <label className="text-xs text-slate-500 flex items-center gap-1">
-                        <Building className="w-3 h-3" /> Банкны нэр
+                        <Building className="w-3 h-3" /> {t("gift_banner.bank_name_label")}
                       </label>
                       <select
                         value={bankName}
@@ -222,9 +224,9 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                         }}
                         className="w-full rounded-lg border border-maroon-200 p-3 text-sm bg-white"
                       >
-                        <option value="">Банк сонгох...</option>
+                        <option value="">{t("gift_banner.select_bank")}...</option>
                         {getBankOptions(gift.currency_to).map((bank) => (
-                          <option key={bank} value={bank}>{bank}</option>
+                          <option key={bank} value={bank}>{bank === "Бусад" ? t("common.other") : bank}</option>
                         ))}
                       </select>
                     </div>
@@ -232,13 +234,13 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                     {/* Custom bank name input */}
                     {isCustomBank && (
                       <div>
-                        <label className="text-xs text-slate-500">Банкны нэр бичих</label>
+                        <label className="text-xs text-slate-500">{t("gift_banner.bank_name_custom")}</label>
                         <input
                           type="text"
                           value={customBankName}
                           onChange={(e) => setCustomBankName(e.target.value)}
                           className="w-full rounded-lg border border-maroon-200 p-3 text-sm"
-                          placeholder="Банкны нэрээ оруулна уу"
+                          placeholder={t("gift_banner.bank_name_placeholder")}
                         />
                       </div>
                     )}
@@ -246,7 +248,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                     {/* Account/Card number */}
                     <div>
                       <label className="text-xs text-slate-500 flex items-center gap-1">
-                        <CreditCard className="w-3 h-3" /> Дансны дугаар / Картын дугаар
+                        <CreditCard className="w-3 h-3" /> {t("gift_banner.account_number")}
                       </label>
                       <input
                         type="text"
@@ -269,7 +271,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
 
                     {/* Owner name */}
                     <div>
-                      <label className="text-xs text-slate-500">Эзэмшигчийн нэр</label>
+                      <label className="text-xs text-slate-500">{t("gift_banner.owner_name")}</label>
                       <input
                         type="text"
                         value={ownerName}
@@ -296,12 +298,12 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
                       {confirming ? (
                         <>
                           <Loader2 className="w-5 h-5 animate-spin" />
-                          Баталгаажуулж байна...
+                          {t("gift_banner.confirming")}
                         </>
                       ) : (
                         <>
                           <CheckCircle2 className="w-5 h-5" />
-                          Бэлэг хүлээн авах
+                          {t("gift_banner.confirm")}
                         </>
                       )}
                     </button>

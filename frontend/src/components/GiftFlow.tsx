@@ -27,6 +27,7 @@ import {
   GiftCard,
   GiftCreateInput,
 } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   buyRate: number;
@@ -40,6 +41,8 @@ const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "В
 const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
 
 export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
+  const { t } = useLang();
+
   // Steps:
   // 0: Select gift card
   // 1: Enter recipient phone & verify
@@ -99,7 +102,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       })
       .catch((err) => {
         console.error("Error loading gift cards:", err);
-        setError("Бэлгийн карт ачаалахад алдаа гарлаа");
+        setError(t("gift.card_load_error"));
       })
       .finally(() => setCardsLoading(false));
   }, []);
@@ -164,7 +167,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   // Handle recipient phone search
   const handleSearchRecipient = async () => {
     if (!recipientPhone.trim()) {
-      setRecipientError("Утасны дугаар оруулна уу");
+      setRecipientError(t("gift.phone_required"));
       return;
     }
 
@@ -178,11 +181,11 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       if (result.found && result.user) {
         setRecipientFound(result.user);
       } else {
-        setRecipientError("Энэ утасны дугаартай хэрэглэгч олдсонгүй. Дахин оролдоно уу.");
+        setRecipientError(t("gift.user_not_found"));
       }
     } catch (err) {
       console.error("Search error:", err);
-      setRecipientError("Хайлт хийхэд алдаа гарлаа");
+      setRecipientError(t("gift.search_error"));
     } finally {
       setRecipientSearching(false);
     }
@@ -208,7 +211,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       setReceiptUrl(presigned.public_url);
     } catch (err) {
       console.error("Receipt upload error:", err);
-      setError("Баримт оруулахад алдаа гарлаа");
+      setError(t("gift.receipt_upload_error"));
     } finally {
       setUploading(false);
     }
@@ -233,7 +236,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   // Handle final submission
   const handleSubmit = async () => {
     if (!giftCards[selectedCardIndex] || !recipientFound || !amount || !receiptUrl || !selectedAdminBank) {
-      setError("Бүх талбарыг бөглөнө үү");
+      setError(t("gift.fill_all"));
       return;
     }
 
@@ -270,7 +273,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       console.error("Gift creation error:", err);
       const errorDetail = err?.response?.data?.detail || err?.response?.data?.body || "";
       console.error("Error details:", errorDetail);
-      setError(`Бэлэг илгээхэд алдаа гарлаа: ${typeof errorDetail === 'string' ? errorDetail.slice(0, 100) : JSON.stringify(errorDetail).slice(0, 100)}`);
+      setError(`${t("gift.send_error")}: ${typeof errorDetail === 'string' ? errorDetail.slice(0, 100) : JSON.stringify(errorDetail).slice(0, 100)}`);
     } finally {
       setLoading(false);
     }
@@ -284,9 +287,9 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Gift className="w-10 h-10 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-green-700 mb-2">Бэлэг амжилттай илгээгдлээ!</h2>
+          <h2 className="text-2xl font-bold text-green-700 mb-2">{t("gift.success")}</h2>
           <p className="text-slate-600 mb-4">
-            Таны бэлэг хэрэглэгч рүү илгээгдлээ. Тухайн хэрэглэгч банкны мэдээллээ баталгаажуулсны дараа мөнгө шилжих болно.
+            {t("gift.success_desc")}
           </p>
           <div className="bg-slate-100 rounded-lg p-3 mb-6">
             <div className="text-xs text-slate-500">Invoice ID</div>
@@ -296,7 +299,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             onClick={onSuccess}
             className="w-full py-4 rounded-xl bg-maroon-600 text-white font-bold hover:bg-maroon-700 transition"
           >
-            Дуусгах
+            {t("gift.finish")}
           </button>
         </div>
       </div>
@@ -312,7 +315,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
         </button>
         <div className="flex items-center gap-2">
           <Gift className="w-6 h-6 text-pink-500" />
-          <h2 className="text-xl font-bold text-maroon-700">Бэлэг илгээх</h2>
+          <h2 className="text-xl font-bold text-maroon-700">{t("gift.title")}</h2>
         </div>
       </div>
 
@@ -330,8 +333,8 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 0 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-maroon-700">Бэлгийн карт сонгох</h3>
-            <p className="text-sm text-slate-500">Хүлээн авагчид илгээх картаа сонгоно уу</p>
+            <h3 className="text-lg font-semibold text-maroon-700">{t("gift.select_card")}</h3>
+            <p className="text-sm text-slate-500">{t("gift.select_card_desc")}</p>
           </div>
 
           {cardsLoading ? (
@@ -340,7 +343,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             </div>
           ) : giftCards.length === 0 ? (
             <div className="text-center py-12 text-slate-500">
-              Бэлгийн карт олдсонгүй
+              {t("gift.no_cards")}
             </div>
           ) : (
             <div className="relative">
@@ -384,14 +387,14 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           {/* From who field */}
           <div className="mt-4">
             <label className="text-xs text-slate-500 flex items-center gap-1">
-              <User className="w-3 h-3" /> Хэнээс? (Бэлэг хүлээн авч буй хүнд харагдах нэр)
+              <User className="w-3 h-3" /> {t("gift.from_label")}
             </label>
             <input
               type="text"
               value={fromName}
               onChange={(e) => setFromName(e.target.value)}
               className="w-full rounded-lg border border-maroon-200 p-3 text-sm mt-1"
-              placeholder="Жишээ нь: Найзаас нь"
+              placeholder={t("gift.from_placeholder")}
             />
           </div>
 
@@ -400,7 +403,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             disabled={giftCards.length === 0}
             className="w-full py-4 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-600 transition disabled:opacity-50"
           >
-            Үргэлжлүүлэх
+            {t("txn.continue")}
           </button>
         </div>
       )}
@@ -409,13 +412,13 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 1 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-maroon-700">Хүлээн авагчийн мэдээлэл</h3>
-            <p className="text-sm text-slate-500">Бэлэг хүлээн авах хүний бүртгэлтэй утасны дугаарыг оруулна уу</p>
+            <h3 className="text-lg font-semibold text-maroon-700">{t("gift.recipient_info")}</h3>
+            <p className="text-sm text-slate-500">{t("gift.recipient_info_desc")}</p>
           </div>
 
           <div>
             <label className="text-xs text-slate-500 flex items-center gap-1">
-              <Phone className="w-3 h-3" /> Утасны дугаар
+              <Phone className="w-3 h-3" /> {t("gift.phone_label")}
             </label>
             <div className="flex gap-2">
               <input
@@ -434,7 +437,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                 disabled={recipientSearching}
                 className="px-4 py-2 rounded-lg bg-maroon-600 text-white font-medium hover:bg-maroon-700 transition disabled:opacity-50"
               >
-                {recipientSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : "Хайх"}
+                {recipientSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : t("gift.search")}
               </button>
             </div>
           </div>
@@ -453,7 +456,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                   <User className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <div className="text-sm text-slate-500">Хүлээн авагч:</div>
+                  <div className="text-sm text-slate-500">{t("gift.recipient")}</div>
                   <div className="text-lg">
                     {recipientFound.last_name} <span className="font-bold">{recipientFound.first_name}</span>
                   </div>
@@ -468,14 +471,14 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               onClick={() => setStep(0)}
               className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
-              Буцах
+              {t("gift.back")}
             </button>
             <button
               onClick={() => setStep(2)}
               disabled={!recipientFound}
               className="flex-1 py-3 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-600 transition disabled:opacity-50"
             >
-              Үргэлжлүүлэх
+              {t("txn.continue")}
             </button>
           </div>
         </div>
@@ -485,13 +488,13 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       {step === 2 && (
         <div className="space-y-4">
           <div className="text-center mb-4">
-            <h3 className="text-lg font-semibold text-maroon-700">Бэлгийн мэдээлэл</h3>
-            <p className="text-sm text-slate-500">Илгээх валют, дүн болон мессежээ оруулна уу</p>
+            <h3 className="text-lg font-semibold text-maroon-700">{t("gift.details")}</h3>
+            <p className="text-sm text-slate-500">{t("gift.details_desc")}</p>
           </div>
 
           {/* Direction selection */}
           <div>
-            <label className="text-xs text-slate-500">Чиглэл сонгох</label>
+            <label className="text-xs text-slate-500">{t("gift.direction")}</label>
             <div className="grid grid-cols-2 gap-2 mt-1">
               <button
                 onClick={() => setDirection("buy")}
@@ -520,7 +523,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
 
           {/* Amount */}
           <div>
-            <label className="text-xs text-slate-500">Илгээх дүн ({currencyFrom})</label>
+            <label className="text-xs text-slate-500">{t("gift.amount_label", { currency: currencyFrom })}</label>
             <input
               type="number"
               value={amount}
@@ -530,7 +533,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             />
             {amount && parseFloat(amount) > 0 && (
               <div className="mt-2 p-3 bg-slate-50 rounded-lg">
-                <div className="text-sm text-slate-500">Хүлээн авах дүн:</div>
+                <div className="text-sm text-slate-500">{t("txn.receive_amount")}</div>
                 <div className="text-xl font-bold text-maroon-700">
                   {convertedAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })} {currencyTo}
                 </div>
@@ -550,14 +553,14 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           {/* Message */}
           <div>
             <label className="text-xs text-slate-500 flex items-center gap-1">
-              <MessageSquare className="w-3 h-3" /> Мессеж (заавал биш)
+              <MessageSquare className="w-3 h-3" /> {t("gift.message_label")}
             </label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value.slice(0, 1000))}
               className="w-full rounded-lg border border-maroon-200 p-3 text-sm resize-none"
               rows={3}
-              placeholder="Хүлээн авагчид илгээх мессеж..."
+              placeholder={t("gift.message_placeholder")}
             />
             <div className="text-xs text-slate-400 text-right">{message.length}/1000</div>
           </div>
@@ -567,7 +570,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               onClick={() => setStep(1)}
               className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
-              Буцах
+              {t("gift.back")}
             </button>
             <button
               onClick={() => {
@@ -577,7 +580,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               disabled={!amount || parseFloat(amount) <= 0 || (direction === "sell" && convertedAmount < minRubAmount)}
               className="flex-1 py-3 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-600 transition disabled:opacity-50"
             >
-              Үргэлжлүүлэх
+              {t("txn.continue")}
             </button>
           </div>
         </div>
@@ -677,7 +680,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
 
           {/* Receipt upload */}
           <div>
-            <label className="text-xs text-slate-500">Гүйлгээний баримт</label>
+            <label className="text-xs text-slate-500">{t("txn.upload_receipt")}</label>
             <div className="mt-1">
               {receiptUrl ? (
                 <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -692,12 +695,12 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                   {uploading ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin text-maroon-600" />
-                      <span className="text-sm text-maroon-600">Оруулж байна...</span>
+                      <span className="text-sm text-maroon-600">{t("txn.uploading")}</span>
                     </>
                   ) : (
                     <>
                       <Upload className="w-5 h-5 text-maroon-600" />
-                      <span className="text-sm text-maroon-600">Баримтын зургаа оруулна уу</span>
+                      <span className="text-sm text-maroon-600">{t("txn.upload_screenshot")}</span>
                     </>
                   )}
                   <input
@@ -717,14 +720,14 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               onClick={() => setStep(2)}
               className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
-              Буцах
+              {t("gift.back")}
             </button>
             <button
               onClick={() => setStep(4)}
               disabled={!receiptUrl || !selectedAdminBank}
               className="flex-1 py-3 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-600 transition disabled:opacity-50"
             >
-              Үргэлжлүүлэх
+              {t("txn.continue")}
             </button>
           </div>
         </div>
@@ -757,13 +760,13 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-500">Хүлээн авагч:</span>
+              <span className="text-sm text-slate-500">{t("gift.recipient")}</span>
               <span className="font-medium">
                 {recipientFound?.last_name} <span className="font-bold">{recipientFound?.first_name}</span>
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-500">Утас:</span>
+              <span className="text-sm text-slate-500">{t("gift.phone_label")}:</span>
               <span className="font-mono">{recipientPhone}</span>
             </div>
             <div className="flex items-center justify-between">
@@ -793,7 +796,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               onClick={() => setStep(3)}
               className="flex-1 py-3 rounded-xl border border-maroon-200 text-maroon-700 font-medium hover:bg-maroon-50 transition"
             >
-              Буцах
+              {t("gift.back")}
             </button>
             <button
               onClick={handleSubmit}
@@ -803,12 +806,12 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Илгээж байна...
+                  {t("txn.submitting")}
                 </>
               ) : (
                 <>
                   <Gift className="w-5 h-5" />
-                  Бэлэг илгээх
+                  {t("gift.title")}
                 </>
               )}
             </button>

@@ -1,18 +1,21 @@
 import { Home, ArrowLeftRight, LayoutGrid, BarChart3 } from "lucide-react";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   activeTab: number;
   onTabChange: (tab: number) => void;
 }
 
-const tabs = [
-  { label: "Нүүр", icon: Home },
-  { label: "Гүйлгээ", icon: ArrowLeftRight },
-  { label: "Үйлчилгээ", icon: LayoutGrid },
-  { label: "Статистик", icon: BarChart3 },
+const tabKeys = [
+  { key: "nav.home", icon: Home },
+  { key: "nav.transaction", icon: ArrowLeftRight },
+  { key: "nav.services", icon: LayoutGrid },
+  { key: "nav.stats", icon: BarChart3 },
 ];
 
 export function BottomNavBar({ activeTab, onTabChange }: Props) {
+  const { t } = useLang();
+  const tabs = tabKeys.map(tk => ({ label: t(tk.key), icon: tk.icon }));
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-safe">
       <div className="max-w-lg mx-auto mb-3">

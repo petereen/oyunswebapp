@@ -5,6 +5,7 @@ import { GiftFlow } from "../components/GiftFlow";
 import { FuelPlaceholder } from "../components/FuelPlaceholder";
 import { FuelFlow } from "../components/FuelFlow";
 import { fetchRates } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   initialFuelOrderId?: string | null;
@@ -13,6 +14,7 @@ interface Props {
 
 export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {}) {
   const [activeService, setActiveService] = useState<"gift" | "fuel" | "fuel-dev" | null>(null);
+  const { t } = useLang();
 
   const { data: rate } = useQuery({
     queryKey: ["rates"],
@@ -60,7 +62,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
 
   return (
     <div className="animate-fadeIn">
-      <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200 mb-4">Үйлчилгээ</h2>
+      <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200 mb-4">{t("services.title")}</h2>
 
       <div className="grid grid-cols-2 gap-3">
         {/* Gift Flow Card */}
@@ -70,8 +72,8 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
         >
           <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
           <Gift className="w-8 h-8 mb-3 opacity-90" />
-          <div className="font-bold text-sm mb-0.5">Бэлэг илгээх</div>
-          <div className="text-[11px] text-white/60 leading-relaxed">Гадаадад буй хүнд мөнгө илгээх</div>
+          <div className="font-bold text-sm mb-0.5">{t("services.gift_title")}</div>
+          <div className="text-[11px] text-white/60 leading-relaxed">{t("services.gift_desc")}</div>
         </button>
 
         {/* Fuel Purchase Card */}
@@ -81,8 +83,8 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
         >
           <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
           <Flame className="w-8 h-8 mb-3 opacity-90" />
-          <div className="font-bold text-sm mb-0.5">Түлш худалдаж авах</div>
-          <div className="text-[11px] text-white/60 leading-relaxed">Жолоочд танд зориулсан</div>
+          <div className="font-bold text-sm mb-0.5">{t("services.fuel_title")}</div>
+          <div className="text-[11px] text-white/60 leading-relaxed">{t("services.fuel_desc")}</div>
         </button>
       </div>
     </div>

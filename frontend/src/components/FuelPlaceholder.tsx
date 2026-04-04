@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { Flame, ArrowLeft, Clock3 } from "lucide-react";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   onBack: () => void;
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function FuelPlaceholder({ onBack, onDevEnter }: Props) {
+  const { t } = useLang();
   const clickTimestamps = useRef<number[]>([]);
   const handleIconClick = useCallback(() => {
     if (!onDevEnter) return;
@@ -26,7 +28,7 @@ export function FuelPlaceholder({ onBack, onDevEnter }: Props) {
         </button>
         <div className="flex items-center gap-2 text-dark-800 dark:text-ivory-200">
           <Flame className="w-4 h-4 text-gold-500" />
-          <span className="text-sm font-bold">Түлш худалдаж авах</span>
+          <span className="text-sm font-bold">{t("fuel.buy_title")}</span>
         </div>
       </div>
 
@@ -36,20 +38,18 @@ export function FuelPlaceholder({ onBack, onDevEnter }: Props) {
         </button>
 
         <div className="text-center space-y-2">
-          <h3 className="text-base font-bold text-dark-800 dark:text-ivory-200">Түлш худалдаж авах</h3>
+          <h3 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("fuel.buy_title")}</h3>
           <p className="text-sm text-dark-600 dark:text-ivory-400 leading-relaxed">
-            Жолооч нарт зориулсан түлш худалдан авах үйлчилгээ. Холын тээврийн жолооч нар хөнгөлөлттэй үнээр
-            ОХУ-ын АЗС-уудаас дизель түлш худалдан авах боломжтой.
+            {t("fuel.buy_desc")}
           </p>
           <p className="text-sm text-dark-600 dark:text-ivory-400">
-            Систем нь захиалга авсанаас хойш админд автоматаар дамжуулан таны хүсэлтийг боловсруулна.
-            Админ баталгаажуулсны дараа таны түлш цэнэглэгдэнэ.
+            {t("fuel.buy_desc2")}
           </p>
         </div>
 
         <div className="flex items-center gap-2 px-4 py-2 bg-gold-50 dark:bg-gold-900/20 text-gold-700 dark:text-gold-400 rounded-xl text-xs font-medium">
           <Clock3 className="w-4 h-4" />
-          Удахгүй нэмэгдэнэ
+          {t("fuel.coming_soon")}
         </div>
       </div>
     </div>

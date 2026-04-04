@@ -9,6 +9,7 @@ import {
 } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, RegistrationModal } from "../components/RegistrationModal";
 import { TelegramUser } from "../hooks/useTelegramAuth";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   initData: string;
@@ -34,6 +35,7 @@ function parseSavedBank(saved: string | undefined): Record<string, string> {
 }
 
 export function TransactionTab({ initData, user, initialDirection, onResetDirection }: Props) {
+  const { t, lang } = useLang();
   const { data: rate } = useQuery({ queryKey: ["rates"], queryFn: fetchRates, retry: 2 });
   const { data: serviceStatus } = useQuery({
     queryKey: ["serviceStatus"],
@@ -179,10 +181,10 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
         setPromoMessage(res.message || "");
         setFlowStep("adminBank");
       } else {
-        setPromoError(res.message || "Промо код олдсонгүй");
+        setPromoError(res.message || t("txn.promo_not_found"));
       }
     } catch {
-      setPromoError("Промо код шалгахад алдаа гарлаа");
+      setPromoError(t("txn.promo_error"));
     } finally {
       setPromoValidating(false);
     }
@@ -212,7 +214,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       await fetch(presigned.upload_url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       setReceiptUrls((prev) => [...prev, presigned.public_url]);
     } catch {
-      setError("Файл байршуулахад алдаа. Дахин оролдоно уу.");
+      setError(t("txn.upload_error"));
     } finally {
       setUploading(false);
     }
@@ -262,7 +264,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       setSuccessInvoice(res.invoice);
       setFlowStep("success");
     } catch {
-      setError("Арилжаа үүсгэхэд алдаа гарлаа. Дахин оролдоно уу.");
+      setError(t("txn.exchange_error"));
     } finally {
       setLoading(false);
     }
@@ -319,15 +321,15 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
             <CreditCard className="w-10 h-10 text-maroon-400" />
           </div>
           <div className="text-center space-y-2">
-            <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">Бүртгүүлэх шаардлагатай</div>
-            <div className="text-sm text-dark-600 dark:text-ivory-300">Валют солихын тулд эхлээд бүртгүүлнэ үү.</div>
+            <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">{t("txn.register_required")}</div>
+            <div className="text-sm text-dark-600 dark:text-ivory-300">{t("txn.register_desc")}</div>
           </div>
           <button
             onClick={() => setShowRegistration(true)}
             className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-maroon-600 hover:bg-maroon-700 text-white font-semibold shadow-card transition-all"
           >
             <UserPlus className="w-5 h-5" />
-            Бүртгүүлэх
+            {t("txn.register")}
           </button>
         </div>
         {showRegistration && (
@@ -348,14 +350,14 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           <CreditCard className="w-8 h-8 text-gold-600" />
         </div>
         <div className="text-center">
-          <div className="text-lg font-semibold text-gold-700 dark:text-gold-400 mb-2">Орос банкны мэдээлэл шаардлагатай</div>
-          <div className="text-sm text-dark-600 dark:text-ivory-300 mb-4">Валют солихын тулд та орос банкны мэдээллээ бүртгүүлэх шаардлагатай.</div>
+          <div className="text-lg font-semibold text-gold-700 dark:text-gold-400 mb-2">{t("txn.rub_bank_required")}</div>
+          <div className="text-sm text-dark-600 dark:text-ivory-300 mb-4">{t("txn.rub_bank_desc")}</div>
           <div className="bg-gold-50 dark:bg-gold-900/20 border border-gold-200 dark:border-gold-800 rounded-xl p-4 text-left">
-            <div className="text-sm text-gold-800 dark:text-gold-300 font-medium mb-2">📋 Бүртгүүлэх заавар:</div>
+            <div className="text-sm text-gold-800 dark:text-gold-300 font-medium mb-2">{t("txn.rub_bank_instructions")}</div>
             <ol className="text-sm text-gold-700 dark:text-gold-400 list-decimal list-inside space-y-1">
-              <li>Нүүр хуудас дээрхи Профайл товчийг дарна</li>
-              <li>Орос банкны дансны мэдээллээ оруулна</li>
-              <li>Үүний дараа админы баталгаажуулалт хүлээгээрэй</li>
+              <li>{t("txn.rub_bank_step1")}</li>
+              <li>{t("txn.rub_bank_step2")}</li>
+              <li>{t("txn.rub_bank_step3")}</li>
             </ol>
           </div>
         </div>
@@ -372,14 +374,14 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
         </div>
         <div className="text-center space-y-2 px-4">
           <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">
-            {!serviceStatus.is_within_hours ? "Ажлын цаг дууссан" : "Идэвхтэй админ байхгүй байна. Та түр хүлээнэ үү."}
+            {!serviceStatus.is_within_hours ? t("txn.working_hours_ended") : t("txn.no_active_admin")}
           </div>
           <div className="text-sm text-dark-600 dark:text-ivory-300">
-            {serviceStatus.message || "Одоогоор шинэ хүсэлт хүлээн авах боломжгүй байна."}
+            {serviceStatus.message || t("txn.new_requests_unavailable")}
           </div>
           {serviceStatus.working_hours && (
             <div className="mt-3 inline-block bg-surface-100 dark:bg-dark-700 rounded-xl px-4 py-2 text-sm font-medium text-dark-800 dark:text-ivory-200">
-              🕐 Ажлын цаг: {serviceStatus.working_hours}
+              {t("txn.working_hours", { hours: serviceStatus.working_hours })}
             </div>
           )}
         </div>
@@ -408,7 +410,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           <ArrowLeft className="w-5 h-5 text-dark-600 dark:text-ivory-300" />
         </button>
         <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{title}</div>
-        <button onClick={resetFlow} className="ml-auto text-xs text-dark-600 dark:text-ivory-400 hover:text-maroon-600 dark:hover:text-gold-400 font-medium">Цуцлах</button>
+        <button onClick={resetFlow} className="ml-auto text-xs text-dark-600 dark:text-ivory-400 hover:text-maroon-600 dark:hover:text-gold-400 font-medium">{t("txn.cancel")}</button>
       </div>
       {/* Step progress dots */}
       <div className="flex items-center gap-1.5 px-1">
@@ -437,13 +439,13 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
   if (flowStep === "promo") {
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
-        <FlowHeader title="Промо код" onBack={() => setFlowStep("card")} />
+        <FlowHeader title={t("txn.promo_code")} onBack={() => setFlowStep("card")} />
         <RateInfo />
 
         {userPromoCodes.length > 0 && (
           <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800 rounded-xl mb-3">
             <div className="text-sm font-medium text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-2">
-              <Gift className="w-4 h-4" /> Таны промо кодууд:
+              <Gift className="w-4 h-4" /> {t("txn.your_promos")}
             </div>
             <div className="flex flex-wrap gap-2">
               {userPromoCodes.map((promo) => (
@@ -465,25 +467,25 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           value={promoCode}
           onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
           className="w-full rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3 text-lg uppercase mb-3"
-          placeholder="Промо код оруулна уу"
+          placeholder={t("txn.promo_placeholder")}
         />
 
         {promoError && <div className="text-red-600 dark:text-red-400 text-sm mb-3">{promoError}</div>}
         {promoValid && promoDiscount > 0 && (
           <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-400 mb-3">
             <Gift className="w-5 h-5" />
-            <span>{promoMessage || (direction === "buy" ? `+${promoDiscount} ₮ ханшинд нэмэгдлээ!` : `-${promoDiscount} ₮ ханшнаас хасагдлаа!`)}</span>
+            <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: promoDiscount }) : t("txn.promo_sell_applied", { amount: promoDiscount }))}</span>
           </div>
         )}
 
         <div className="flex gap-2">
           <button onClick={() => { setPromoCode(""); setPromoDiscount(0); setPromoValid(false); setFlowStep("adminBank"); }}
             className="flex-1 py-3 rounded-xl bg-surface-100 dark:bg-dark-700 text-dark-800 dark:text-ivory-200 font-semibold hover:bg-surface-200 dark:hover:bg-dark-600 transition">
-            Алгасах
+            {t("txn.skip")}
           </button>
           <button onClick={handleValidatePromo} disabled={promoValidating}
             className="flex-1 py-3 rounded-xl bg-maroon-600 text-white font-semibold hover:bg-maroon-500 disabled:opacity-50 transition">
-            {promoValidating ? "Шалгаж байна..." : "Идэвхжүүлээд үргэлжлэх"}
+            {promoValidating ? t("txn.validating") : t("txn.activate_proceed")}
           </button>
         </div>
       </div>
@@ -494,18 +496,18 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
   if (flowStep === "adminBank") {
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
-        <FlowHeader title="Банк сонгох" onBack={() => setFlowStep("promo")} />
+        <FlowHeader title={t("txn.select_bank")} onBack={() => setFlowStep("promo")} />
         <RateInfo />
 
         <div className="text-sm text-dark-600 dark:text-ivory-300 mb-3">
-          Та {amount.toLocaleString()} {currencyFrom}-г манай данс руу илгээнэ үү
+          {t("txn.send_to_our_account", { amount: amount.toLocaleString(), currency: currencyFrom })}
         </div>
 
         {direction === "buy" && (
           <>
             {availableAdminBanks.length > 0 ? (
               <div className="flex flex-col gap-2 mb-3">
-                <div className="text-xs text-dark-600 dark:text-ivory-300">Шилжүүлэх банк сонгоно уу:</div>
+                <div className="text-xs text-dark-600 dark:text-ivory-300">{t("txn.select_transfer_bank")}</div>
                 {availableAdminBanks.map((bank) => (
                   <button key={bank.id} onClick={() => setSelectedAdminBank(bank)}
                     className={`p-4 rounded-xl border-2 text-left transition ${
@@ -520,17 +522,17 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
               </div>
             ) : (
               <div className="p-4 bg-gold-50 dark:bg-gold-900/20 border border-gold-200 dark:border-gold-800 rounded-xl text-sm text-gold-700 dark:text-gold-400 mb-3">
-                Идэвхтэй банкны данс байхгүй байна.
+                {t("txn.no_active_bank")}
               </div>
             )}
 
             {selectedAdminBank && (
               <div className="p-4 bg-maroon-50 dark:bg-maroon-900/20 border border-maroon-200 dark:border-maroon-800 rounded-xl space-y-2 mb-3">
-                <div className="text-xs text-dark-600 dark:text-ivory-300">Шилжүүлгийн мэдээлэл:</div>
+                <div className="text-xs text-dark-600 dark:text-ivory-300">{t("txn.transfer_info")}</div>
                 {selectedAdminBank.card_number && (
                   <div className="flex items-center justify-between p-2 bg-white dark:bg-dark-700 rounded-lg">
                     <div>
-                      <div className="text-xs text-dark-600 dark:text-ivory-400">Картын дугаар</div>
+                      <div className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.card_number")}</div>
                       <div className="font-mono font-bold text-maroon-700 dark:text-maroon-400">{selectedAdminBank.card_number}</div>
                     </div>
                     <button onClick={() => handleCopy(selectedAdminBank.card_number!, "card")} className="p-2 bg-maroon-100 dark:bg-maroon-900/30 hover:bg-maroon-200 dark:hover:bg-maroon-800/30 rounded-lg transition">
@@ -541,7 +543,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
                 {selectedAdminBank.phone && (
                   <div className="flex items-center justify-between p-2 bg-white dark:bg-dark-700 rounded-lg">
                     <div>
-                      <div className="text-xs text-dark-600 dark:text-ivory-400">Утас (СБП)</div>
+                      <div className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.phone_sbp")}</div>
                       <div className="font-mono font-bold text-maroon-700 dark:text-maroon-400">{selectedAdminBank.phone}</div>
                     </div>
                     <button onClick={() => handleCopy(selectedAdminBank.phone!, "phone")} className="p-2 bg-maroon-100 dark:bg-maroon-900/30 hover:bg-maroon-200 dark:hover:bg-maroon-800/30 rounded-lg transition">
@@ -551,7 +553,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
                 )}
                 <div className="text-sm text-dark-600 dark:text-ivory-300">{selectedAdminBank.owner_name}</div>
                 <div className="mt-3 p-3 bg-gold-50 dark:bg-gold-900/20 border border-gold-200 dark:border-gold-800 rounded-lg">
-                  <div className="text-xs text-gold-700 dark:text-gold-400 font-medium mb-1">⚠️ Гүйлгээний утга хэсэгт заавал бичнэ үү:</div>
+                  <div className="text-xs text-gold-700 dark:text-gold-400 font-medium mb-1">{t("txn.invoice_warning")}</div>
                   <div className="flex items-center justify-between">
                     <div className="font-mono font-bold text-gold-800 dark:text-gold-300 text-lg">{invoiceId}</div>
                     <button onClick={() => handleCopy(invoiceId, "invoice")} className="p-2 bg-gold-100 dark:bg-gold-900/30 hover:bg-gold-200 dark:hover:bg-gold-800/30 rounded-lg transition">
@@ -568,7 +570,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           <>
             {availableMntAdminBanks.length > 0 ? (
               <div className="flex flex-col gap-2 mb-3">
-                <div className="text-xs text-dark-600 dark:text-ivory-300">MNT шилжүүлэх банк сонгоно уу:</div>
+                <div className="text-xs text-dark-600 dark:text-ivory-300">{t("txn.select_mnt_bank")}</div>
                 {availableMntAdminBanks.map((bank) => (
                   <button key={bank.id} onClick={() => setSelectedMntAdminBank(bank)}
                     className={`p-4 rounded-xl border-2 text-left transition ${
@@ -582,15 +584,15 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
               </div>
             ) : (
               <div className="p-4 bg-gold-50 dark:bg-gold-900/20 border border-gold-200 dark:border-gold-800 rounded-xl text-sm text-gold-700 dark:text-gold-400 mb-3">
-                Идэвхтэй MNT банкны данс байхгүй байна.
+                {t("txn.no_active_mnt_bank")}
               </div>
             )}
             {selectedMntAdminBank && (
               <div className="p-4 bg-maroon-50 dark:bg-maroon-900/20 border border-maroon-200 dark:border-maroon-800 rounded-xl space-y-2 mb-3">
-                <div className="text-xs text-dark-600 dark:text-ivory-300">Шилжүүлгийн мэдээлэл:</div>
+                <div className="text-xs text-dark-600 dark:text-ivory-300">{t("txn.transfer_info")}</div>
                 <div className="flex items-center justify-between p-2 bg-white dark:bg-dark-700 rounded-lg">
                   <div>
-                    <div className="text-xs text-dark-600 dark:text-ivory-400">Данс</div>
+                    <div className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.account")}</div>
                     <div className="font-mono font-bold text-maroon-700 dark:text-maroon-400">{selectedMntAdminBank.account_number}</div>
                   </div>
                   <button onClick={() => handleCopy(selectedMntAdminBank.account_number, "mnt-acc")} className="p-2 bg-maroon-100 dark:bg-maroon-900/30 hover:bg-maroon-200 dark:hover:bg-maroon-800/30 rounded-lg transition">
@@ -599,7 +601,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
                 </div>
                 <div className="text-sm text-dark-600 dark:text-ivory-300">{selectedMntAdminBank.owner_name}</div>
                 <div className="mt-3 p-3 bg-gold-50 dark:bg-gold-900/20 border border-gold-200 dark:border-gold-800 rounded-lg">
-                  <div className="text-xs text-gold-700 dark:text-gold-400 font-medium mb-1">⚠️ Гүйлгээний утга хэсэгт Invoice ID-г заавал бичнэ үү:</div>
+                  <div className="text-xs text-gold-700 dark:text-gold-400 font-medium mb-1">{t("txn.invoice_warning_mnt")}</div>
                   <div className="flex items-center justify-between">
                     <div className="font-mono font-bold text-gold-800 dark:text-gold-300 text-lg">{invoiceId}</div>
                     <button onClick={() => handleCopy(invoiceId, "invoice")} className="p-2 bg-gold-100 dark:bg-gold-900/30 hover:bg-gold-200 dark:hover:bg-gold-800/30 rounded-lg transition">
@@ -617,7 +619,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           onClick={() => setFlowStep("receipt")}
           disabled={direction === "buy" ? !selectedAdminBank : !selectedMntAdminBank}
         >
-          Үргэлжлүүлэх
+          {t("txn.continue")}
         </button>
       </div>
     );
@@ -627,15 +629,15 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
   if (flowStep === "receipt") {
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
-        <FlowHeader title="Баримт оруулах" onBack={() => setFlowStep("adminBank")} />
+        <FlowHeader title={t("txn.upload_receipt")} onBack={() => setFlowStep("adminBank")} />
 
         <div className="p-3 bg-maroon-50 dark:bg-maroon-900/20 rounded-xl text-sm mb-3">
           <div className="flex justify-between text-dark-800 dark:text-ivory-200">
-            <span>Илгээх дүн:</span>
+            <span>{t("txn.send_amount")}</span>
             <span className="font-bold">{amount.toLocaleString()} {currencyFrom}</span>
           </div>
           <div className="flex justify-between text-dark-800 dark:text-ivory-200">
-            <span>Хүлээн авах дүн:</span>
+            <span>{t("txn.receive_amount")}</span>
             <span className="font-bold">{convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}</span>
           </div>
         </div>
@@ -655,14 +657,14 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           {receiptUrls.length > 0 ? (
             <div className="flex flex-col items-center gap-2 text-green-600 dark:text-green-400">
               <CheckCircle2 className="w-6 h-6" />
-              <span className="font-medium">{receiptUrls.length} зураг хавсаргасан</span>
-              <span className="text-xs text-dark-600 dark:text-ivory-400">Нэмж зураг хавсаргахын тулд энд дарна уу</span>
+              <span className="font-medium">{t("txn.photos_attached", { count: receiptUrls.length })}</span>
+              <span className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.add_more_photos")}</span>
             </div>
           ) : (
             <>
               <Upload className="w-8 h-8 text-maroon-600 dark:text-maroon-400" />
-              <span className="text-sm text-dark-600 dark:text-ivory-300 mt-2">{uploading ? "Хавсаргаж байна..." : "Төлбөрийн баримтын скриншот зураг оруулах"}</span>
-              <span className="text-xs text-dark-600 dark:text-ivory-400 mt-1">Олон зураг сонгож болно</span>
+              <span className="text-sm text-dark-600 dark:text-ivory-300 mt-2">{uploading ? t("txn.uploading") : t("txn.upload_screenshot")}</span>
+              <span className="text-xs text-dark-600 dark:text-ivory-400 mt-1">{t("txn.multiple_photos")}</span>
             </>
           )}
           <input type="file" accept="image/*" multiple className="hidden"
@@ -682,7 +684,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           }}
           disabled={receiptUrls.length === 0}
         >
-          Үргэлжлүүлэх
+          {t("txn.continue")}
         </button>
       </div>
     );
@@ -692,22 +694,22 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
   if (flowStep === "receivingBank") {
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
-        <FlowHeader title={`${currencyTo} данс`} onBack={() => { setUseSavedBank(null); setFlowStep("receipt"); }} />
+        <FlowHeader title={t("txn.account_label", { currency: currencyTo })} onBack={() => { setUseSavedBank(null); setFlowStep("receipt"); }} />
 
         {useSavedBank === null && getSavedBankForDirection(direction!) && (
           <div className="flex flex-col gap-3 mb-3">
             <div className="p-4 bg-maroon-50 dark:bg-maroon-900/20 rounded-xl border border-maroon-200 dark:border-maroon-800">
-              <div className="text-xs text-dark-600 dark:text-ivory-400 mb-2">Хадгалсан {currencyTo} банкны мэдээлэл:</div>
+              <div className="text-xs text-dark-600 dark:text-ivory-400 mb-2">{t("txn.saved_bank", { currency: currencyTo })}</div>
               <div className="text-sm font-medium text-maroon-700 dark:text-maroon-300 whitespace-pre-wrap">{getSavedBankForDirection(direction!)}</div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => handleUseSaved(true)}
                 className="flex-1 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-5 h-5" /> Ашиглах
+                <CheckCircle2 className="w-5 h-5" /> {t("txn.use_saved")}
               </button>
               <button onClick={() => handleUseSaved(false)}
                 className="flex-1 py-3 rounded-xl bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-300 font-semibold hover:bg-surface-200 dark:hover:bg-dark-600 transition flex items-center justify-center gap-2">
-                <Edit3 className="w-5 h-5" /> Шинээр оруулах
+                <Edit3 className="w-5 h-5" /> {t("txn.enter_new")}
               </button>
             </div>
           </div>
@@ -717,23 +719,23 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           <div className="flex flex-col gap-3">
             {direction === "sell" && (
               <>
-                <label className="text-xs text-dark-600 dark:text-ivory-400">Банк</label>
-                <input value={rubBank} onChange={(e) => setRubBank(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="Tinkoff, Sber..." />
-                <label className="text-xs text-dark-600 dark:text-ivory-400">Картын дугаар</label>
+                <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.bank_label")}</label>
+                <input value={rubBank} onChange={(e) => setRubBank(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder={t("txn.bank_placeholder_sell")} />
+                <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.card_number")}</label>
                 <input value={rubCardNumber} onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="XXXX XXXX XXXX XXXX" maxLength={19} />
-                <label className="text-xs text-dark-600 dark:text-ivory-400">Утас (СБП)</label>
+                <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.phone_sbp")}</label>
                 <input value={rubPhone} onChange={(e) => setRubPhone(formatRussianPhone(e.target.value))} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="+7 XXX XXX XX XX" />
-                <label className="text-xs text-dark-600 dark:text-ivory-400">Эзэмшигчийн нэр</label>
+                <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.owner_name")}</label>
                 <input value={rubOwnerName} onChange={(e) => setRubOwnerName(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="Иван Иванов" />
               </>
             )}
             {direction === "buy" && (
               <>
-                <label className="text-xs text-dark-600 dark:text-ivory-400">Банк</label>
-                <input value={mntBank} onChange={(e) => setMntBank(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="Хаан банк, Голомт банк..." />
-                <label className="text-xs text-dark-600 dark:text-ivory-400">Дансны дугаар (IBAN)</label>
+                <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.bank_label")}</label>
+                <input value={mntBank} onChange={(e) => setMntBank(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder={t("txn.bank_placeholder_buy")} />
+                <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.iban_label")}</label>
                 <input value={mntIban} onChange={(e) => setMntIban(formatIBAN(e.target.value))} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="MN XX XXXX XX XXXXXXXXXX" />
-                <label className="text-xs text-dark-600 dark:text-ivory-400">Эзэмшигчийн нэр</label>
+                <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.owner_name")}</label>
                 <input value={mntOwnerName} onChange={(e) => setMntOwnerName(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="Бат-Эрдэнэ" />
               </>
             )}
@@ -743,7 +745,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
               onClick={() => handleSubmit()}
               disabled={!isBankValid() || loading}
             >
-              {loading ? "Боловсруулж байна..." : "Баталгаажуулах"}
+              {loading ? t("txn.processing") : t("txn.confirm")}
             </button>
 
             {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
@@ -761,16 +763,16 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
           <div className="w-16 h-16 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center">
             <CheckCircle2 className="w-9 h-9 text-green-500" />
           </div>
-          <div className="text-xl font-bold text-dark-800 dark:text-ivory-200">Хүсэлт илгээгдлээ!</div>
+          <div className="text-xl font-bold text-dark-800 dark:text-ivory-200">{t("txn.success_title")}</div>
           <div className="text-sm text-dark-600 dark:text-ivory-400 text-center">
             Invoice: <span className="font-mono font-bold text-dark-800 dark:text-ivory-200">{successInvoice}</span>
           </div>
           <div className="text-sm text-dark-600 dark:text-ivory-400 text-center">
-            Админ таны төлбөрийг шалгаж дууссаны дараа танд Telegram чатаар мэдэгдэл ирэх болно.
+            {t("txn.success_notification")}
           </div>
           <button onClick={resetFlow}
             className="mt-4 px-6 py-3 bg-maroon-600 text-white rounded-2xl font-semibold shadow-btn hover:bg-maroon-500 active:scale-[0.98] transition-all">
-            Нүүр хуудас руу буцах
+            {t("txn.back_home")}
           </button>
         </div>
       </div>

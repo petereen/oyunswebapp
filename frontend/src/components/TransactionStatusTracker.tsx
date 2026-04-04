@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Clock, ThumbsUp, CheckCircle2, X, AlertTriangle, MessageCircle } from "lucide-react";
 import { fetchActiveTransactions, ActiveTransaction } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface TransactionStatusTrackerProps {
   userId?: number;
@@ -70,6 +71,7 @@ interface TransactionStatusCardProps {
 
 function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCardProps) {
   const { status, invoice, amount, currency_from, currency_to, admin_comment } = transaction;
+  const { t } = useLang();
 
   const getStatusConfig = () => {
     switch (status) {
@@ -81,8 +83,8 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           barColor: "bg-amber-400",
           barBg: "bg-amber-100",
           progress: 33,
-          label: "Хүлээгдэж байна",
-          description: "Таны хүсэлтийг админ шалгаж байна",
+          label: t("status.pending"),
+          description: t("status.pending_desc"),
         };
       case "approved":
         return {
@@ -92,8 +94,8 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           barColor: "bg-green-400",
           barBg: "bg-green-100",
           progress: 66,
-          label: "Баталгаажсан",
-          description: "Админ гүйлгээг хийж байна",
+          label: t("status.approved"),
+          description: t("status.approved_desc"),
         };
       case "completed":
       case "successful": // Legacy status name
@@ -104,8 +106,8 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           barColor: "bg-green-500",
           barBg: "bg-green-100",
           progress: 100,
-          label: "Амжилттай",
-          description: "Гүйлгээ амжилттай хийгдлээ",
+          label: t("status.completed"),
+          description: t("status.completed_desc"),
         };
       case "rejected":
         return {
@@ -115,8 +117,8 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           barColor: "bg-red-500",
           barBg: "bg-red-100",
           progress: 100,
-          label: "Цуцлагдсан",
-          description: admin_comment || "Таны хүсэлт цуцлагдсан",
+          label: t("status.rejected"),
+          description: admin_comment || t("status.rejected_desc"),
         };
       default:
         return {
@@ -126,7 +128,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           barColor: "bg-slate-400",
           barBg: "bg-slate-100",
           progress: 0,
-          label: "Тодорхойгүй",
+          label: t("status.unknown"),
           description: "",
         };
     }
@@ -142,7 +144,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
         <button
           onClick={onDismiss}
           className="absolute top-2 right-2 p-1 rounded-full hover:bg-slate-100 transition"
-          title="Хаах"
+          title={t("status.close")}
         >
           <X className="w-4 h-4 text-slate-400" />
         </button>
@@ -186,7 +188,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           className="mt-3 flex items-center justify-center gap-2 text-xs text-red-600 hover:text-red-700 transition"
         >
           <MessageCircle className="w-4 h-4" />
-          <span>Асуудал гарсан гэж үзвэл support хаягтай холбогдоорой</span>
+          <span>{t("status.support_contact")}</span>
         </a>
       )}
     </div>

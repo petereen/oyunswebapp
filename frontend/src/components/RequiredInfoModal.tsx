@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Mail, Phone, AlertCircle, Loader2, Save } from "lucide-react";
 import { updateBankInfo, UpdateBankInfoInput } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   currentEmail?: string;
@@ -44,6 +45,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
   const [phoneMnt, setPhoneMnt] = useState(currentPhoneMnt || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { t } = useLang();
 
   // Check which fields are missing
   const missingEmail = !currentEmail?.trim();
@@ -75,7 +77,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
 
   const handleSave = async () => {
     if (!isFormValid()) {
-      setError("Бүх талбарыг зөв бөглөнө үү");
+      setError(t("req.fill_all"));
       return;
     }
 
@@ -106,7 +108,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
       onSaved();
     } catch (err) {
       console.error("Save error:", err);
-      setError("Хадгалахад алдаа гарлаа. Дахин оролдоно уу.");
+      setError(t("req.save_error"));
     } finally {
       setLoading(false);
     }
@@ -123,8 +125,8 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold">Мэдээлэл шаардлагатай</h2>
-                <p className="text-sm text-white/80">Гүйлгээ хийхийн өмнө дараах мэдээллийг бөглөнө үү</p>
+                <h2 className="text-xl font-bold">{t("req.title")}</h2>
+                <p className="text-sm text-white/80">{t("req.subtitle")}</p>
               </div>
             </div>
             <button
@@ -149,7 +151,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
             <div>
               <label className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-2">
                 <Mail className="w-4 h-4 text-maroon-600" />
-                Имэйл хаяг
+                {t("req.email_label")}
               </label>
               <input
                 type="email"
@@ -159,7 +161,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
                 placeholder="example@email.com"
               />
               <p className="text-xs text-slate-500 mt-1">
-                Гүйлгээний мэдээлэл, баталгаажуулалт авах
+                {t("req.email_desc")}
               </p>
             </div>
           )}
@@ -169,7 +171,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
             <div>
               <label className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-2">
                 <Phone className="w-4 h-4 text-maroon-600" />
-                Монгол утасны дугаар
+                {t("req.phone_mn_label")}
               </label>
               <input
                 type="tel"
@@ -179,7 +181,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
                 placeholder="9912-3456"
               />
               <p className="text-xs text-slate-500 mt-1">
-                Монголд байгаа утасны дугаар (8 оронтой)
+                {t("req.phone_mn_desc")}
               </p>
             </div>
           )}
@@ -189,11 +191,11 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-amber-800">
-                <strong>Яагаад шаардлагатай вэ?</strong>
+                <strong>{t("req.why_required")}</strong>
                 <ul className="mt-2 space-y-1 list-disc list-inside text-amber-700">
-                  <li>Гүйлгээний баталгаажуулалт илгээх</li>
-                  <li>Асуудал гарвал холбогдох</li>
-                  <li>Аюулгүй байдлыг хангах</li>
+                  <li>{t("req.reason1")}</li>
+                  <li>{t("req.reason2")}</li>
+                  <li>{t("req.reason3")}</li>
                 </ul>
               </div>
             </div>
@@ -206,7 +208,7 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
             onClick={onClose}
             className="flex-1 py-3 px-4 rounded-xl border border-slate-300 text-slate-700 font-medium hover:bg-slate-100 transition"
           >
-            Хаах
+            {t("req.close")}
           </button>
           <button
             onClick={handleSave}
@@ -216,12 +218,12 @@ export function RequiredInfoModal({ currentEmail, currentPhoneMnt, currentPhone,
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Хадгалж байна...
+                {t("req.saving")}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Хадгалах
+                {t("req.save")}
               </>
             )}
           </button>

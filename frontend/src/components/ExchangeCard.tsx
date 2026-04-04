@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { ArrowUpDown, Info } from "lucide-react";
 import { Rate } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   rate?: Rate;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
+  const { t } = useLang();
   const [direction, setDirection] = useState<"buy" | "sell">(initialDirection || "buy");
   const [inputValue, setInputValue] = useState("");
   const [swapRotation, setSwapRotation] = useState(0);
@@ -78,9 +80,9 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
         {/* You Give section */}
         <div className="mb-2">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-medium text-dark-600 dark:text-ivory-300 uppercase tracking-wider">Илгээх</span>
+            <span className="text-[11px] font-medium text-dark-600 dark:text-ivory-300 uppercase tracking-wider">{t("exchange.send")}</span>
             <span className="text-[11px] text-dark-600 dark:text-ivory-300">
-              Мин: {direction === "buy" ? `${effectiveMinRub.toLocaleString()} ₽` : `${Math.round(effectiveMinRub * currentRate).toLocaleString()} ₮`}
+              {t("exchange.min")}: {direction === "buy" ? `${effectiveMinRub.toLocaleString()} ₽` : `${Math.round(effectiveMinRub * currentRate).toLocaleString()} ₮`}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -108,7 +110,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
           <button
             onClick={handleSwap}
             className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-white dark:bg-dark-700 border border-silver dark:border-dark-600 flex items-center justify-center hover:bg-surface-50 dark:hover:bg-dark-600 hover:border-dark-600 transition-all shadow-card-xs"
-            aria-label="Чиглэл солих"
+            aria-label={t("exchange.swap")}
           >
             <ArrowUpDown
               className="w-4 h-4 text-dark-600 dark:text-ivory-300 transition-transform duration-300"
@@ -120,7 +122,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
         {/* You Receive section */}
         <div className="mt-2">
           <div className="mb-3">
-            <span className="text-[11px] font-medium text-dark-600 dark:text-ivory-300 uppercase tracking-wider">Хүлээн авах</span>
+            <span className="text-[11px] font-medium text-dark-600 dark:text-ivory-300 uppercase tracking-wider">{t("exchange.receive")}</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-surface-100 dark:bg-dark-700 rounded-xl px-4 py-3 text-sm font-semibold text-dark-800 dark:text-ivory-200 flex-shrink-0">
@@ -143,7 +145,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
       {/* Min amount warning */}
       {isBelowMin && (
         <div className="text-sm text-red-500 text-center font-medium">
-          Хамгийн бага дүн {effectiveMinRub.toLocaleString()} рубль
+          {t("exchange.min_amount", { amount: effectiveMinRub.toLocaleString() })}
         </div>
       )}
 
@@ -153,7 +155,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
         disabled={!canProceed}
         className="w-full bg-maroon-600 text-white py-4 rounded-2xl font-bold text-base shadow-btn hover:bg-maroon-500 active:scale-[0.97] transition-all disabled:bg-silver disabled:text-dark-600 disabled:shadow-none"
       >
-        Үргэлжлүүлэх
+        {t("exchange.proceed")}
       </button>
     </div>
   );

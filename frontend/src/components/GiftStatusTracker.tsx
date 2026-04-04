@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Gift, Clock, UserCheck, ThumbsUp, CheckCircle2, X, AlertTriangle, MessageCircle } from "lucide-react";
 import { fetchSentGifts, SentGift } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface GiftStatusTrackerProps {
   userId?: number;
@@ -83,6 +84,7 @@ interface GiftStatusCardProps {
 function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
   const { status, invoice, amount, currency_from, currency_to, recipient_first_name, recipient_last_name } =
     gift;
+  const { t } = useLang();
 
   const getStatusConfig = () => {
     switch (status) {
@@ -94,8 +96,8 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
           barColor: "bg-amber-400",
           barBg: "bg-amber-100",
           progress: 25,
-          label: "Хүлээн авагч хүлээгдэж байна",
-          description: "Хүлээн авагч банкны мэдээллээ оруулаагүй байна",
+          label: t("gift_status.pending_recipient"),
+          description: t("gift_status.pending_recipient_desc"),
         };
       case "pending_admin":
         return {
@@ -105,8 +107,8 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
           barColor: "bg-blue-400",
           barBg: "bg-blue-100",
           progress: 50,
-          label: "Админ хүлээгдэж байна",
-          description: "Хүлээн авагч банкаа баталгаажуулсан, админ шалгаж байна",
+          label: t("gift_status.pending_admin"),
+          description: t("gift_status.pending_admin_desc"),
         };
       case "approved":
         return {
@@ -116,8 +118,8 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
           barColor: "bg-green-400",
           barBg: "bg-green-100",
           progress: 75,
-          label: "Баталгаажсан",
-          description: "Админ бэлгийг баталгаажуулсан, шилжүүлж байна",
+          label: t("gift_status.approved"),
+          description: t("gift_status.approved_desc"),
         };
       case "completed":
         return {
@@ -127,8 +129,8 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
           barColor: "bg-green-500",
           barBg: "bg-green-100",
           progress: 100,
-          label: "Амжилттай",
-          description: "Бэлэг амжилттай хүргэгдлээ!",
+          label: t("gift_status.completed"),
+          description: t("gift_status.completed_desc"),
         };
       case "rejected":
         return {
@@ -138,8 +140,8 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
           barColor: "bg-red-500",
           barBg: "bg-red-100",
           progress: 100,
-          label: "Цуцлагдсан",
-          description: "Бэлэг цуцлагдсан",
+          label: t("status.rejected"),
+          description: t("gift_status.rejected_desc"),
         };
       default:
         return {
@@ -149,7 +151,7 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
           barColor: "bg-slate-400",
           barBg: "bg-slate-100",
           progress: 0,
-          label: "Тодорхойгүй",
+          label: t("status.unknown"),
           description: "",
         };
     }
@@ -171,7 +173,7 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
         <button
           onClick={onDismiss}
           className="absolute top-2 right-2 p-1 rounded-full hover:bg-slate-100 transition"
-          title="Хаах"
+          title={t("status.close")}
         >
           <X className="w-4 h-4 text-slate-400" />
         </button>
@@ -190,7 +192,7 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
             <span className="font-semibold text-sm text-slate-700">{config.label}</span>
           </div>
           <div className="text-xs text-slate-500 truncate">
-            {recipient_first_name} {recipient_last_name} руу • {amount.toLocaleString()} {currency_from} →{" "}
+            {recipient_first_name} {recipient_last_name} {t("gift_status.to")} • {amount.toLocaleString()} {currency_from} →{" "}
             {currency_to}
           </div>
         </div>
@@ -206,7 +208,7 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
 
       {/* Step indicators */}
       <div className="flex justify-between mt-2 text-[10px] text-slate-400">
-        <span className={status !== "rejected" ? "text-pink-500 font-medium" : ""}>Илгээсэн</span>
+        <span className={status !== "rejected" ? "text-pink-500 font-medium" : ""}>{t("gift_status.step_sent")}</span>
         <span
           className={
             status === "pending_admin" ||
@@ -216,14 +218,14 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
               : ""
           }
         >
-          Хүлээн авсан
+          {t("gift_status.step_received")}
         </span>
         <span
           className={status === "approved" || status === "completed" ? "text-pink-500 font-medium" : ""}
         >
-          Баталгаажсан
+          {t("gift_status.step_confirmed")}
         </span>
-        <span className={status === "completed" ? "text-green-500 font-medium" : ""}>Амжилттай</span>
+        <span className={status === "completed" ? "text-green-500 font-medium" : ""}>{t("gift_status.step_done")}</span>
       </div>
 
       {/* Description */}
@@ -241,7 +243,7 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
           className="mt-3 flex items-center justify-center gap-2 text-xs text-red-600 hover:text-red-700 transition"
         >
           <MessageCircle className="w-4 h-4" />
-          <span>Асуудалтай гэж бодвол тусламжтай холбогдоорой</span>
+          <span>{t("gift_status.support")}</span>
         </a>
       )}
     </div>

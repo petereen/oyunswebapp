@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { X, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRightLeft, Image } from "lucide-react";
 import { fetchHistory } from "../api";
 import { useState } from "react";
+import { useLang } from "../i18n/useLang";
 
 interface HistoryItem {
   invoice: string;
@@ -21,30 +22,30 @@ interface Props {
   onClose: () => void;
 }
 
-function getStatusInfo(status: string) {
+function getStatusInfo(status: string, t: (key: string) => string) {
   switch (status) {
     case "completed":
-    case "successful": // Legacy status name - treat same as completed
+    case "successful":
       return {
-        label: "Амжилттай",
+        label: t("stats.successful"),
         color: "bg-green-100 text-green-700",
         icon: CheckCircle2,
       };
     case "approved":
       return {
-        label: "Баталгаажсан",
+        label: t("stats.confirmed"),
         color: "bg-blue-100 text-blue-700",
         icon: CheckCircle2,
       };
     case "pending":
       return {
-        label: "Хүлээгдэж буй",
+        label: t("stats.pending"),
         color: "bg-amber-100 text-amber-700",
         icon: Clock,
       };
     case "rejected":
       return {
-        label: "Татгалзсан",
+        label: t("stats.rejected"),
         color: "bg-red-100 text-red-700",
         icon: XCircle,
       };
@@ -57,9 +58,9 @@ function getStatusInfo(status: string) {
   }
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, locale: string): string {
   const date = new Date(dateStr.endsWith("Z") ? dateStr : dateStr + "Z");
-  return date.toLocaleDateString("mn-MN", {
+  return date.toLocaleDateString(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -68,7 +69,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function getTimeAgo(dateStr: string): string {
+function getTimeAgo(dateStr: string, t: (key: string, params?: Record<string, string | number>) => string): string {
   let then: Date;
   if (dateStr.endsWith("Z") || dateStr.includes("+")) {
     then = new Date(dateStr);
@@ -78,16 +79,17 @@ function getTimeAgo(dateStr: string): string {
   const now = Date.now();
   const diff = now - then.getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Саяхан";
-  if (mins < 60) return `${mins} мин өмнө`;
+  if (mins < 1) return t("time.just_now");
+  if (mins < 60) return t("time.min_ago", { n: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} цаг өмнө`;
+  if (hrs < 24) return t("time.hour_ago", { n: hrs });
   const days = Math.floor(hrs / 24);
-  return `${days} өдрийн өмнө`;
+  return t("time.day_ago", { n: days });
 }
 
 export function HistoryModal({ userId, onClose }: Props) {
   const [photoModal, setPhotoModal] = useState<string | null>(null);
+  const { t, lang } = useLang();
   
   const { data, isLoading, error } = useQuery({
     queryKey: ["history", userId],
@@ -106,7 +108,7 @@ export function HistoryModal({ userId, onClose }: Props) {
           <div className="flex items-center justify-between p-4 border-b border-maroon-100">
             <div className="flex items-center gap-2">
               <ArrowRightLeft className="w-5 h-5 text-maroon-600" />
-              <span className="font-bold text-maroon-700">Гүйлгээний түүх</span>
+              <span className="font-bold text-maroon-700">{t("history.title")}</span>
             </div>
             <button
               onClick={onClose}
@@ -126,16 +128,16 @@ export function HistoryModal({ userId, onClose }: Props) {
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-sm text-center">
-                Түүх татахад алдаа гарлаа
+                {t("history.load_error")}
               </div>
             )}
 
             {!isLoading && !error && items.length === 0 && (
               <div className="text-center py-12">
                 <ArrowRightLeft className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <div className="text-slate-500">Гүйлгээ байхгүй байна</div>
+                <div className="text-slate-500">{t("history.empty")}</div>
                 <div className="text-sm text-slate-400 mt-1">
-                  Та гүйлгээ хийсний дараа энд таны хийсэн гүйлгээнүүд харагдана
+                  {t("history.empty_desc")}
                 </div>
               </div>
             )}
@@ -143,7 +145,7 @@ export function HistoryModal({ userId, onClose }: Props) {
             {!isLoading && items.length > 0 && (
               <div className="space-y-3">
                 {items.map((item) => {
-                  const statusInfo = getStatusInfo(item.status);
+                  const statusInfo = getStatusInfo(item.status, t);
                   const StatusIcon = statusInfo.icon;
                   const isBuy = item.currency_from.toUpperCase() === "RUB";
                   // Rate is stored as MNT per RUB (e.g., 46.2 means 1 RUB = 46.2 MNT)
@@ -192,7 +194,7 @@ export function HistoryModal({ userId, onClose }: Props) {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-xs text-slate-400">Ханш</div>
+                          <div className="text-xs text-slate-400">{t("history.rate")}</div>
                           <div className="text-sm font-medium text-maroon-600">
                             {Number(item.rate).toFixed(2)}
                           </div>
@@ -203,16 +205,16 @@ export function HistoryModal({ userId, onClose }: Props) {
                       <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
                         <div className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" />
-                          {getTimeAgo(item.timestamp)}
+                          {getTimeAgo(item.timestamp, t)}
                         </div>
-                        <div>{formatDate(item.timestamp)}</div>
+                        <div>{formatDate(item.timestamp, lang === "ru" ? "ru-RU" : "mn-MN")}</div>
                       </div>
 
                       {/* Admin Comment (if rejected) */}
                       {item.status === "rejected" && item.admin_comment && (
                         <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-100">
                           <div className="text-xs text-red-600 font-medium mb-1">
-                            Татгалзсан шалтгаан:
+                            {t("history.rejection_reason")}
                           </div>
                           <div className="text-sm text-red-700">{item.admin_comment}</div>
                         </div>
@@ -225,7 +227,7 @@ export function HistoryModal({ userId, onClose }: Props) {
                           className="mt-2 flex items-center gap-1 text-xs text-maroon-600 hover:text-maroon-700"
                         >
                           <Image className="w-3.5 h-3.5" />
-                          Баримт харах
+                          {t("history.view_receipt")}
                         </button>
                       )}
 
@@ -254,7 +256,7 @@ export function HistoryModal({ userId, onClose }: Props) {
             </button>
             <img
               src={photoModal}
-              alt="Баримт"
+              alt={t("history.receipt_alt")}
               className="max-w-full max-h-[85vh] object-contain"
             />
           </div>

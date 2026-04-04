@@ -9,6 +9,7 @@ import {
   Tooltip, Legend,
 } from "recharts";
 import { fetchAnalytics, fetchHistory } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface MonthlyData { month: string; amount: number; }
 interface AnalyticsData {
@@ -31,36 +32,36 @@ interface HistoryItem {
   admin_comment?: string;
 }
 
-function getStatusInfo(status: string) {
+function getStatusInfo(status: string, t: (k: string) => string) {
   switch (status) {
     case "completed":
     case "successful":
-      return { label: "Амжилттай", color: "bg-green-100 text-green-700", icon: CheckCircle2 };
+      return { label: t("stats.successful"), color: "bg-green-100 text-green-700", icon: CheckCircle2 };
     case "approved":
-      return { label: "Баталгаажсан", color: "bg-blue-100 text-blue-700", icon: CheckCircle2 };
+      return { label: t("stats.confirmed"), color: "bg-blue-100 text-blue-700", icon: CheckCircle2 };
     case "pending":
-      return { label: "Хүлээгдэж буй", color: "bg-amber-100 text-amber-700", icon: Clock };
+      return { label: t("stats.pending"), color: "bg-amber-100 text-amber-700", icon: Clock };
     case "rejected":
-      return { label: "Татгалзсан", color: "bg-red-100 text-red-700", icon: XCircle };
+      return { label: t("stats.rejected"), color: "bg-red-100 text-red-700", icon: XCircle };
     default:
       return { label: status, color: "bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-300", icon: AlertCircle };
   }
 }
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, locale: string): string {
   const date = new Date(dateStr.endsWith("Z") ? dateStr : dateStr + "Z");
-  return date.toLocaleDateString("mn-MN", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function getTimeAgo(dateStr: string): string {
+function getTimeAgo(dateStr: string, t: (k: string, p?: Record<string, string | number>) => string): string {
   const then = new Date(dateStr.endsWith("Z") || dateStr.includes("+") ? dateStr : dateStr + "Z");
   const diff = Date.now() - then.getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Саяхан";
-  if (mins < 60) return `${mins} мин өмнө`;
+  if (mins < 1) return t("time.just_now");
+  if (mins < 60) return t("time.min_ago", { n: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} цаг өмнө`;
-  return `${Math.floor(hrs / 24)} өдрийн өмнө`;
+  if (hrs < 24) return t("time.hour_ago", { n: hrs });
+  return t("time.day_ago", { n: Math.floor(hrs / 24) });
 }
 
 interface Props {
@@ -68,6 +69,7 @@ interface Props {
 }
 
 export function StatsTab({ userId }: Props) {
+  const { t, lang } = useLang();
   const [section, setSection] = useState<"analytics" | "history">("analytics");
   const [periodOffset, setPeriodOffset] = useState(0);
   const [photoModal, setPhotoModal] = useState<string | null>(null);
@@ -92,11 +94,11 @@ export function StatsTab({ userId }: Props) {
   // Analytics helpers
   const formatMonth = (m: string) => {
     const [y, mo] = m.split("-");
-    return new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString("mn-MN", { month: "short" });
+    return new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString(lang === "ru" ? "ru-RU" : "mn-MN", { month: "short" });
   };
   const formatMonthFull = (m: string) => {
     const [y, mo] = m.split("-");
-    return new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString("mn-MN", { year: "numeric", month: "short" });
+    return new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString(lang === "ru" ? "ru-RU" : "mn-MN", { year: "numeric", month: "short" });
   };
 
   const periodMonths = useMemo(() => {
@@ -138,7 +140,7 @@ export function StatsTab({ userId }: Props) {
 
   return (
     <div className="animate-fadeIn space-y-5">
-      <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">Статистик</h2>
+      <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("stats.title")}</h2>
 
       {/* Section Toggle */}
       <div className="flex gap-1 bg-surface-100 dark:bg-dark-700 p-1 rounded-xl">
@@ -146,13 +148,13 @@ export function StatsTab({ userId }: Props) {
           onClick={() => setSection("analytics")}
           className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${section === "analytics" ? "bg-white dark:bg-dark-800 text-dark-800 dark:text-ivory-200 shadow-card-xs" : "text-dark-600 dark:text-ivory-400"}`}
         >
-          Аналитик
+          {t("stats.analytics")}
         </button>
         <button
           onClick={() => setSection("history")}
           className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${section === "history" ? "bg-white dark:bg-dark-800 text-dark-800 dark:text-ivory-200 shadow-card-xs" : "text-dark-600 dark:text-ivory-400"}`}
         >
-          Гүйлгээний түүх
+          {t("stats.history")}
         </button>
       </div>
 
@@ -162,7 +164,7 @@ export function StatsTab({ userId }: Props) {
           {analyticsLoading && (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-maroon-600 mx-auto" />
-              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">Уншиж байна...</p>
+              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">{t("stats.loading")}</p>
             </div>
           )}
 
@@ -173,21 +175,21 @@ export function StatsTab({ userId }: Props) {
                 <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-xl border border-green-200">
                   <div className="flex items-center gap-1 mb-1">
                     <TrendingUp className="w-4 h-4 text-green-600" />
-                    <span className="text-[10px] font-medium text-green-700">Авсан</span>
+                    <span className="text-[10px] font-medium text-green-700">{t("stats.bought")}</span>
                   </div>
                   <div className="text-base font-bold text-green-800">{analyticsData.total_buy_rub.toLocaleString()} ₽</div>
                 </div>
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-xl border border-blue-200">
                   <div className="flex items-center gap-1 mb-1">
                     <TrendingDown className="w-4 h-4 text-blue-600" />
-                    <span className="text-[10px] font-medium text-blue-700">Зарсан</span>
+                    <span className="text-[10px] font-medium text-blue-700">{t("stats.sold")}</span>
                   </div>
                   <div className="text-base font-bold text-blue-800">{analyticsData.total_sell_rub.toLocaleString()} ₮</div>
                 </div>
                 <div className="bg-gradient-to-br from-maroon-50 to-maroon-100 dark:from-maroon-900/30 dark:to-maroon-800/20 p-3 rounded-xl border border-maroon-200 dark:border-maroon-800">
                   <div className="flex items-center gap-1 mb-1">
                     <BarChart3 className="w-4 h-4 text-maroon-600 dark:text-maroon-400" />
-                    <span className="text-[10px] font-medium text-maroon-700 dark:text-maroon-300">Нийт</span>
+                    <span className="text-[10px] font-medium text-maroon-700 dark:text-maroon-300">{t("stats.total")}</span>
                   </div>
                   <div className="text-base font-bold text-maroon-800 dark:text-maroon-200">{analyticsData.total_transactions}</div>
                 </div>
@@ -209,8 +211,8 @@ export function StatsTab({ userId }: Props) {
                 <>
                   <div className="bg-surface-50 dark:bg-dark-700 rounded-xl p-3">
                     <div className="flex items-center gap-4 mb-3">
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">Рубль (₽)</span></div>
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">Төгрөг (₮)</span></div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">{t("stats.rub_currency")}</span></div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">{t("stats.mnt_currency")}</span></div>
                     </div>
                     <ResponsiveContainer width="100%" height={220}>
                       <LineChart data={filteredBuyData.map((d, i) => ({
@@ -225,7 +227,7 @@ export function StatsTab({ userId }: Props) {
                           contentStyle={{ borderRadius: 12, fontSize: 12, border: "1px solid #e2e8f0" }}
                           formatter={(value, name) => [
                             `${Number(value).toLocaleString()} ${name === "buy" ? "₽" : "₮"}`,
-                            name === "buy" ? "Авсан (₽)" : "Зарсан (₮)",
+                            name === "buy" ? t("stats.bought_label") : t("stats.sold_label"),
                           ]}
                         />
                         <Line type="monotone" dataKey="buy" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4, fill: "#22c55e", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 6 }} />
@@ -237,18 +239,18 @@ export function StatsTab({ userId }: Props) {
                   {/* Period Summary */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-green-50 p-3 rounded-xl border border-green-100">
-                      <div className="text-xs text-green-600 mb-1">Энэ үеийн рубль</div>
+                      <div className="text-xs text-green-600 mb-1">{t("stats.period_rub")}</div>
                       <div className="text-lg font-bold text-green-700">{periodBuyTotal.toLocaleString()} ₽</div>
                     </div>
                     <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                      <div className="text-xs text-blue-600 mb-1">Энэ үеийн төгрөг</div>
+                      <div className="text-xs text-blue-600 mb-1">{t("stats.period_mnt")}</div>
                       <div className="text-lg font-bold text-blue-700">{periodSellTotal.toLocaleString()} ₮</div>
                     </div>
                   </div>
 
                   {/* Monthly Details */}
                   <div className="space-y-2">
-                    <h3 className="font-semibold text-sm text-dark-800 dark:text-ivory-200">Сар бүрийн задаргаа</h3>
+                    <h3 className="font-semibold text-sm text-dark-800 dark:text-ivory-200">{t("stats.monthly_breakdown")}</h3>
                     {periodMonths.map(month => {
                       const b = filteredBuyData.find(d => d.month === month)?.amount || 0;
                       const s = filteredSellData.find(d => d.month === month)?.amount || 0;
@@ -268,10 +270,10 @@ export function StatsTab({ userId }: Props) {
               ) : (
                 <div className="text-center py-10 bg-surface-50 dark:bg-dark-700 rounded-xl">
                   <BarChart3 className="w-14 h-14 text-silver dark:text-dark-600 mx-auto mb-3" />
-                  <p className="text-dark-600 dark:text-ivory-400 text-sm">Энэ үед гүйлгээний мэдээлэл байхгүй</p>
+                  <p className="text-dark-600 dark:text-ivory-400 text-sm">{t("stats.no_data")}</p>
                   {hasOlderData && (
                     <button onClick={() => setPeriodOffset(p => p + 1)} className="mt-3 text-maroon-600 dark:text-gold-400 text-sm font-medium">
-                      ← Өмнөх үе харах
+                      {t("stats.view_older")}
                     </button>
                   )}
                 </div>
@@ -287,20 +289,20 @@ export function StatsTab({ userId }: Props) {
           {historyLoading && (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-maroon-600 mx-auto" />
-              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">Уншиж байна...</p>
+              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">{t("stats.loading")}</p>
             </div>
           )}
 
           {!historyLoading && historyItems.length === 0 && (
             <div className="text-center py-10">
               <ArrowRightLeft className="w-12 h-12 text-silver dark:text-dark-600 mx-auto mb-3" />
-              <div className="text-dark-600 dark:text-ivory-400 text-sm">Гүйлгээ байхгүй байна</div>
-              <div className="text-xs text-dark-600 dark:text-ivory-400 mt-1">Та гүйлгээ хийсний дараа энд харагдана</div>
+              <div className="text-dark-600 dark:text-ivory-400 text-sm">{t("stats.no_transactions")}</div>
+              <div className="text-xs text-dark-600 dark:text-ivory-400 mt-1">{t("stats.no_transactions_desc")}</div>
             </div>
           )}
 
           {!historyLoading && historyItems.length > 0 && historyItems.map(item => {
-            const statusInfo = getStatusInfo(item.status);
+            const statusInfo = getStatusInfo(item.status, t);
             const StatusIcon = statusInfo.icon;
             const isBuy = item.currency_from.toUpperCase() === "RUB";
             const rate = Number(item.rate);
@@ -324,26 +326,26 @@ export function StatsTab({ userId }: Props) {
                     <div className="text-sm text-dark-600 dark:text-ivory-400">→ {receiveAmount.toLocaleString()} {item.currency_to}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs text-dark-600 dark:text-ivory-400">Ханш</div>
+                    <div className="text-xs text-dark-600 dark:text-ivory-400">{t("stats.rate")}</div>
                     <div className="text-sm font-medium text-maroon-600 dark:text-gold-400">{rate.toFixed(2)}</div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-dark-600 dark:text-ivory-400 pt-2 border-t border-silver/60 dark:border-dark-600">
-                  <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{getTimeAgo(item.timestamp)}</div>
-                  <div>{formatDate(item.timestamp)}</div>
+                  <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{getTimeAgo(item.timestamp, t)}</div>
+                  <div>{formatDate(item.timestamp, lang === "ru" ? "ru-RU" : "mn-MN")}</div>
                 </div>
 
                 {item.status === "rejected" && item.admin_comment && (
                   <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-100">
-                    <div className="text-xs text-red-600 font-medium mb-1">Татгалзсан шалтгаан:</div>
+                    <div className="text-xs text-red-600 font-medium mb-1">{t("stats.rejection_reason")}</div>
                     <div className="text-sm text-red-700">{item.admin_comment}</div>
                   </div>
                 )}
 
                 {item.bill_url && (
                   <button onClick={() => setPhotoModal(item.bill_url!)} className="mt-2 flex items-center gap-1 text-xs text-maroon-600 dark:text-gold-400 hover:text-maroon-700 dark:hover:text-gold-300">
-                    <Image className="w-3.5 h-3.5" />Баримт харах
+                    <Image className="w-3.5 h-3.5" />{t("stats.view_receipt")}
                   </button>
                 )}
 
@@ -361,7 +363,7 @@ export function StatsTab({ userId }: Props) {
             <button onClick={() => setPhotoModal(null)} className="absolute top-2 right-2 p-2 bg-white/80 dark:bg-dark-700/80 rounded-full hover:bg-white dark:hover:bg-dark-600">
               <X className="w-5 h-5" />
             </button>
-            <img src={photoModal} alt="Баримт" className="max-w-full max-h-[85vh] object-contain" />
+            <img src={photoModal} alt={t("common.receipt")} className="max-w-full max-h-[85vh] object-contain" />
           </div>
         </div>
       )}

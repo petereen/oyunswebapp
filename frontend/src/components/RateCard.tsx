@@ -1,11 +1,13 @@
 import { Wallet, TrendingUp, Clock3 } from "lucide-react";
 import { Rate } from "../api";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   rate?: Rate;
 }
 
 export function RateCard({ rate }: Props) {
+  const { t, lang } = useLang();
   return (
     <div className="relative overflow-hidden bg-gradient-to-br from-maroon-600 via-maroon-700 to-maroon-800 dark:from-maroon-800 dark:via-maroon-900 dark:to-dark-900 p-5 rounded-3xl shadow-card-dark text-white">
       {/* Decorative gradient orb */}
@@ -18,11 +20,11 @@ export function RateCard({ rate }: Props) {
             <div className="w-9 h-9 bg-gold-400/20 rounded-xl flex items-center justify-center">
               <Wallet className="w-4.5 h-4.5 text-gold-400" />
             </div>
-            <span className="font-semibold text-sm text-white/90">Ханшийн мэдээлэл</span>
+            <span className="font-semibold text-sm text-white/90">{t("rate.title")}</span>
           </div>
           <div className="text-[10px] text-white/40 flex items-center gap-1">
             <Clock3 className="w-3 h-3" />
-            <span>{rate?.updated_at ? new Date(rate.updated_at).toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+            <span>{rate?.updated_at ? new Date(rate.updated_at).toLocaleTimeString(lang === "ru" ? "ru-RU" : "mn-MN", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
           </div>
         </div>
 

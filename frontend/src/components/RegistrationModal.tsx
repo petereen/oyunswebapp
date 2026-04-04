@@ -13,6 +13,7 @@ import {
   Mail,
 } from "lucide-react";
 import { submitRegistration, RegistrationInput, requestPresign } from "../api";
+import { useLang } from "../i18n/useLang";
 
 // Bank name options
 const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
@@ -118,6 +119,7 @@ interface Props {
 }
 
 export function RegistrationModal({ onRegistered, onClose }: Props) {
+  const { t } = useLang();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -168,7 +170,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
       setPassportUrl(presigned.public_url);
     } catch (err) {
       console.error("Passport upload error:", err);
-      setError("Паспорт зураг оруулахад алдаа гарлаа");
+      setError(t("reg.passport_error"));
     } finally {
       setUploading(false);
     }
@@ -211,9 +213,9 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
   const handleSubmit = async () => {
     if (!isFormValid()) {
       if (!agreedTerms) {
-        setError("Хэрэглэгчийн гэрээг зөвшөөрнө үү");
+        setError(t("reg.terms_required"));
       } else {
-        setError("Бүх талбарыг бөглөнө үү");
+        setError(t("reg.fill_all"));
       }
       return;
     }
@@ -244,7 +246,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
       onRegistered();
     } catch (err) {
       console.error("Registration error:", err);
-      setError("Бүртгэл илгээхэд алдаа гарлаа. Дахин оролдоно уу.");
+      setError(t("reg.submit_error"));
     } finally {
       setLoading(false);
     }
@@ -261,8 +263,8 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold">OYUNS FINANCE ХЭРЭГЛЭГЧИЙН БҮРТГЭЛ</h2>
-                <p className="text-sm text-white/80">Та манай үйлчилгээг ашиглахын өмнө бүртгүүлнэ үү</p>
+                <h2 className="text-xl font-bold">{t("reg.title")}</h2>
+                <p className="text-sm text-white/80">{t("reg.subtitle")}</p>
               </div>
             </div>
             {onClose && (
@@ -282,34 +284,34 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-maroon-700 font-semibold">
               <User className="w-4 h-4" />
-              <span>Хувийн мэдээлэл</span>
+              <span>{t("reg.personal_info")}</span>
             </div>
 
             <div>
-              <label className="text-xs text-slate-500">Овог <span className="text-red-500">*</span></label>
+              <label className="text-xs text-slate-500">{t("reg.last_name")} <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
-                placeholder="Овог"
+                placeholder={t("reg.last_name")}
               />
             </div>
 
             <div>
-              <label className="text-xs text-slate-500">Нэр <span className="text-red-500">*</span></label>
+              <label className="text-xs text-slate-500">{t("reg.first_name")} <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
-                placeholder="Нэр"
+                placeholder={t("reg.first_name")}
               />
             </div>
 
             <div>
               <label className="text-xs text-slate-500 flex items-center gap-1">
-                <Mail className="w-3 h-3" /> Имэйл хаяг <span className="text-red-500">*</span>
+                <Mail className="w-3 h-3" /> {t("reg.email_label")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
@@ -327,7 +329,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-maroon-700 font-semibold">
                 <CreditCard className="w-4 h-4" />
-                <span>Орос дахь банкны мэдээлэл (RUB)</span>
+                <span>{t("reg.rub_bank_section")}</span>
               </div>
             </div>
 
@@ -340,7 +342,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 className="w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
               />
               <span className="text-sm text-slate-600">
-                Оросын банкны данс байгаа
+                {t("reg.has_rub_bank")}
               </span>
             </label>
 
@@ -353,7 +355,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                     onChange={(e) => setRubBankName(e.target.value)}
                     className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm bg-white"
                   >
-                    <option value="">Банк сонгоно уу</option>
+                    <option value="">{t("reg.select_bank")}</option>
                     {RUB_BANKS.map((bank) => (
                       <option key={bank} value={bank}>{bank}</option>
                     ))}
@@ -364,13 +366,13 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                       value={rubBankNameOther}
                       onChange={(e) => setRubBankNameOther(e.target.value)}
                       className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm mt-2"
-                      placeholder="Банкны нэрийг оруулна уу"
+                      placeholder={t("reg.bank_name_placeholder")}
                     />
                   )}
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500">СБП холбосон орос утасны дугаар <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-slate-500">{t("reg.sbp_phone")} <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
                     value={rubPhoneSbp}
@@ -381,7 +383,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500">Картын дугаар <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-slate-500">{t("reg.card_number")} <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     value={rubCardNumber}
@@ -393,7 +395,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-500">Данс эзэмшигчийн нэр <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-slate-500">{t("reg.owner_name")} <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     value={rubOwnerName}
@@ -410,7 +412,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
           <div className="space-y-3 pt-3 border-t border-slate-100">
             <div className="flex items-center gap-2 text-maroon-700 font-semibold">
               <Building className="w-4 h-4" />
-              <span>Монгол дахь банкны мэдээлэл (MNT)</span>
+              <span>{t("reg.mnt_bank_section")}</span>
             </div>
 
             <div>
@@ -420,7 +422,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 onChange={(e) => setMntBankName(e.target.value)}
                 className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm bg-white"
               >
-                <option value="">Банк сонгоно уу</option>
+                <option value="">{t("reg.select_bank")}</option>
                 {MNT_BANKS.map((bank) => (
                   <option key={bank} value={bank}>{bank}</option>
                 ))}
@@ -431,13 +433,13 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                   value={mntBankNameOther}
                   onChange={(e) => setMntBankNameOther(e.target.value)}
                   className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm mt-2"
-                  placeholder="Банкны нэрийг оруулна уу"
+                  placeholder={t("reg.bank_name_placeholder")}
                 />
               )}
             </div>
 
             <div>
-              <label className="text-xs text-slate-500">IBAN дансны дугаар <span className="text-red-500">*</span></label>
+              <label className="text-xs text-slate-500">{t("reg.iban")} <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={mntAccountNumber}
@@ -448,7 +450,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             </div>
 
             <div>
-              <label className="text-xs text-slate-500">Данс эзэмшигчийн нэр <span className="text-red-500">*</span></label>
+              <label className="text-xs text-slate-500">{t("reg.owner_name")} <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={mntOwnerName}
@@ -459,7 +461,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             </div>
 
             <div>
-              <label className="text-xs text-slate-500">Монгол утасны дугаар <span className="text-red-500">*</span></label>
+              <label className="text-xs text-slate-500">{t("reg.mn_phone")} <span className="text-red-500">*</span></label>
               <input
                 type="tel"
                 value={mntPhone}
@@ -474,22 +476,22 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
           <div className="space-y-3 pt-3 border-t border-slate-100">
             <div className="flex items-center gap-2 text-maroon-700 font-semibold">
               <FileText className="w-4 h-4" />
-              <span>Паспортын зураг</span>
+              <span>{t("reg.passport_section")}</span>
             </div>
 
             <div>
-              <label className="text-xs text-slate-500">Паспортын зураг оруулах <span className="text-red-500">*</span></label>
+              <label className="text-xs text-slate-500">{t("reg.passport_upload")} <span className="text-red-500">*</span></label>
               <div className="mt-1">
                 {passportUrl ? (
                   <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
-                    <span className="text-sm text-green-700">Паспорт амжилттай оруулсан</span>
+                    <span className="text-sm text-green-700">{t("reg.passport_success")}</span>
                     <button
                       type="button"
                       onClick={() => setPassportUrl("")}
                       className="ml-auto text-xs text-maroon-600 hover:underline"
                     >
-                      Өөрчлөх
+                      {t("reg.passport_change")}
                     </button>
                   </div>
                 ) : (
@@ -497,12 +499,12 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                     {uploading ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin text-maroon-600" />
-                        <span className="text-sm text-maroon-600">Оруулж байна...</span>
+                        <span className="text-sm text-maroon-600">{t("reg.passport_uploading")}</span>
                       </>
                     ) : (
                       <>
                         <Upload className="w-5 h-5 text-maroon-600" />
-                        <span className="text-sm text-maroon-600">Паспортын зургаа оруулна уу</span>
+                        <span className="text-sm text-maroon-600">{t("reg.passport_upload_prompt")}</span>
                       </>
                     )}
                     <input
@@ -528,7 +530,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 className="mt-0.5 w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
               />
               <span className="text-sm text-slate-600">
-                Би{" "}
+                {t("reg.terms_prefix")}
                 <a
                   href={TERMS_URL}
                   target="_blank"
@@ -536,10 +538,10 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                   className="text-maroon-600 hover:underline font-medium inline-flex items-center gap-1"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  хэрэглэгчийн гэрээ
+                  {t("reg.terms_link")}
                   <ExternalLink className="w-3 h-3" />
                 </a>
-                {" "}болон үйлчилгээний нөхцөлтэй танилцаж, зөвшөөрч байна <span className="text-red-500">*</span>
+                {t("reg.terms_suffix")} <span className="text-red-500">*</span>
               </span>
             </label>
           </div>
@@ -561,18 +563,18 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Илгээж байна...
+                {t("reg.submitting")}
               </>
             ) : (
               <>
                 <CheckCircle2 className="w-5 h-5" />
-                Бүртгүүлэх
+                {t("reg.submit")}
               </>
             )}
           </button>
 
           <p className="text-xs text-center text-slate-400">
-            Таны мэдээлэл админаар шалгагдсаны дараа үйлчилгээг ашиглах боломжтой болно.
+            {t("reg.footer_note")}
           </p>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
 import { createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
+import { useLang } from "../i18n/useLang";
 
 interface Props {
   initData: string;
@@ -30,6 +31,7 @@ function parseSavedBank(saved: string | undefined): Record<string, string> {
 }
 
 export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedBankMnt, onBack }: Props) {
+  const { t } = useLang();
   // Steps:
   // 0: Direction selection
   // 1: Promo code (optional)
@@ -220,14 +222,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         setPromoMessage(res.message || "");
         setStep(2); // Only proceed to next step if promo is valid
       } else {
-        setPromoError(res.message || "Промо код олдсонгүй");
+        setPromoError(res.message || t("txn.promo_not_found"));
         setPromoDiscount(0);
         setPromoValid(false);
         // Stay on current step - don't proceed
       }
     } catch (err) {
       console.error("Promo validation error:", err);
-      setPromoError("Промо код шалгахад алдаа гарлаа");
+      setPromoError(t("txn.promo_error"));
       setPromoDiscount(0);
       setPromoValid(false);
       // Stay on current step - don't proceed
@@ -260,7 +262,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         setCopied(label);
         setTimeout(() => setCopied(""), 2000);
       } catch {
-        setError("Хуулж чадсангүй");
+        setError(t("txn.copy_failed"));
       }
       document.body.removeChild(textArea);
     }
@@ -280,7 +282,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       setReceiptUrls(prev => [...prev, presigned.public_url]);
     } catch (err) {
       console.error(err);
-      setError("Файл байршуулахад алдаа. Дахин оролдоно уу.");
+      setError(t("txn.upload_error"));
     } finally {
       setUploading(false);
     }
@@ -393,7 +395,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       setStep(6);
     } catch (err) {
       console.error("Exchange creation error:", err);
-      setError("Арилжаа үүсгэхэд алдаа гарлаа. Дахин оролдоно уу.");
+      setError(t("txn.exchange_error"));
     } finally {
       setLoading(false);
     }
@@ -426,10 +428,10 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           </button>
         )}
         <div className="flex items-center gap-2 text-maroon-700 font-semibold">
-          <CreditCard className="w-5 h-5" /> ВАЛЮТ СОЛИХ
+          <CreditCard className="w-5 h-5" /> {t("ef.title")}
         </div>
         <button onClick={onBack} className="ml-auto text-sm text-slate-500 hover:text-maroon-600">
-          Цуцлах
+          {t("ef.cancel")}
         </button>
       </div>
 
@@ -444,17 +446,17 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-amber-700 mb-2">
-                  Орос банкны мэдээлэл шаардлагатай
+                  {t("ef.rub_bank_required_title")}
                 </div>
                 <div className="text-sm text-slate-600 mb-4">
-                  Валют солихын тулд та орос банкны мэдээллээ бүртгүүлэх шаардлагатай.
+                  {t("ef.rub_bank_required_desc")}
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
-                  <div className="text-sm text-amber-800 font-medium mb-2">📋 Бүртгүүлэх заавар:</div>
+                  <div className="text-sm text-amber-800 font-medium mb-2">{t("ef.rub_bank_instructions")}</div>
                   <ol className="text-sm text-amber-700 list-decimal list-inside space-y-1">
-                    <li>Баруун дээр байрлах <span className="font-bold">Профайл</span> товчийг дарна</li>
-                    <li>Орос банкны дансны мэдээллээ оруулна</li>
-                    <li>Үүний дараа админы баталгаажуулалт хүлээгээрэй</li>
+                    <li>{t("ef.rub_bank_step1")}</li>
+                    <li>{t("ef.rub_bank_step2")}</li>
+                    <li>{t("ef.rub_bank_step3")}</li>
                   </ol>
                 </div>
               </div>
@@ -462,7 +464,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                 onClick={onBack}
                 className="mt-2 px-6 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition"
               >
-                Ойлголоо
+                {t("ef.understood")}
               </button>
             </div>
           );
@@ -473,19 +475,19 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {/* Step 0: Direction Selection - only show if user has Russian bank info */}
       {step === 0 && savedBankRub && savedBankRub.trim() && savedBankRub !== ",,," && (
         <div className="flex flex-col gap-4">
-          <div className="text-center text-slate-600 mb-2">Валют солих чиглэлээ сонгоно уу</div>
+          <div className="text-center text-slate-600 mb-2">{t("ef.select_direction")}</div>
           <button
             onClick={() => handleSelectDirection("buy")}
             className="p-4 rounded-xl border-2 border-maroon-200 hover:border-maroon-500 hover:bg-maroon-50 transition flex items-center justify-between"
           >
             <div className="text-left">
               <div className="font-semibold text-maroon-700 flex items-center gap-2">
-                Төгрөг авах (RUB → MNT)
+                {t("ef.get_mnt")}
               </div>
-              <div className="text-sm text-slate-500">RUB илгээж, MNT авна</div>
+              <div className="text-sm text-slate-500">{t("ef.send_rub_get_mnt")}</div>
             </div>
             <div className="text-right">
-              <div className="text-xs text-slate-400">Ханш</div>
+              <div className="text-xs text-slate-400">{t("stats.rate")}</div>
               <div className="font-bold text-maroon-600">{buyRate}</div>
             </div>
           </button>
@@ -499,12 +501,12 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               >
                 <div className="text-left">
                   <div className="font-semibold text-maroon-700 flex items-center gap-2">
-                    Рубль авах (MNT → RUB)
+                    {t("ef.get_rub")}
                   </div>
-                  <div className="text-sm text-slate-500">MNT илгээж, RUB авна</div>
+                  <div className="text-sm text-slate-500">{t("ef.send_mnt_get_rub")}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-slate-400">Ханш</div>
+                  <div className="text-xs text-slate-400">{t("stats.rate")}</div>
                   <div className="font-bold text-maroon-600">{sellRate}</div>
                 </div>
               </button>
@@ -512,17 +514,17 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               <div className="p-4 rounded-xl border-2 border-slate-200 bg-slate-50 flex items-center justify-between opacity-70">
                 <div className="text-left">
                   <div className="font-semibold text-slate-500 flex items-center gap-2">
-                    Рубль авах (MNT → RUB) ❌
+                    {t("ef.get_rub")} ❌
                   </div>
                   <div className="text-sm text-red-500">
-                    Та орос банкны мэдээллээ бүртгүүлээгүй байна
+                    {t("ef.no_rub_bank")}
                   </div>
                   <div className="text-xs text-slate-400 mt-1">
-                    Профайл хэсэгт орос банкны мэдээллээ оруулаад админы баталгаажуулалт хийсний дараа валют солиулна уу.
+                    {t("ef.no_rub_bank_desc")}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-slate-400">Ханш</div>
+                  <div className="text-xs text-slate-400">{t("stats.rate")}</div>
                   <div className="font-bold text-slate-400">{sellRate}</div>
                 </div>
               </div>
@@ -535,20 +537,20 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {step === 1 && direction && (
         <div className="flex flex-col gap-4">
           <div className="text-sm text-slate-600 flex items-center gap-2">
-            <Tag className="w-4 h-4" /> 1-р алхам — Промо код (заавал биш)
+            <Tag className="w-4 h-4" /> {t("ef.promo_step")}
           </div>
           
           <div className="flex items-center gap-2 p-2 bg-maroon-50 rounded-lg text-sm">
             <ArrowRightLeft className="w-4 h-4 text-maroon-600" />
             <span>{currencyFrom} → {currencyTo}</span>
-            <span className="ml-auto font-semibold">Суурь ханш: {baseRate}</span>
+            <span className="ml-auto font-semibold">{t("ef.base_rate", { rate: String(baseRate) })}</span>
           </div>
 
           {/* User's available promo codes */}
           {userPromoCodes.length > 0 && (
             <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl">
               <div className="text-sm font-medium text-purple-700 mb-2 flex items-center gap-2">
-                <Gift className="w-4 h-4" /> Таны промо кодууд:
+                <Gift className="w-4 h-4" /> {t("txn.your_promos")}
               </div>
               <div className="flex flex-wrap gap-2">
                 {userPromoCodes.map((promo) => (
@@ -575,7 +577,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
             className="rounded-xl border border-maroon-100 p-3 text-lg uppercase"
-            placeholder="Промо код оруулна уу"
+            placeholder={t("txn.promo_placeholder")}
           />
           
           {promoError && (
@@ -585,7 +587,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           {promoValid && promoDiscount > 0 && (
             <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700">
               <Gift className="w-5 h-5" />
-              <span>{promoMessage || (direction === "buy" ? `+${promoDiscount} ₮ таны худалдан авах ханшинд нэмэгдлээ!` : `-${promoDiscount} ₮ ханшнаас хасагдлаа!`)}</span>
+              <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: String(promoDiscount) }) : t("txn.promo_sell_applied", { amount: String(promoDiscount) }))}</span>
             </div>
           )}
 
@@ -594,14 +596,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               onClick={handleSkipPromo}
               className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"
             >
-              Алгасах
+              {t("txn.skip")}
             </button>
             <button
               onClick={handleValidatePromo}
               disabled={promoValidating}
               className="flex-1 py-3 rounded-xl bg-maroon-600 text-white font-semibold hover:bg-maroon-700 disabled:opacity-50"
             >
-              {promoValidating ? "Шалгаж байна..." : "Идэвхжүүлээд үргэлжлэх"}
+              {promoValidating ? t("txn.validating") : t("txn.activate_proceed")}
             </button>
           </div>
         </div>
@@ -610,12 +612,12 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {/* Step 2: Amount */}
       {step === 2 && direction && (
         <div className="flex flex-col gap-3">
-          <div className="text-sm text-slate-600">2-р алхам — Солих мөнгөн дүн оруулах</div>
+          <div className="text-sm text-slate-600">{t("ef.amount_step")}</div>
           <div className="flex items-center gap-2 p-2 bg-maroon-50 rounded-lg text-sm">
             <ArrowRightLeft className="w-4 h-4 text-maroon-600" />
             <span>{currencyFrom} → {currencyTo}</span>
             <span className="ml-auto font-semibold">
-              Ханш: {effectiveRate.toFixed(2)}
+              {t("stats.rate")}: {effectiveRate.toFixed(2)}
               {promoDiscount > 0 && (
                 <span className="text-green-600 ml-1">
                   ({direction === "buy" ? "+" : "-"}{promoDiscount})
@@ -624,7 +626,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             </span>
           </div>
           
-          <label className="text-xs text-slate-500">Таны илгээх мөнгөн дүн ({currencyFrom})</label>
+          <label className="text-xs text-slate-500">{t("ef.amount_label", { currency: currencyFrom })}</label>
           <input
             type="number"
             min={0}
@@ -636,7 +638,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           
           {amount > 0 && (
             <div className="text-sm text-slate-600">
-              Таны хүлээн авах мөнгөн дүн: <span className="font-bold text-maroon-700">
+              {t("ef.receive_label")} <span className="font-bold text-maroon-700">
                 {convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}
               </span>
             </div>
@@ -646,7 +648,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           {direction === "sell" && convertedAmount > 0 && convertedAmount < minRubAmount && (
             <div className="text-sm text-red-500 flex items-center gap-1">
               <span>⚠️</span>
-              <span>MNT→RUB чиглэлд хамгийн бага дүн {minRubAmount.toLocaleString()} рубль байх ёстой</span>
+              <span>MNT→RUB {t("txn.min_rub_warning", { amount: minRubAmount.toLocaleString() })}</span>
             </div>
           )}
           
@@ -661,7 +663,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             }}
             disabled={amount <= 0 || (direction === "sell" && convertedAmount < minRubAmount)}
           >
-            Үргэлжлүүлэх
+            {t("txn.continue")}
           </button>
         </div>
       )}
@@ -670,7 +672,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {step === 3 && direction && (
         <div className="flex flex-col gap-3">
           <div className="text-sm text-slate-600">
-            3-р алхам — та {currencyFrom}-г манай данс руу илгээнэ үү
+            {t("ef.bank_step", { currency: currencyFrom })}
           </div>
 
           {/* For RUB->MNT: Show admin's RUB bank options */}
@@ -678,7 +680,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <>
               {availableAdminBanks.length > 0 ? (
                 <div className="flex flex-col gap-2">
-                  <div className="text-xs text-slate-500">Шилжүүлэх банк сонгоно уу:</div>
+                  <div className="text-xs text-slate-500">{t("txn.select_transfer_bank")}</div>
                   {availableAdminBanks.map((bank) => (
                     <button
                       key={bank.id}
@@ -698,7 +700,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                 </div>
               ) : (
                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-700">
-                  Идэвхтэй банкны данс байхгүй байна. Support хаягтай холбогдоно уу.
+                  {t("txn.no_active_bank")}
                 </div>
               )}
             </>
@@ -709,7 +711,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <>
               {availableMntAdminBanks.length > 0 ? (
                 <div className="flex flex-col gap-2">
-                  <div className="text-xs text-slate-500">MNT шилжүүлэх банк сонгоно уу:</div>
+                  <div className="text-xs text-slate-500">{t("txn.select_mnt_bank")}</div>
                   {availableMntAdminBanks.map((bank) => (
                     <button
                       key={bank.id}
@@ -728,18 +730,18 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                 </div>
               ) : (
                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-700">
-                  Идэвхтэй MNT банкны данс байхгүй байна. Support хаягтай холбогдоно уу.
+                  {t("txn.no_active_mnt_bank")}
                 </div>
               )}
 
               {/* Show selected MNT bank details with copy buttons */}
               {selectedMntAdminBank && (
                 <div className="p-4 bg-maroon-50 border border-maroon-200 rounded-xl space-y-2">
-                  <div className="text-xs text-slate-500">Шилжүүлгийн мэдээлэл:</div>
+                  <div className="text-xs text-slate-500">{t("txn.transfer_info")}</div>
                   
                   <div className="flex items-center justify-between p-2 bg-white rounded-lg">
                     <div>
-                      <div className="text-xs text-slate-500">Данс</div>
+                      <div className="text-xs text-slate-500">{t("txn.account")}</div>
                       <div className="font-mono font-bold text-maroon-700">{selectedMntAdminBank.account_number}</div>
                     </div>
                     <button
@@ -754,7 +756,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   
                   {/* Invoice ID - must include in transaction message */}
                   <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <div className="text-xs text-amber-700 font-medium mb-1">⚠️ Гүйлгээний утга хэсэгт Invoice ID-г заавал бичнэ үү:</div>
+                    <div className="text-xs text-amber-700 font-medium mb-1">{t("txn.invoice_warning_mnt")}</div>
                     <div className="flex items-center justify-between">
                       <div className="font-mono font-bold text-amber-800 text-lg">{invoiceId}</div>
                       <button
@@ -773,12 +775,12 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
           {/* Selected bank details with copy buttons (for buy direction) */}
           {direction === "buy" && selectedAdminBank && (
             <div className="p-4 bg-maroon-50 border border-maroon-200 rounded-xl space-y-2">
-              <div className="text-xs text-slate-500">Шилжүүлгийн мэдээлэл:</div>
+              <div className="text-xs text-slate-500">{t("txn.transfer_info")}</div>
               
               {selectedAdminBank.card_number && (
                 <div className="flex items-center justify-between p-2 bg-white rounded-lg">
                   <div>
-                    <div className="text-xs text-slate-500">Картын дугаар</div>
+                    <div className="text-xs text-slate-500">{t("txn.card_number")}</div>
                     <div className="font-mono font-bold text-maroon-700">{selectedAdminBank.card_number}</div>
                   </div>
                   <button
@@ -793,7 +795,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               {selectedAdminBank.phone && (
                 <div className="flex items-center justify-between p-2 bg-white rounded-lg">
                   <div>
-                    <div className="text-xs text-slate-500">Утасны дугаар (СБП)</div>
+                    <div className="text-xs text-slate-500">{t("txn.phone_sbp")}</div>
                     <div className="font-mono font-bold text-maroon-700">{selectedAdminBank.phone}</div>
                   </div>
                   <button
@@ -809,7 +811,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               
               {/* Invoice ID - must include in transaction message */}
               <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="text-xs text-amber-700 font-medium mb-1">⚠️ Гүйлгээний утга хэсэгт заавал бичнэ үү:</div>
+                <div className="text-xs text-amber-700 font-medium mb-1">{t("txn.invoice_warning")}</div>
                 <div className="flex items-center justify-between">
                   <div className="font-mono font-bold text-amber-800 text-lg">{invoiceId}</div>
                   <button
@@ -828,7 +830,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             onClick={() => setStep(4)}
             disabled={direction === "buy" && !selectedAdminBank}
           >
-            Үргэлжлүүлэх
+            {t("txn.continue")}
           </button>
         </div>
       )}
@@ -836,16 +838,16 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {/* Step 4: Upload Receipt */}
       {step === 4 && direction && (
         <div className="flex flex-col gap-3">
-          <div className="text-sm text-slate-600">4-р алхам — Төлбөрийн баримт оруулах (олон зураг хавсаргах боломжтой)</div>
+          <div className="text-sm text-slate-600">4-р алхам — {t("txn.upload_receipt")}</div>
           
           {/* Summary */}
           <div className="p-3 bg-maroon-50 rounded-xl text-sm">
             <div className="flex justify-between">
-              <span>Таны илгээх мөнгөн дүн:</span>
+              <span>{t("txn.send_amount")}</span>
               <span className="font-bold">{amount.toLocaleString()} {currencyFrom}</span>
             </div>
             <div className="flex justify-between">
-              <span>Таны хүлээн авах мөнгөн дүн:</span>
+              <span>{t("txn.receive_amount")}</span>
               <span className="font-bold">{convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}</span>
             </div>
           </div>
@@ -871,16 +873,16 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             {receiptUrls.length > 0 ? (
               <div className="flex flex-col items-center gap-2 text-green-600">
                 <CheckCircle2 className="w-6 h-6" />
-                <span className="font-medium">{receiptUrls.length} зураг хавсаргасан</span>
-                <span className="text-xs text-slate-500">Нэмж зураг хавсаргахын тулд энд дарна уу</span>
+                <span className="font-medium">{t("txn.photos_attached", { count: String(receiptUrls.length) })}</span>
+                <span className="text-xs text-slate-500">{t("txn.add_more_photos")}</span>
               </div>
             ) : (
               <>
                 <Upload className="w-8 h-8 text-maroon-600" />
                 <span className="text-sm text-slate-500 mt-2">
-                  {uploading ? "Хавсаргаж байна..." : "Төлбөрийн баримтын скриншот зураг оруулах"}
+                  {uploading ? t("txn.uploading") : t("txn.upload_screenshot")}
                 </span>
-                <span className="text-xs text-slate-400 mt-1">Олон зураг сонгож болно</span>
+                <span className="text-xs text-slate-400 mt-1">{t("txn.multiple_photos")}</span>
               </>
             )}
             <input
@@ -913,7 +915,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             }}
             disabled={receiptUrls.length === 0}
           >
-            Үргэлжлүүлэх
+            {t("txn.continue")}
           </button>
         </div>
       )}
@@ -922,14 +924,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {step === 5 && direction && (
         <div className="flex flex-col gap-3">
           <div className="text-sm text-slate-600">
-            5-р алхам — Таны {currencyTo} хүлээн авах данс
+            5-р алхам — {t("txn.account_label", { currency: currencyTo })}
           </div>
 
           {/* Ask about saved bank if available and not yet chosen */}
           {useSavedBank === null && getSavedBankForDirection(direction) && (
             <div className="flex flex-col gap-3">
               <div className="p-4 bg-maroon-50 rounded-xl border border-maroon-200">
-                <div className="text-xs text-slate-500 mb-2">Хадгалсан {currencyTo} банкны мэдээлэл:</div>
+                <div className="text-xs text-slate-500 mb-2">{t("txn.saved_bank", { currency: currencyTo })}</div>
                 <div className="text-sm font-medium text-maroon-700 whitespace-pre-wrap">
                   {getSavedBankForDirection(direction)}
                 </div>
@@ -939,13 +941,13 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                   onClick={() => handleUseSaved(true)}
                   className="flex-1 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition flex items-center justify-center gap-2"
                 >
-                  <CheckCircle2 className="w-5 h-5" /> Хадгалсан дансны мэдээллээ ашиглах
+                  <CheckCircle2 className="w-5 h-5" /> {t("txn.use_saved")}
                 </button>
                 <button
                   onClick={() => handleUseSaved(false)}
                   className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition flex items-center justify-center gap-2"
                 >
-                  <Edit3 className="w-5 h-5" /> Шинээр оруулах
+                  <Edit3 className="w-5 h-5" /> {t("txn.enter_new")}
                 </button>
               </div>
             </div>
@@ -963,7 +965,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               {/* RUB receiving form (MNT → RUB / sell) */}
               {direction === "sell" && (
                 <>
-                  <label className="text-xs text-slate-500">Банк</label>
+                  <label className="text-xs text-slate-500">{t("txn.select_bank")}</label>
                   <input
                     value={rubBank}
                     onChange={(e) => setRubBank(e.target.value)}
@@ -971,7 +973,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     placeholder="Tinkoff, Sber, Alfa..."
                   />
 
-                  <label className="text-xs text-slate-500">Картын дугаар</label>
+                  <label className="text-xs text-slate-500">{t("txn.card_number")}</label>
                   <input
                     value={rubCardNumber}
                     onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))}
@@ -980,7 +982,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     maxLength={19}
                   />
 
-                  <label className="text-xs text-slate-500">Утасны дугаар (СБП)</label>
+                  <label className="text-xs text-slate-500">{t("txn.phone_sbp")}</label>
                   <input
                     value={rubPhone}
                     onChange={(e) => setRubPhone(formatRussianPhone(e.target.value))}
@@ -988,7 +990,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     placeholder="+7 XXX XXX XX XX"
                   />
 
-                  <label className="text-xs text-slate-500">Данс эзэмшигчийн нэр</label>
+                  <label className="text-xs text-slate-500">{t("txn.owner_name")}</label>
                   <input
                     value={rubOwnerName}
                     onChange={(e) => setRubOwnerName(e.target.value)}
@@ -1001,7 +1003,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               {/* MNT receiving form (RUB → MNT / buy) */}
               {direction === "buy" && (
                 <>
-                  <label className="text-xs text-slate-500">Банк</label>
+                  <label className="text-xs text-slate-500">{t("txn.select_bank")}</label>
                   <input
                     value={mntBank}
                     onChange={(e) => setMntBank(e.target.value)}
@@ -1009,7 +1011,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     placeholder="Хаан банк, Голомт банк..."
                   />
 
-                  <label className="text-xs text-slate-500">Дансны дугаар(IBAN)</label>
+                  <label className="text-xs text-slate-500">{t("txn.account")}</label>
                   <input
                     value={mntIban}
                     onChange={(e) => setMntIban(formatIBAN(e.target.value))}
@@ -1017,7 +1019,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     placeholder="MN XX XXXX XX XXXXXXXXXX"
                   />
 
-                  <label className="text-xs text-slate-500">Данс эзэмшигчийн нэр</label>
+                  <label className="text-xs text-slate-500">{t("txn.owner_name")}</label>
                   <input
                     value={mntOwnerName}
                     onChange={(e) => setMntOwnerName(e.target.value)}
@@ -1032,7 +1034,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                 onClick={() => handleSubmit()}
                 disabled={!isBankValid() || loading}
               >
-                {loading ? "Боловсруулж байна..." : "Баталгаажуулах"}
+                {loading ? t("txn.submitting") : t("txn.submit_exchange")}
               </button>
               
               {error && <div className="text-red-600 text-sm">{error}</div>}
@@ -1045,18 +1047,18 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {step === 6 && (
         <div className="flex flex-col items-center gap-4 py-6">
           <CheckCircle2 className="w-16 h-16 text-green-500" />
-          <div className="text-xl font-bold text-maroon-700">Хүсэлт илгээгдлээ!</div>
+          <div className="text-xl font-bold text-maroon-700">{t("txn.success_title")}</div>
           <div className="text-sm text-slate-600 text-center">
             Invoice: <span className="font-mono font-bold">{successInvoice}</span>
           </div>
           <div className="text-sm text-slate-500 text-center">
-            Админ таны төлбөрийг шалгаж дууссаны дараа танд Telegram чатаар мэдэгдэл ирэх болно.
+            {t("txn.success_desc")}
           </div>
           <button
             onClick={onBack}
             className="mt-4 px-6 py-2 bg-maroon-100 text-maroon-700 rounded-xl font-semibold hover:bg-maroon-200 transition"
           >
-            Дуусгах
+            {t("txn.back_home")}
           </button>
         </div>
       )}
