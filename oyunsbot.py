@@ -4751,7 +4751,6 @@ def show_pending_users(message):
                 InlineKeyboardButton(t(lang_admin, "admin_btn_verify"), callback_data=f"verify_{user['id']}"),
                 InlineKeyboardButton(t(lang_admin, "admin_btn_cancel"), callback_data=f"rejectuser_{user['id']}")
             )
-            )
 
             passport_id = user.get('passport_file_id')
             passport_url = user.get("passport_storage_url")
