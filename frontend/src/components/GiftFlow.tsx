@@ -537,7 +537,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                 <div className="text-xl font-bold text-maroon-700">
                   {convertedAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })} {currencyTo}
                 </div>
-                <div className="text-xs text-slate-400">Ханш: {effectiveRate}</div>
+                <div className="text-xs text-slate-400">{t("gift.rate_display", { rate: String(effectiveRate) })}</div>
               </div>
             )}
             
@@ -545,7 +545,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             {direction === "sell" && convertedAmount > 0 && convertedAmount < minRubAmount && (
               <div className="mt-2 text-sm text-red-500 flex items-center gap-1">
                 <span>⚠️</span>
-                <span>MNT→RUB чиглэлд хамгийн бага дүн {minRubAmount.toLocaleString()} рубль байх ёстой</span>
+                <span>{t("txn.min_rub_warning", { amount: minRubAmount.toLocaleString() })}</span>
               </div>
             )}
           </div>

@@ -349,7 +349,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             {hasRubBank && (
               <div className="space-y-3 pl-2 border-l-2 border-maroon-200">
                 <div>
-                  <label className="text-xs text-slate-500">Банкны нэр <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-slate-500">{t("reg.bank_name")} <span className="text-red-500">*</span></label>
                   <select
                     value={rubBankName}
                     onChange={(e) => setRubBankName(e.target.value)}
@@ -357,7 +357,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                   >
                     <option value="">{t("reg.select_bank")}</option>
                     {RUB_BANKS.map((bank) => (
-                      <option key={bank} value={bank}>{bank}</option>
+                      <option key={bank} value={bank}>{bank === "Бусад" ? t("txn.bank_other") : bank}</option>
                     ))}
                   </select>
                   {rubBankName === "Бусад" && (
@@ -416,7 +416,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             </div>
 
             <div>
-              <label className="text-xs text-slate-500">Банкны нэр <span className="text-red-500">*</span></label>
+              <label className="text-xs text-slate-500">{t("reg.bank_name")} <span className="text-red-500">*</span></label>
               <select
                 value={mntBankName}
                 onChange={(e) => setMntBankName(e.target.value)}
@@ -424,7 +424,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
               >
                 <option value="">{t("reg.select_bank")}</option>
                 {MNT_BANKS.map((bank) => (
-                  <option key={bank} value={bank}>{bank}</option>
+                  <option key={bank} value={bank}>{bank === "Бусад" ? t("txn.bank_other") : bank}</option>
                 ))}
               </select>
               {mntBankName === "Бусад" && (
@@ -456,7 +456,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 value={mntOwnerName}
                 onChange={(e) => setMntOwnerName(e.target.value)}
                 className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
-                placeholder="БАТ-ЭРДЭНЭ"
+                placeholder={t("ef.placeholder_mnt_owner").toUpperCase()}
               />
             </div>
 

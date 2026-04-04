@@ -9,6 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # copy only backend source to keep image small
 COPY backend/ ./
 
+# copy shared translation module used by backend notifications
+COPY bot_translations.py /shared/bot_translations.py
+
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

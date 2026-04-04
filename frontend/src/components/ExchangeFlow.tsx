@@ -838,7 +838,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {/* Step 4: Upload Receipt */}
       {step === 4 && direction && (
         <div className="flex flex-col gap-3">
-          <div className="text-sm text-slate-600">4-р алхам — {t("txn.upload_receipt")}</div>
+          <div className="text-sm text-slate-600">{t("ef.receipt_step")}</div>
           
           {/* Summary */}
           <div className="p-3 bg-maroon-50 rounded-xl text-sm">
@@ -924,7 +924,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       {step === 5 && direction && (
         <div className="flex flex-col gap-3">
           <div className="text-sm text-slate-600">
-            5-р алхам — {t("txn.account_label", { currency: currencyTo })}
+            {t("ef.bank_step_receive", { currency: currencyTo })}
           </div>
 
           {/* Ask about saved bank if available and not yet chosen */}
@@ -958,7 +958,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <>
               {useSavedBank && (
                 <div className="p-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700">
-                  ✓ Хадгалсан мэдээллийг явууллаа
+                  {t("ef.saved_bank_sent")}
                 </div>
               )}
 
@@ -995,7 +995,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     value={rubOwnerName}
                     onChange={(e) => setRubOwnerName(e.target.value)}
                     className="rounded-xl border border-maroon-100 p-3"
-                    placeholder="Иван Иванов"
+                    placeholder={t("ef.placeholder_rub_owner")}
                   />
                 </>
               )}
@@ -1008,7 +1008,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     value={mntBank}
                     onChange={(e) => setMntBank(e.target.value)}
                     className="rounded-xl border border-maroon-100 p-3"
-                    placeholder="Хаан банк, Голомт банк..."
+                    placeholder={t("ef.placeholder_mnt_bank")}
                   />
 
                   <label className="text-xs text-slate-500">{t("txn.account")}</label>
@@ -1024,7 +1024,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     value={mntOwnerName}
                     onChange={(e) => setMntOwnerName(e.target.value)}
                     className="rounded-xl border border-maroon-100 p-3"
-                    placeholder="Бат-Эрдэнэ"
+                    placeholder={t("ef.placeholder_mnt_owner")}
                   />
                 </>
               )}

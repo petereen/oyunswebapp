@@ -508,6 +508,30 @@ const translations: Record<string, Record<Lang, string>> = {
   "ef.amount_label": { ru: "Сумма к отправке ({currency})", mn: "Таны илгээх мөнгөн дүн ({currency})" },
   "ef.receive_label": { ru: "Сумма к получению:", mn: "Таны хүлээн авах мөнгөн дүн:" },
   "ef.bank_step": { ru: "Шаг 3 — отправьте {currency} на наш счёт", mn: "3-р алхам — та {currency}-г манай данс руу илгээнэ үү" },
+  "ef.receipt_step": { ru: "Шаг 4 — Загрузить чек", mn: "4-р алхам — Баримт оруулах" },
+  "ef.bank_step_receive": { ru: "Шаг 5 — Счёт {currency}", mn: "5-р алхам — {currency} данс" },
+  "ef.saved_bank_sent": { ru: "✓ Отправлены сохранённые данные", mn: "✓ Хадгалсан мэдээллийг явууллаа" },
+  "ef.placeholder_rub_owner": { ru: "Иван Иванов", mn: "Иван Иванов" },
+  "ef.placeholder_mnt_owner": { ru: "Бат-Эрдэнэ", mn: "Бат-Эрдэнэ" },
+  "ef.placeholder_mnt_bank": { ru: "Khan bank, Golomt bank...", mn: "Хаан банк, Голомт банк..." },
+
+  // ─── Dashboard ───
+  "home.platform_title": { ru: "ПЛАТФОРМА ОБМЕНА ВАЛЮТ", mn: "ВАЛЮТ СОЛИХ ПЛАТФОРМ" },
+  "home.greeting": { ru: "Здравствуйте, {name}", mn: "Сайн байна уу, {name}" },
+  "home.refresh": { ru: "Обновить", mn: "Шинэчлэх" },
+  "home.history": { ru: "История", mn: "Түүх" },
+  "home.statistics": { ru: "Статистика", mn: "Статистик" },
+  "home.exchange_button": { ru: "ОБМЕН ВАЛЮТЫ", mn: "ВАЛЮТ СОЛИХ" },
+  "home.ready_to_exchange": { ru: "Готовы к обмену?", mn: "Та валют солиход бэлэн үү?" },
+  "home.rate_label": { ru: "КУРС", mn: "ХАНШ" },
+  "home.send_gift_button": { ru: "ОТПРАВИТЬ ПОДАРОК", mn: "БЭЛЭГ ИЛГЭЭХ" },
+  "home.register_button_desc": { ru: "Нажмите кнопку регистрации в правом верхнем углу.", mn: "Баруун дээр байрлах товчийг дарна уу." },
+  "home.working_hours_detail": { ru: "Мы работаем: Москва 04:00-23:00, УБ 09:00–04:00 (следующего дня).", mn: "Бид Москвагийн цагаар 04:00-23:00 хооронд, Улаанбаатарын цагаар 09:00–04:00(дараа өдрийн) цагийн хооронд ажиллаж байна." },
+  "home.auth_debug_hint": { ru: "Проверьте консоль, найдите «=== Telegram Auth Debug ==»", mn: "Дэлгэцийн консолыг шалгаж, \"=== Telegram Auth Debug ==\" гэсэн мэдээлэл олоорой" },
+  "home.rates_load_failed": { ru: "Не удалось загрузить курсы валют.", mn: "Валютын ханш татаж чадсангүй." },
+
+  // ─── GiftFlow extras ───
+  "gift.rate_display": { ru: "Курс: {rate}", mn: "Ханш: {rate}" },
 
   // ─── Common ───  
   "common.other": { ru: "Другой", mn: "Бусад" },

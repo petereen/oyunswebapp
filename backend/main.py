@@ -100,6 +100,7 @@ from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, "/shared")
 from bot_translations import tb
 from utils import (
     TelegramAuthError,
