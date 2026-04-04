@@ -87,6 +87,7 @@ class UpsertUserPayload(BaseModel):
     ready_for_verification: Optional[bool] = None
     verified: Optional[bool] = None
     agreed_terms: Optional[bool] = None
+    lang: Optional[str] = None
     updated_at: Optional[datetime] = None
 
 

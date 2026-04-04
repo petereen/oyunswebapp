@@ -21,6 +21,8 @@ from math import ceil
 from telebot.types import InputMediaPhoto
 from typing import Dict, List, Set
 
+from bot_translations import t
+
 _admin_media_buffers: Dict[str, List[str]] = {}
 _admin_media_flush_scheduled: Set[str] = set()
 
@@ -88,6 +90,30 @@ REFERRAL_CHANNELS = [
 # In-memory caches for invite link ↔ referrer mapping
 invite_link_to_referrer: Dict[str, int] = {}
 referrer_to_invite_link: Dict[int, str] = {}
+
+# ── Language helpers ──
+_lang_cache: Dict[int, str] = {}
+
+def get_user_lang(user_id: int) -> str:
+    """Return the user's preferred language ('mn' or 'ru'). Cached in memory."""
+    if user_id in _lang_cache:
+        return _lang_cache[user_id]
+    try:
+        resp = supabase.table("users").select("lang").eq("id", user_id).execute()
+        lang = (resp.data[0].get("lang") or "mn") if resp.data else "mn"
+    except Exception:
+        lang = "mn"
+    _lang_cache[user_id] = lang
+    return lang
+
+def set_user_lang(user_id: int, lang: str) -> None:
+    """Persist language choice and update cache."""
+    lang = lang if lang in ("mn", "ru") else "mn"
+    _lang_cache[user_id] = lang
+    try:
+        supabase.table("users").upsert({"id": user_id, "lang": lang}).execute()
+    except Exception as e:
+        print(f"⚠️ Failed to save lang for {user_id}: {e}")
 
 def check_user_is_member(username_or_id) -> bool:
     """Check if a user is a member of any referral channel.
@@ -169,14 +195,11 @@ def check_user_is_member(username_or_id) -> bool:
         print(f"❌ Error in check_user_is_member: {e}")
         return False
 
-NOT_WORKING_TEXT = (
-    "⏳ Бид одоогоор ажиллахгүй байна. Та дараа манай ажлын цаг нээгдэхээр дахин оролдоно уу.\n"
-    "📞 Тусламж: @oyuns_finance"
-)
 def ensure_admin_available(chat_id: int) -> bool:
     admin_id = get_current_admin_id()
     if not admin_id:
-        bot.send_message(chat_id, NOT_WORKING_TEXT)
+        lang = get_user_lang(chat_id)
+        bot.send_message(chat_id, t(lang, "not_working"))
         return False
     return True
 def ensure_exchange_available(chat_id: int) -> bool:
@@ -229,10 +252,11 @@ def clear_state(user_id):
 #HEREGLEGCHIIN GEREE
 
 def ask_terms_agreement(chat_id):
+    lang = get_user_lang(chat_id)
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📄 Хэрэглэгчийн гэрээ", url="https://oyuns.mn/user-agreement"))
-    markup.add(InlineKeyboardButton("✅ Зөвшөөрч байна", callback_data="accept_terms"))
-    bot.send_message(chat_id, "📜 Сайн байна уу, та OYUNS Finance бот ашиглахын өмнө [хэрэглэгчийн гэрээтэй](https://oyuns.mn/user-agreement) уншиж танилцана уу. Хэрвээ зөвшөөрч байвал дараах товчыг дарж үргэлжлүүлээрэй.", parse_mode="Markdown", reply_markup=markup)
+    markup.add(InlineKeyboardButton(t(lang, "btn_terms_link"), url="https://oyuns.mn/user-agreement"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_terms_accept"), callback_data="accept_terms"))
+    bot.send_message(chat_id, t(lang, "terms_prompt"), parse_mode="Markdown", reply_markup=markup)
 def has_agreed_terms(user_id):
     response = supabase.table("users").select("agreed_terms").eq("id", user_id).execute()
     return response.data and response.data[0]['agreed_terms'] == True
@@ -251,8 +275,9 @@ def set_agreed_terms(user_id):
 def handle_terms_accept(call):
     user_id = call.from_user.id
     set_agreed_terms(user_id)
-    bot.answer_callback_query(call.id, "Та OYUNS Finance Telegram Bot-ын хэрэглэгчийн гэрээг зөвшөөрлөө.")
-    bot.send_message(call.message.chat.id, "Баярлалаа! Та ийнхүү бидний үйлчилгээг ашиглах боломжтой боллоо.")
+    lang = get_user_lang(user_id)
+    bot.answer_callback_query(call.id, t(lang, "terms_accepted_alert"))
+    bot.send_message(call.message.chat.id, t(lang, "terms_accepted_msg"))
     def delayed_start():
         time_module.sleep(1.0)  # Let Supabase commit finish
         handle_start(call.message)
@@ -261,9 +286,10 @@ def handle_terms_accept(call):
 
 @bot.message_handler(commands=['geree'])
 def terms_handler(message):
+  lang = get_user_lang(message.chat.id)
   markup = InlineKeyboardMarkup()
-  markup.add(InlineKeyboardButton("📄 Хэрэглэгчийн гэрээ:", url="https://oyuns.mn/user-agreement"))
-  bot.send_message(message.chat.id, "📄 Та хэрэглэгчийн гэрээг эндээс уншина уу.", reply_markup=markup)
+  markup.add(InlineKeyboardButton(t(lang, "btn_terms_link"), url="https://oyuns.mn/user-agreement"))
+  bot.send_message(message.chat.id, t(lang, "terms_view"), reply_markup=markup)
     
 #-------------------GUILGEENII TUUH----------------------
 PAGE_SIZE = 5  # items per page
@@ -828,38 +854,39 @@ def update_transaction_status(user_id, status):
 
 
 # 🏠 Main Menu
-def main_menu():
+def main_menu(lang=None):
+    if lang is None:
+        lang = "mn"
     markup = InlineKeyboardMarkup()
     # Add Web App button at the top
-    markup.add(InlineKeyboardButton("🚀 OYUNS Finance App нээх", web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
     
     markup.row_width = 2
     markup.add(
-        InlineKeyboardButton("📊 Ханш", callback_data="exchange_rate"),
-        InlineKeyboardButton("💱 Валют солих", callback_data="exchange_menu"),
-        InlineKeyboardButton("👤 Хэрэглэгчийн тохиргоо", callback_data="user_profile"),
-        InlineKeyboardButton("⭐ Бусад үйлчилгээ", callback_data="other_services"),
-        InlineKeyboardButton("📝 Бүртгүүлэх", callback_data="start_registration"),
-        InlineKeyboardButton("🤝 Найз урих", callback_data="invite_friend")
+        InlineKeyboardButton(t(lang, "btn_exchange_rate"), callback_data="exchange_rate"),
+        InlineKeyboardButton(t(lang, "btn_exchange"), callback_data="exchange_menu"),
+        InlineKeyboardButton(t(lang, "btn_profile"), callback_data="user_profile"),
+        InlineKeyboardButton(t(lang, "btn_other_services"), callback_data="other_services"),
+        InlineKeyboardButton(t(lang, "btn_register"), callback_data="start_registration"),
+        InlineKeyboardButton(t(lang, "btn_invite_friend"), callback_data="invite_friend")
     )
     return markup
 
 @bot.callback_query_handler(func=lambda call: call.data == "contact_support")
 def contact_support_handler(call):
+    lang = get_user_lang(call.from_user.id)
     bot.send_message(
         call.message.chat.id,
-        "📞 *Холбоо барих мэдээлэл:*\n\n"
-        "📱 +976 7230 3060\n"
-        "📱 +7 (977) 801-91-43\n"
-        "🔗 Telegram: [@oyuns_finance](https://t.me/oyuns_finance)",
+        t(lang, "contact_support_msg"),
         parse_mode="Markdown"
     )
 @bot.callback_query_handler(func=lambda call: call.data == "restart_registration")
 def restart_registration(call):
     user_id = call.message.chat.id
-    bot.send_message(user_id, "🔁 Бүртгэлийг шинээр эхлүүлж байна...")
+    lang = get_user_lang(user_id)
+    bot.send_message(user_id, t(lang, "register_restarting"))
     update_user_session(user_id, {"state": "register_last_name"})
-    bot.send_message(user_id, "👤 Та өөрийн овгоо оруулна уу:", reply_markup=cancel_markup())
+    bot.send_message(user_id, t(lang, "register_enter_last_name"), reply_markup=cancel_markup(lang))
 
     
 
@@ -882,11 +909,29 @@ def handle_start(message):
             print(f"⚠️ Invalid referrer ID in deep link: {command_parts[1]}")
 
     # ⛑ Ensure user row exists
-    response = supabase.table("users").select("id").eq("id", user_id).execute()
+    response = supabase.table("users").select("id, lang").eq("id", user_id).execute()
     if not response.data:
         supabase.table("users").insert({"id": user_id}).execute()
 
-    # 🧾 Now check if they’ve agreed
+    # 🌐 First-time language selection
+    user_data = response.data[0] if response.data else {}
+    if not user_data.get("lang"):
+        tg_lang = getattr(message.from_user, 'language_code', '') or ''
+        if tg_lang.startswith('ru'):
+            prompt = "🌐 Выберите язык / Хэлээ сонгоно уу:"
+        else:
+            prompt = "🌐 Хэлээ сонгоно уу / Выберите язык:"
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("🇲🇳 Монгол", callback_data="set_lang_mn"),
+            InlineKeyboardButton("🇷🇺 Русский", callback_data="set_lang_ru"),
+        )
+        bot.send_message(user_id, prompt, reply_markup=markup)
+        return
+
+    lang = get_user_lang(user_id)
+
+    # 🧾 Now check if they've agreed
     if not has_agreed_terms(user_id):
         ask_terms_agreement(user_id)
         return
@@ -904,10 +949,30 @@ def handle_start(message):
     update_user_session(user_id, {"state": ""})
     bot.send_message(
         message.chat.id,
-        "👋 Сайн байна уу? OYUNS Finance Bot-д тавтай морил!\nТа дараах үйлчилгээнүүдээс сонгон үйлчлүүлнэ үү:",
-
-        reply_markup=main_menu()
+        t(lang, "welcome"),
+        reply_markup=main_menu(lang)
     )
+
+
+# 🌐 Language selection callback
+@bot.callback_query_handler(func=lambda call: call.data.startswith("set_lang_"))
+def handle_lang_selection(call):
+    user_id = call.from_user.id
+    lang = call.data.replace("set_lang_", "")
+    set_user_lang(user_id, lang)
+    bot.answer_callback_query(call.id)
+    bot.send_message(call.message.chat.id, t(lang, "lang_changed"))
+    # Continue the /start flow
+    if not has_agreed_terms(user_id):
+        ask_terms_agreement(user_id)
+        return
+    session = get_user_session(user_id)
+    referrer_id = session.get("pending_referrer_id") if session else None
+    if referrer_id:
+        prompt_channel_join(user_id, referrer_id)
+        return
+    update_user_session(user_id, {"state": ""})
+    bot.send_message(call.message.chat.id, t(lang, "welcome"), reply_markup=main_menu(lang))
 
 
 #----------------------OTHER SERVICES-----------------------------
@@ -916,30 +981,30 @@ FLIGHT_BOOKING_TG = "OYUNS_Finance"
 # Other Services Menu
 @bot.callback_query_handler(func=lambda call: call.data == "other_services")
 def other_services_menu(call):
+    lang = get_user_lang(call.from_user.id)
     markup = InlineKeyboardMarkup()
     markup.add(
-        InlineKeyboardButton("✈️ Нислэг захиалга", callback_data="flight_booking"),
-        InlineKeyboardButton("📱 Утасны дугаар цэнэглэх", callback_data="phone_topup"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="back_main")
+        InlineKeyboardButton(t(lang, "btn_flight_booking"), callback_data="flight_booking"),
+        InlineKeyboardButton(t(lang, "btn_phone_topup"), callback_data="phone_topup"),
+        InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main")
     )
     bot.send_message(
         call.message.chat.id,
-        "⭐ *Бусад үйлчилгээ*\n\nТа дараах үйлчилгээнүүдээс сонгоно уу:",
+        t(lang, "other_services_title"),
         reply_markup=markup,
         parse_mode="Markdown"
     )
 
 @bot.callback_query_handler(func=lambda call: call.data == "flight_booking")
 def flight_booking_info(call):
+    lang = get_user_lang(call.from_user.id)
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("📨 OYUNS FINANCE", url=f"https://t.me/{FLIGHT_BOOKING_TG}"))
-    kb.add(InlineKeyboardButton("🔙 Буцах", callback_data="other_services"))
+    kb.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="other_services"))
 
     bot.send_message(
         call.message.chat.id,
-        "✈️ *OYUNS онгоцны тийз захиалга*\n\n"
-        "Та нислэгийн тийз захиалахын тулд хэзээ, ямар чиглэлд нисэх тухай ерөнхий мэдээллээ дараах чатаар явуулж захиалаарай:\n\n"
-        f"📨 [@{FLIGHT_BOOKING_TG}](https://t.me/{FLIGHT_BOOKING_TG})",
+        t(lang, "flight_booking_info", tg=FLIGHT_BOOKING_TG),
         parse_mode="Markdown",
         reply_markup=kb,
         disable_web_page_preview=True
@@ -962,9 +1027,10 @@ def phone_topup_start(call):
     # Check business hours and admin availability
     if not is_within_ub_business_hours():
         bot.answer_callback_query(call.id)
+        lang = get_user_lang(user_id)
         bot.send_message(
             user_id,
-            "⚠️ Бид Москвагийн цагаар 04:00-23:00 хооронд, Улаанбаатарын цагаар 09:00–04:00(дараа өдрийн) цагийн хооронд ажиллаж байна.",
+            t(lang, "business_hours_msg"),
         )
         return
     
@@ -984,11 +1050,10 @@ def phone_topup_start(call):
     update_user_session(user_id, {"state": "phone_topup_amount"})
     
     bot.answer_callback_query(call.id)
+    lang = get_user_lang(user_id)
     bot.send_message(
         user_id,
-        "📱 *Утасны дугаар цэнэглэх*\n\n"
-        "💰 Та хэдэн РУБ-ээр цэнэглэх вэ?\n\n"
-        "Мөнгөн дүнг оруулна уу. Жишээ нь: `500` эсвэл `1000`",
+        t(lang, "phone_topup_title"),
         parse_mode="Markdown"
     )
 
@@ -1261,43 +1326,44 @@ def notify_phone_topup_operator(user_id, invoice, receipt_id, amount_rub, amount
 @bot.callback_query_handler(func=lambda call: call.data == "exchange_rate")
 def exchange_rate(call):
     fetch_exchange_rates()  # Refresh rates before displaying
+    lang = get_user_lang(call.from_user.id)
     DATETODAY = date.today().isoformat()
     markup = InlineKeyboardMarkup()
     markup.add(
-        InlineKeyboardButton("Ханш тооцоолуур", callback_data="open_calculator"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="back_main")
+        InlineKeyboardButton(t(lang, "btn_calculator"), callback_data="open_calculator"),
+        InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main")
     )
     bot.send_message(
         call.message.chat.id,
-        f"💱 *Өнөөдрийн ханш* ({DATETODAY}):\n\n"
-        f"🔸 АВАХ ХАНШ = `{exchange_rates['BUY_RATE']}` MNT\n"
-        f"🔹 ЗАРАХ ХАНШ = `{exchange_rates['SELL_RATE']}` MNT",
+        t(lang, "exchange_rate_title", date=DATETODAY, buy=exchange_rates['BUY_RATE'], sell=exchange_rates['SELL_RATE']),
         reply_markup=markup,
         parse_mode="Markdown"
     )
 
 @bot.callback_query_handler(func=lambda call: call.data == "open_calculator")
 def start_calculator(call):
+    lang = get_user_lang(call.from_user.id)
     update_user_session(call.from_user.id, {"state": "calc_direction"})
     markup = InlineKeyboardMarkup()
     markup.add(
         InlineKeyboardButton("🇷🇺 RUB ➝ MNT", callback_data="calc_rub_mnt"),
         InlineKeyboardButton("🇲🇳 MNT ➝ RUB", callback_data="calc_mnt_rub"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="back_main")
+        InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main")
     )
-    bot.send_message(call.message.chat.id, "🖩 Аль чиглэлээр ханш тооцоолох вэ?", reply_markup=markup)
+    bot.send_message(call.message.chat.id, t(lang, "calc_direction"), reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("calc_"))
 def ask_amount(call):
     direction = call.data
     user_id = call.from_user.id
 
+    lang = get_user_lang(user_id)
     if direction == "calc_rub_mnt":
         update_user_session(user_id, {"state": "calc_rub_mnt_amount"})
-        bot.send_message(user_id, "💵 Тооцоолох *RUB* мөнгөн дүнгээ оруулна уу?", parse_mode="Markdown")
+        bot.send_message(user_id, t(lang, "calc_enter_rub"), parse_mode="Markdown")
     elif direction == "calc_mnt_rub":
         update_user_session(user_id, {"state": "calc_mnt_rub_amount"})
-        bot.send_message(user_id, "💵 Тооцоолох *MNT* мөнгөн дүнгээ оруулна уу?", parse_mode="Markdown")
+        bot.send_message(user_id, t(lang, "calc_enter_mnt"), parse_mode="Markdown")
 
 @bot.message_handler(func=lambda m: get_state(m.chat.id) in ["calc_rub_mnt_amount", "calc_mnt_rub_amount"])
 def perform_calculation(message):
@@ -1306,12 +1372,13 @@ def perform_calculation(message):
     session = get_user_session(user_id)
     state = session["state"] if session else None
     raw     = message.text.replace(",", "").strip()
+    lang = get_user_lang(user_id)
     try:
         amount = float(raw)
     except ValueError:
         bot.send_message(
             user_id,
-            "❌ Зөвхөн тоон утга оруулна уу (жишээ: 50 000 эсвэл 50,000).",
+            t(lang, "error_number_only"),
             parse_mode="Markdown"
         )
         # leave them in the same state so they can retry
@@ -1322,7 +1389,7 @@ def perform_calculation(message):
         converted = round(amount * rate, 2)
         bot.send_message(
             user_id,
-            f"📌 {amount} RUB ≈ `{converted} MNT`\n💱 Ханш: {rate}",
+            t(lang, "calc_result_rub_mnt", amount=amount, converted=converted, rate=rate),
             parse_mode="Markdown"
         )
 
@@ -1331,7 +1398,7 @@ def perform_calculation(message):
         converted = round(amount / rate, 2)
         bot.send_message(
             user_id,
-            f"📌 {amount} MNT ≈ `{converted} RUB`\n💱 Ханш: {rate}",
+            t(lang, "calc_result_mnt_rub", amount=amount, converted=converted, rate=rate),
             parse_mode="Markdown"
         )
 
@@ -1343,10 +1410,11 @@ def perform_calculation(message):
 @bot.callback_query_handler(func=lambda call: call.data == "user_profile")
 def profile_menu(call):
     user_id = call.message.chat.id
+    lang = get_user_lang(user_id)
     response = supabase.table("users").select("*").eq("id", user_id).execute()
 
     if not response.data:
-        bot.send_message(user_id, "❗ Та эхлээд /register команд ашиглан бүртгүүлнэ үү.")
+        bot.send_message(user_id, t(lang, "register_not_agreed"))
         return
 
     user = response.data[0]
@@ -1357,43 +1425,45 @@ def profile_menu(call):
     promo_codes = promo_codes_response.data if promo_codes_response.data else []
     
     # 📋 User Summary Text
+    passport_status = t(lang, "profile_passport_yes") if user.get('passport_file_id') else t(lang, "profile_passport_no")
+    verification_sent = t(lang, "profile_verification_sent") if user.get('ready_for_verification') else t(lang, "profile_verification_not_sent")
+    verified_label = t(lang, "profile_verified_yes") if is_verified else t(lang, "profile_verified_no")
+
     text = (
-        f"👤 Таны мэдээлэл:\n\n"
-        f"👤 Овог: {user.get('last_name', '-')}\n"
-        f"👤 Нэр: {user.get('first_name', '-')}\n"
-        f"� Имэйл: {user.get('email', '-')}\n"
-        f"📞 Монгол утас: {user.get('phone_mnt', '-')}\n"
-        f"📞 Орос утас: {user.get('phone', '-')}\n"
-        f"🪪 Паспортын дугаар: {user.get('registration_number', '-')}\n"
-        f"🏦 Монгол банк: {user.get('bank_mnt', '-')}\n"
-        f"🇷🇺 Орос банк: {user.get('bank_rub', '-')}\n"
-        f"📷 Паспорт зураг: {'🟢 Байгаа' if user.get('passport_file_id') else '🔴 Байхгүй'}\n"
-        f"\n📤 Баталгаажуулах хүсэлт: {'Илгээсэн' if user.get('ready_for_verification') else 'Илгээгүй'}\n"
-        f"📎 Баталгаажсан: {'✅ Тийм' if is_verified else '❌ Үгүй'}\n"
-        f"\nℹ️ Бот хувилбар: v2.0.0"
+        t(lang, "profile_title")
+        + f"{t(lang, 'profile_last_name')}: {user.get('last_name', '-')}\n"
+        + f"{t(lang, 'profile_first_name')}: {user.get('first_name', '-')}\n"
+        + f"{t(lang, 'profile_email')}: {user.get('email', '-')}\n"
+        + f"{t(lang, 'profile_phone_mn')}: {user.get('phone_mnt', '-')}\n"
+        + f"{t(lang, 'profile_phone_ru')}: {user.get('phone', '-')}\n"
+        + f"{t(lang, 'profile_passport')}: {user.get('registration_number', '-')}\n"
+        + f"{t(lang, 'profile_bank_mn')}: {user.get('bank_mnt', '-')}\n"
+        + f"{t(lang, 'profile_bank_ru')}: {user.get('bank_rub', '-')}\n"
+        + f"{t(lang, 'profile_passport_photo')}: {passport_status}\n"
+        + f"\n{t(lang, 'profile_verification_request')}: {verification_sent}\n"
+        + f"{t(lang, 'profile_verified_label')}: {verified_label}\n"
+        + f"\nℹ️ Bot version: v2.0.0"
     )
     
     # Add promo codes section (collect buttons so user can copy codes easily)
     promo_buttons = []
     if promo_codes:
-        text += f"\n\n🎟️ Таны промокодууд:\n"
+        text += f"\n\n{t(lang, 'profile_promo_codes')}\n"
         for promo in promo_codes:
             discount = promo.get('discount', 0)
             created_at = promo.get('created_at', '')
             if created_at:
                 try:
-                    # Format date for display
                     promo_date = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%Y-%m-%d')
                 except:
                     promo_date = created_at[:10] if len(created_at) >= 10 else created_at
             else:
                 promo_date = 'N/A'
             code_escaped = sanitize_markdown(promo.get('code', ''))
-            text += f"  • `{code_escaped}` - {discount} MNT хөнгөлөлт (үүссэн огноо: {promo_date})\n"
-            # prepare a copy button for this promo code (callback includes code)
-            promo_buttons.append(InlineKeyboardButton(f"📋 Хуулах {promo.get('code')}", callback_data=f"copy_promo_{promo.get('code')}") )
+            text += t(lang, "profile_promo_item", code=code_escaped, discount=discount, date=promo_date) + "\n"
+            promo_buttons.append(InlineKeyboardButton(t(lang, "btn_copy_promo", code=promo.get('code')), callback_data=f"copy_promo_{promo.get('code')}") )
     else:
-        text += f"\n\n🎟️ Промокод: Байхгүй"
+        text += f"\n\n{t(lang, 'profile_promo_none')}"
     
     # Add referral status section
     referral_status = get_user_referral_status(user_id)
@@ -1402,38 +1472,38 @@ def profile_menu(call):
     total_count = referral_status["total"]
     
     if total_count == 0:
-        referral_status_text = "Найз уриагүй"
+        referral_status_text = t(lang, "profile_referral_none")
     elif pending_count > 0:
-        referral_status_text = f"Хүлээгдэж буй ({pending_count} найз)"
+        referral_status_text = t(lang, "profile_referral_pending", count=pending_count)
     elif accepted_count >= REFERRAL_REQUIRED_COUNT:
-        referral_status_text = f"✅ Амжилттай ({accepted_count}/{REFERRAL_REQUIRED_COUNT})"
+        referral_status_text = t(lang, "profile_referral_success", accepted=accepted_count, required=REFERRAL_REQUIRED_COUNT)
     else:
-        referral_status_text = f"Хүлээгдэж буй ({accepted_count}/{REFERRAL_REQUIRED_COUNT})"
+        referral_status_text = t(lang, "profile_referral_in_progress", accepted=accepted_count, required=REFERRAL_REQUIRED_COUNT)
     
-    text += f"\n\n👥 Найз урих статус: {referral_status_text}"
+    text += f"\n\n{t(lang, 'profile_referral_status')}: {referral_status_text}"
 
     # 📌 Markup (Edit / Continue Registration)
     markup = InlineKeyboardMarkup()
 
-    # Disable editing of reg/passport if verified (optional)
     markup.add(
-        InlineKeyboardButton("👤 Овог өөрчлөх", callback_data="edit_last_name"),
-        InlineKeyboardButton("👤 Нэр өөрчлөх", callback_data="edit_first_name"),
-        InlineKeyboardButton("📞 Утас өөрчлөх", callback_data="edit_phone")
+        InlineKeyboardButton(t(lang, "btn_edit_last_name"), callback_data="edit_last_name"),
+        InlineKeyboardButton(t(lang, "btn_edit_first_name"), callback_data="edit_first_name"),
+        InlineKeyboardButton(t(lang, "btn_edit_phone"), callback_data="edit_phone")
     )
 
     if not is_verified:
         markup.add(
-            InlineKeyboardButton("🪪 Паспортын дугаар", callback_data="edit_registration_number"),
-            InlineKeyboardButton("📷 Паспорт зураг", callback_data="upload_passport")
+            InlineKeyboardButton(t(lang, "btn_edit_passport_num"), callback_data="edit_registration_number"),
+            InlineKeyboardButton(t(lang, "btn_upload_passport"), callback_data="upload_passport")
         )
 
     markup.add(
-        InlineKeyboardButton("🇲🇳 Монгол банк", callback_data="edit_bank_mnt"),
-        InlineKeyboardButton("🇷🇺 Орос банк", callback_data="edit_bank_rub"),
-        InlineKeyboardButton("📤 Баталгаажуулах хүсэлт илгээх", callback_data="submit_verification"),
-        InlineKeyboardButton("📜 Гүйлгээний түүх", callback_data="txn_history_1"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="back_main")
+        InlineKeyboardButton(t(lang, "btn_edit_bank_mn"), callback_data="edit_bank_mnt"),
+        InlineKeyboardButton(t(lang, "btn_edit_bank_ru"), callback_data="edit_bank_rub"),
+        InlineKeyboardButton(t(lang, "btn_submit_verification"), callback_data="submit_verification"),
+        InlineKeyboardButton(t(lang, "btn_txn_history"), callback_data="txn_history_1"),
+        InlineKeyboardButton(t(lang, "btn_change_lang"), callback_data="profile_change_lang"),
+        InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main")
     )
 
     # add promo copy buttons if any (each on its own row)
@@ -1441,6 +1511,28 @@ def profile_menu(call):
         markup.add(b)
 
     bot.send_message(user_id, text, reply_markup=markup, parse_mode="Markdown")
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "profile_change_lang")
+def profile_change_lang(call):
+    user_id = call.from_user.id
+    lang = get_user_lang(user_id)
+    markup = InlineKeyboardMarkup()
+    markup.add(
+        InlineKeyboardButton("🇲🇳 Монгол", callback_data="set_profile_lang_mn"),
+        InlineKeyboardButton("🇷🇺 Русский", callback_data="set_profile_lang_ru")
+    )
+    bot.send_message(call.message.chat.id, t(lang, "choose_lang_mn") if lang == "mn" else t(lang, "choose_lang_ru"), reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("set_profile_lang_"))
+def set_profile_lang(call):
+    user_id = call.from_user.id
+    new_lang = call.data.replace("set_profile_lang_", "")
+    if new_lang not in ("mn", "ru"):
+        new_lang = "mn"
+    set_user_lang(user_id, new_lang)
+    bot.answer_callback_query(call.id, t(new_lang, "lang_changed"))
+    bot.send_message(call.message.chat.id, t(new_lang, "lang_changed"), reply_markup=main_menu(new_lang))
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("txn_history_"))
 def txn_history_page(call):
@@ -1732,26 +1824,12 @@ def get_bank(message):
 # ℹ️ How to Use Button Handler
 @bot.callback_query_handler(func=lambda call: call.data == "how_to_use")
 def how_to_use(call):
+    lang = get_user_lang(call.from_user.id)
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔙 Буцах", callback_data="back_main"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main"))
 
     bot.send_message(
-        call.message.chat.id, "Та энэхүү ботын тусламжтай ханшийн өдөр тутмын мэдээлэл авах, рубль болон төгрөгийн ханш хөрвүүлэн солиулах боломжтой\n\n"
-                              "📖 Бот ашиглах заавар:\n\n"
-                              "1️⃣ Хэрэглэгчийн бүртгэл үүсгэх. Та */register* команд ашиглан хэрэглэгчийн бүртгэл үүсгэх боломжтой.\n\n"
-                              "2️⃣ Хэрэглэгчийн бүртгэл баталгаажуулах. Та хэрэглэгчийн бүртгэл үүсгэх явцад бүртгэлээ баталгаажуулах товч дарах эсвэл хэрэглэгчийн тохиргоо цэст буй бүртгэл баталгаажуулах товч дарснаар бүртгэлээ баталгаажуулах хүсэлт илгээх боломжтой.\n\n"
-                              "3️⃣ Админ таны мэдээллийг тодорхой хугацааны дараа бүрэн зөв эсэхийг шалгаад баталгаажуулна. Админ баталгаажуулсан тохиолдолд танд мэдэгдэл ирнэ.\n\n"
-                              "4️⃣ Ийнхүү та хэрэглэгчийн бүртгэлээ баталгаажуулсан бол ханш солих боломжтой болно. Ингэхдээ */start* команд ашиглан 💱 *Валют солих* товч дээр дарна.\n\n"
-                              "5️⃣ Ханш солих чиглэлээ сонгоно.\n\n"
-                              "6️⃣ Та ямар дүнгээр солиулахаа сонгох эсвэл өөрийн хүссэн дүнгээ оруулна.\n\n"
-                              "7️⃣ Солих дүнгээ оруулсаны дараа ханш хөрвүүлсэн байдлаар харагдах бөгөөд танд илгээсэн дансны мэдээллийн дагуу гүйлгээ хийнэ. Гүйлгээ хийсний дараа гүйлгээний баримтыг зурган хэлбэрээр бот руу илгээнэ.\n\n"
-                              "8️⃣ Oyuns Finance бот зураг хүлээж авсаны дараа та өөрийн дансны мэдээллийг бот руу илгээснээр админ таны гүйлгээний хүсэлтийг баталгаажуулах боломжтой болно.\n\n"
-                              "9️⃣ Админ таны хүсэлтийг хүлээн авч хэсэг хугацааны дараа таны гүйлгээг баталгаажуулна. Баталгаажсанаас хэсэг хугацааны дараа админ таны хүсэлтийн дагуу гүйлгээ хйиж гүйлгээний баримтыг танд ботоор дамжуулан илгээх болно\n\n"
-                              "*Баяр хүргэе!* Та ийнхүү амжилттай ханшаа солиуллаа!\n\n\n"
-                              "📞 *Холбоо барих:*\n"
-                              "+976 7230 3060\n"
-                              "+7 (977) 801-91-43\n"
-                              "[Telegram: @oyuns_finance](https://t.me/oyuns_finance)",
+        call.message.chat.id, t(lang, "how_to_use_text"),
                               parse_mode="Markdown",
                               reply_markup=markup
     )
@@ -1765,8 +1843,9 @@ def exchange_menu(call):
     response = supabase.table("users").select("verified").eq("id", user_id).execute()
     user = response.data[0] if response.data else None
 
+    lang = get_user_lang(user_id)
     if not user or not user.get("verified"):
-        bot.send_message(user_id, "⚠️ Та бүртгэлээ баталгаажуулсны дараа валют солих боломжтой.\n📌 Та эхлээд /start товч даран бүртгүүлэх функц сонгох эсвэл /register команд ашиглан бүртгүүлнэ үү.")
+        bot.send_message(user_id, t(lang, "exchange_not_verified"))
         return
     
     config = get_current_shift_config()
@@ -1774,17 +1853,18 @@ def exchange_menu(call):
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
     markup.add(
-        InlineKeyboardButton("🇲🇳 МНТ → РУБ", callback_data="SELL_RATE"),
-        InlineKeyboardButton("🇷🇺 РУБ → МНТ", callback_data="BUY_RATE"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="back_main")
+        InlineKeyboardButton(t(lang, "btn_mnt_to_rub"), callback_data="SELL_RATE"),
+        InlineKeyboardButton(t(lang, "btn_rub_to_mnt"), callback_data="BUY_RATE"),
+        InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main")
     )
-    bot.send_message(call.message.chat.id, "💱 Та валют солих чиглэлээ сонгоно уу:", reply_markup=markup)
+    bot.send_message(call.message.chat.id, t(lang, "exchange_choose_direction"), reply_markup=markup)
 
 
 
 
 def show_common_rub_amounts(user_id):
     try:
+        lang = get_user_lang(user_id)
         markup = InlineKeyboardMarkup()
         markup.add(
             InlineKeyboardButton("1,000 РУБ", callback_data="amount_rub_1000"),
@@ -1792,10 +1872,10 @@ def show_common_rub_amounts(user_id):
             InlineKeyboardButton("10,000 РУБ", callback_data="amount_rub_10000"),
             InlineKeyboardButton("20,000 РУБ", callback_data="amount_rub_20000"),
             InlineKeyboardButton("30,000 РУБ", callback_data="amount_rub_30000"),
-            InlineKeyboardButton("✏️ Хүссэн дүнгээ бичих", callback_data="custom_rub"),
-            InlineKeyboardButton("🔙 Буцах", callback_data="exchange_menu")
+            InlineKeyboardButton(t(lang, "btn_custom_amount"), callback_data="custom_rub"),
+            InlineKeyboardButton(t(lang, "btn_back"), callback_data="exchange_menu")
         )
-        bot.send_message(user_id, "💰 Та хэдэн РУБ солиулах вэ:", reply_markup=markup)
+        bot.send_message(user_id, t(lang, "exchange_choose_rub_amount"), reply_markup=markup)
     except Exception as e:
         print(f"❌ Error in show_common_rub_amounts: {e}")
         import traceback
@@ -1804,6 +1884,7 @@ def show_common_rub_amounts(user_id):
 
 
 def show_common_mnt_amounts(user_id):
+    lang = get_user_lang(user_id)
     markup = InlineKeyboardMarkup()
     markup.add(
         InlineKeyboardButton("250,000 MNT", callback_data="amount_mnt_250000"),
@@ -1811,10 +1892,10 @@ def show_common_mnt_amounts(user_id):
         InlineKeyboardButton("1,000,000 MNT", callback_data="amount_mnt_1000000"),
         InlineKeyboardButton("3,000,000 MNT", callback_data="amount_mnt_3000000"),
         InlineKeyboardButton("5,000,000 MNT", callback_data="amount_mnt_5000000"),
-        InlineKeyboardButton("✏️ Хүссэн дүнгээ бичих", callback_data="custom_mnt"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="exchange_menu")
+        InlineKeyboardButton(t(lang, "btn_custom_amount"), callback_data="custom_mnt"),
+        InlineKeyboardButton(t(lang, "btn_back"), callback_data="exchange_menu")
     )
-    bot.send_message(user_id, "💰 Та хэдэн МНТ солиулах вэ:", reply_markup=markup)
+    bot.send_message(user_id, t(lang, "exchange_choose_mnt_amount"), reply_markup=markup)
 
 
 
@@ -1837,7 +1918,7 @@ def BUY_RATE(call):
         bot.answer_callback_query(call.id)
         bot.send_message(
             user_id,
-            "⚠️ Бид Москвагийн цагаар 04:00-23:00 хооронд, Улаанбаатарын цагаар 09:00–04:00(дараа өдрийн) цагийн хооронд ажиллаж байна.",
+            t(get_user_lang(user_id), "business_hours_msg"),
         )
         return
     
@@ -1873,7 +1954,7 @@ def SELL_RATE(call):
         bot.answer_callback_query(call.id)
         bot.send_message(
             user_id,
-            "⚠️ Бид Москвагийн цагаар 04:00-23:00 хооронд, Улаанбаатарын цагаар 09:00–04:00(дараа өдрийн) цагийн хооронд ажиллаж байна.",
+            t(get_user_lang(user_id), "business_hours_msg"),
         )
         return
     
@@ -1908,7 +1989,8 @@ def promo_code_request(call):
         direction = call.data.replace("promo_enter_", "")
         update_user_session(call.message.chat.id, {"state": f"awaiting_promo_code_{direction}"})
         bot.answer_callback_query(call.id)
-        bot.send_message(call.message.chat.id, "🎟️ Та промокодоо оруулна уу:")
+        lang = get_user_lang(user_id)
+        bot.send_message(call.message.chat.id, t(lang, "promo_enter"))
     except Exception as e:
         print(f"❌ Error in promo_code_request: {e}")
         import traceback
@@ -1929,7 +2011,7 @@ def promo_code_input_handler(message):
     discount = get_promo_discount_from_db(promo_code)
 
     if discount <= 0:
-        bot.send_message(user_id, "❌ Буруу промокод байна. Дахин оролдоно уу.")
+        bot.send_message(user_id, t(get_user_lang(user_id), "promo_invalid"))
         return
 
     # Save discount and promo code in session
@@ -1940,7 +2022,7 @@ def promo_code_input_handler(message):
 
 
     clear_state(user_id)
-    bot.send_message(user_id, f"✅ Промокод амжилттай! Хөнгөлөлт: {discount} MNT")
+    bot.send_message(user_id, t(get_user_lang(user_id), "promo_success", discount=discount))
 
     if direction == "buy":
         show_common_rub_amounts(user_id)
@@ -2260,7 +2342,8 @@ def custom_amount(call):
     currency = call.data.split("_")[1]
     update_user_session(call.message.chat.id, {"state": f"custom_amount_{currency}"})
 
-    bot.send_message(call.message.chat.id, "💰 Та солиулах дүнгээ оруулна уу:")
+    lang = get_user_lang(call.from_user.id)
+    bot.send_message(call.message.chat.id, t(lang, "exchange_enter_amount"))
 
 # 🏦 Receive Custom Amount
 @bot.message_handler(func=lambda message: isinstance(get_state(message.chat.id), str) and get_state(message.chat.id).startswith("custom_amount_"))
@@ -2939,7 +3022,8 @@ def handle_transaction_rejection_comment(message):
 # 🔙 Back to Main Menu
 @bot.callback_query_handler(func=lambda call: call.data == "back_main")
 def back_main(call):
-    bot.send_message(call.message.chat.id, "👋 Нүүр хуудас руу буцах", reply_markup=main_menu())
+    lang = get_user_lang(call.from_user.id)
+    bot.send_message(call.message.chat.id, t(lang, "back_main"), reply_markup=main_menu(lang))
 
 # ==================== REFERRAL PROGRAM ====================
 
@@ -4590,22 +4674,27 @@ def save_text_feedback(message):
     finally:
         clear_state(user_id)
 
-def cancel_markup():
+def cancel_markup(lang=None):
+    if lang is None:
+        lang = "mn"
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("❌ Цуцлах", callback_data="cancel_registration"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_cancel"), callback_data="cancel_registration"))
     return markup
 
-def restart_registration_markup():
+def restart_registration_markup(lang=None):
+    if lang is None:
+        lang = "mn"
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("🔁 Бүртгэл дахин эхлүүлэх", callback_data="restart_registration"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_restart_registration"), callback_data="restart_registration"))
     return markup
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "cancel_registration")
 def cancel_registration(call):
     user_id = call.message.chat.id
+    lang = get_user_lang(user_id)
     clear_state(user_id)
-    bot.send_message(user_id, "🚫 Бүртгэлийн үйлдэл цуцлагдлаа.")
+    bot.send_message(user_id, t(lang, "register_action_cancelled"))
 
 #REGISTRATION FORM
 
@@ -4619,30 +4708,31 @@ def register(message):
     response = supabase.table("users").select("verified").eq("id", user_id).execute()
     user = response.data[0] if response.data else None
 
+    lang = get_user_lang(user_id)
     if user and user.get("verified"):
-        bot.send_message(user_id, "✅ Та аль хэдийн бүртгүүлсэн байна. Хувийн мэдээлэл өөрчлөхийг хүсвэл хэрэглэгчийн тохиргоо цэсийг ашиглана уу.")
+        bot.send_message(user_id, t(lang, "register_already_verified"))
         return
 
     # Insert placeholder user if not exists
     if not user:
         supabase.table("users").upsert({"id": user_id}).execute()
 
-    bot.send_message(user_id, "Та бүртгэлийн форм эхлүүлж байна.\n\n Бид таны хувийн мэдээллийг чандлан хадгалах бөгөөд энэхүү мэдээллүүд нь хэрэглэгчийн санхүүгийн аюулгүй байдлыг хангах, болзошгүй луйвраас сэргийлэх зорилготой юм. Эдгээрээс бусад зорилгоор таны мэдээллийг бид ашиглахгүй болно.\n\n📋 Та өөрийн дараах мэдээллүүдийг оруулна уу...")
+    bot.send_message(user_id, t(lang, "register_intro"))
     update_user_session(user_id, {"state": "register_last_name"})
 
-    bot.send_message(user_id, "👤 Та өөрийн овгоо оруулна уу:", reply_markup=cancel_markup())
+    bot.send_message(user_id, t(lang, "register_enter_last_name"), reply_markup=cancel_markup(lang))
 
 @bot.callback_query_handler(func=lambda c: c.data == "enter_rub")
 def handle_rub_choice(c):
     user_id = c.message.chat.id
     # Move straight to entering RUB info
     update_user_session(user_id, {"state": "register_bank_rub"})
+    lang = get_user_lang(user_id)
     bot.send_message(
         user_id,
-        "🏦 Орос банкны мэдээллээ дараах форматаар таслал тэмдэг ашиглан оруулна уу:\n"
-        "Банк, Орос утасны дугаар, Картын дугаар, Карт эзэмшэгчийн нэр",
+        t(lang, "register_enter_bank_rub"),
         parse_mode="Markdown",
-        reply_markup=cancel_markup()
+        reply_markup=cancel_markup(lang)
     )
     bot.answer_callback_query(c.id)
 
@@ -4662,20 +4752,21 @@ def handle_registration_sequence(message):
     state = session["state"] if session else None
     text = message.text.strip()
 
+    lang = get_user_lang(user_id)
     if state == "register_last_name":
         supabase.table("users").upsert({"id": user_id, "last_name": text}).execute()
         update_user_session(user_id, {"state": "register_first_name"})
-        bot.send_message(user_id, "👤 Та өөрийн нэрээ оруулна уу:", reply_markup=cancel_markup())
+        bot.send_message(user_id, t(lang, "register_enter_first_name"), reply_markup=cancel_markup(lang))
 
     elif state == "register_first_name":
         supabase.table("users").upsert({"id": user_id, "first_name": text}).execute()
         update_user_session(user_id, {"state": "register_phone"})
-        bot.send_message(user_id, "📞 Утасны дугаараа оруулна уу:", reply_markup=cancel_markup())
+        bot.send_message(user_id, t(lang, "register_enter_phone"), reply_markup=cancel_markup(lang))
 
     elif state == "register_phone":
         supabase.table("users").upsert({"id": user_id, "phone": text}).execute()
         update_user_session(user_id, {"state": "register_reg"})
-        bot.send_message(user_id, "🪪 Паспортын дугаараа оруулна уу (жишээ нь: E1234560):", reply_markup=cancel_markup())
+        bot.send_message(user_id, t(lang, "register_enter_passport"), reply_markup=cancel_markup(lang))
 
     elif state == "register_reg":
         # Remove spaces before validating
@@ -4685,22 +4776,22 @@ def handle_registration_sequence(message):
         if not re.fullmatch(r'[A-Za-z0-9]+', clean_text):
             msg = bot.send_message(
                 user_id,
-                "❌ Паспортын дугаар буруу байна. Зөвхөн A–Z болон 0–9 тэмдэгт зөвшөөрнө. Жишээ нь: E1234560",
-                reply_markup=cancel_markup()
+                t(lang, "register_passport_error"),
+                reply_markup=cancel_markup(lang)
             )
             bot.register_next_step_handler(msg, handle_registration_sequence)
             return
                 
         supabase.table("users").upsert({"id": user_id, "registration_number": text}).execute()
         update_user_session(user_id, {"state": "register_bank_mnt"})
-        bot.send_message(user_id, "🏦 Монгол банкны мэдээллээ дараах форматаар таслал тэмдэг ашиглан оруулна уу (Банк, IBAN дансны дугаар, Данс эзэмшэгчийн нэр):", reply_markup=cancel_markup())
+        bot.send_message(user_id, t(lang, "register_enter_bank_mnt"), reply_markup=cancel_markup(lang))
 
     elif state == "register_bank_mnt":
         parts = [x.strip() for x in text.split(",")]
         if len(parts) != 3:
             bot.send_message(user_id,
-                "❌ Зөв формат: Банк, IBAN дансны дугаар, Данс эзэмшэгчийн нэр",
-                reply_markup=cancel_markup())
+                t(lang, "register_bank_mnt_error"),
+                reply_markup=cancel_markup(lang))
             return
 
         # Save MNT info
@@ -4710,9 +4801,8 @@ def handle_registration_sequence(message):
         update_user_session(user_id, {"state": "register_bank_rub"})
         bot.send_message(
             user_id,
-            "📌 Орос банкны мэдээллээ дараах форматаар таслал тэмдэг ашиглан оруулна уу:\n"
-            "`Банк, Утасны дугаар, Картын дугаар, Карт эзэмшэгчийн нэр`",
-            reply_markup=cancel_markup()
+            t(lang, "register_enter_bank_rub_2"),
+            reply_markup=cancel_markup(lang)
         )
 
     elif state == "register_bank_rub":
@@ -4720,16 +4810,16 @@ def handle_registration_sequence(message):
         if len(parts) != 4:
             bot.send_message(
                 user_id,
-                "❌ Зөв формат: Банк, Утасны дугаар, Картын дугаар, Карт эзэмшэгчийн нэр",
-                reply_markup=cancel_markup()
+                t(lang, "register_bank_rub_error"),
+                reply_markup=cancel_markup(lang)
             )
             return
         supabase.table("users").upsert({"id": user_id, "bank_rub": text}).execute()
         update_user_session(user_id, {"state": "register_passport"})
-        bot.send_message(user_id, "📷 Та паспортын эхний хуудасны зургаа илгээнэ үү:", reply_markup=cancel_markup())
+        bot.send_message(user_id, t(lang, "register_enter_passport_photo"), reply_markup=cancel_markup(lang))
 
     elif state == "register_passport":
-        bot.send_message(user_id, "❌ Та зураг илгээнэ үү, текст биш.", reply_markup=cancel_markup())
+        bot.send_message(user_id, t(lang, "register_photo_not_text"), reply_markup=cancel_markup(lang))
         clear_state(user_id)
 
 
@@ -4742,7 +4832,8 @@ def cancel_registration(call):
     # Optional: delete unverified user data
     supabase.table("users").delete().eq("id", user_id).execute()
 
-    bot.send_message(user_id, "🚫 Бүртгэлийн үйл явц цуцлагдлаа.", reply_markup=restart_registration_markup())
+    lang = get_user_lang(user_id)
+    bot.send_message(user_id, t(lang, "register_cancelled"), reply_markup=restart_registration_markup(lang))
 
 
 
@@ -4817,7 +4908,7 @@ def verify_user(call):
     try:
         supabase.table("users").update({"verified": True}).eq("id", user_id).execute()
         bot.send_message(call.message.chat.id, f"✅ Хэрэглэгч [{user_id}](tg://user?id={user_id}) баталгаажлаа.", parse_mode="Markdown")
-        bot.send_message(user_id, "🎉 Таны бүртгэл амжилттай баталгаажлаа!")
+        bot.send_message(user_id, t(get_user_lang(user_id), "verification_submitted").replace("илгээгдлээ! Админ шалгаад хариу өгөх болно.", "баталгаажлаа!"))
 
         # 🧹 Delete the original message with buttons
         bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -5440,10 +5531,10 @@ def test_broadcast_rates(message):
 def handle_unknown_text(message):
     # only fire when we're not in the middle of a flow
     if not get_state(message.chat.id):
+        lang = get_user_lang(message.chat.id)
         bot.send_message(
             message.chat.id,
-            "🕹️ Та */start* команд ашиглан үйлчилгээний цэснээс сонгон өөрт хэрэгтэй үйлчилгээгээ авна уу, эсвэл OYUNS SUPPORT чат руу хандаарай:\n"
-            f"{CONTACT_SUPPORT}",
+            t(lang, "unknown_text"),
             parse_mode="Markdown"
         )
 

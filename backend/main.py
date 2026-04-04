@@ -98,6 +98,9 @@ from models import (
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from bot_translations import tb
 from utils import (
     TelegramAuthError,
     JWTAuthError,
@@ -110,6 +113,19 @@ from utils import (
 )
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _get_user_lang(user_id: int) -> str:
+    """Get user's language preference from DB. Returns 'mn' by default."""
+    try:
+        client = get_supabase()
+        res = client.table("users").select("lang").eq("id", user_id).execute()
+        if res.data and res.data[0].get("lang"):
+            return res.data[0]["lang"]
+    except Exception:
+        pass
+    return "mn"
+
 
 # Background task for stale transaction reminders
 async def stale_transaction_reminder():
@@ -1116,16 +1132,12 @@ async def create_exchange(
         logger.warning("No shift admin found, skipping transaction notification")
 
     # Send confirmation notification to user
+    user_lang = _get_user_lang(user.id)
     user_direction_text = "Төгрөг авах (RUB → MNT)" if payload.direction.lower() == "buy" else "Рубль авах (MNT → RUB)"
     user_notification = (
-        f"✅ <b>Таны гүйлгээний хүсэлтийг хүлээн авлаа!</b>\n\n"
-        f"📋 <b>Гүйлгээний дэлгэрэнгүй мэдээлэл:</b>\n"
-        f"🧾 Invoice: <code>{invoice}</code>\n"
-        f"🔄 Чиглэл: {user_direction_text}\n"
-        f"💰 Та илгээх дүн: <b>{payload.amount:,.0f}</b> {payload.currency_from}\n"
-        f"💸 Та хүлээн авах: <b>{admin_sends:,.0f}</b> {admin_sends_currency}\n"
-        f"📊 Ханш: <b>{payload.rate}</b>\n\n"
-        f"⏳ Таны хүсэлтийг админ удахгүй баталгаажуулах болно. Та түр хүлээнэ үү."
+        f"{tb(user_lang, 'notif_exchange_received', invoice=invoice, amount=f'{payload.amount:,.0f}', from_=payload.currency_from, to=payload.currency_to, rate=payload.rate)}\n\n"
+        f"🔄 {user_direction_text}\n"
+        f"💰 {payload.amount:,.0f} {payload.currency_from} → {admin_sends:,.0f} {admin_sends_currency}"
     )
     
     try:
@@ -1239,14 +1251,15 @@ async def admin_action(
     # notify user based on status
     user_id = trx.get("user_id")
     if user_id:
+        user_lang = _get_user_lang(int(user_id))
         if payload.status == "approved":
             send_user_notification(
                 user_id=int(user_id),
-                text=f"✅ Таны <b>{payload.invoice}</b> дугаартай гүйлгээ баталгаажлаа!\nАдмин таны гүйлгээг хийх хүртэл түр хүлээнэ үү.",
+                text=tb(user_lang, "notif_tx_approved", invoice=payload.invoice),
             )
         elif payload.status in ["completed", "successful"]:
             # Send completion notification with admin's bill photo if available
-            completion_text = f"✅ Таны <b>{payload.invoice}</b> дугаартай гүйлгээ амжилттай хийгдлээ!\n\nТа шилжүүлсэн баримтыг хүлээн авна уу.\n\nМанайхыг сонгон үйлчлүүлдэгт баярлалаа!🤗\nӨдрийг сайхан өнгөрүүлээрэй."
+            completion_text = tb(user_lang, "notif_tx_completed", invoice=payload.invoice)
             
             # If admin uploaded bills, send them as photos
             if payload.admin_bill_url:
@@ -1304,19 +1317,15 @@ async def admin_action(
                     }).execute()
                     
                     # Notify user about the promo code
-                    promo_text = (
-                        f"⏰ Уучлаарай, таны гүйлгээг гүйцэтгэхэд {round(duration_minutes)}+ минутын хугацаа зарцуулагдлаа.\n\n"
-                        f"🎁 Танд промокод бэлэглэж байна: <code>{promo_code}</code>\n\n"
-                        f"Энэхүү промокодыг дараагийн гүйлгээндээ ашиглаарай! 🙌"
-                    )
+                    promo_text = tb(user_lang, "notif_compensation_promo", code=promo_code, discount="0.2")
                     send_user_notification(user_id=int(user_id), text=promo_text)
                     logger.info(f"Generated compensation promo code {promo_code} for user {user_id}")
                 except Exception as e:
                     logger.error(f"Failed to create compensation promo code: {e}")
         elif payload.status == "rejected":
-            rejection_msg = f"❌ Таны <b>{payload.invoice}</b> дугаартай гүйлгээг татгалзлаа. Та алдаа гарсан гэж үзвэл @OYUNS_Finance хаягаар холбогдоно уу."
+            rejection_msg = tb(user_lang, "notif_tx_rejected", invoice=payload.invoice)
             if payload.rejection_comment:
-                rejection_msg += f"\n\nШалтгаан: {payload.rejection_comment}"
+                rejection_msg += tb(user_lang, "notif_tx_rejected_reason", reason=payload.rejection_comment)
             
             # If admin uploaded rejection proof photos, send them
             if payload.admin_bill_url:
@@ -1673,20 +1682,12 @@ async def admin_kyc_action(
             promo_code = None
         
         # Notify user via Telegram with webapp button
+        user_lang = _get_user_lang(payload.user_id)
         promo_text = ""
         if promo_code:
-            promo_text = (
-                f"\n\n🎁 <b>Шинэ хэрэглэгч танд нэг удаа ашиглах промокод бэлэглэж байна</b>\n"
-                f"🎟️ Промокод: <code>{promo_code}</code>\n"
-                f"📌 Нэг удаагийн гүйлгээнд ашиглах боломжтойг анхаарна уу."
-            )
+            promo_text = tb(user_lang, "notif_kyc_approved_promo", code=promo_code, discount="0.5")
         
-        notification_text = (
-            f"✅ <b>Таны бүртгэл амжилттай баталгаажлаа!</b>\n\n"
-            f"Та OYUNS FINANCE үйлчилгээг ашиглах боломжтой боллоо.\n"
-            f"Доорх товчийг дараад валютаа солиорой!"
-            f"{promo_text}"
-        )
+        notification_text = tb(user_lang, "notif_kyc_approved") + promo_text
         
         # Add webapp launch button if URL is configured
         settings = get_settings()
@@ -1696,7 +1697,7 @@ async def admin_kyc_action(
                 "inline_keyboard": [
                     [
                         {
-                            "text": "🚀 Апп нээх",
+                            "text": tb(user_lang, "btn_open_app") if user_lang == "ru" else "🚀 Апп нээх",
                             "web_app": {"url": settings.user_panel_url}
                         }
                     ]
@@ -1727,11 +1728,7 @@ async def admin_kyc_action(
         
         # Notify user via Telegram
         rejection_reason = payload.rejection_reason or "Мэдээлэл буруу эсвэл дутуу байна"
-        notification_text = (
-            f"❌ <b>Таны бүртгүүлэх хүсэлтийг татгалзлаа</b>\n\n"
-            f"Шалтгаан: {rejection_reason}\n\n"
-            f"Та мэдээллээ засаад дахин илгээнэ үү."
-        )
+        notification_text = tb(user_lang, "notif_kyc_rejected", reason=rejection_reason)
         send_user_notification(user_id=payload.user_id, text=notification_text)
         
         # Log admin action
@@ -2700,19 +2697,20 @@ async def create_gift(
             # Use from_name if provided, otherwise use sender's actual name
             display_sender = payload.from_name if payload.from_name else sender_name
             
-            message_text = (
-                f"🎁 <b>Танд бэлэг ирлээ!</b>\n\n"
-                f"👤 Хэнээс: <b>{display_sender}</b>\n"
-                f"💰 Дүн: <b>{payload.amount}</b> {payload.currency_from}\n"
-                f"📦 Хүлээн авах: <b>{receive_amount:,.2f}</b> {payload.currency_to}\n"
-            )
+            recipient_lang = _get_user_lang(payload.recipient_user_id)
+            message_text = tb(recipient_lang, "notif_gift_incoming",
+                sender=display_sender,
+                amount=payload.amount,
+                currency_from=payload.currency_from,
+                receive_amount=f"{receive_amount:,.2f}",
+                currency_to=payload.currency_to)
+            message_text += "\n"
             
             if payload.message:
-                message_text += f"\n💬 Мессеж:\n<i>\"{payload.message}\"</i>\n"
+                message_text += tb(recipient_lang, "notif_gift_incoming_msg", message=payload.message)
+                message_text += "\n"
             
-            message_text += (
-                f"\n✨ Бэлгээ хүлээн авахын тулд доорх товчийг дарна уу!"
-            )
+            message_text += tb(recipient_lang, "notif_gift_incoming_cta")
             
             # Create inline keyboard with app link
             reply_markup = None
@@ -2723,7 +2721,7 @@ async def create_gift(
                 # Use web_app button for Mini App
                 reply_markup = {
                     "inline_keyboard": [
-                        [{"text": "🎁 Бэлэг хүлээн авах", "web_app": {"url": webapp_url}}]
+                        [{"text": tb(recipient_lang, "btn_gift_accept"), "web_app": {"url": webapp_url}}]
                     ]
                 }
                 logger.info(f"Gift notification - reply_markup: {reply_markup}")
@@ -2975,22 +2973,22 @@ async def preapprove_gift(
     recipient_name = f"{recipient_res.data.get('first_name', '')} {recipient_res.data.get('last_name', '')}".strip() if recipient_res.data else "хэрэглэгч"
     
     # Notify sender about preapproval
+    sender_lang = _get_user_lang(gift.get("sender_user_id"))
     sender_message = (
-        f"⏳ <b>Таны бэлгийн хүсэлт баталгаажлаа!</b>\n\n"
+        f"{tb(sender_lang, 'notif_gift_preapproved_sender')}\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"🎯 Хүлээн авагч: {recipient_name}\n"
-        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}\n\n"
-        f"⏳ Админ мөнгө шилжүүлж байна. Шилжүүлэлт дууссаны дараа танд мэдэгдэл илгээнэ."
+        f"🎯 {recipient_name}\n"
+        f"💰 {gift.get('amount')} {gift.get('currency_from')}"
     )
     send_user_notification(gift.get("sender_user_id"), sender_message)
     
     # Notify recipient about preapproval
+    recipient_lang = _get_user_lang(gift.get("recipient_user_id"))
     recipient_message = (
-        f"⏳ <b>{sender_name} хэрэглэгчээс илгээсэн бэлэг баталгаажлаа!</b>\n\n"
+        f"{tb(recipient_lang, 'notif_gift_preapproved_recipient', sender=sender_name)}\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}\n"
-        f"🏦 Шилжүүлэх данс: {gift.get('recipient_bank_details')}\n\n"
-        f"⏳ Админ таны данс руу мөнгө шилжүүлж байна. Удахгүй дуусна."
+        f"💰 {gift.get('amount')} {gift.get('currency_from')}\n"
+        f"🏦 {gift.get('recipient_bank_details')}"
     )
     send_user_notification(gift.get("recipient_user_id"), recipient_message)
     
@@ -3061,11 +3059,11 @@ async def finalize_gift(
         all_bill_urls = existing_bills + payload.admin_bill_urls
     
     # Notify sender with photos if available
+    sender_lang = _get_user_lang(gift.get("sender_user_id"))
     sender_message = (
-        f"✅ <b>Таны бэлэг {recipient_name} хэрэглэгчид амжилттай илгээгдлээ!</b>\n\n"
+        f"{tb(sender_lang, 'notif_gift_finalized_sender', recipient=recipient_name)}\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}\n\n"
-        f"Баярлалаа! 🎉"
+        f"💰 {gift.get('amount')} {gift.get('currency_from')}\n\n🎉"
     )
     if all_bill_urls:
         send_user_photos(gift.get("sender_user_id"), all_bill_urls, sender_message)
@@ -3073,11 +3071,11 @@ async def finalize_gift(
         send_user_notification(gift.get("sender_user_id"), sender_message)
     
     # Notify recipient with photos if available
+    recipient_lang = _get_user_lang(gift.get("recipient_user_id"))
     recipient_message = (
-        f"✅ <b>{sender_name} хэрэглэгчээс илгээсэн бэлэг таны дансанд амжилттай шилжлээ!</b>\n\n"
+        f"{tb(recipient_lang, 'notif_gift_finalized_recipient', sender=sender_name)}\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"🏦 Шилжүүлсэн данс: {gift.get('recipient_bank_details')}\n\n"
-        f"Сайхан өдөр өнгөрүүлээрэй! 🎉"
+        f"🏦 {gift.get('recipient_bank_details')}\n\n🎉"
     )
     if all_bill_urls:
         send_user_photos(gift.get("recipient_user_id"), all_bill_urls, recipient_message)
@@ -3142,10 +3140,11 @@ async def approve_gift(
             sender_name = "хэрэглэгч"
         
         # Notify sender with bill photos
+        sender_lang = _get_user_lang(gift.get("sender_user_id"))
         sender_message = (
-            f"✅ <b>Таны бэлэг {recipient_name.strip()} хэрэглэгчид амжилттай илгээгдлээ!</b>\n\n"
+            f"{tb(sender_lang, 'notif_gift_finalized_sender', recipient=recipient_name.strip())}\n\n"
             f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-            f"💰 Дүн: {gift.get('amount')} {gift.get('currency_from')}"
+            f"💰 {gift.get('amount')} {gift.get('currency_from')}"
         )
         
         # Send with bill photos if available
@@ -3155,10 +3154,11 @@ async def approve_gift(
             send_user_notification(gift.get("sender_user_id"), sender_message)
         
         # Notify recipient with bill photos if available
+        recipient_lang = _get_user_lang(gift.get("recipient_user_id"))
         recipient_message = (
-            f"✅ <b>{sender_name.strip()} хэрэглэгчээс илгээсэн бэлэг таны дансанд амжилттай шилжлээ!</b>\n\n"
+            f"{tb(recipient_lang, 'notif_gift_finalized_recipient', sender=sender_name.strip())}\n\n"
             f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-            f"🏦 Шилжүүлсэн данс: {gift.get('recipient_bank_details')}"
+            f"🏦 {gift.get('recipient_bank_details')}"
         )
         
         # Send with bill photos if available
@@ -3206,21 +3206,21 @@ async def reject_gift(
     }).eq("id", gift_id).execute()
     
     # Notify sender
+    sender_lang = _get_user_lang(gift.get("sender_user_id"))
     sender_message = (
-        f"❌ <b>Таны илгээсэн бэлэг цуцлагдлаа</b>\n\n"
+        f"{tb(sender_lang, 'notif_gift_rejected_sender')}\n\n"
         f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-        f"📝 Шалтгаан: {payload.comment}\n\n"
-        f"Та алдаа гарсан гэж үзвэл @Oyuns_Finance хаягаар админтай холбогдоно уу."
+        f"{tb(sender_lang, 'notif_gift_rejected_reason', reason=payload.comment)}"
     )
     send_user_notification(gift.get("sender_user_id"), sender_message)
     
     # Notify recipient if they already confirmed
     if gift.get("status") == "pending_admin":
+        recipient_lang = _get_user_lang(gift.get("recipient_user_id"))
         recipient_message = (
-            f"❌ <b>Таны хүлээж буй бэлэг цуцлагдлаа</b>\n\n"
+            f"{tb(recipient_lang, 'notif_gift_rejected_recipient')}\n\n"
             f"📋 Invoice: <code>{gift.get('invoice')}</code>\n"
-            f"📝 Шалтгаан: {payload.comment}\n\n"
-            f"Та алдаа гарсан гэж үзвэл @Oyuns_Finance хаягаар админтай холбогдоно уу."
+            f"{tb(recipient_lang, 'notif_gift_rejected_reason', reason=payload.comment)}"
         )
         send_user_notification(gift.get("recipient_user_id"), recipient_message)
     
@@ -3659,27 +3659,28 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
     invoice = order.get("invoice")
     has_dispenser = bool(order.get("dispenser_number"))
     approval_img = payload.approval_image_url or order.get("approval_image_url")
+    fuel_user_lang = _get_user_lang(order_user_id) if order_user_id else "mn"
 
     if payload.status == "approved":
         if has_dispenser:
-            approved_msg = "✅ Таны захиалга зөвшөөрөгдлөө! Админ бензин түгээгүүрийг удахгүй асаах болно."
+            approved_msg = tb(fuel_user_lang, "notif_fuel_approved_dispenser")
         else:
-            approved_msg = "✅ Таны захиалга зөвшөөрөгдлөө! QR кодыг ашиглан түлшээ аваарай.\n\nТүлшээ хийсний дараа колонкны дэлгэцийн зургийг оруулна уу."
+            approved_msg = tb(fuel_user_lang, "notif_fuel_approved_qr")
     else:
         approved_msg = None
 
     status_messages = {
-        "paid": "✅ Таны төлбөр баталгаажлаа.",
-        "in_progress": "⛽ Таны түлш нийлүүлэлт эхэллээ!",
-        "fueling_complete": "✅ Цэнэглэлт дууслаа. Колонкны зургийг оруулна уу.",
-        "completed": "🎉 Таны түлшний захиалга амжилттай дууслаа!",
-        "rejected": f"❌ Таны захиалга цуцлагдлаа.\n📝 Шалтгаан: {payload.rejection_comment or 'Тодорхойгүй'}",
+        "paid": tb(fuel_user_lang, "notif_fuel_paid"),
+        "in_progress": tb(fuel_user_lang, "notif_fuel_in_progress"),
+        "fueling_complete": tb(fuel_user_lang, "notif_fuel_fueling_done"),
+        "completed": tb(fuel_user_lang, "notif_fuel_completed"),
+        "rejected": tb(fuel_user_lang, "notif_fuel_rejected") + f"\n📝 {payload.rejection_comment or ''}",
     }
 
     if order_user_id:
         if payload.status == "approved" and approved_msg:
             header = (
-                f"⛽ <b>Түлш худалдаж авах захиалга шинэчлэгдлээ</b>\n\n"
+                f"{tb(fuel_user_lang, 'notif_fuel_order_updated')}\n\n"
                 f"📋 Invoice: <code>{invoice}</code>\n"
                 f"{approved_msg}"
             )
@@ -3692,7 +3693,7 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
             msg = status_messages.get(payload.status, "")
             if msg:
                 user_text = (
-                    f"⛽ <b>Түлш худалдаж авах захиалга шинэчлэгдлээ</b>\n\n"
+                    f"{tb(fuel_user_lang, 'notif_fuel_order_updated')}\n\n"
                     f"📋 Invoice: <code>{invoice}</code>\n"
                     f"{msg}"
                 )
@@ -3836,11 +3837,11 @@ async def fuel_admin_chat_send(order_id: str, payload: FuelChatMessageRequest, u
         order_user_id = order_res.data[0].get("user_id")
         invoice = order_res.data[0].get("invoice")
         if order_user_id:
+            chat_lang = _get_user_lang(order_user_id)
             send_user_notification(
                 order_user_id,
-                f"💬 <b>Шинэ мессеж</b>\n\n"
-                f"📋 Invoice: <code>{invoice}</code>\n"
-                f"Танд шинэ мессеж ирлээ."
+                f"{tb(chat_lang, 'notif_fuel_new_message')}\n\n"
+                f"📋 Invoice: <code>{invoice}</code>"
             )
 
     return {"ok": True, "message": FuelChatMessage(**res.data[0])}
