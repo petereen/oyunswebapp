@@ -3422,21 +3422,32 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
         loc_str = f"📍 {payload.station_latitude:.6f}, {payload.station_longitude:.6f}"
 
     curr_symbol = "₽" if payload.payment_currency == "RUB" else "₮"
-    dispenser_line = f"\n🔢 Колонка: <b>№{payload.dispenser_number}</b>" if payload.dispenser_number else ""
-    admin_text = (
-        f"⛽ <b>ШИНЭ ТҮЛШ ХУДАЛДАЖ АВАХ ЗАХИАЛГА!</b>\n\n"
-        f"📋 Invoice: <code>{payload.invoice}</code>\n"
-        f"👤 Хэрэглэгч: {user_name} (ID: {user.id})\n"
-        f"🏪 АЗС: <b>{payload.station_name}</b>{dispenser_line}\n"
-        f"{loc_str}\n"
-        f"⛽ Литр: <b>{payload.liters}</b> л\n"
-        f"💰 Үнэ/л: {payload.station_price_per_liter}₽\n"
-        f"📊 Хөнгөлөлт: -{calc['discount_percent']}%\n"
-        f"💵 Нийт: <b>{calc['final_amount']}{curr_symbol}</b>\n"
-        f"💳 Төлбөр: {payload.payment_currency}\n"
+    dispenser_line = tb("ru", "fuel_admin_dispenser_line", number=payload.dispenser_number) if payload.dispenser_number else ""
+    admin_text = tb("ru", "fuel_admin_new_order",
+        invoice=payload.invoice,
+        user_name=user_name,
+        user_id=user.id,
+        station_name=payload.station_name,
+        dispenser_line=dispenser_line,
+        loc_str=loc_str,
+        liters=payload.liters,
+        price_per_liter=payload.station_price_per_liter,
+        discount_pct=calc['discount_percent'],
+        final_amount=calc['final_amount'],
+        curr_symbol=curr_symbol,
+        payment_currency=payload.payment_currency,
     )
 
-    _send_fuel_admin_notification(admin_text)
+    reply_markup = None
+    fuel_settings = get_settings()
+    if fuel_settings.webapp_url and "localhost" not in fuel_settings.webapp_url and fuel_settings.webapp_url.startswith("https://"):
+        reply_markup = {
+            "inline_keyboard": [
+                [{"text": tb("ru", "fuel_admin_open_panel"), "web_app": {"url": f"{fuel_settings.webapp_url}?fuel-admin"}}]
+            ]
+        }
+
+    _send_fuel_admin_notification(admin_text, reply_markup=reply_markup)
 
     return FuelOrderCreateResponse(
         id=order["id"],
@@ -3507,13 +3518,22 @@ async def fuel_upload_pump_photo(payload: FuelPumpPhotoRequest, user=Depends(get
 
     # Notify fuel admin
     order = res.data
-    _send_fuel_admin_notification(
-        f"📸 <b>Колонкны зураг ирлээ!</b>\n\n"
-        f"📋 Invoice: <code>{order.get('invoice')}</code>\n"
-        f"🏪 АЗС: {order.get('station_name')}\n"
-        f"⛽ {order.get('liters')} л\n\n"
-        f"Хэрэглэгч колонкны зургийг оруулсан байна."
+    pump_text = tb("ru", "fuel_admin_pump_photo",
+        invoice=order.get('invoice'),
+        station_name=order.get('station_name'),
+        liters=order.get('liters'),
     )
+
+    pump_reply_markup = None
+    fuel_settings = get_settings()
+    if fuel_settings.webapp_url and "localhost" not in fuel_settings.webapp_url and fuel_settings.webapp_url.startswith("https://"):
+        pump_reply_markup = {
+            "inline_keyboard": [
+                [{"text": tb("ru", "fuel_admin_open_panel"), "web_app": {"url": f"{fuel_settings.webapp_url}?fuel-admin"}}]
+            ]
+        }
+
+    _send_fuel_admin_notification(pump_text, reply_markup=pump_reply_markup)
 
     return {"ok": True}
 

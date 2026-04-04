@@ -212,14 +212,11 @@ def ensure_exchange_available(chat_id: int) -> bool:
 def prompt_admin_bank_remainder(admin_id: int, context: str = "shift") -> None:
     """Send the admin a reminder to log their bank account remainder with link."""
     try:
-        text = (
-            "📌 Санамж: Ээлж дуусах/шилжүүлсний дараа өөрийн банкны үлдэгдлийг "
-            "OYUNS FINANCE дотоод системд бүртгэнэ үү.\n\n"
-            "🔗 Систем: https://oyunsadmin.pages.dev/"
-        )
+        lang = get_user_lang(admin_id)
+        text = t(lang, "admin_shift_bank_reminder")
         markup = InlineKeyboardMarkup()
         markup.add(InlineKeyboardButton(
-            "📊 Банкны дансны үлдэгдэл бүртгэх",
+            t(lang, "admin_shift_bank_btn"),
             url="https://oyunsadmin.pages.dev/"
         ))
         bot.send_message(admin_id, text, reply_markup=markup)
@@ -319,17 +316,18 @@ def compute_converted(txn) -> tuple[float, str]:
 @bot.message_handler(commands=["shift_status"])
 def show_current_shift_admin(message):
     if message.from_user.id not in ALLOWED_ADMINS:
-        return  # Admin биш бол чимээгүй
+        return
 
+    lang_a = get_user_lang(message.from_user.id)
     current_admin_id = get_current_admin_id()
     if current_admin_id:
         bot.send_message(
             message.chat.id,
-            f"👤 Одоогийн ээлж хариуцагч: [{current_admin_id}](tg://user?id={current_admin_id})",
+            t(lang_a, "admin_shift_status_current", admin_id=current_admin_id),
             parse_mode="Markdown"
         )
     else:
-        bot.send_message(message.chat.id, "❓ Одоогоор ээлж томилоогүй байна.")
+        bot.send_message(message.chat.id, t(lang_a, "admin_shift_not_assigned"))
 
 
 
@@ -540,14 +538,16 @@ def shift_control(message):
                 current_admin_name += f" {current_admin_chat.last_name}"
             current_admin_display = f"[{current_admin_name}](tg://user?id={current_admin_id})"
         else:
-            current_admin_display = "❌ Ээлж хаалттай байна"
+            lang = get_user_lang(message.from_user.id)
+            current_admin_display = t(lang, "admin_shift_closed")
     except Exception as e:
         print(f"❌ Couldn't fetch chat info: {e}")
-        current_admin_display = "❓ Тодорхойгүй"
+        current_admin_display = "❓"
 
     # Inline buttons
     markup = InlineKeyboardMarkup()
 
+    lang = get_user_lang(message.from_user.id)
     for admin_id in ALLOWED_ADMINS:
         if admin_id != current_admin_id:
             try:
@@ -557,16 +557,16 @@ def shift_control(message):
                     name += f" {admin_chat.last_name}"
             except:
                 name = str(admin_id)
-            markup.add(InlineKeyboardButton(f"➡️ Ээлж шилжүүлэх: {name}", callback_data=f"shift_to_{admin_id}"))
+            markup.add(InlineKeyboardButton(t(lang, "admin_shift_transfer_btn", name=name), callback_data=f"shift_to_{admin_id}"))
 
     if current_admin_id:
-        markup.add(InlineKeyboardButton("🔒 Ээлж хаах", callback_data="shift_close"))
+        markup.add(InlineKeyboardButton(t(lang, "admin_shift_close_btn"), callback_data="shift_close"))
     else:
-        markup.add(InlineKeyboardButton("✅ Ээлж нээх", callback_data=f"shift_to_{message.from_user.id}"))
+        markup.add(InlineKeyboardButton(t(lang, "admin_shift_open_btn"), callback_data=f"shift_to_{message.from_user.id}"))
 
     bot.send_message(
         message.chat.id,
-        f"👤 Одоогийн ээлж хариуцагч: {current_admin_display}",
+        t(lang, "admin_shift_current", admin=current_admin_display),
         parse_mode="Markdown",
         reply_markup=markup
     )
@@ -574,15 +574,16 @@ def shift_control(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("shift_to_"))
 def transfer_shift(call):
     if call.from_user.id not in ALLOWED_ADMINS:
-        return bot.answer_callback_query(call.id, "🚫 Зөвшөөрөлгүй!", show_alert=True)
+        return bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_shift_unauthorized"), show_alert=True)
 
     # Capture current (previous) admin before transfer
     previous_admin_id = get_current_admin_id()
     new_admin_id = int(call.data.replace("shift_to_", ""))
     success = set_current_admin_id(new_admin_id, performed_by_admin_id=call.from_user.id, is_automatic=False)
     if success:
+        lang = get_user_lang(call.from_user.id)
         bot.edit_message_text(
-            f"✅ Ээлжийг амжилттай шилжүүллээ: [{new_admin_id}](tg://user?id={new_admin_id})",
+            t(lang, "admin_shift_transferred", id=new_admin_id),
             call.message.chat.id,
             call.message.message_id,
             parse_mode="Markdown"
@@ -597,7 +598,7 @@ def transfer_shift(call):
 @bot.callback_query_handler(func=lambda call: call.data == "shift_close")
 def close_shift_callback(call):
     if call.from_user.id not in ALLOWED_ADMINS:
-        return bot.answer_callback_query(call.id, "🚫 Зөвшөөрөлгүй!", show_alert=True)
+        return bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_shift_unauthorized"), show_alert=True)
 
     try:
         previous_admin_id = get_current_admin_id()
@@ -613,8 +614,9 @@ def close_shift_callback(call):
             is_automatic=False
         )
         
+        lang = get_user_lang(call.from_user.id)
         bot.edit_message_text(
-            "🔒 Ээлж амжилттай хаагдлаа.",
+            t(lang, "admin_shift_closed_msg"),
             call.message.chat.id,
             call.message.message_id
         )
@@ -623,7 +625,7 @@ def close_shift_callback(call):
             prompt_admin_bank_remainder(previous_admin_id, context="close")
     except Exception as e:
         print(f"❌ Failed to close shift: {e}")
-        bot.answer_callback_query(call.id, "❌ Ээлж хаах үед алдаа гарлаа.")
+        bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_shift_close_error"))
 
 
 def get_current_shift_operator_id():
@@ -1060,10 +1062,11 @@ def phone_topup_start(call):
 @bot.message_handler(func=lambda message: get_state(message.chat.id) == "phone_topup_amount")
 def receive_topup_amount(message):
     user_id = message.chat.id
+    lang = get_user_lang(user_id)
     
     try:
         if not message.text:
-            bot.send_message(user_id, "❌ Мессеж хоосон байна. Дахин оролдоно уу.")
+            bot.send_message(user_id, t(lang, "topup_empty_message"))
             return
         
         raw = re.sub(r"\D", "", message.text)
@@ -1071,7 +1074,7 @@ def receive_topup_amount(message):
         if not raw or not raw.isdigit():
             bot.send_message(
                 user_id,
-                "❌ Зөвхөн тоон утга оруулна уу (жишээ: 500).",
+                t(lang, "topup_number_only"),
                 parse_mode="Markdown"
             )
             return
@@ -1079,7 +1082,7 @@ def receive_topup_amount(message):
         amount = int(raw)
         
         if amount <= 0:
-            bot.send_message(user_id, "❌ Дүн 0-ээс их байх ёстой.")
+            bot.send_message(user_id, t(lang, "topup_amount_zero"))
             return
         
         # Calculate MNT equivalent
@@ -1091,7 +1094,7 @@ def receive_topup_amount(message):
             base_rate = exchange_rates.get("BUY_RATE")
             
             if not base_rate:
-                bot.send_message(user_id, "❌ Ханш татах үед алдаа гарлаа. Дахин оролдоно уу.")
+                bot.send_message(user_id, t(lang, "topup_rate_error"))
                 return
         
         mnt_amount = amount * base_rate
@@ -1107,10 +1110,7 @@ def receive_topup_amount(message):
         
         bot.send_message(
             user_id,
-            f"💰 Та {amount:,} РУБ-ээр цэнэглэх гэж байна.\n"
-            f"💱 Төлөх дүн: *{int(mnt_amount):,} MNT*\n\n"
-            "📱 Та цэнэглэх утасны дугаараа оруулна уу:\n\n"
-            "Жишээ нь: `+79001234567` эсвэл `79001234567`",
+            t(lang, "topup_amount_confirm", amount=f"{amount:,}", mnt=f"{int(mnt_amount):,}"),
             parse_mode="Markdown"
         )
         
@@ -1118,7 +1118,7 @@ def receive_topup_amount(message):
         print(f"❌ Error in receive_topup_amount: {e}")
         import traceback
         traceback.print_exc()
-        bot.send_message(user_id, "❌ Алдаа гарлаа. Дахин оролдоно уу.")
+        bot.send_message(user_id, t(lang, "error_generic"))
         return
 
 @bot.message_handler(func=lambda message: get_state(message.chat.id) == "phone_topup_phone_number")
@@ -1126,6 +1126,7 @@ def receive_topup_phone_number(message):
     user_id = message.chat.id
     if not ensure_exchange_available(user_id):
         return
+    lang = get_user_lang(user_id)
     
     phone_number = message.text.strip()
     
@@ -1134,8 +1135,7 @@ def receive_topup_phone_number(message):
     if not cleaned_phone or len(cleaned_phone) < 10:
         bot.send_message(
             user_id,
-            "❌ Утасны дугаар буруу байна. Дахин оруулна уу.\n\n"
-            "Жишээ нь: `+79001234567` эсвэл `79001234567`",
+            t(lang, "topup_phone_invalid"),
             parse_mode="Markdown"
         )
         return
@@ -1150,13 +1150,12 @@ def receive_topup_phone_number(message):
     markup = InlineKeyboardMarkup()
     for key, name in TELECOM_COMPANIES.items():
         markup.add(InlineKeyboardButton(name, callback_data=f"topup_telecom_{key}"))
-    markup.add(InlineKeyboardButton("✏️ Бусад", callback_data="topup_telecom_custom"))
-    markup.add(InlineKeyboardButton("🔙 Цуцлах", callback_data="other_services"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_other_telecom"), callback_data="topup_telecom_custom"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="other_services"))
     
     bot.send_message(
         user_id,
-        f"📱 Утасны дугаар: `{cleaned_phone}`\n\n"
-        "📡 Та аль үүрэн телефоны компаний дугаар цэнэглэх вэ?",
+        t(lang, "topup_select_operator", phone=cleaned_phone),
         reply_markup=markup,
         parse_mode="Markdown"
     )
@@ -1167,6 +1166,7 @@ def receive_topup_telecom(call):
     if not ensure_exchange_available(user_id):
         bot.answer_callback_query(call.id)
         return
+    lang = get_user_lang(user_id)
     
     telecom_key = call.data.replace("topup_telecom_", "")
     
@@ -1176,8 +1176,7 @@ def receive_topup_telecom(call):
         update_user_session(user_id, {"state": "phone_topup_custom_telecom"})
         bot.send_message(
             user_id,
-            "✏️ Та үүрэн телефоны оператороо бичнэ үү:\n\n"
-            "Жишээ нь: `Tinkoff Mobile` эсвэл `Ростелеком`",
+            t(lang, "topup_custom_telecom_prompt"),
             parse_mode="Markdown"
         )
         return
@@ -1186,7 +1185,7 @@ def receive_topup_telecom(call):
     
     session = get_user_session(user_id)
     if not session:
-        bot.send_message(user_id, "⚠️ Гүйлгээний мэдээлэл олдсонгүй. Та эхнээс эхлэнэ үү.")
+        bot.send_message(user_id, t(lang, "error_session_not_found"))
         return
     
     invoice = generate_invoice()
@@ -1205,15 +1204,7 @@ def receive_topup_telecom(call):
     bot.answer_callback_query(call.id)
     bot.send_message(
         user_id,
-        f"📱 *Утасны дугаар цэнэглэлт*\n\n"
-        f"💰 Цэнэглэх дүн: *{amount_rub:,} РУБ*\n"
-        f"📱 Утасны дугаар: `{phone_number}`\n"
-        f"📡 Оператор: *{telecom_name}*\n\n"
-        f"💱 Төлөх дүн: *{int(amount_mnt):,} MNT*\n\n"
-        "📸 Та дараах дансаар гүйлгээ хийсний дараа шилжүүлэг хийсэн баримтаа *зургаар* оруулна уу.\n\n"
-        f"{BANK_DETAILS_MNT}\n\n"
-        f"💰 Гүйлгээний дүн: *{int(amount_mnt):,} МНТ*\n"
-        f"🧾 Гүйлгээний утга: `{invoice}`",
+        t(lang, "topup_receipt_summary", amount_rub=f"{amount_rub:,}", phone=phone_number, telecom=telecom_name, amount_mnt=f"{int(amount_mnt):,}", bank=BANK_DETAILS_MNT, invoice=invoice),
         parse_mode="Markdown"
     )
 
@@ -1222,6 +1213,7 @@ def receive_custom_telecom(message):
     user_id = message.chat.id
     if not ensure_exchange_available(user_id):
         return
+    lang = get_user_lang(user_id)
     
     custom_telecom = message.text.strip()
     
@@ -1229,15 +1221,14 @@ def receive_custom_telecom(message):
     if not custom_telecom or len(custom_telecom) > 50:
         bot.send_message(
             user_id,
-            "❌ Операторын нэр хоосон эсвэл хэт урт байна. Дахин оруулна уу.\n\n"
-            "Жишээ нь: `Tinkoff Mobile` эсвэл `Ростелеком`",
+            t(lang, "topup_custom_telecom_error"),
             parse_mode="Markdown"
         )
         return
     
     session = get_user_session(user_id)
     if not session:
-        bot.send_message(user_id, "⚠️ Гүйлгээний мэдээлэл олдсонгүй. Та эхнээс эхлэнэ үү.")
+        bot.send_message(user_id, t(lang, "error_session_not_found"))
         return
     
     invoice = generate_invoice()
@@ -1255,15 +1246,7 @@ def receive_custom_telecom(message):
     
     bot.send_message(
         user_id,
-        f"📱 *Утасны дугаар цэнэглэлт*\n\n"
-        f"💰 Цэнэглэх дүн: *{amount_rub:,} РУБ*\n"
-        f"📱 Утасны дугаар: `{phone_number}`\n"
-        f"📡 Оператор: *{custom_telecom}*\n\n"
-        f"💱 Төлөх дүн: *{int(amount_mnt):,} MNT*\n\n"
-        "📸 Та дараах дансаар гүйлгээ хийсний дараа шилжүүлэг хийсэн баримтаа *зургаар* оруулна уу.\n\n"
-        f"{BANK_DETAILS_MNT}\n\n"
-        f"💰 Гүйлгээний дүн: *{int(amount_mnt):,} МНТ*\n"
-        f"🧾 Гүйлгээний утга: `{invoice}`",
+        t(lang, "topup_receipt_summary", amount_rub=f"{amount_rub:,}", phone=phone_number, telecom=custom_telecom, amount_mnt=f"{int(amount_mnt):,}", bank=BANK_DETAILS_MNT, invoice=invoice),
         parse_mode="Markdown"
     )
 
@@ -1287,21 +1270,13 @@ def notify_phone_topup_operator(user_id, invoice, receipt_id, amount_rub, amount
     except:
         user_line = f"[`{user_id}`](tg://user?id={user_id})"
     
-    caption = (
-        f"🔔 УТАСНЫ ДУГААР ЦЭНЭГЛЭХ ХҮСЭЛТ 🔔\n\n"
-        f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-        f"👤 Үйлчлүүлэгч: {user_line}\n"
-        f"💰 Цэнэглэх дүн: *{amount_rub:,} РУБ*\n"
-        f"💱 Төлсөн дүн: *{int(amount_mnt):,} MNT*\n"
-        f"📱 Утасны дугаар: `{phone_number}`\n"
-        f"📡 Оператор: *{telecom}*\n\n"
-        "✅ Гүйлгээг баталгаажуулах эсвэл татгалзах товчийг дарна уу."
-    )
+    lang = get_user_lang(get_current_shift_operator_id())
+    caption = t(lang, "admin_topup_request_caption", invoice=invoice, user_line=user_line, amount_rub=f"{amount_rub:,}", amount_mnt=f"{int(amount_mnt):,}", phone_number=phone_number, telecom=telecom)
     
     markup = InlineKeyboardMarkup()
     markup.add(
-        InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"confirm_{user_id}"),
-        InlineKeyboardButton("❌ Татгалзах", callback_data=f"reject_{user_id}")
+        InlineKeyboardButton(t(lang, "admin_btn_confirm"), callback_data=f"confirm_{user_id}"),
+        InlineKeyboardButton(t(lang, "admin_btn_reject"), callback_data=f"reject_{user_id}")
     )
     
     operator_id = get_current_shift_operator_id()
@@ -1642,20 +1617,13 @@ def send_verification_alert_to_operator(user_id, user):
     try:
         passport_file_id = user.get("passport_file_id")
 
-        caption = (
-            f"🆕 Шинэ баталгаажуулах хүсэлт ирлээ!\n\n"
-            f"👤 Хэрэглэгч: [{user_id}](tg://user?id={user_id})\n"
-            f"👤 Нэр: {user.get('last_name')} {user.get('first_name')}\n"
-            f"📞 Утас: {user.get('phone')}\n"
-            f"🪪 Паспортын дугаар: {user.get('registration_number')}\n"
-            f"🏦 Монгол банк: {user.get('bank_mnt')}\n"
-            f"🇷🇺 Орос банк: {user.get('bank_rub')}"
-        )
+        lang = get_user_lang(primary if primary else (ALWAYS_NOTIFY_OPERATOR_ID[0] if ALWAYS_NOTIFY_OPERATOR_ID else 0))
+        caption = t(lang, "admin_verification_caption", user_id=user_id, last_name=user.get('last_name'), first_name=user.get('first_name'), phone=user.get('phone'), reg_num=user.get('registration_number'), bank_mnt=user.get('bank_mnt'), bank_rub=user.get('bank_rub'))
 
         markup = InlineKeyboardMarkup()
         markup.add(
-            InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"verify_{user_id}"),
-            InlineKeyboardButton("❌ Цуцлах", callback_data=f"rejectuser_{user_id}")
+            InlineKeyboardButton(t(lang, "admin_btn_verify"), callback_data=f"verify_{user_id}"),
+            InlineKeyboardButton(t(lang, "admin_btn_cancel"), callback_data=f"rejectuser_{user_id}")
         )
         # send each person in the set
         for op_id in to_notify:
@@ -1671,7 +1639,7 @@ def send_verification_alert_to_operator(user_id, user):
                 else:
                     bot.send_message(
                         op_id,
-                        caption + "\n⚠️ Паспорт зураг оруулаагүй байна!",
+                        caption + t(lang, "admin_no_passport_warning"),
                         parse_mode="Markdown",
                         reply_markup=markup
                     )
@@ -1680,7 +1648,7 @@ def send_verification_alert_to_operator(user_id, user):
         if passport_file_id:
             bot.send_photo(operator_id, passport_file_id, caption=caption, parse_mode="Markdown", reply_markup=markup)
         else:
-            bot.send_message(operator_id, caption + "\n⚠️ Паспорт зураг оруулаагүй байна!", parse_mode="Markdown", reply_markup=markup)
+            bot.send_message(operator_id, caption + t(lang, "admin_no_passport_warning"), parse_mode="Markdown", reply_markup=markup)
 
     except Exception as e:
         print(f"❌ Failed to send verification alert: {e}")
@@ -2077,25 +2045,26 @@ def handle_open_gift(call):
 def confirm_referral_callback(call):
     # Only the moderator should confirm
     try:
+        lang_mod = get_user_lang(call.from_user.id)
         if call.from_user.id != MODERATOR_ID:
-            bot.answer_callback_query(call.id, "❌ Та энэ үйлдлийг хийх эрхгүй.", show_alert=True)
+            bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_no_permission"), show_alert=True)
             return
 
         parts = call.data.split(":")
         if len(parts) < 2:
-            bot.answer_callback_query(call.id, "❌ Буруу callback data.", show_alert=True)
+            bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_bad_data"), show_alert=True)
             return
 
         user_id = int(parts[1])
         pending = pending_referral_confirmations.get(call.message.message_id)
         if not pending or pending.get("user_id") != user_id:
-            bot.answer_callback_query(call.id, "❌ Энэ хүсэлтийг олж чадсангүй буюу нь өөр хэрэглэгчийнх байна.", show_alert=True)
+            bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_not_found"), show_alert=True)
             return
 
         # Ensure this message is mapped to a pending request
         pending = pending_referral_confirmations.get(call.message.message_id)
         if not pending or pending.get("user_id") != user_id:
-            bot.answer_callback_query(call.id, "❌ Энэ хүсэлтийг олж чадсангүй буюу нь өөр хэрэглэгчийнх байна.", show_alert=True)
+            bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_not_found"), show_alert=True)
             return
 
         # Recompute how many to award at confirmation time, using unawarded accepted referrals
@@ -2144,10 +2113,10 @@ def confirm_referral_callback(call):
         except Exception:
             pass
 
-        bot.answer_callback_query(call.id, "✅ Баталгаажуулсан. Промокодууд олгогдлоо.")
+        bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_confirmed"))
     except Exception as e:
         print(f"❌ confirm_referral error: {e}")
-        bot.answer_callback_query(call.id, "❌ Баталгаажуулах үед алдаа гарлаа.", show_alert=True)
+        bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_referral_confirm_error"), show_alert=True)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("request_promocode:"))
@@ -2204,19 +2173,20 @@ def request_promocode_callback(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reject_referral:"))
 def reject_referral_callback(call):
     try:
+        lang_mod = get_user_lang(call.from_user.id)
         if call.from_user.id != MODERATOR_ID:
-            bot.answer_callback_query(call.id, "❌ Та энэ үйлдлийг хийх эрхгүй.", show_alert=True)
+            bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_no_permission"), show_alert=True)
             return
 
         parts = call.data.split(":")
         if len(parts) < 2:
-            bot.answer_callback_query(call.id, "❌ Буруу callback data.", show_alert=True)
+            bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_bad_data"), show_alert=True)
             return
 
         user_id = int(parts[1])
         # Notify user about rejection
         try:
-            bot.send_message(user_id, "❌ Таны уриалгыг баталгаажуулахаар админ татгалзлаа. Дахин оролдоно уу.")
+            bot.send_message(user_id, t(get_user_lang(user_id), "user_referral_rejected"))
         except Exception:
             pass
 
@@ -2230,10 +2200,10 @@ def reject_referral_callback(call):
         except Exception:
             pass
 
-        bot.answer_callback_query(call.id, "❌ Урилга татгалзсан.")
+        bot.answer_callback_query(call.id, t(lang_mod, "admin_referral_rejected"))
     except Exception as e:
         print(f"❌ reject_referral error: {e}")
-        bot.answer_callback_query(call.id, "❌ Татгалзах үед алдаа гарлаа.", show_alert=True)
+        bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_referral_reject_error"), show_alert=True)
 
 
 # 💰 Handle Common Amount Selection
@@ -2279,10 +2249,10 @@ def selected_common_amount(call):
         # final_rate is MNT per 1 RUB, so to get MIN_RUB you need MIN_RUB * final_rate MNT
         min_mnt = ceil(MIN_RUB * final_rate)
         if amount < min_mnt:
+            lang = get_user_lang(user_id)
             return bot.send_message(
                 user_id,
-                f"❌ Та солих доод хэмжээ буюу {MIN_RUB:,} RUB-тэй тэнцүү ({min_mnt:,} MNT) солих ёстой.\n"
-                f"Та дор хаяж *{min_mnt:,} MNT* солиулна уу.",
+                t(lang, "exchange_min_amount", min_rub=MIN_RUB, min_mnt=min_mnt),
                 parse_mode="Markdown"
             )
 
@@ -2300,33 +2270,27 @@ def selected_common_amount(call):
         # Show RUB bank options
         markup = InlineKeyboardMarkup()
         rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
+        lang = get_user_lang(user_id)
         if not rub_bank_options:
-            bot.send_message(
-                user_id,
-                "❌ Одоогоор ашиглах боломжтой банкны данс байхгүй байна. Дараа дахин оролдоно уу."
-            )
+            bot.send_message(user_id, t(lang, "exchange_no_banks"))
             return
         for bank in rub_bank_options:
             markup.add(InlineKeyboardButton(bank, callback_data=f"rubmnt_bank_{bank}"))
 
         bot.send_message(
             user_id,
-            "💳 Та аль банкаар РУБ-ээ илгээх вэ?\n"
-            "⬇️ Дараах боломжит банкнуудаас сонгон гүйлгээ хийх банкны мэдээллээ авна уу:",
+            t(lang, "exchange_choose_rub_bank"),
             reply_markup=markup
         )
     else:
         # MNT → RUB flow
+        lang = get_user_lang(user_id)
         exchanged = amount / final_rate
         message_text = f"💱 {amount:,} MNT → {round(exchanged, 2):,} RUB"
 
         bot.send_message(
             user_id,
-            f"*{message_text}*\n\n"
-            "📸Та дараах дансаар гүйлгээ хийсний дараа шилжүүлэг хийсэн баримтаа *зургаар* оруулна уу.\n\n"
-            f"{BANK_DETAILS_MNT}\n\n"
-            f"💰 Гүйлгээний дүн: *{amount:,} МНТ*\n"
-            f"🧾 Гүйлгээний утга: `{invoice}`",
+            t(lang, "exchange_send_receipt_mnt", msg=message_text, bank=BANK_DETAILS_MNT, amount=amount, invoice=invoice),
             parse_mode="Markdown"
         )
 
@@ -2356,11 +2320,12 @@ def receive_custom_amount(message):
     state = session.get("state", "")
     currency = state.split("_")[2] if state else None
     invoice = generate_invoice()
+    lang = get_user_lang(user_id)
     raw = re.sub(r"\D", "", message.text)
     if not raw.isdigit():
         bot.send_message(
             user_id,
-            "❌ Зөвхөн тоон утга оруулна уу (жишээ: 50000).",
+            t(lang, "error_number_only"),
             parse_mode="Markdown"
         )
         # Make sure they stay in the same state
@@ -2413,8 +2378,7 @@ def receive_custom_amount(message):
             if amount < min_mnt:
                 return bot.send_message(
                     user_id,
-                    f"❌ Та солих доод хэмжээ буюу {MIN_RUB:,} RUB-тэй тэнцүү ({min_mnt:,} MNT) солих ёстой.\n"
-                    f"Та дор хаяж *{min_mnt:,} MNT* солиулна уу.",
+                    t(lang, "exchange_min_amount", min_rub=MIN_RUB, min_mnt=min_mnt),
                     parse_mode="Markdown"
                 )
 
@@ -2438,18 +2402,14 @@ def receive_custom_amount(message):
             markup = InlineKeyboardMarkup()
             rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
             if not rub_bank_options:
-                bot.send_message(
-                    user_id,
-                    "❌ Одоогоор ашиглах боломжтой банкны данс алга. Дараа дахин оролдоно уу."
-                )
+                bot.send_message(user_id, t(lang, "exchange_no_banks"))
                 return
             for bank_key in rub_bank_options:
                 markup.add(InlineKeyboardButton(bank_key, callback_data=f"rubmnt_bank_{bank_key}"))
 
             bot.send_message(
                 user_id,
-                f"*{message_text}*\n\n"
-                "🏦 Та RUB илгээх банкаа сонгоно уу:",
+                t(lang, "exchange_choose_rub_bank_custom", msg=message_text),
                 parse_mode="Markdown",
                 reply_markup=markup
             )
@@ -2459,17 +2419,13 @@ def receive_custom_amount(message):
 
             bot.send_message(
                 user_id,
-                f"*{message_text}*\n\n"
-                "📸 Та дараах дансаар гүйлгээ хийсний дараа шилжүүлэг хийсэн баримтаа *зургаар* оруулна уу.\n\n"
-                f"{BANK_DETAILS_MNT}\n\n"
-                f"💰 Гүйлгээний дүн: *{amount:,} МНТ*\n"
-                f"🧾 Гүйлгээний утга: `{invoice}`",
+                t(lang, "exchange_send_receipt_mnt", msg=message_text, bank=BANK_DETAILS_MNT, amount=amount, invoice=invoice),
                 parse_mode="Markdown"
             )
     except ValueError:
         # This will catch both non-positive numbers (raised above)
         # and any int(…) failures (though digits-only check handles most)
-        bot.send_message(user_id, "❌ Зөвхөн тоон утга оруулна уу.")
+        bot.send_message(user_id, t(lang, "error_number_input"))
         update_user_session(user_id, {"state": state})
         return
 
@@ -2481,6 +2437,7 @@ def handle_rub_mnt_bank_selection(call):
     if not ensure_exchange_available(user_id):
         bot.answer_callback_query(call.id)
         return
+    lang = get_user_lang(user_id)
     selected_bank = call.data.replace("rubmnt_bank_", "")
 
     # Store selected bank in session
@@ -2489,14 +2446,14 @@ def handle_rub_mnt_bank_selection(call):
     })
 
     rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
-    bank_details = rub_bank_options.get(selected_bank, "❌ Банк олдсонгүй.")
-    if bank_details.startswith("❌"):
-        bot.send_message(user_id, bank_details)
+    bank_details = rub_bank_options.get(selected_bank)
+    if not bank_details:
+        bot.send_message(user_id, t(lang, "exchange_bank_not_found"))
         return
 
     session = get_user_session(user_id)
     if not session:
-        bot.send_message(user_id, "⚠️ Гүйлгээний мэдээлэл олдсонгүй. Та эхнээс эхлэнэ үү.")
+        bot.send_message(user_id, t(lang, "error_session_not_found"))
         return
     amount = session.get("amount")
     invoice = session.get("invoice")
@@ -2507,11 +2464,7 @@ def handle_rub_mnt_bank_selection(call):
 
     bot.send_message(
         user_id,
-        f"*{message_text}*\n\n"
-        "📸Та дараах дансаар гүйлгээ хийсний дараа шилжүүлэг хийсэн баримтаа *зургаар* оруулна уу.\n\n"
-        f"{bank_details}\n\n"
-        f"💰 Гүйлгээний дүн: *{amount:,} РУБ*\n"
-        f"🧾 Гүйлгээний утга: `{invoice}`",
+        t(lang, "exchange_send_receipt_rub", msg=message_text, bank=bank_details, amount=amount, invoice=invoice),
         parse_mode="Markdown"
     )
 
@@ -2526,9 +2479,10 @@ def use_saved_bank(call):
     if not ensure_exchange_available(user_id):
         bot.answer_callback_query(call.id)
         return
+    lang = get_user_lang(user_id)
     update_user_session(user_id, {"state": "waiting_for_receipt"})
     if get_state(user_id) == "waiting_for_bank":
-        bot.send_message(user_id, "❗ Та одоогоор дансны мэдээлэл оруулах горимд байхгүй байна. Та ижил мөнгөн дүнгээр дахин ханш солиулах хүсэлт үүсгээд гүйлгээ хийсэн баримтаа дахин илгээгээрэй.")
+        bot.send_message(user_id, t(lang, "saved_bank_not_in_mode"))
         return
 
     try:
@@ -2536,11 +2490,11 @@ def use_saved_bank(call):
         user = response.data[0] if response.data else None
 
         if not user:
-            bot.send_message(user_id, "❗ Таны бүртгэл олдсонгүй.")
+            bot.send_message(user_id, t(lang, "error_registration_not_found"))
             return
         session = get_user_session(user_id)
         if not session:
-            bot.send_message(user_id, "⚠️ Гүйлгээний мэдээлэл олдсонгүй. Та эхнээс эхлэнэ үү.")
+            bot.send_message(user_id, t(lang, "error_session_not_found"))
             return
 
 
@@ -2550,31 +2504,30 @@ def use_saved_bank(call):
         if currency_from == "rub":
             bank_info = user.get("bank_mnt", "").strip()
             expected_fields = 3
-            format_note = "📌 Жишээ: Хаан Банк, MN01 0015 00 500XXXXXXX, Бат"
+            format_note = t(lang, "saved_bank_format_note_mnt")
         else:
             bank_info = user.get("bank_rub", "").strip()
             expected_fields = 4
-            format_note = "📌 Жишээ: Сбербанк, +79001234567, 1234567812345678, Бат"
+            format_note = t(lang, "saved_bank_format_note_rub")
 
         if not bank_info:
-            bot.send_message(user_id, "⚠️ Та энэ төрлийн дансны мэдээллээ хадгалаагүй байна.\n 'Профайл тохиргоо' хэсгээс оруулна уу.")
+            bot.send_message(user_id, t(lang, "saved_bank_not_found"))
             return
 
         parts = [p.strip() for p in bank_info.split(",")]
         if len(parts) != expected_fields or any(not p for p in parts):
-            bot.send_message(user_id, f"⚠️ Хадгалсан дансны мэдээлэл алдаатай байна.\n{format_note}")
+            bot.send_message(user_id, t(lang, "saved_bank_format_error", note=format_note))
             return
 
         # ✅ Show Preview and ask for confirmation
         markup = InlineKeyboardMarkup()
         markup.add(
-            InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"confirm_saved_bank"),
-            InlineKeyboardButton("❌ Цуцлах", callback_data="cancel_saved_bank")
+            InlineKeyboardButton(t(lang, "btn_confirm"), callback_data=f"confirm_saved_bank"),
+            InlineKeyboardButton(t(lang, "btn_cancel"), callback_data="cancel_saved_bank")
         )
 
         bot.send_message(user_id,
-                         f"📎 Та дараах хадгалсан дансны мэдээллийг ашиглах гэж байна:\n\n`{bank_info}`\n\n"
-                         "Та зөв эсэхийг шалгаад үргэлжлүүлэх эсэхээ сонгоно уу.",
+                         t(lang, "saved_bank_preview", bank=bank_info),
                          reply_markup=markup,
                          parse_mode="Markdown")
         update_user_session(user_id, {"state": "previewing_saved_bank"})
@@ -2582,7 +2535,7 @@ def use_saved_bank(call):
 
     except Exception as e:
         print(f"❌ Error using saved bank: {e}")
-        bot.send_message(user_id, "❌ Дансны мэдээллийг татах үед алдаа гарлаа.")
+        bot.send_message(user_id, t(lang, "saved_bank_error"))
 
 
 @bot.callback_query_handler(func=lambda call: call.data in ["confirm_saved_bank", "cancel_saved_bank"])
@@ -2591,16 +2544,17 @@ def handle_preview_decision(call):
     if not ensure_exchange_available(user_id):
         bot.answer_callback_query(call.id)
         return
+    lang = get_user_lang(user_id)
     if call.data == "cancel_saved_bank":
         update_user_session(user_id, {"state": "waiting_for_bank"})
 
-        bot.send_message(user_id, "❌ Хадгалсан дансны мэдээллийг ашиглах үйлдэл цуцлагдлаа.")
+        bot.send_message(user_id, t(lang, "saved_bank_cancelled"))
         return
 
     # If confirmed
     bank_info = user_profiles.get(user_id, {}).get("preview_bank_info")
     if not bank_info:
-        bot.send_message(user_id, "❗ Мэдээлэл олдсонгүй. Та ижил мөнгөн дүнгээр дахин валют солих хүсэлт үүсгээд гүйлгээ хийсэн баримтаа дахин илгээгээрэй.")
+        bot.send_message(user_id, t(lang, "saved_bank_info_not_found"))
         return
 
     # Fake message to trigger the receive_bank_details function
@@ -2619,17 +2573,18 @@ def receive_bank_details(message):
     if not ensure_exchange_available(user_id):
         bot.answer_callback_query(call.id)
         return
+    lang = get_user_lang(user_id)
     bank_details = message.text.strip()
 
     # ✅ Step 1: Check if session exists
     session = get_user_session(user_id)
     if not session:
-        bot.send_message(user_id, "⚠️ Гүйлгээний мэдээлэл олдсонгүй. Та эхнээс эхлэнэ үү.")
+        bot.send_message(user_id, t(lang, "error_session_not_found"))
         return
 
     invoice = session.get("invoice")
     if not invoice:
-        bot.send_message(user_id, "❗ Хүсэлтийн дугаар алга байна. Шинээр эхэлнэ үү.")
+        bot.send_message(user_id, t(lang, "error_invoice_not_found"))
         return
 
     # ✅ Step 2: Validate bank format (must be 4 parts)
@@ -2638,20 +2593,17 @@ def receive_bank_details(message):
 
     parts = [p.strip() for p in bank_details.split(",")]
     if len(parts) != expected_fields or any(not p for p in parts):
+        fmt_key = "bank_format_error_mnt" if expected_fields == 3 else "bank_format_error_rub"
         bot.send_message(
             user_id,
-            f"⚠️ Та банкны мэдээллээ зөв оруулна уу! Таслал тэмдэгээр тусгаарлаж оруулах ёстойг анхаарна уу.\n\n"
-            f"📌 Жишээ нь:\n"
-            + ("`Хаан Банк, MN01 0015 00 500XXXXXXX, Бат`\n\n" if expected_fields == 3 else
-               "`Сбербанк, 79001234567, 5469123412341234, Бат`\n\n")
-            + "Банкны нэр, Утасны дугаар, Карт/IBAN дугаар, Данс эзэмшэгчийн нэр - гэсэн дарааллаар таслалаар тусгаарлан бичнэ үү.",
+            t(lang, fmt_key),
             parse_mode="Markdown"
         )
         return
 
     # ✅ Step 3: Ensure receipt has been received (i.e. pending_transactions initialized)
     if user_id not in pending_transactions or not pending_transactions[user_id].get("receipt_id"):
-        bot.send_message(user_id, "📸 Та эхлээд шилжүүлгийн баримтаа зургаар илгээнэ үү.")
+        bot.send_message(user_id, t(lang, "receipt_required"))
         return
 
     # ✅ Step 4: Save bank details
@@ -2700,12 +2652,12 @@ def receive_bank_details(message):
             amount_rub = amount / rate if rate > 0 else amount
         
         if amount_rub > 20000:
-            bot.send_message(user_id, "✅ Банкны мэдээлэл хүлээн авлаа!\n⏱️ Таны хүсэлт их хэмжээний гүйлгээ тул ердийн гүйлгээнээс бага зэрэг удах болохыг анхаарна уу. Админ таны гүйлгээг баталгаажуулах хүртэл та хүлээнэ үү.")
+            bot.send_message(user_id, t(lang, "bank_received_large"))
         else:
-            bot.send_message(user_id, "✅ Банкны мэдээлэл хүлээн авлаа!\nАдмин таны гүйлгээг баталгаажуулах хүртэл та хүлээнэ үү.")
+            bot.send_message(user_id, t(lang, "bank_received"))
     except Exception as e:
         print(f"❌ Operator notify error: {e}")
-        bot.send_message(user_id, "❗ Админд мэдэгдэж чадсангүй. Та дахин оролдоно уу.")
+        bot.send_message(user_id, t(lang, "error_admin_notify"))
 
 
 
@@ -2742,20 +2694,13 @@ def notify_operator(user_id, invoice, receipt_id, bank_details, operator_chat_id
     converted = round(amount * rate if currency_from.lower() == "rub" else amount / rate, 2)
 
     # 📝 Save caption to reuse
-    caption = (
-        f"🔔 ШИНЭ ХҮСЭЛТ 🔔\n\n"
-        f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-        f"👤 Үйлчлүүлэгч: {user_line}\n"
-        f"💰 Гүйлгээ: *{amount} {currency_from} → {currency_to}*\n"
-        f"💱 Хөрвүүлсэн дүн: *{converted} {currency_to}*\n"
-        f"🏦 Дансны мэдээлэл: `{bank_details}`\n\n"
-        "✅ Гүйлгээг баталгаажуулах эсвэл татгалзах товчийг дарна у|у."
-    )
+    lang = get_user_lang(operator_id)
+    caption = t(lang, "admin_new_request_caption", invoice=invoice, user_line=user_line, amount=amount, currency_from=currency_from, currency_to=currency_to, converted=converted, bank_details=bank_details)
 
     markup = InlineKeyboardMarkup()
     markup.add(
-        InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"confirm_{user_id}"),
-        InlineKeyboardButton("❌ Татгалзах", callback_data=f"reject_{user_id}")
+        InlineKeyboardButton(t(lang, "admin_btn_confirm"), callback_data=f"confirm_{user_id}"),
+        InlineKeyboardButton(t(lang, "admin_btn_reject"), callback_data=f"reject_{user_id}")
     )
     operator_id = get_current_shift_operator_id()
     # ➤ Always send to current shift operator
@@ -2781,7 +2726,7 @@ def notify_operator(user_id, invoice, receipt_id, bank_details, operator_chat_id
 @bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_") or call.data.startswith("reject_") or call.data.startswith("pending_") or call.data.startswith("refresh_"))
 def handle_transaction_action(call):
     if call.from_user.id not in ALLOWED_ADMINS:
-        bot.answer_callback_query(call.id, "🚫 Зөвшөөрөлгүй хэрэглэгч!", show_alert=True)
+        bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_unauthorized"), show_alert=True)
         return
 
     action, user_id_str = call.data.split("_", 1)
@@ -2803,9 +2748,9 @@ def handle_transaction_action(call):
                 f"/status {invoice}",
                 parse_mode="Markdown"
             )
-            bot.answer_callback_query(call.id, "🔄 Статус шинэчлэгдлээ.", show_alert=True)
+            bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_status_refreshed"), show_alert=True)
         else:
-            bot.answer_callback_query(call.id, "❌ Invoice олдсонгүй.", show_alert=True)
+            bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_invoice_not_found"), show_alert=True)
         return
 
     # 1️⃣ Extract invoice number from message (поддерживаем оба формата)
@@ -2821,7 +2766,7 @@ def handle_transaction_action(call):
         if match:
             invoice = match.group(1)
         else:
-            bot.answer_callback_query(call.id, "❌ Хүсэлтийн дугаар олдсонгүй.", show_alert=True)
+            bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_request_not_found"), show_alert=True)
             return
     
     resp = supabase.table("transactions") \
@@ -2835,13 +2780,13 @@ def handle_transaction_action(call):
         # if it's already successful or rejected, tell the admin
         return bot.answer_callback_query(
             call.id,
-            "❗ Энэ гүйлгээ аль хэдийн баталгаажсан эсвэл цуцлагдсан байна.",
+            t(get_user_lang(call.from_user.id), "admin_already_processed"),
             show_alert=True
         )
     # 2️⃣ Get transaction from Supabase
     response = supabase.table("transactions").select("*").eq("invoice", invoice).limit(1).execute()
     if not response.data:
-        bot.answer_callback_query(call.id, "❌ Гүйлгээ датабазаас олдсонгүй.", show_alert=True)
+        bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_txn_not_in_db"), show_alert=True)
         return
 
     txn = response.data[0]
@@ -2885,24 +2830,25 @@ def handle_transaction_action(call):
         award_gift_for_transaction(user_id, amount, currency_from, currency_to, rate)
 
     # 4️⃣ Notify user
+    lang_admin = get_user_lang(call.from_user.id)
     if is_pending:
         # Notify user about status change to pending
+        lang_user = get_user_lang(user_id)
         bot.send_message(
             user_id,
-            f"🔄 Таны `{invoice}` дугаартай гүйлгээ дахин шалгагдах төлөвт орууллаа.\n"
-            f"⏳ Админ таны гүйлгээг дахин шалгаж, удахгүй хариу өгөх болно.",
+            t(lang_user, "txn_pending_again", invoice=invoice),
             parse_mode="Markdown"
         )
-        bot.answer_callback_query(call.id, "✅ Гүйлгээ pending төлөвт орууллаа.", show_alert=True)
+        bot.answer_callback_query(call.id, t(lang_admin, "admin_set_pending"), show_alert=True)
     elif is_confirmed:
         # ✅ Calculate how much to send
         converted = round(amount * rate if currency_from == "RUB" else amount / rate, 2)
 
         # ✅ Notify user
+        lang_user = get_user_lang(user_id)
         bot.send_message(
             user_id,
-            f"✅ Таны `{invoice}` дугаартай гүйлгээ баталгаажлаа!\n"
-            f"💸 Админ таны данс руу тун удахгүй шилжүүлэг хийх болно.",
+            t(lang_user, "txn_confirmed", invoice=invoice),
             parse_mode="Markdown"
         )
 
@@ -2915,37 +2861,13 @@ def handle_transaction_action(call):
             if len(parts) == 2:
                 # Phone top-up: phone number, telecom
                 phone, telecom = parts
-                bank_info = (
-                    f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-                    f"📤 *Цэнэглэх дүн:* `{converted} RUB`\n\n"
-                    f"📱 Утас: `{sanitize_markdown(phone)}`\n"
-                    f"📡 Оператор: *{sanitize_markdown(telecom)}*\n\n"
-                    f"Ханш: *{rate}*\n\n"
-                    f"📲 Утасны дугаар цэнэглээд баталгаажуулсан баримтыг reply эсвэл caption хэсэгт invoice id-тай хамт илгээнэ үү."
-                )
+                bank_info = t(lang_admin, "admin_payout_topup", invoice=invoice, converted=converted, phone=sanitize_markdown(phone), telecom=sanitize_markdown(telecom), rate=rate)
             elif currency_to == "MNT" and len(parts) >= 3:
                 bank, iban, name = parts[:3]
-                bank_info = (
-                    f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-                    f"📤 *Шилжүүлэх дүн:* `{converted} MNT`\n\n"
-                    f"{bank}\n"
-                    f"`{iban}`\n"
-                    f"{name}\n\n"
-                    f"Ханш: *{rate}*\n\n"
-                    f"Энэхүү мессежд зургаар *REPLY* хийх эсвэл *CAPTION* хэсэгт invoice id-г бичиж хамт илгээнэ үү."
-                )
+                bank_info = t(lang_admin, "admin_payout_mnt", invoice=invoice, converted=converted, bank=bank, iban=iban, name=name, rate=rate)
             elif currency_to == "RUB" and len(parts) >= 4:
                 bank, phone, card, name = parts[:4]
-                bank_info = (
-                    f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-                    f"📤 *Шилжүүлэх дүн:* `{converted} RUB`\n\n"
-                    f"{bank}\n"
-                    f"`{phone}`\n"
-                    f"`{card}`\n"
-                    f"{name}\n\n"
-                    f"Ханш: *{rate}*\n\n"
-                    f"Энэхүү мессежд зургаар *REPLY* хийх эсвэл *CAPTION* хэсэгт invoice id-г бичиж хамт илгээнэ үү."
-                )
+                bank_info = t(lang_admin, "admin_payout_rub", invoice=invoice, converted=converted, bank=bank, phone=phone, card=card, name=name, rate=rate)
 
             if not bank_info:
                 raise ValueError("Unsupported bank details format")
@@ -2953,12 +2875,12 @@ def handle_transaction_action(call):
             msg = bot.send_message(call.message.chat.id, bank_info, parse_mode="Markdown")
         except Exception as e:
             print(f"❌ Error formatting bank details: {e}")
-            bot.send_message(call.message.chat.id, "⚠️ Дансны мэдээлэл формат буруу байна.")
+            bot.send_message(call.message.chat.id, t(lang_admin, "admin_payout_format_error"))
 
     else:
         # Ask for rejection comment
         update_user_session(call.from_user.id, {"state": f"awaiting_tx_rejection_comment|{invoice}|{user_id}"})
-        bot.send_message(call.from_user.id, f"📝 Та `{invoice}` гүйлгээг цуцлах шалтгаанаа бичнэ үү:", parse_mode="Markdown")
+        bot.send_message(call.from_user.id, t(lang_admin, "admin_rejection_prompt", invoice=invoice), parse_mode="Markdown")
 
 
     # ✅ Clean up: remove buttoned message if desired
@@ -2976,7 +2898,7 @@ def handle_transaction_rejection_comment(message):
     # Full string after the prefix
     state = get_state(admin_id)
     if not state.startswith("awaiting_tx_rejection_comment|"):
-        bot.send_message(admin_id, "❌ Алдаа: Хүсэлтийн төлөв олдсонгүй.")
+        bot.send_message(admin_id, t(get_user_lang(admin_id), "admin_rejection_state_error"))
         return
     
     # Extract invoice and user_id from state
@@ -2984,7 +2906,7 @@ def handle_transaction_rejection_comment(message):
     state_parts = state.replace("awaiting_tx_rejection_comment|", "").split("|")
     
     if len(state_parts) < 2:
-        bot.send_message(admin_id, "❌ Алдаа: Хүсэлтийн мэдээлэл буруу байна.")
+        bot.send_message(admin_id, t(get_user_lang(admin_id), "admin_rejection_data_error"))
         return
     
     invoice = state_parts[0]
@@ -2998,23 +2920,24 @@ def handle_transaction_rejection_comment(message):
         }).eq("invoice", invoice).execute()
 
         # Notify both parties
+        lang_admin = get_user_lang(admin_id)
         bot.send_message(
             admin_id,
-            f"❌ `{invoice}` дугаартай гүйлгээ амжилттай цуцлагдлаа.",
+            t(lang_admin, "admin_rejection_success", invoice=invoice),
             parse_mode="Markdown"
         )
 
+        lang_user = get_user_lang(user_id)
         bot.send_message(
             user_id,
-            f"❌ Таны `{invoice}` дугаартай гүйлгээг баталгаажуулах боломжгүй байна.\n"
-            f"📌 Шалтгаан: _{comment}_\n\n{CONTACT_SUPPORT}",
+            t(lang_user, "user_txn_rejected_with_reason", invoice=invoice, comment=comment, support=CONTACT_SUPPORT),
             parse_mode="Markdown"
         )
         update_user_session(user_id, {"invoice": None})
 
     except Exception as e:
         print(f"❌ Rejection DB error: {e}")
-        bot.send_message(admin_id, "❌ Гүйлгээ цуцлах үед алдаа гарлаа.")
+        bot.send_message(admin_id, t(get_user_lang(admin_id), "admin_rejection_error"))
     finally:
         clear_state(admin_id)
         pending_transactions.pop(user_id, None)
@@ -3339,16 +3262,12 @@ def send_referral_confirmation_request(user_id: int, accepted_count: int, to_awa
         if not list_text:
             list_text = "\n  - (no referrals found)"
 
-        text = (
-            f"📝 Найз урьсан хүсэлт\n\n"
-            f"Хэрэглэгч: {display_name} (id: {user_id})\n"
-            f"Урилга хүлээж авсан хэрэглэгчийн тоо: {accepted_count} найз\n"
-            f"Промокодууд: {to_award} ширхэг\n\n"
-            f"Хянаж баталгаажуулснаар хэрэглэгчид промокод олгоно.\n\nУрилга явуулсан телеграм хаягууд:\n{list_text}")
+        lang_mod = get_user_lang(MODERATOR_ID)
+        text = t(lang_mod, "admin_referral_request", display_name=display_name, user_id=user_id, accepted_count=accepted_count, to_award=to_award, list_text=list_text)
 
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"confirm_referral:{user_id}"))
-        markup.add(InlineKeyboardButton("❌ Татгалзах", callback_data=f"reject_referral:{user_id}"))
+        markup.add(InlineKeyboardButton(t(lang_mod, "admin_btn_confirm"), callback_data=f"confirm_referral:{user_id}"))
+        markup.add(InlineKeyboardButton(t(lang_mod, "admin_btn_reject"), callback_data=f"reject_referral:{user_id}"))
 
         admin_msg = bot.send_message(MODERATOR_ID, text, reply_markup=markup, parse_mode="Markdown")
         # Store mapping to allow deletion / tracking
@@ -3886,19 +3805,20 @@ def admin_award_referral_command(message):
     Manually trigger awarding referral promo codes for a user.
     """
     admin_id = message.from_user.id
+    lang_a = get_user_lang(admin_id)
     if admin_id not in ALLOWED_ADMINS:
-        bot.send_message(message.chat.id, "❌ Та энэ командыг ашиглах эрхгүй байна.")
+        bot.send_message(message.chat.id, t(lang_a, "admin_promo_unauthorized"))
         return
 
     parts = message.text.strip().split()
     if len(parts) < 2:
-        bot.send_message(message.chat.id, "❌ Хэрэглэгчийн ID болон хөнгөлөх үнийн дүнг оруулна уу. Жишээ: /promocode 123456789 0.3")
+        bot.send_message(message.chat.id, t(lang_a, "admin_promo_format"))
         return
 
     try:
         user_id = int(parts[1])
     except ValueError:
-        bot.send_message(message.chat.id, "❌ Зөв ID оруулна уу. Жишээ: /promocode 123456789 0.3")
+        bot.send_message(message.chat.id, t(lang_a, "admin_promo_bad_id"))
         return
 
     # Optional discount argument
@@ -3907,7 +3827,7 @@ def admin_award_referral_command(message):
         try:
             discount = float(parts[2])
         except ValueError:
-            bot.send_message(message.chat.id, "❌ Хөнгөлөлтийн хэмжээг тоогоор оруулна уу. Жишээ: /promocode 123456789 0.3")
+            bot.send_message(message.chat.id, t(lang_a, "admin_promo_bad_discount"))
             return
 
     # Generate a 10-digit numeric promo code
@@ -3920,11 +3840,11 @@ def admin_award_referral_command(message):
                 bot.send_message(user_id, f"🎉 Танд промокод олгогдлоо: `{sanitize_markdown(promo_code)}`\n💰 Хөнгөлөлт: {discount}", parse_mode="Markdown")
             except Exception:
                 pass
-            bot.send_message(message.chat.id, f"✅ Промокод `{promo_code}` ({discount}) амжилттай {user_id} хэрэглэгчд олгогдлоо.")
+            bot.send_message(message.chat.id, t(lang_a, "admin_promo_success", code=promo_code, discount=discount, user_id=user_id))
         else:
-            bot.send_message(message.chat.id, "❌ Промокод үүсгэхэд алдаа гарлаа.")
+            bot.send_message(message.chat.id, t(lang_a, "admin_promo_error"))
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Промокод үүсгэхэд алдаа гарлаа: {e}")
+        bot.send_message(message.chat.id, t(lang_a, "admin_promo_error_detail", error=str(e)))
 
 
 
@@ -3932,6 +3852,7 @@ def admin_award_referral_command(message):
 
 def payment_receipt(message):
     user_id = message.chat.id
+    lang = get_user_lang(user_id)
     receipt_id = message.photo[-1].file_id
     session = get_user_session(user_id)
     invoice = session.get("invoice")
@@ -3948,32 +3869,21 @@ def payment_receipt(message):
     # 🧠 Detect the target currency
     session = get_user_session(user_id)
     if not session:
-        bot.send_message(user_id, "⚠️ Гүйлгээний мэдээлэл олдсонгүй. Та эхнээс эхлэнэ үү.")
+        bot.send_message(user_id, t(lang, "error_session_not_found"))
         return
     currency_to = session.get("currency_to") if session else "mnt"
 
     # 📌 Instructions based on destination currency
-    if currency_to == "mnt":
-        instructions = (
-            "📌 Та өөрийн *монгол банкны* мэдээллийг дараах форматаар явуулна уу:\n"
-            "👉 `Банк, IBAN дансны дугаар, Данс эзэмшэгчийн нэр` \n\n ⚠️ Та өөрийн нэр дээр бүртгэлтэй данснаас шилжүүлэг хийгээгүй тохиолдолд таны гүйлгээ буцаагдах болохыг анхаарна уу!"
-        )
-    else:
-        instructions = (
-            "📌 Та өөрийн *орос банкны* мэдээллийг дараах форматаар явуулна уу:\n"
-            "👉 `Банк, Утасны дугаар, Картын дугаар, Карт эзэмшэгчийн нэр` \n\n ⚠️ Та өөрийн нэр дээр бүртгэлтэй данснаас шилжүүлэг хийгээгүй тохиолдолд таны гүйлгээ буцаагдах болохыг анхаарна уу!"
-        )
+    receipt_key = "receipt_accepted_mnt" if currency_to == "mnt" else "receipt_accepted_rub"
 
     markup = InlineKeyboardMarkup()
     markup.add(
-        InlineKeyboardButton("💾 Хадгалсан дансны мэдээллээ ашиглах", callback_data="use_saved_bank")
+        InlineKeyboardButton(t(lang, "btn_use_saved_bank"), callback_data="use_saved_bank")
     )
 
     bot.send_message(
         user_id,
-        f"✅ Хүлээж авлаа!\n📌 Хүсэлтийн дугаар: `{invoice}`\n\n"
-        f"{instructions}\n\n"
-        "📎 Эсвэл хадгалсан мэдээллээ ашиглах бол доорх товчийг дарна уу.",
+        t(lang, receipt_key, invoice=invoice),
         reply_markup=markup,
         parse_mode="Markdown"
     )
@@ -4028,11 +3938,12 @@ def reject_file_receipts(message):
 def cmd_reconfirm(message):
     admin_id = message.chat.id
     if admin_id not in ALLOWED_ADMINS:
-        return bot.reply_to(message, "🚫 Зөвшөөрөгдөөгүй хэрэглэгч!")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_cmd_unauthorized_2"))
 
+    lang_admin = get_user_lang(admin_id)
     parts = message.text.split(maxsplit=1)
     if len(parts) != 2 or not is_valid_invoice_format(parts[1]):
-        return bot.reply_to(message, "❗ Формат: /batalgaajuulah <YYYYMMDD_HHMMSS> эсвэл <YYYYMMDD-HHMMSS-XX>")
+        return bot.reply_to(message, t(lang_admin, "admin_reconfirm_format"))
     invoice = parts[1]
 
     # Fetch txn
@@ -4042,13 +3953,13 @@ def cmd_reconfirm(message):
         .single() \
         .execute()
     if not resp.data:
-        return bot.reply_to(message, f"❌ `{invoice}` гүйлгээ олдсонгүй.", parse_mode="Markdown")
+        return bot.reply_to(message, t(lang_admin, "admin_txn_not_found_inv", invoice=invoice), parse_mode="Markdown")
     txn = resp.data
 
     if txn["status"] != "rejected":
         return bot.reply_to(
             message,
-            f"❗ `{invoice}` төлөв нь `{txn['status']}`, дахин баталгаажуулах боломжгүй.",
+            t(lang_admin, "admin_reconfirm_status_err", invoice=invoice, status=txn['status']),
             parse_mode="Markdown"
         )
 
@@ -4066,31 +3977,14 @@ def cmd_reconfirm(message):
     # Build caption
     if tocur == "MNT":
         bank, iban, name = [x.strip() for x in bd.split(",")]
-        caption = (
-            f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-            f"📤 *Шилжүүлэх дүн:* `{conv} MNT`\n\n"
-            f"{bank}\n"
-            f"`{iban}`\n"
-            f"{name}\n\n"
-            f"Ханш: *{rate}*\n\n"
-            f"Энэхүү мессежд зургаар *REPLY* хийх эсвэл *CAPTION* хэсэгт invoice id-г бичиж хамт илгээнэ үү."
-        )
+        caption = t(lang_admin, "admin_payout_mnt_reopen", invoice=invoice, converted=conv, bank=bank, iban=iban, name=name, rate=rate)
     else:
         bank, phone, card, name = [x.strip() for x in bd.split(",")]
-        caption = (
-            f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-            f"📤 *Шилжүүлэх дүн:* `{conv} RUB`\n\n"
-            f"{bank}\n"
-            f"`{phone}`\n"
-            f"`{card}`\n"
-            f"{name}\n\n"
-            f"Ханш: *{rate}*\n\n"
-            f"Энэхүү мессежд зургаар *REPLY* хийх эсвэл *CAPTION* хэсэгт invoice id-г бичиж хамт илгээнэ үү."
-        )
+        caption = t(lang_admin, "admin_payout_rub_reopen", invoice=invoice, converted=conv, bank=bank, phone=phone, card=card, name=name, rate=rate)
 
     # Attach public link
     if url:
-        caption += f"\n\n📎 [Баримт харах]({url})"
+        caption += f"\n\n[{t(lang_admin, 'admin_receipt_view')}]({url})"
 
     bot.send_message(admin_id, caption, parse_mode="Markdown")
 
@@ -4099,11 +3993,11 @@ def cmd_reconfirm(message):
 def cmd_status(message):
     admin_id = message.chat.id
     if admin_id not in ALLOWED_ADMINS:
-        return bot.reply_to(message, "🚫 Зөвшөөрөгдөөгүй хэрэглэгч!")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_cmd_unauthorized_2"))
 
     parts = message.text.split(maxsplit=1)
     if len(parts) != 2 or not is_valid_invoice_format(parts[1]):
-        return bot.reply_to(message, "❗ Формат: /status <YYYYMMDD_HHMMSS> эсвэл <YYYYMMDD-HHMMSS-XX>")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_status_format"))
     invoice = parts[1]
 
     # Fetch txn
@@ -4113,7 +4007,7 @@ def cmd_status(message):
         .single() \
         .execute()
     if not resp.data:
-        return bot.reply_to(message, f"❌ `{invoice}` гүйлгээ олдсонгүй.", parse_mode="Markdown")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_txn_not_found_inv", invoice=invoice), parse_mode="Markdown")
     txn = resp.data
 
     # Build status message
@@ -4123,10 +4017,11 @@ def cmd_status(message):
         "rejected": "❌"
     }
     
+    lang_admin = get_user_lang(message.from_user.id)
     status_text = {
-        "pending": "Хүлээгдэж буй",
-        "successful": "Амжилттай",
-        "rejected": "Цуцлагдсан"
+        "pending": t(lang_admin, "admin_status_pending"),
+        "successful": t(lang_admin, "admin_status_successful"),
+        "rejected": t(lang_admin, "admin_status_rejected"),
     }
 
     status = txn["status"]
@@ -4140,40 +4035,30 @@ def cmd_status(message):
     currency_to = txn["currency_to"].upper()
     converted = round(amt * rate if currency_from == "RUB" else amt / rate, 2)
 
-    message_text = (
-        f"{emoji} **Гүйлгээний мэдээлэл**\n\n"
-        f"📌 **Дугаар:** `{invoice}`\n"
-        f"📊 **Төлөв:** {status_name}\n"
-        f"💰 **Дүн:** {amt} {currency_from} → {converted} {currency_to}\n"
-        f"📈 **Ханш:** {rate}\n"
-        f"👤 **Хэрэглэгч ID:** {txn['user_id']}\n"
-        f"🕐 **Үүсгэсэн:** {txn.get('timestamp', 'N/A')[:19] if txn.get('timestamp') else 'N/A'}\n"
-    )
+    created = txn.get('timestamp', 'N/A')[:19] if txn.get('timestamp') else 'N/A'
+    message_text = t(lang_admin, "admin_status_info", emoji=emoji, invoice=invoice, status_name=status_name, amt=amt, currency_from=currency_from, converted=converted, currency_to=currency_to, rate=rate, user_id=txn['user_id'], created=created)
 
     if txn.get("completed_at"):
-        message_text += f"✅ **Амжилттай:** {txn['completed_at'][:19]}\n"
+        message_text += t(lang_admin, "admin_status_completed_at", date=txn['completed_at'][:19])
     if txn.get("completed_by_admin"):
-        message_text += f"👨‍💼 **Баталгаажуулсан:** {txn['completed_by_admin']}\n"
+        message_text += t(lang_admin, "admin_status_confirmed_by", admin=txn['completed_by_admin'])
     if txn.get("admin_comment"):
-        message_text += f"💬 **Тайлбар:** {txn['admin_comment']}\n"
+        message_text += t(lang_admin, "admin_status_comment", comment=txn['admin_comment'])
 
     # Add action buttons based on current status
     markup = InlineKeyboardMarkup()
     if status == "pending":
-        # Pending transactions can be confirmed or rejected
         markup.add(
-            InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"confirm_{txn['user_id']}"),
-            InlineKeyboardButton("❌ Цуцлах", callback_data=f"reject_{txn['user_id']}")
+            InlineKeyboardButton(t(lang_admin, "admin_btn_confirm"), callback_data=f"confirm_{txn['user_id']}"),
+            InlineKeyboardButton(t(lang_admin, "admin_btn_reject"), callback_data=f"reject_{txn['user_id']}")
         )
     elif status == "successful":
-        # Successful transactions can be moved back to pending or rejected
         markup.add(
-            InlineKeyboardButton("🔄 Pending рүү буцаах", callback_data=f"pending_{txn['user_id']}")
+            InlineKeyboardButton(t(lang_admin, "admin_btn_return_pending"), callback_data=f"pending_{txn['user_id']}")
         )
     elif status == "rejected":
-        # Rejected transactions can be moved back to pending or confirmed
         markup.add(
-            InlineKeyboardButton("🔄 Pending рүү буцаах", callback_data=f"pending_{txn['user_id']}")
+            InlineKeyboardButton(t(lang_admin, "admin_btn_return_pending"), callback_data=f"pending_{txn['user_id']}")
         )
 
     bot.reply_to(message, message_text, parse_mode="Markdown", reply_markup=markup)
@@ -4182,8 +4067,9 @@ def _send_rating_prompt(user_id: int):
     kb = InlineKeyboardMarkup()
     for i in range(1, 6):
         kb.add(InlineKeyboardButton("⭐" * i, callback_data=f"rate_{i}"))
-    kb.add(InlineKeyboardButton("✍️ Санал хүсэлт бичих", callback_data="write_feedback"))
-    bot.send_message(user_id, "🤔 Та бидний энэхүү үйлчилгээг ашиглахад хэр хялбар байсан бэ?", reply_markup=kb)
+    lang = get_user_lang(user_id)
+    kb.add(InlineKeyboardButton(t(lang, "admin_feedback_btn"), callback_data="write_feedback"))
+    bot.send_message(user_id, t(lang, "admin_rating_prompt"), reply_markup=kb)
 
 def _flush_admin_media_group(mgid: str, target_user: int, caption: str, admin_id: int):
     # pop buffer and clear scheduled flag
@@ -4210,7 +4096,7 @@ def _flush_admin_media_group(mgid: str, target_user: int, caption: str, admin_id
     # acknowledge to admin
     bot.send_message(
         admin_id,
-        f"📨 `{invoice}` дугаартай гүйлгээний баримт хэрэглэгч рүү амжилттай илгээгдлээ.",
+        t(get_user_lang(admin_id), "admin_receipt_sent", invoice=invoice),
         parse_mode="Markdown"
     )
 @bot.message_handler(content_types=['photo'])
@@ -4314,10 +4200,10 @@ def handle_passport_or_receipt(message):
             except Exception as e:
                 print(f"❌ Receipt upload DB update error: {e}")
 
-            bot.send_message(user_id, "✅ Гүйлгээний баримт амжилттай хадгалагдлаа!")
+            bot.send_message(user_id, t(get_user_lang(user_id), "user_topup_receipt_saved"))
         except Exception as e:
             print(f"❌ Receipt upload error: {e}")
-            bot.send_message(user_id, f"❌ Баримт хадгалах үед алдаа гарлаа: {e}")
+            bot.send_message(user_id, t(get_user_lang(user_id), "user_topup_receipt_error", error=str(e)))
         finally:
             update_user_session(user_id, {"state": "waiting_for_bank"})
             if 'temp_path' in locals() and os.path.exists(temp_path):
@@ -4383,7 +4269,7 @@ def handle_passport_or_receipt(message):
                 "receipt_submitted_at": receipt_submitted_at
             }).eq("invoice", invoice).execute()
             
-            bot.send_message(user_id, "✅ Гүйлгээний баримт амжилттай хадгалагдлаа!")
+            bot.send_message(user_id, t(get_user_lang(user_id), "user_topup_receipt_saved"))
             
             # Notify operator
             notify_phone_topup_operator(
@@ -4396,13 +4282,13 @@ def handle_passport_or_receipt(message):
                 telecom
             )
             
-            bot.send_message(user_id, "✅ Таны хүсэлтийг админ руу илгээлээ!\nАдмин таны гүйлгээг баталгаажуулах хүртэл та хүлээнэ үү.")
+            bot.send_message(user_id, t(get_user_lang(user_id), "user_topup_sent_to_admin"))
             
             clear_state(user_id)
             
         except Exception as e:
             print(f"❌ Phone topup receipt upload error: {e}")
-            bot.send_message(user_id, f"❌ Баримт хадгалах үед алдаа гарлаа: {e}")
+            bot.send_message(user_id, t(get_user_lang(user_id), "user_topup_receipt_error", error=str(e)))
         finally:
             if 'temp_path' in locals() and os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -4844,7 +4730,7 @@ def show_pending_users(message):
         print("🆔 Admin requesting:", user_id)
 
         if user_id not in ALLOWED_ADMINS:
-            bot.send_message(message.chat.id, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+            bot.send_message(message.chat.id, t(get_user_lang(user_id), "admin_cmd_unauthorized"))
             return
 
         response = supabase.table("users").select("*").eq("verified", False).eq("ready_for_verification", True).execute()
@@ -4853,26 +4739,18 @@ def show_pending_users(message):
         print("🗂 Pending user data:", users)
 
         if not users:
-            bot.send_message(message.chat.id, "📭 Одоогоор баталгаажуулах хүсэлт илгээсэн хэрэглэгч байхгүй байна.")
+            bot.send_message(message.chat.id, t(get_user_lang(message.from_user.id), "admin_no_pending"))
             return
 
+        lang_admin = get_user_lang(message.from_user.id)
         for user in users:
-            text = (
-                f"👤 Хэрэглэгчийн мэдээлэл:\n\n"
-                f"👤 Овог: {user.get('last_name', '-')}\n"
-                f"👤 Нэр: {user.get('first_name', '-')}\n"
-                f"� Имэйл: {user.get('email', '-')}\n"
-                f"📞 Монгол утас: {user.get('phone_mnt', '-')}\n"
-                f"📞 Орос утас: {user.get('phone', '-')}\n"
-                f"🪪 Паспортын дугаар: {user.get('registration_number', '-')}\n"
-                f"🏦 Монгол банк: {user.get('bank_mnt', '-')}\n"
-                f"🇷🇺 Орос банк: {user.get('bank_rub', '-')}\n"
-            )
+            text = t(lang_admin, "admin_pending_user_info", user_id=user.get('id'), last_name=user.get('last_name', '-'), first_name=user.get('first_name', '-'), email=user.get('email', '-'), phone_mnt=user.get('phone_mnt', '-'), phone=user.get('phone', '-'), reg_num=user.get('registration_number', '-'), bank_mnt=user.get('bank_mnt', '-'), bank_rub=user.get('bank_rub', '-'))
 
             markup = InlineKeyboardMarkup()
             markup.add(
-                InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"verify_{user['id']}"),
-                InlineKeyboardButton("❌ Цуцлах", callback_data=f"rejectuser_{user['id']}")
+                InlineKeyboardButton(t(lang_admin, "admin_btn_verify"), callback_data=f"verify_{user['id']}"),
+                InlineKeyboardButton(t(lang_admin, "admin_btn_cancel"), callback_data=f"rejectuser_{user['id']}")
+            )
             )
 
             passport_id = user.get('passport_file_id')
@@ -4892,10 +4770,10 @@ def show_pending_users(message):
                     else:
                         raise Exception("⚠️ Supabase URL-с зураг татаж чадсангүй.")
                 except Exception as e:
-                    bot.send_message(message.chat.id, text + "\n⚠️ Паспортын зургийг татаж чадсангүй.", reply_markup=markup)
+                    bot.send_message(message.chat.id, text + t(lang_admin, "admin_no_passport_download"), reply_markup=markup)
                     print(f"❌ Error downloading image from Supabase: {e}")
             else:
-                bot.send_message(message.chat.id, text + "\n⚠️ Паспорт зураг оруулаагүй байна!", reply_markup=markup)
+                bot.send_message(message.chat.id, text + t(lang_admin, "admin_no_passport_warning"), reply_markup=markup)
 
     except Exception as e:
         import traceback
@@ -4907,7 +4785,8 @@ def verify_user(call):
     user_id = int(call.data.replace("verify_", ""))
     try:
         supabase.table("users").update({"verified": True}).eq("id", user_id).execute()
-        bot.send_message(call.message.chat.id, f"✅ Хэрэглэгч [{user_id}](tg://user?id={user_id}) баталгаажлаа.", parse_mode="Markdown")
+        lang_admin = get_user_lang(call.from_user.id)
+        bot.send_message(call.message.chat.id, t(lang_admin, "admin_user_verified", user_id=user_id), parse_mode="Markdown")
         bot.send_message(user_id, t(get_user_lang(user_id), "verification_submitted").replace("илгээгдлээ! Админ шалгаад хариу өгөх болно.", "баталгаажлаа!"))
 
         # 🧹 Delete the original message with buttons
@@ -4915,7 +4794,7 @@ def verify_user(call):
 
     except Exception as e:
         print(f"❌ Error verifying user: {e}")
-        bot.send_message(call.message.chat.id, "❌ Баталгаажуулах үед алдаа гарлаа.")
+        bot.send_message(call.message.chat.id, t(get_user_lang(call.from_user.id), "admin_verify_error"))
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("rejectuser_"))
 def reject_user_with_reason_prompt(call):
@@ -4923,7 +4802,7 @@ def reject_user_with_reason_prompt(call):
     admin_id = call.from_user.id
     update_user_session(admin_id, {"state": f"awaiting_rejection_comment_{user_id}"})
 
-    bot.send_message(admin_id, f"✍️ `{user_id}` хэрэглэгчийн бүртгэлийг цуцлах шалтгаанаа бичнэ үү:", parse_mode="Markdown")
+    bot.send_message(admin_id, t(get_user_lang(admin_id), "admin_reject_user_prompt", user_id=user_id), parse_mode="Markdown")
 
 @bot.message_handler(func=lambda m: get_state(m.chat.id).startswith("awaiting_rejection_comment_"))
 def handle_rejection_comment(message):
@@ -4933,7 +4812,7 @@ def handle_rejection_comment(message):
     try:
         user_id = int(state.split("_")[-1])
     except (ValueError, AttributeError, IndexError):
-        bot.send_message(admin_id, "⚠️ Уучлаарай, хэрэглэгчийн мэдээллийг уншиж чадсангүй.")
+        bot.send_message(admin_id, t(get_user_lang(admin_id), "admin_reject_read_error"))
         return
 
     # Save to DB
@@ -4942,10 +4821,12 @@ def handle_rejection_comment(message):
     }).eq("id", user_id).execute()
 
     # Notify both parties
-    bot.send_message(admin_id, f"❌ Хэрэглэгч `{user_id}` бүртгэл цуцлагдлаа.", parse_mode="Markdown")
+    lang_admin = get_user_lang(admin_id)
+    bot.send_message(admin_id, t(lang_admin, "admin_user_rejected", user_id=user_id), parse_mode="Markdown")
+    lang_user = get_user_lang(user_id)
     bot.send_message(
         user_id,
-        f"⚠️ Таны бүртгэлийг баталгаажуулах боломжгүй байна.\n📌 Шалтгаан: _{text}_\n\n Та шаардлагатай бол мэдээллээ 👤 *Хэрэглэгчийн тохиргоо* хэсэгт засаж дахин илгээнэ үү.\n\n📞 Тусламж хэрэгтэй бол дараах хаягаар холбогдоно уу:\n+976 7230 3060\n+7 (977) 801-91-43\n📨 [@oyuns_finance](https://t.me/oyuns_finance)",
+        t(lang_user, "user_verification_rejected", reason=text),
         parse_mode="Markdown"
     )
     clear_state(admin_id)
@@ -4970,34 +4851,28 @@ def build_transaction_caption_and_markup(user_id, invoice, amount, currency_from
 
     converted = round(amount * rate if currency_from.upper() == "RUB" else amount / rate, 2)
 
-    caption = (
-        f"🔔 БАТАЛГААЖААГҮЙ ХҮСЭЛТ 🔔\n\n"
-        f"📌 Хүсэлтийн дугаар: `{invoice}`\n"
-        f"👤 Үйлчлүүлэгч: {user_line}\n"
-        f"💰 Гүйлгээ: *{amount} {currency_from.upper()} → {currency_to.upper()}*\n"
-        f"💱 Хөрвүүлсэн дүн: *{converted} {currency_to.upper()}*\n"
-        f"🏦 Дансны мэдээлэл: `{bank_details}`\n\n"
-        "✅ Гүйлгээг баталгаажуулах эсвэл татгалзах товчийг дарна уу."
-    )
+    # Use first ALWAYS_NOTIFY admin lang, or fallback to 'ru'
+    lang = get_user_lang(ALWAYS_NOTIFY_OPERATOR_ID[0] if ALWAYS_NOTIFY_OPERATOR_ID else 0)
+    caption = t(lang, "admin_new_request_caption", invoice=invoice, user_line=user_line, amount=amount, currency_from=currency_from.upper(), currency_to=currency_to.upper(), converted=converted, bank_details=bank_details)
 
     markup = InlineKeyboardMarkup()
     markup.add(
-        InlineKeyboardButton("✅ Баталгаажуулах", callback_data=f"confirm_{user_id}"),
-        InlineKeyboardButton("❌ Татгалзах", callback_data=f"reject_{user_id}")
+        InlineKeyboardButton(t(lang, "admin_btn_confirm"), callback_data=f"confirm_{user_id}"),
+        InlineKeyboardButton(t(lang, "admin_btn_reject"), callback_data=f"reject_{user_id}")
     )
 
     return caption, markup
 @bot.message_handler(commands=['guilgee'])
 def show_pending_transactions(message):
     if message.from_user.id not in ALLOWED_ADMINS:
-        bot.send_message(message.chat.id, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+        bot.send_message(message.chat.id, t(get_user_lang(message.from_user.id), "admin_cmd_unauthorized"))
         return
 
     response = supabase.table("transactions").select("*").eq("status", "pending").execute()
     transactions = response.data
 
     if not transactions:
-        bot.send_message(message.chat.id, "📭 Баталгаажаагүй гүйлгээ алга байна.")
+        bot.send_message(message.chat.id, t(get_user_lang(message.from_user.id), "admin_no_pending_txn"))
         return
 
     for txn in transactions:
@@ -5039,25 +4914,27 @@ def show_pending_transactions(message):
             except Exception as e:
                 print(f"⚠️ Telegram-с зураг илгээж чадсангүй: {e}")
                 if bill_url:
-                    bot.send_message(message.chat.id, caption + f"\n📎 [Баримт харах]({bill_url})", parse_mode="Markdown", reply_markup=markup)
+                    _lang = get_user_lang(message.from_user.id)
+                    bot.send_message(message.chat.id, caption + f"\n{t(_lang, 'admin_receipt_view')}({bill_url})", parse_mode="Markdown", reply_markup=markup)
                 else:
-                    bot.send_message(message.chat.id, caption + "\n⚠️ Баримтын зураг олдсонгүй.", parse_mode="Markdown", reply_markup=markup)
+                    bot.send_message(message.chat.id, caption + t(get_user_lang(message.from_user.id), "admin_receipt_img_missing"), parse_mode="Markdown", reply_markup=markup)
         else:
             if bill_url:
-                bot.send_message(message.chat.id, caption + f"\n📎 [Баримт харах]({bill_url})", parse_mode="Markdown", reply_markup=markup)
+                _lang = get_user_lang(message.from_user.id)
+                bot.send_message(message.chat.id, caption + f"\n{t(_lang, 'admin_receipt_view')}({bill_url})", parse_mode="Markdown", reply_markup=markup)
             else:
-                bot.send_message(message.chat.id, caption + "\n⚠️ Гүйлгээний баримт байхгүй байна.", parse_mode="Markdown", reply_markup=markup)
+                bot.send_message(message.chat.id, caption + t(get_user_lang(message.from_user.id), "admin_receipt_not_exist"), parse_mode="Markdown", reply_markup=markup)
 
 
 @bot.message_handler(commands=["haih"])
 def find_user_or_invoice(message):
     admin_id = message.from_user.id
     if admin_id not in ALLOWED_ADMINS:
-        return bot.reply_to(message, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_cmd_unauthorized"))
 
     args = message.text.split(maxsplit=1)
     if len(args) != 2:
-        return bot.reply_to(message, "❌ Зөв формат: /haih <user_id|invoice_id>")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_haih_format"))
 
     query = args[1].strip()
 
@@ -5090,10 +4967,10 @@ def find_user_or_invoice(message):
                                
         except Exception as e:
             print(f"❌ Supabase lookup error: {e}")
-            return bot.reply_to(message, "❌ Дата хайх үед алдаа гарлаа.")
+            return bot.reply_to(message, t(get_user_lang(admin_id), "admin_lookup_error"))
 
         if not resp.data:
-            return bot.reply_to(message, f"❌ `{invoice}` дугаартай гүйлгээ олдсонгүй.", parse_mode="Markdown")
+            return bot.reply_to(message, t(get_user_lang(admin_id), "admin_haih_txn_not_found", invoice=invoice), parse_mode="Markdown")
 
         target_id = resp.data[0]["user_id"]
         # fall through to the user-id branch
@@ -5133,19 +5010,20 @@ def find_user_or_invoice(message):
                 db_name = f"{db_user.get('first_name', '')} {db_user.get('last_name', '')}".strip()
             
             # Build the quick-copy line format: "Name — @username — ID"
-            display_name = tg_name or db_name or "Нэр_байхгүй"
+            lang_ha = get_user_lang(admin_id)
+            display_name = tg_name or db_name or "Unknown"
             quick_line = f"<code>{display_name} — {username} — {user_id}</code>"
             
             lines = [
-                "👤 <b>Хэрэглэгчийн мэдээлэл:</b>\n",
-                f"📋 <b>Хуулах:</b> {quick_line}\n"
+                t(lang_ha, "admin_haih_user_info_header"),
+                t(lang_ha, "admin_haih_copy", quick_line=quick_line)
             ]
             
             # Detailed info
             if db_name:
-                lines.append(f"📛 Нэр (DB): {db_name}")
+                lines.append(t(lang_ha, "admin_haih_name_db", name=db_name))
             if tg_name:
-                lines.append(f"📛 Нэр (TG): {tg_name}")
+                lines.append(t(lang_ha, "admin_haih_name_tg", name=tg_name))
             if tg_user and tg_user.username:
                 lines.append(f"🔗 Username: @{tg_user.username}")
             lines.append(f"🆔 ID: <code>{user_id}</code>")
@@ -5153,29 +5031,30 @@ def find_user_or_invoice(message):
             # DB info
             if db_user:
                 lines.append("")
-                lines.append(f"✅ Баталгаажсан: {'Тийм' if db_user.get('verified') else 'Үгүй'}")
+                v = t(lang_ha, "admin_haih_verified_yes") if db_user.get('verified') else t(lang_ha, "admin_haih_verified_no")
+                lines.append(t(lang_ha, "admin_haih_verified", val=v))
                 if db_user.get("phone"):
-                    lines.append(f"📞 Утас: {db_user.get('phone')}")
+                    lines.append(f"📞 {db_user.get('phone')}")
                 if db_user.get("bank_rub"):
-                    lines.append(f"🏦 RUB данс: {db_user.get('bank_rub')}")
+                    lines.append(f"🏦 RUB: {db_user.get('bank_rub')}")
                 if db_user.get("bank_mnt"):
-                    lines.append(f"🏦 MNT данс: {db_user.get('bank_mnt')}")
+                    lines.append(f"🏦 MNT: {db_user.get('bank_mnt')}")
             
             # Get transaction count
             try:
                 tx_resp = supabase.table("transactions").select("id", count="exact").eq("user_id", user_id).execute()
                 tx_count = tx_resp.count if tx_resp.count else 0
-                lines.append(f"\n📊 Нийт гүйлгээ: {tx_count}")
+                lines.append(t(lang_ha, "admin_haih_txn_count", count=tx_count))
             except:
                 pass
             
             text = "\n".join(lines)
             return bot.send_message(message.chat.id, text, parse_mode="HTML")
         else:
-            return bot.reply_to(message, f"❌ <code>{user_id}</code> хэрэглэгчийн мэдээлэл олдсонгүй.\n\nБотонд бүртгэлгүй эсвэл буруу ID байна.", parse_mode="HTML")
+            return bot.reply_to(message, t(get_user_lang(admin_id), "admin_haih_user_not_found", user_id=user_id), parse_mode="HTML")
     else:
         # neither invoice nor pure-digit
-        return bot.reply_to(message, "❌ Зөв формат: /haih <user_id|invoice_id>")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_haih_format_err"))
 
 @bot.message_handler(commands=["message"])
 def send_message_to_user(message):
@@ -5184,20 +5063,17 @@ def send_message_to_user(message):
     """
     admin_id = message.from_user.id
     if admin_id not in ALLOWED_ADMINS:
-        return bot.reply_to(message, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+        return bot.reply_to(message, t(get_user_lang(admin_id), "admin_cmd_unauthorized"))
     
+    lang_adm = get_user_lang(admin_id)
     args = message.text.split(maxsplit=2)
     if len(args) < 3:
-        return bot.reply_to(
-            message, 
-            "❌ Зөв формат: /message <user_id> <message>\n\n"
-            "Жишээ нь: /message 123456789 Сайн байна уу?"
-        )
+        return bot.reply_to(message, t(lang_adm, "admin_msg_format"))
     
     try:
         user_id = int(args[1])
     except ValueError:
-        return bot.reply_to(message, "❌ User ID буруу байна. Зөвхөн тоо оруулна уу.")
+        return bot.reply_to(message, t(lang_adm, "admin_msg_bad_id"))
     
     user_message = args[2]
     
@@ -5225,17 +5101,17 @@ def send_message_to_user(message):
         if e.error_code == 403:
             bot.reply_to(
                 message, 
-                f"❌ Хэрэглэгч `{user_id}` бот-ыг блоклосон эсвэл устгасан байна.",
+                t(get_user_lang(admin_id), "admin_msg_user_blocked", user_id=user_id),
                 parse_mode="Markdown"
             )
         elif e.error_code == 400:
             bot.reply_to(
                 message, 
-                f"❌ Хэрэглэгч `{user_id}` олдсонгүй эсвэл чат эхлүүлээгүй байна.",
+                t(get_user_lang(admin_id), "admin_msg_user_not_found", user_id=user_id),
                 parse_mode="Markdown"
             )
         else:
-            bot.reply_to(message, f"❌ Мессеж илгээх үед алдаа гарлаа: {e}")
+            bot.reply_to(message, t(get_user_lang(admin_id), "admin_msg_send_error", error=str(e)))
         print(f"❌ Failed to send message from admin {admin_id} to user {user_id}: {e}")
     except Exception as e:
         bot.reply_to(message, f"❌ Алдаа гарлаа: {e}")
@@ -5278,20 +5154,21 @@ def broadcast_rates(message):
     Only admins (ALLOWED_ADMINS) and the moderator (MODERATOR_ID) can use this.
     """
     sender_id = message.from_user.id
+    lang_s = get_user_lang(sender_id)
     if sender_id not in ALLOWED_ADMINS and sender_id != MODERATOR_ID:
-        return bot.reply_to(message, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+        return bot.reply_to(message, t(lang_s, "admin_broadcast_unauthorized"))
 
     # 1. Fetch latest rates
     try:
         rate_resp = supabase.table("bot_rates").select("buy_rate, sell_rate").order("updated_at", desc=True).limit(1).execute()
         if not rate_resp.data:
-            return bot.reply_to(message, "❌ Ханшийн мэдээлэл олдсонгүй.")
+            return bot.reply_to(message, t(lang_s, "admin_broadcast_no_rates"))
         rate = rate_resp.data[0]
         buy_rate = _format_rate(rate["buy_rate"])
         sell_rate = _format_rate(rate["sell_rate"])
     except Exception as e:
         print(f"❌ Broadcast: failed to fetch rates: {e}")
-        return bot.reply_to(message, f"❌ Ханш татахад алдаа: {e}")
+        return bot.reply_to(message, t(lang_s, "admin_broadcast_rate_error", error=str(e)))
 
     # 2. Build caption
     now = datetime.now(UB_TZ)
@@ -5319,10 +5196,10 @@ def broadcast_rates(message):
         user_ids = _fetch_all_user_ids()
     except Exception as e:
         print(f"❌ Broadcast: failed to fetch users: {e}")
-        return bot.reply_to(message, f"❌ Хэрэглэгчдийн жагсаалт татахад алдаа: {e}")
+        return bot.reply_to(message, t(lang_s, "admin_broadcast_users_error", error=str(e)))
 
     if not user_ids:
-        return bot.reply_to(message, "⚠️ Хэрэглэгч олдсонгүй.")
+        return bot.reply_to(message, t(lang_s, "admin_broadcast_no_users"))
 
     bot.reply_to(message, f"📡 Broadcast эхэллээ... ({len(user_ids)} хэрэглэгч)")
 
@@ -5462,20 +5339,21 @@ def _auto_broadcast_loop():
 def test_broadcast_rates(message):
     """Test broadcast – sends the rate photo only to admins and the moderator."""
     sender_id = message.from_user.id
+    lang_s = get_user_lang(sender_id)
     if sender_id not in ALLOWED_ADMINS and sender_id != MODERATOR_ID:
-        return bot.reply_to(message, "🚫 Зөвшөөрөлгүй хэрэглэгч байна.")
+        return bot.reply_to(message, t(lang_s, "admin_broadcast_unauthorized"))
 
     # 1. Fetch latest rates
     try:
         rate_resp = supabase.table("bot_rates").select("buy_rate, sell_rate").order("updated_at", desc=True).limit(1).execute()
         if not rate_resp.data:
-            return bot.reply_to(message, "❌ Ханшийн мэдээлэл олдсонгүй.")
+            return bot.reply_to(message, t(lang_s, "admin_broadcast_no_rates"))
         rate = rate_resp.data[0]
         buy_rate = _format_rate(rate["buy_rate"])
         sell_rate = _format_rate(rate["sell_rate"])
     except Exception as e:
         print(f"❌ TestBroadcast: failed to fetch rates: {e}")
-        return bot.reply_to(message, f"❌ Ханш татахад алдаа: {e}")
+        return bot.reply_to(message, t(lang_s, "admin_broadcast_rate_error", error=str(e)))
 
     # 2. Build caption
     now = datetime.now(UB_TZ)
