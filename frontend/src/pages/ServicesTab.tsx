@@ -14,6 +14,7 @@ interface Props {
 
 export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {}) {
   const [activeService, setActiveService] = useState<"gift" | "fuel" | "fuel-dev" | null>(null);
+  const [pendingFuelOrderId, setPendingFuelOrderId] = useState<string | null>(null);
   const { t } = useLang();
 
   const { data: rate } = useQuery({
@@ -25,6 +26,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
   // Auto-open FuelFlow when navigating from status card
   useEffect(() => {
     if (initialFuelOrderId) {
+      setPendingFuelOrderId(initialFuelOrderId);
       setActiveService("fuel-dev");
       onFuelOrderOpened?.();
     }
@@ -48,9 +50,9 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
       <div className="animate-fadeIn">
         <FuelFlow
           sellRate={rate?.sell_rate || 0}
-          onBack={() => setActiveService(null)}
-          onSuccess={() => setActiveService(null)}
-          initialOrderId={initialFuelOrderId || undefined}
+          onBack={() => { setActiveService(null); setPendingFuelOrderId(null); }}
+          onSuccess={() => { setActiveService(null); setPendingFuelOrderId(null); }}
+          initialOrderId={pendingFuelOrderId || undefined}
         />
       </div>
     );
