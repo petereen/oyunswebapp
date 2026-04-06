@@ -200,7 +200,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
     const gross = l * p;
     const discount = gross * discountPercent / 100;
     const net = gross - discount;
-    const rounded = Math.ceil(net / 100) * 100;
+    const rounded = Math.round(net / 100) * 100;
 
     let exchangeRate: number | undefined;
     let final_amount = rounded;
@@ -225,11 +225,24 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
     };
   }, [liters, pricePerLiter, discountPercent, paymentCurrency, sellRate, stationName]);
 
-  // Filtered banks by currency
+  // Filtered banks by currency – randomly pick ONE to cycle across accounts
   const filteredBanks = useMemo(() => {
-    if (!paymentCurrency) return adminBanks;
-    return adminBanks.filter((b) => b.currency === paymentCurrency);
+    const currencyBanks = !paymentCurrency
+      ? adminBanks
+      : adminBanks.filter((b) => b.currency === paymentCurrency);
+    if (currencyBanks.length <= 1) return currencyBanks;
+    const randomIndex = Math.floor(Math.random() * currencyBanks.length);
+    return [currencyBanks[randomIndex]];
   }, [adminBanks, paymentCurrency]);
+
+  // Auto-select the randomly chosen bank
+  useEffect(() => {
+    if (filteredBanks.length === 1) {
+      setSelectedBank(filteredBanks[0]);
+    } else {
+      setSelectedBank(null);
+    }
+  }, [filteredBanks]);
 
   // Geolocation
   const requestGeolocation = () => {
@@ -939,7 +952,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
           </div>
 
           {validInput && (() => {
-            const previewRounded = Math.ceil(previewNet / 100) * 100;
+            const previewRounded = Math.round(previewNet / 100) * 100;
             const roundingDiff = previewRounded - previewNet;
             return (
               <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl space-y-1 text-xs">
@@ -955,10 +968,10 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                   <span>{t("fuel.net_amount")}</span>
                   <span>{previewNet.toFixed(0)}₽</span>
                 </div>
-                {roundingDiff > 0 && (
+                {roundingDiff !== 0 && (
                   <div className="flex justify-between text-dark-400 dark:text-ivory-500">
                     <span>{t("fuel.rounding")}</span>
-                    <span>+{roundingDiff.toFixed(0)}₽</span>
+                    <span>{roundingDiff > 0 ? "+" : ""}{roundingDiff.toFixed(0)}₽</span>
                   </div>
                 )}
                 <div className="border-t border-amber-200 dark:border-amber-800 pt-1 flex justify-between font-bold text-dark-800 dark:text-ivory-200">

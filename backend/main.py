@@ -3251,7 +3251,7 @@ def _fuel_calculate(station_name: str, liters: float, price_per_liter: float, pa
     gross = liters * price_per_liter
     discount = gross * discount_percent / 100
     net = gross - discount
-    rounded = math.ceil(net / 100) * 100  # Always round up to 100 RUB
+    rounded = round(net / 100) * 100  # Round to nearest 100 RUB (>=50 up, <50 down)
 
     if payment_currency == "MNT" and exchange_rate and exchange_rate > 0:
         final = round(rounded * exchange_rate, 2)
