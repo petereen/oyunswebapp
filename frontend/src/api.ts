@@ -757,6 +757,9 @@ export interface FuelOrder {
   pump_photo_url?: string;
   approval_image_url?: string;
   admin_bank_id?: string;
+  admin_bank_name?: string;
+  admin_bank_owner?: string;
+  admin_bank_card?: string;
   status: 'pending' | 'pending_payment' | 'approved' | 'paid' | 'in_progress' | 'fueling_complete' | 'completed' | 'rejected' | 'cancelled';
   rejection_comment?: string;
   admin_comment?: string;

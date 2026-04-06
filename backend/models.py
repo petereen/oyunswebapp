@@ -621,6 +621,9 @@ class FuelOrderItem(BaseModel):
     pump_photo_url: Optional[str] = None
     approval_image_url: Optional[str] = None
     admin_bank_id: Optional[str] = None
+    admin_bank_name: Optional[str] = None
+    admin_bank_owner: Optional[str] = None
+    admin_bank_card: Optional[str] = None
     status: str
     rejection_comment: Optional[str] = None
     admin_comment: Optional[str] = None

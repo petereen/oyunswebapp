@@ -83,8 +83,11 @@ CREATE TABLE IF NOT EXISTS fuel_orders (
     pump_photo_url TEXT,                         -- pump display photo after fueling
     approval_image_url TEXT,                     -- QR/barcode image from admin approval
 
-    -- Admin bank used
+    -- Admin bank used (ID + snapshot of details at order time)
     admin_bank_id UUID,
+    admin_bank_name VARCHAR(100),
+    admin_bank_owner VARCHAR(100),
+    admin_bank_card VARCHAR(50),
 
     -- Status flow: pending -> approved -> completed | rejected
     status VARCHAR(30) NOT NULL DEFAULT 'pending'

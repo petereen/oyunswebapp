@@ -60,6 +60,7 @@ const translations: Record<string, Record<FuelLang, string>> = {
   "history.rounded": { ru: "Округлено:", mn: "Бүхэл:" },
   "history.rate": { ru: "Курс:", mn: "Ханш:" },
   "history.receipt": { ru: "Чек:", mn: "Баримт:" },
+  "history.bankAccount": { ru: "Реквизит:", mn: "Данс:" },
   "history.pump": { ru: "Колонка:", mn: "Насос:" },
   "history.rejectionReason": { ru: "Причина отклонения:", mn: "Цуцлах шалтгаан:" },
 
@@ -86,6 +87,7 @@ const translations: Record<string, Record<FuelLang, string>> = {
   "inbox.viewOnMap": { ru: "Показать на карте", mn: "Газрын зураг дээр харах" },
   "inbox.paymentReceipt": { ru: "Чек оплаты:", mn: "Төлбөрийн баримт:" },
   "inbox.pumpPhoto": { ru: "Фото колонки:", mn: "Насосны зураг:" },
+  "inbox.bankAccount": { ru: "Реквизит:", mn: "Данс:" },
   "inbox.dispenserTitle": { ru: "Колонка", mn: "Колонка" },
   "inbox.turnOnDispenser": { ru: "включите колонку", mn: "колонкыг асаана уу" },
   "inbox.qrUploadTitle": { ru: "Загрузить QR/штрих-код (перед одобрением)", mn: "QR/Штрих-код зураг оруулах (зөвшөөрөхийн өмнө)" },

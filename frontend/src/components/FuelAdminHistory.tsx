@@ -132,6 +132,16 @@ export function FuelAdminHistory() {
                   {order.exchange_rate && (
                     <div><span className="text-slate-400">{t("history.rate")}</span> <span className="font-medium">{order.exchange_rate}</span></div>
                   )}
+                  {order.admin_bank_name && (
+                    <div className="col-span-2">
+                      <span className="text-slate-400">{t("history.bankAccount") || "Реквизит:"}</span>{" "}
+                      <span className="font-medium">
+                        {order.admin_bank_name}
+                        {order.admin_bank_card ? ` • ${order.admin_bank_card}` : ""}
+                        {order.admin_bank_owner ? ` (${order.admin_bank_owner})` : ""}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {order.location_text && (

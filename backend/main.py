@@ -3402,6 +3402,17 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
         "updated_at": now_utc,
     }
 
+    # Snapshot bank account details so they're preserved even if the account is changed/deleted
+    if payload.admin_bank_id:
+        try:
+            bank_res = client.table("fuel_admin_bank_accounts").select("bank_name, owner_name, card_number").eq("id", payload.admin_bank_id).single().execute()
+            if bank_res.data:
+                order_data["admin_bank_name"] = bank_res.data.get("bank_name")
+                order_data["admin_bank_owner"] = bank_res.data.get("owner_name")
+                order_data["admin_bank_card"] = bank_res.data.get("card_number")
+        except Exception:
+            pass
+
     res = client.table("fuel_orders").insert(order_data).execute()
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create fuel order")

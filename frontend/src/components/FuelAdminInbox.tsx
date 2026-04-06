@@ -238,6 +238,16 @@ export function FuelAdminInbox() {
                       <span className="font-bold text-amber-600">{order.final_amount.toLocaleString()} {order.payment_currency}</span>
                     </div>
                   )}
+                  {order.admin_bank_name && (
+                    <div className="col-span-2">
+                      <span className="text-slate-400">{t("inbox.bankAccount") || "Реквизит:"}</span>{" "}
+                      <span className="font-medium text-dark-800 dark:text-ivory-200">
+                        {order.admin_bank_name}
+                        {order.admin_bank_card ? ` • ${order.admin_bank_card}` : ""}
+                        {order.admin_bank_owner ? ` (${order.admin_bank_owner})` : ""}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Location */}
