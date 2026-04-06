@@ -2480,8 +2480,7 @@ def use_saved_bank(call):
         bot.answer_callback_query(call.id)
         return
     lang = get_user_lang(user_id)
-    update_user_session(user_id, {"state": "waiting_for_receipt"})
-    if get_state(user_id) == "waiting_for_bank":
+    if get_state(user_id) != "waiting_for_bank":
         bot.send_message(user_id, t(lang, "saved_bank_not_in_mode"))
         return
 
@@ -2503,11 +2502,11 @@ def use_saved_bank(call):
 
         if currency_from == "rub":
             bank_info = user.get("bank_mnt", "").strip()
-            expected_fields = 3
+            expected_fields = (3, 4)  # 3 (legacy) or 4 (with phone)
             format_note = t(lang, "saved_bank_format_note_mnt")
         else:
             bank_info = user.get("bank_rub", "").strip()
-            expected_fields = 4
+            expected_fields = (4,)
             format_note = t(lang, "saved_bank_format_note_rub")
 
         if not bank_info:
@@ -2515,7 +2514,9 @@ def use_saved_bank(call):
             return
 
         parts = [p.strip() for p in bank_info.split(",")]
-        if len(parts) != expected_fields or any(not p for p in parts):
+        # For MNT: require at least first 3 fields non-empty; phone (4th) can be empty
+        required_parts = parts[:3] if currency_from == "rub" else parts
+        if len(parts) not in expected_fields or any(not p for p in required_parts):
             bot.send_message(user_id, t(lang, "saved_bank_format_error", note=format_note))
             return
 
@@ -2589,11 +2590,16 @@ def receive_bank_details(message):
 
     # ✅ Step 2: Validate bank format (must be 4 parts)
     currency_to = session.get("currency_to")
-    expected_fields = 3 if currency_to == "mnt" else 4
+    if currency_to == "mnt":
+        expected_fields = (3, 4)  # 3 (legacy) or 4 (with phone)
+    else:
+        expected_fields = (4,)
 
     parts = [p.strip() for p in bank_details.split(",")]
-    if len(parts) != expected_fields or any(not p for p in parts):
-        fmt_key = "bank_format_error_mnt" if expected_fields == 3 else "bank_format_error_rub"
+    # For MNT: require at least first 3 fields non-empty; phone (4th) can be empty
+    required_parts = parts[:3] if currency_to == "mnt" else parts
+    if len(parts) not in expected_fields or any(not p for p in required_parts):
+        fmt_key = "bank_format_error_mnt" if currency_to == "mnt" else "bank_format_error_rub"
         bot.send_message(
             user_id,
             t(lang, fmt_key),
@@ -2693,6 +2699,8 @@ def notify_operator(user_id, invoice, receipt_id, bank_details, operator_chat_id
 
     converted = round(amount * rate if currency_from.lower() == "rub" else amount / rate, 2)
 
+    operator_id = get_current_shift_operator_id()
+
     # 📝 Save caption to reuse
     lang = get_user_lang(operator_id)
     caption = t(lang, "admin_new_request_caption", invoice=invoice, user_line=user_line, amount=amount, currency_from=currency_from, currency_to=currency_to, converted=converted, bank_details=bank_details)
@@ -2702,7 +2710,6 @@ def notify_operator(user_id, invoice, receipt_id, bank_details, operator_chat_id
         InlineKeyboardButton(t(lang, "admin_btn_confirm"), callback_data=f"confirm_{user_id}"),
         InlineKeyboardButton(t(lang, "admin_btn_reject"), callback_data=f"reject_{user_id}")
     )
-    operator_id = get_current_shift_operator_id()
     # ➤ Always send to current shift operator
     bot.send_photo(operator_id, receipt_id, caption=caption, parse_mode="Markdown", reply_markup=markup)
 
