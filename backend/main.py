@@ -1736,7 +1736,7 @@ async def admin_kyc_action(
         user_lang = _get_user_lang(payload.user_id)
         promo_text = ""
         if promo_code:
-            promo_text = tb(user_lang, "notif_kyc_approved_promo", code=promo_code, discount="0.5")
+            promo_text = tb(user_lang, "notif_kyc_approved_promo", code=promo_code, discount="0.2")
         
         notification_text = tb(user_lang, "notif_kyc_approved") + promo_text
         
