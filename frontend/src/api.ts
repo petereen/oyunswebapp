@@ -117,6 +117,7 @@ export type UserProfile = {
   ready_for_verification?: boolean;
   agreed_terms?: boolean;
   passport_storage_url?: string;
+  verification_level?: number; // 0=new, 1=basic (unverified), 2=fully verified
 };
 
 export type AdminBankAccount = {
@@ -144,6 +145,13 @@ export type RegistrationInput = {
   mnt_owner_name: string;
   mnt_phone: string;
   passport_storage_url: string;
+};
+
+export type BasicRegistrationInput = {
+  last_name: string;
+  first_name: string;
+  phone: string;
+  email?: string;
 };
 
 export type KycItem = {
@@ -300,6 +308,11 @@ export async function validatePromoCode(code: string, direction: string) {
 export async function submitRegistration(payload: RegistrationInput) {
   const res = await api.post('/register', payload);
   return res.data as { ok: boolean; message: string };
+}
+
+export async function submitBasicRegistration(payload: BasicRegistrationInput) {
+  const res = await api.post('/register-basic', payload);
+  return res.data as { ok: boolean; message: string; verification_level: number };
 }
 
 export async function fetchInbox() {

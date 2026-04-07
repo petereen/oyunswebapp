@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend,
 } from "recharts";
-import { fetchAnalytics, fetchHistory } from "../api";
+import { fetchAnalytics, fetchHistory, fetchMe } from "../api";
 import { useLang } from "../i18n/useLang";
 
 interface MonthlyData { month: string; amount: number; }
@@ -74,20 +74,43 @@ export function StatsTab({ userId }: Props) {
   const [periodOffset, setPeriodOffset] = useState(0);
   const [photoModal, setPhotoModal] = useState<string | null>(null);
 
-  // Analytics
-  const { data: analyticsData, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
-    queryKey: ["analytics"],
-    queryFn: () => fetchAnalytics(),
-    enabled: Boolean(userId),
-  });
-
-  // History
-  const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ["history", userId],
-    queryFn: () => fetchHistory(),
+  const { data: profile } = useQuery({
+    queryKey: ["me", userId],
+    queryFn: fetchMe,
     enabled: Boolean(userId),
     staleTime: 0,
   });
+  const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : 0);
+  const isVerified = verificationLevel >= 2;
+
+  // Analytics - only for verified users
+  const { data: analyticsData, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
+    queryKey: ["analytics"],
+    queryFn: () => fetchAnalytics(),
+    enabled: Boolean(userId) && isVerified,
+  });
+
+  // History - only for verified users
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ["history", userId],
+    queryFn: () => fetchHistory(),
+    enabled: Boolean(userId) && isVerified,
+    staleTime: 0,
+  });
+
+  if (!isVerified) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-5 animate-fadeIn">
+        <div className="w-20 h-20 bg-maroon-50 dark:bg-maroon-900/30 rounded-full flex items-center justify-center">
+          <BarChart3 className="w-10 h-10 text-maroon-400" />
+        </div>
+        <div className="text-center space-y-2">
+          <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">{t("stats.verification_required")}</div>
+          <div className="text-sm text-dark-600 dark:text-ivory-300">{t("stats.verification_required_desc")}</div>
+        </div>
+      </div>
+    );
+  }
 
   const historyItems: HistoryItem[] = historyData?.items || [];
 

@@ -89,6 +89,7 @@ class UpsertUserPayload(BaseModel):
     agreed_terms: Optional[bool] = None
     lang: Optional[str] = None
     updated_at: Optional[datetime] = None
+    verification_level: Optional[int] = 0  # 0=new, 1=basic (unverified), 2=fully verified
 
 
 class HistoryItem(BaseModel):
@@ -159,6 +160,14 @@ class KycItem(BaseModel):
 
 class KycResponse(BaseModel):
     items: list[KycItem]
+
+
+class BasicRegistrationRequest(BaseModel):
+    """Level 1 registration - minimal info, no admin approval needed."""
+    last_name: str
+    first_name: str
+    phone: str  # Phone number
+    email: Optional[str] = None
 
 
 class RegistrationRequest(BaseModel):

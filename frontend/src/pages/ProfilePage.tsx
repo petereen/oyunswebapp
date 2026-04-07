@@ -3,9 +3,10 @@ import { useState, useEffect } from "react";
 import {
   ArrowLeft, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp,
   Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save, MessageCircle,
+  ShieldCheck,
 } from "lucide-react";
 import { fetchMe, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput } from "../api";
-import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "../components/RegistrationModal";
+import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone, RegistrationModal } from "../components/RegistrationModal";
 import { useLang } from "../i18n/useLang";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
@@ -36,6 +37,7 @@ export function ProfilePage({ userId, onBack }: Props) {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showKycModal, setShowKycModal] = useState(false);
 
   // Bank form state
   const [phone, setPhone] = useState("");
@@ -58,6 +60,10 @@ export function ProfilePage({ userId, onBack }: Props) {
     staleTime: 0,
   });
   const profile = profileData?.user;
+  const verificationLevel = profile?.verification_level ?? (profile?.verified ? 2 : 0);
+  const isVerified = verificationLevel >= 2;
+  const isBasicRegistered = verificationLevel >= 1;
+  const pendingVerification = profile?.ready_for_verification && !profile?.verified;
 
   const { data: promoCodes, isLoading: promoLoading } = useQuery({
     queryKey: ["user-promos", userId],
@@ -148,6 +154,11 @@ export function ProfilePage({ userId, onBack }: Props) {
                   <CheckCircle2 className="w-5 h-5 text-green-400" />
                 </div>
               )}
+              {isBasicRegistered && !isVerified && (
+                <div className="w-8 h-8 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-amber-400" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -210,6 +221,26 @@ export function ProfilePage({ userId, onBack }: Props) {
           ) : (
             /* ───── View Mode ───── */
             <div className="space-y-4">
+              {/* Complete Registration Banner for Level 1 users */}
+              {isBasicRegistered && !isVerified && !pendingVerification && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 rounded-2xl">
+                  <div className="text-sm font-bold text-amber-700 dark:text-amber-300 mb-1">{t("profile.complete_registration")}</div>
+                  <div className="text-xs text-amber-600 dark:text-amber-400 mb-3">{t("profile.complete_registration_desc")}</div>
+                  <button
+                    onClick={() => setShowKycModal(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 transition"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    {t("profile.complete_registration_btn")}
+                  </button>
+                </div>
+              )}
+              {pendingVerification && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-2xl">
+                  <div className="text-sm font-bold text-blue-700 dark:text-blue-300 mb-1">{t("home.pending_verification")}</div>
+                  <div className="text-xs text-blue-600 dark:text-blue-400">{t("home.pending_desc")}</div>
+                </div>
+              )}
               {/* Contact Info - grouped list */}
               <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-card-xs border border-silver/60 dark:border-dark-600 overflow-hidden divide-y divide-surface-50 dark:divide-dark-700">
                 {profile.email && (
@@ -302,6 +333,17 @@ export function ProfilePage({ userId, onBack }: Props) {
                 Oyuns Finance v2.0 • © 2026
               </div>
             </div>
+          )}
+
+          {/* KYC Registration Modal */}
+          {showKycModal && (
+            <RegistrationModal
+              onRegistered={() => {
+                queryClient.invalidateQueries({ queryKey: ["me", userId] });
+                setShowKycModal(false);
+              }}
+              onClose={() => setShowKycModal(false)}
+            />
           )}
         </div>
       ) : (

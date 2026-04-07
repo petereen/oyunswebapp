@@ -27,6 +27,7 @@ from models import (
     AppSettingsResponse,
     AuthRequest,
     AuthResponse,
+    BasicRegistrationRequest,
     ExchangeCreateRequest,
     ExchangeCreateResponse,
     HealthResponse,
@@ -833,6 +834,43 @@ async def agree_terms(user=Depends(get_jwt_authenticated_user)):
     return {"ok": True, "agreed_terms": True}
 
 
+@app.post("/api/register-basic")
+async def register_basic(
+    payload: BasicRegistrationRequest,
+    user=Depends(get_jwt_authenticated_user),
+):
+    """Level 1 registration - minimal info, immediate account creation without admin approval."""
+    from zoneinfo import ZoneInfo
+
+    client = get_supabase()
+    moscow_tz = ZoneInfo("Europe/Moscow")
+    now = datetime.now(moscow_tz).isoformat()
+
+    # Check if user already has a higher verification level
+    existing = client.table("users").select("verification_level").eq("id", user.id).limit(1).execute()
+    if existing.data and existing.data[0].get("verification_level", 0) >= 1:
+        raise HTTPException(status_code=400, detail="User already registered")
+
+    update_payload = {
+        "first_name": payload.first_name,
+        "last_name": payload.last_name,
+        "phone": payload.phone,
+        "verification_level": 1,
+        "agreed_terms": True,
+        "updated_at": now,
+    }
+
+    if payload.email:
+        update_payload["email"] = payload.email
+
+    result = client.table("users").update(update_payload).eq("id", user.id).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to submit basic registration")
+
+    return {"ok": True, "message": "Basic registration completed", "verification_level": 1}
+
+
 @app.post("/api/register")
 async def register_user(
     payload: RegistrationRequest,
@@ -863,6 +901,7 @@ async def register_user(
         "passport_storage_url": payload.passport_storage_url,
         "ready_for_verification": True,
         "agreed_terms": True,  # User agreed to terms during registration
+        "verification_level": 1,  # Level 1 until admin approves to Level 2
         "updated_at": now,
     }
     
@@ -1651,9 +1690,10 @@ async def admin_kyc_action(
     has_all_bank_info = has_russian_bank and has_mongolian_bank
     
     if payload.action == "approve":
-        # Update user to verified
+        # Update user to verified + Level 2
         client.table("users").update({
             "verified": True,
+            "verification_level": 2,
             "updated_at": now,
         }).eq("id", payload.user_id).execute()
         

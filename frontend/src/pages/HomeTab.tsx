@@ -9,6 +9,7 @@ import { PendingGiftBanner } from "../components/PendingGiftBanner";
 import { GiftStatusTracker } from "../components/GiftStatusTracker";
 import { FuelStatusTracker } from "../components/FuelStatusTracker";
 import { RegistrationModal } from "../components/RegistrationModal";
+import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { RequiredInfoModal } from "../components/RequiredInfoModal";
 import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
 import { TelegramUser } from "../hooks/useTelegramAuth";
@@ -51,8 +52,10 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
   });
 
   const userProfile = profile?.user;
-  const isVerified = userProfile?.verified === true;
-  const needsRegistration = userProfile && userProfile.verified === false && userProfile.ready_for_verification === false;
+  const verificationLevel = userProfile?.verification_level ?? (userProfile?.verified ? 2 : userProfile?.ready_for_verification ? 1 : 0);
+  const isVerified = verificationLevel >= 2;
+  const isBasicRegistered = verificationLevel >= 1;
+  const needsRegistration = verificationLevel === 0;
   const pendingVerification = userProfile && userProfile.verified === false && userProfile.ready_for_verification === true;
 
   const missingEmail = isVerified && !userProfile?.email?.trim();
@@ -66,12 +69,16 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
   const missingRequiredInfo = missingEmail || missingPhoneMnt;
 
   const [showRegistration, setShowRegistration] = useState(false);
+  const [showQuickRegistration, setShowQuickRegistration] = useState(false);
+  const [showKycRegistration, setShowKycRegistration] = useState(false);
   const [showRequiredInfo, setShowRequiredInfo] = useState(false);
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
 
   const handleRegistered = () => {
     queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
     setShowRegistration(false);
+    setShowQuickRegistration(false);
+    setShowKycRegistration(false);
   };
 
   const handleRequiredInfoSaved = () => {
@@ -158,9 +165,17 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
             >
               <User className="w-5 h-5" />
             </button>
+          ) : isBasicRegistered ? (
+            <button
+              onClick={onNavigateToProfile}
+              className="w-11 h-11 rounded-2xl bg-white dark:bg-dark-700 shadow-card-xs border border-silver/60 dark:border-dark-600 text-dark-600 dark:text-ivory-200 flex items-center justify-center hover:shadow-card transition-all"
+              aria-label={t("home.profile")}
+            >
+              <User className="w-5 h-5" />
+            </button>
           ) : (
             <button
-              onClick={() => setShowRegistration(true)}
+              onClick={() => setShowQuickRegistration(true)}
               className="w-11 h-11 rounded-2xl bg-maroon-600 text-white flex items-center justify-center hover:bg-maroon-500 shadow-btn transition-all"
               aria-label={t("home.register")}
             >
@@ -184,7 +199,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
       {/* Transaction Status Trackers */}
       {user?.id && <TransactionStatusTracker userId={user.id} />}
       {user?.id && isVerified && <GiftStatusTracker userId={user.id} />}
-      {user?.id && <FuelStatusTracker userId={user.id} onOpenOrder={onNavigateToFuelOrder} />}
+      {user?.id && isBasicRegistered && <FuelStatusTracker userId={user.id} onOpenOrder={onNavigateToFuelOrder} />}
       {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: ["me", user?.id] })} />}
 
       {/* Profile Error */}
@@ -198,7 +213,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
       )}
 
       {/* Registration / Verification States */}
-      {!isVerified && !pendingVerification && needsRegistration && (
+      {needsRegistration && (
         <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-14 h-14 bg-maroon-50 dark:bg-maroon-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
@@ -210,10 +225,31 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
             </div>
           </div>
           <button
-            onClick={() => setShowRegistration(true)}
+            onClick={() => setShowQuickRegistration(true)}
             className="w-full bg-maroon-600 text-white py-3.5 rounded-2xl font-bold text-base shadow-btn hover:bg-maroon-500 active:scale-[0.98] transition-all"
           >
             {t("home.register")}
+          </button>
+        </div>
+      )}
+
+      {/* Level 1 registered but not fully verified - show upgrade prompt */}
+      {isBasicRegistered && !isVerified && !pendingVerification && (
+        <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-amber-200 dark:border-amber-800 animate-slideUp">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <UserPlus className="w-6 h-6 text-amber-500" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-dark-800 dark:text-ivory-200 mb-0.5">{t("home.complete_registration")}</div>
+              <div className="text-xs text-dark-600 dark:text-ivory-300">{t("home.complete_registration_desc")}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowKycRegistration(true)}
+            className="w-full mt-3 bg-amber-500 text-white py-3 rounded-2xl font-bold text-sm shadow-btn hover:bg-amber-600 active:scale-[0.98] transition-all"
+          >
+            {t("home.complete_registration_btn")}
           </button>
         </div>
       )}
@@ -294,8 +330,18 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
         © 2026 Oyuns Finance. All rights reserved.
       </div>
 
-      {/* Registration Modal */}
-      {showRegistration && !isVerified && !pendingVerification && (
+      {/* Registration Modal - Level 1 Quick */}
+      {showQuickRegistration && needsRegistration && (
+        <QuickRegistrationModal onRegistered={handleRegistered} onClose={() => setShowQuickRegistration(false)} />
+      )}
+
+      {/* Registration Modal - Level 2 Full KYC */}
+      {showKycRegistration && isBasicRegistered && !isVerified && (
+        <RegistrationModal onRegistered={handleRegistered} onClose={() => setShowKycRegistration(false)} />
+      )}
+
+      {/* Legacy Registration Modal */}
+      {showRegistration && !isBasicRegistered && (
         <RegistrationModal onRegistered={handleRegistered} onClose={() => setShowRegistration(false)} />
       )}
 
