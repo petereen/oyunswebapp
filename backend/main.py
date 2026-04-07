@@ -3647,6 +3647,27 @@ async def fuel_chat_send(order_id: str, payload: FuelChatMessageRequest, user=De
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to send message")
 
+    # Notify fuel admin about new user message
+    invoice = order_res.data[0].get("invoice", "")
+    chat_text = (
+        f"{tb('ru', 'notif_fuel_user_chat')}\n\n"
+        f"📋 Invoice: <code>{invoice}</code>\n"
+    )
+    if payload.message:
+        chat_text += f"💬 {payload.message[:200]}"
+    elif payload.image_url:
+        chat_text += "📷 Зураг илгээсэн"
+
+    fuel_settings = get_settings()
+    chat_reply_markup = None
+    if fuel_settings.webapp_url and "localhost" not in fuel_settings.webapp_url and fuel_settings.webapp_url.startswith("https://"):
+        chat_reply_markup = {
+            "inline_keyboard": [
+                [{"text": tb("ru", "fuel_admin_open_panel"), "web_app": {"url": f"{fuel_settings.webapp_url}?fuel-admin"}}]
+            ]
+        }
+    _send_fuel_admin_notification(chat_text, reply_markup=chat_reply_markup)
+
     return {"ok": True, "message": FuelChatMessage(**res.data[0])}
 
 
@@ -3794,6 +3815,21 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
     }
 
     if order_user_id:
+        # Build reply_markup with "Open Order" button for user
+        fuel_reply_markup = None
+        order_id = payload.order_id
+        if settings.user_panel_url and settings.user_panel_url.startswith("https://"):
+            fuel_reply_markup = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": tb(fuel_user_lang, "btn_open_fuel_order"),
+                            "web_app": {"url": f"{settings.user_panel_url}?fuel-order={order_id}"}
+                        }
+                    ]
+                ]
+            }
+
         if payload.status == "approved" and approved_msg:
             header = (
                 f"{tb(fuel_user_lang, 'notif_fuel_order_updated')}\n\n"
@@ -3802,9 +3838,9 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
             )
             # For QR/barcode stations, send the image with the message
             if not has_dispenser and approval_img:
-                send_user_photo(order_user_id, approval_img, caption=header)
+                send_user_photo(order_user_id, approval_img, caption=header, reply_markup=fuel_reply_markup)
             else:
-                send_user_notification(order_user_id, header)
+                send_user_notification(order_user_id, header, reply_markup=fuel_reply_markup)
         else:
             msg = status_messages.get(payload.status, "")
             if msg:
@@ -3813,7 +3849,7 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
                     f"📋 Invoice: <code>{invoice}</code>\n"
                     f"{msg}"
                 )
-                send_user_notification(order_user_id, user_text)
+                send_user_notification(order_user_id, user_text, reply_markup=fuel_reply_markup)
 
     return {"ok": True, "status": payload.status}
 

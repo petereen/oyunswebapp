@@ -20,13 +20,16 @@ export default function App() {
   const isFuelAdmin = new URLSearchParams(window.location.search).has("fuel-admin");
   if (isFuelAdmin) return <FuelAdminPanel />;
 
+  // Check URL for fuel order deep link
+  const urlFuelOrderId = new URLSearchParams(window.location.search).get("fuel-order");
+
   const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
   const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(urlFuelOrderId ? 2 : 0);
   const [showProfile, setShowProfile] = useState(false);
   const [transactionDirection, setTransactionDirection] = useState<"buy" | "sell" | null>(null);
-  const [fuelOrderId, setFuelOrderId] = useState<string | null>(null);
+  const [fuelOrderId, setFuelOrderId] = useState<string | null>(urlFuelOrderId);
 
   // Listen for auth:unauthorized events and trigger re-authentication
   useEffect(() => {

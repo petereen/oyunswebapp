@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { fetchActiveFuelOrders, FuelOrder } from "../api";
 import { useLang } from "../i18n/useLang";
+import { useSwipeToDismiss } from "../hooks/useSwipeToDismiss";
 
 interface Props {
   userId?: number;
@@ -78,9 +79,12 @@ function FuelStatusCard({
   const { t } = useLang();
   const cfg = getStatusConfig(order.status, order.rejection_comment, t);
   const Icon = cfg.icon;
+  const { swipeHandlers, swipeStyle } = useSwipeToDismiss({ onDismiss });
 
   return (
     <div
+      {...swipeHandlers}
+      style={swipeStyle}
       onClick={onOpen}
       className={`relative p-4 rounded-xl border ${onOpen ? "cursor-pointer active:scale-[0.98] transition-transform" : ""} ${
         order.status === "rejected" || order.status === "cancelled"

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Gift, Clock, UserCheck, ThumbsUp, CheckCircle2, X, AlertTriangle, MessageCircle } from "lucide-react";
 import { fetchSentGifts, SentGift } from "../api";
 import { useLang } from "../i18n/useLang";
+import { useSwipeToDismiss } from "../hooks/useSwipeToDismiss";
 
 interface GiftStatusTrackerProps {
   userId?: number;
@@ -153,9 +154,12 @@ function GiftStatusCard({ gift, onDismiss }: GiftStatusCardProps) {
 
   const config = getStatusConfig();
   const Icon = config.icon;
+  const { swipeHandlers, swipeStyle } = useSwipeToDismiss({ onDismiss });
 
   return (
     <div
+      {...swipeHandlers}
+      style={swipeStyle}
       className={`relative p-4 rounded-xl border ${
         status === "rejected"
           ? "bg-red-50 border-red-200"

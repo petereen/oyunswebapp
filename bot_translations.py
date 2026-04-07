@@ -1506,6 +1506,14 @@ _backend_translations = {
         "mn": "🔗 Түлшний админ панел нээх",
         "ru": "🔗 Открыть панель админа",
     },
+    "btn_open_fuel_order": {
+        "mn": "⛽ App нээх",
+        "ru": "⛽ App нээх",
+    },
+    "notif_fuel_user_chat": {
+        "mn": "💬 <b>Шинэ мессеж хэрэглэгчээс ирлээ</b>",
+        "ru": "💬 <b>Новое сообщение от клиента</b>",
+    },
 
     # ── Exchange admin notifications (sent TO admin, in backend) ──
     "admin_exchange_new_order": {
