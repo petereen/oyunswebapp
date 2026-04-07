@@ -10,7 +10,7 @@ else
   DOCKER_COMPOSE="docker-compose"
 fi
 
-domains=(oyunswebapp.ddns.net)
+domains=(app.oyuns.mn)
 rsa_key_size=4096
 data_path="./certbot"
 email="" # Adding a valid address is strongly recommended
