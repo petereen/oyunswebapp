@@ -6,27 +6,39 @@
     <title>OYUNS FINANCE</title>
     <link rel="icon" type="image/png" href="https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/oyuns%20finance%20logo%201%20tp.png" />
     <meta name="theme-color" content="#1d4ed8" />
-    <!-- Telegram Web App Script -->
+    <!-- Telegram Web App Script (CDN may be blocked in some WebViews – fallback below handles that) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!--
-      Local-dev fallback: if the Telegram SDK loaded but we are NOT inside
-      Telegram, window.Telegram.WebApp.initData will be an empty string.
-      The useTelegramAuth hook already handles that (Priority 3 path).
-      We only need to make sure the global object exists so that third-party
-      code that reads theme params never throws.
+      Fallback: runs when either (a) outside Telegram in a plain browser [dev], or
+      (b) telegram-web-app.js failed to load (ERR_CONNECTION_CLOSED in Telegram WebView).
+      In case (b) the real initData is already in the URL hash as tgWebAppData –
+      parse it so the rest of the app can authenticate normally.
     -->
     <script>
       (function () {
+        // Extract tgWebAppData from the URL hash if present
+        function getHashInitData() {
+          try {
+            var hash = window.location.hash.slice(1);
+            var params = new URLSearchParams(hash);
+            var raw = params.get('tgWebAppData');
+            return raw ? decodeURIComponent(raw) : '';
+          } catch (e) {
+            return '';
+          }
+        }
+
         if (typeof window.Telegram === 'undefined') {
+          var hashInitData = getHashInitData();
           window.Telegram = {
             WebApp: {
-              initData: '',
+              initData: hashInitData,
               initDataUnsafe: {},
               ready: function () {},
               expand: function () {},
               close: function () {},
-              platform: 'unknown',
-              version: '0.0',
+              platform: hashInitData ? 'android' : 'unknown',
+              version: hashInitData ? '6.0' : '0.0',
               themeParams: {
                 bg_color: '#ffffff',
                 text_color: '#0f172a',

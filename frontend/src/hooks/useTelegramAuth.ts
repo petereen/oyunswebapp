@@ -47,6 +47,19 @@ const USER_STORAGE_KEY = 'oyuns_user_v2';
 const INIT_DATA_STORAGE_KEY = 'oyuns_init_data_v2'; // cached for menu-button / refresh reopens
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
+// When telegram-web-app.js fails to load (ERR_CONNECTION_CLOSED), the SDK never parses
+// the URL hash. Extract initData from the hash directly as a fallback.
+function getInitDataFromHash(): string {
+  try {
+    const hash = window.location.hash.slice(1); // strip leading #
+    const params = new URLSearchParams(hash);
+    const raw = params.get('tgWebAppData');
+    return raw ? decodeURIComponent(raw) : '';
+  } catch {
+    return '';
+  }
+}
+
 // Default dev user for local testing without Telegram
 const DEV_USER: TelegramUser = {
   id: 1932946217,
@@ -136,6 +149,11 @@ export function useTelegramAuth() {
   useEffect(() => {
     const initAuth = async () => {
       const tg = window.Telegram?.WebApp;
+      // Fallback: when telegram-web-app.js fails to load (CDN blocked/closed),
+      // the SDK never parses the URL hash → read tgWebAppData from hash directly.
+      const hashInitData = getInitDataFromHash();
+      // Use SDK initData if available, otherwise fall back to URL hash
+      const liveInitData = (tg?.initData && tg.initData.length > 0) ? tg.initData : hashInitData;
       
       // Debug logging
       console.log('=== Telegram Auth Debug ===');
@@ -143,7 +161,8 @@ export function useTelegramAuth() {
       console.log('VITE_DEV_MODE env:', import.meta.env.VITE_DEV_MODE);
       console.log('Telegram object exists:', !!window.Telegram);
       console.log('WebApp object exists:', !!tg);
-      console.log('initData:', tg?.initData ? `${tg.initData.substring(0, 50)}... (${tg.initData.length} chars)` : 'EMPTY');
+      console.log('initData (SDK):', tg?.initData ? `${tg.initData.substring(0, 50)}... (${tg.initData.length} chars)` : 'EMPTY');
+      console.log('initData (hash):', hashInitData ? `present (${hashInitData.length} chars)` : 'absent');
       console.log('initDataUnsafe.user:', tg?.initDataUnsafe?.user);
       console.log('Platform:', tg?.platform);
       console.log('Version:', tg?.version);
@@ -156,17 +175,16 @@ export function useTelegramAuth() {
         tg.expand();
       }
 
-      // PRIORITY 1: Real Telegram WebApp context (always use if available)
-      if (tg?.initData && tg.initData.length > 0) {
+      // PRIORITY 1: Live initData from SDK or URL hash (we are inside Telegram Mini App)
+      if (liveInitData) {
         console.log('📱 Real Telegram WebApp detected! Using initData for authentication...');
-        // tg.ready() / tg.expand() already called above
         // Clear any old dev mode tokens to force fresh auth with real user
         localStorage.removeItem(JWT_STORAGE_KEY);
         localStorage.removeItem(USER_STORAGE_KEY);
         // Don't remove INIT_DATA_STORAGE_KEY here — we're about to overwrite it on success
         
         try {
-          await authenticate(tg.initData);
+          await authenticate(liveInitData);
           return;
         } catch {
           // Auth failed, error already set in state
