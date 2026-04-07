@@ -11,9 +11,44 @@ import {
 } from "lucide-react";
 import { submitBasicRegistration, BasicRegistrationInput } from "../api";
 import { useLang } from "../i18n/useLang";
-import { formatMongolianPhone } from "./RegistrationModal";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
+
+const COUNTRY_CODES = [
+  { code: "+976", flag: "🇲🇳", name: "Монгол" },
+  { code: "+7", flag: "🇷🇺", name: "Россия / Казахстан" },
+  { code: "+86", flag: "🇨🇳", name: "China" },
+  { code: "+1", flag: "🇺🇸", name: "USA / Canada" },
+  { code: "+44", flag: "🇬🇧", name: "UK" },
+  { code: "+81", flag: "🇯🇵", name: "Japan" },
+  { code: "+82", flag: "🇰🇷", name: "South Korea" },
+  { code: "+49", flag: "🇩🇪", name: "Germany" },
+  { code: "+33", flag: "🇫🇷", name: "France" },
+  { code: "+61", flag: "🇦🇺", name: "Australia" },
+  { code: "+91", flag: "🇮🇳", name: "India" },
+  { code: "+971", flag: "🇦🇪", name: "UAE" },
+  { code: "+65", flag: "🇸🇬", name: "Singapore" },
+  { code: "+90", flag: "🇹🇷", name: "Turkey" },
+  { code: "+852", flag: "🇭🇰", name: "Hong Kong" },
+  { code: "+886", flag: "🇹🇼", name: "Taiwan" },
+  { code: "+966", flag: "🇸🇦", name: "Saudi Arabia" },
+  { code: "+380", flag: "🇺🇦", name: "Ukraine" },
+  { code: "+375", flag: "🇧🇾", name: "Belarus" },
+  { code: "+48", flag: "🇵🇱", name: "Poland" },
+  { code: "+374", flag: "🇦🇲", name: "Armenia" },
+  { code: "+994", flag: "🇦🇿", name: "Azerbaijan" },
+  { code: "+995", flag: "🇬🇪", name: "Georgia" },
+  { code: "+996", flag: "🇰🇬", name: "Kyrgyzstan" },
+  { code: "+992", flag: "🇹🇯", name: "Tajikistan" },
+  { code: "+998", flag: "🇺🇿", name: "Uzbekistan" },
+  { code: "+993", flag: "🇹🇲", name: "Turkmenistan" },
+  { code: "+373", flag: "🇲🇩", name: "Moldova" },
+  { code: "+39", flag: "🇮🇹", name: "Italy" },
+  { code: "+34", flag: "🇪🇸", name: "Spain" },
+  { code: "+31", flag: "🇳🇱", name: "Netherlands" },
+  { code: "+41", flag: "🇨🇭", name: "Switzerland" },
+  { code: "+46", flag: "🇸🇪", name: "Sweden" },
+];
 
 interface Props {
   onRegistered: () => void;
@@ -27,17 +62,21 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
 
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+976");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [agreedTerms, setAgreedTerms] = useState(false);
 
+  const phoneDigits = phoneNumber.replace(/\D/g, "");
+  const phoneValid =
+    countryCode === "+976"
+      ? phoneDigits.length === 8
+      : phoneDigits.length >= 6 && phoneDigits.length <= 15;
+
   const isFormValid = () => {
-    if (!lastName.trim() || !firstName.trim() || !phone.trim()) return false;
+    if (!lastName.trim() || !firstName.trim()) return false;
     if (!agreedTerms) return false;
-    // Phone must have 8 digits
-    const digits = phone.replace(/\D/g, "").replace(/^976/, "");
-    if (digits.length < 8) return false;
-    return true;
+    return phoneValid;
   };
 
   const handleSubmit = async () => {
@@ -54,10 +93,11 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
       setLoading(true);
       setError("");
 
+      const fullPhone = `${countryCode}${phoneNumber.replace(/\s/g, "")}`;
       const payload: BasicRegistrationInput = {
         last_name: lastName.trim(),
         first_name: firstName.trim(),
-        phone: phone.replace(/\D/g, "").replace(/^976/, "").slice(0, 8),
+        phone_intl: fullPhone,
         email: email.trim() || undefined,
       };
 
@@ -125,17 +165,34 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
               />
             </div>
 
+            {/* International phone: country code selector + number input */}
             <div>
-              <label className="text-xs text-slate-500 dark:text-ivory-400 flex items-center gap-1">
+              <label className="text-xs text-slate-500 dark:text-ivory-400 flex items-center gap-1 mb-1">
                 <Phone className="w-3 h-3" /> {t("qreg.phone")} <span className="text-red-500">*</span>
               </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(formatMongolianPhone(e.target.value))}
-                className="w-full rounded-lg border border-maroon-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-2.5 text-sm"
-                placeholder="+976 XXXX XXXX"
-              />
+              <div className="flex gap-2">
+                <select
+                  value={countryCode}
+                  onChange={(e) => { setCountryCode(e.target.value); setPhoneNumber(""); }}
+                  className="rounded-lg border border-maroon-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-2.5 text-sm flex-shrink-0 max-w-[140px]"
+                >
+                  {COUNTRY_CODES.map((c) => (
+                    <option key={`${c.code}-${c.name}`} value={c.code}>
+                      {c.flag} {c.code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value.replace(/[^\d\s\-]/g, ""))}
+                  className="flex-1 rounded-lg border border-maroon-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-2.5 text-sm"
+                  placeholder={countryCode === "+976" ? "9911 2233" : countryCode === "+7" ? "999 123 45 67" : "..."}
+                />
+              </div>
+              {countryCode === "+976" && phoneDigits.length > 0 && phoneDigits.length !== 8 && (
+                <p className="text-xs text-red-500 mt-1">8 оронтой дугаар оруулна уу / Введите 8 цифр</p>
+              )}
             </div>
 
             <div>

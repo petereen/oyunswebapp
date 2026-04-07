@@ -80,7 +80,8 @@ class UpsertUserPayload(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    phone_mnt: Optional[str] = None  # Mongolian phone number
+    phone_mnt: Optional[str] = None  # Mongolian phone number (8 digits)
+    phone_intl: Optional[str] = None  # Full international phone from Level 1 registration
     bank_rub: Optional[str] = None
     bank_mnt: Optional[str] = None
     passport_storage_url: Optional[str] = None
@@ -166,13 +167,14 @@ class BasicRegistrationRequest(BaseModel):
     """Level 1 registration - minimal info, no admin approval needed."""
     last_name: str
     first_name: str
-    phone: str  # Phone number
+    phone_intl: str  # Full international phone e.g. "+97699112233"
     email: Optional[str] = None
 
 
 class RegistrationRequest(BaseModel):
-    last_name: str
-    first_name: str
+    # name/email already collected in Level 1, not required here
+    last_name: Optional[str] = None
+    first_name: Optional[str] = None
     email: Optional[str] = None
     # RUB bank info: bank_name, phone_sbp, card_number, owner_name (optional)
     rub_bank_name: str = ""

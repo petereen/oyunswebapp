@@ -111,6 +111,7 @@ export type UserProfile = {
   email?: string;
   phone?: string;
   phone_mnt?: string;
+  phone_intl?: string;
   bank_rub?: string;
   bank_mnt?: string;
   verified?: boolean;
@@ -133,9 +134,6 @@ export type AdminBankAccount = {
 };
 
 export type RegistrationInput = {
-  last_name: string;
-  first_name: string;
-  email?: string;
   rub_bank_name: string;
   rub_phone_sbp: string;
   rub_card_number: string;
@@ -150,7 +148,7 @@ export type RegistrationInput = {
 export type BasicRegistrationInput = {
   last_name: string;
   first_name: string;
-  phone: string;
+  phone_intl: string;  // Full international phone e.g. "+97699112233"
   email?: string;
 };
 

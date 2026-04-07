@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  User,
   CreditCard,
   Building,
   CheckCircle2,
@@ -9,8 +8,6 @@ import {
   AlertCircle,
   Upload,
   X,
-  ExternalLink,
-  Mail,
 } from "lucide-react";
 import { submitRegistration, RegistrationInput, requestPresign } from "../api";
 import { useLang } from "../i18n/useLang";
@@ -18,8 +15,6 @@ import { useLang } from "../i18n/useLang";
 // Bank name options
 const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
 const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
-
-const TERMS_URL = "https://oyuns.mn/user-agreement";
 
 // Format utility functions
 // Russian phone: +7 XXX XXX XX XX (10 digits after +7)
@@ -124,14 +119,6 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
-  // Personal info
-  const [lastName, setLastName] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [email, setEmail] = useState("");
-
-  // Terms agreement
-  const [agreedTerms, setAgreedTerms] = useState(false);
-
   // RUB bank info - optional
   const [hasRubBank, setHasRubBank] = useState(false);
   const [rubBankName, setRubBankName] = useState("");
@@ -188,12 +175,6 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
   };
 
   const isFormValid = () => {
-    // Personal info required (including email)
-    if (!lastName.trim() || !firstName.trim() || !email.trim()) return false;
-    
-    // Terms agreement required
-    if (!agreedTerms) return false;
-
     // MNT bank info required
     const actualMntBankName = getActualMntBankName();
     if (!actualMntBankName || !mntAccountNumber.trim() || !mntOwnerName.trim() || !mntPhone.trim()) return false;
@@ -212,11 +193,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
 
   const handleSubmit = async () => {
     if (!isFormValid()) {
-      if (!agreedTerms) {
-        setError(t("reg.terms_required"));
-      } else {
-        setError(t("reg.fill_all"));
-      }
+      setError(t("reg.fill_all"));
       return;
     }
 
@@ -225,9 +202,6 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
       setError("");
 
       const payload: RegistrationInput = {
-        last_name: lastName.trim(),
-        first_name: firstName.trim(),
-        email: email.trim() || undefined,
         // RUB bank info - empty if not enabled
         rub_bank_name: hasRubBank ? getActualRubBankName() : "",
         rub_phone_sbp: hasRubBank ? rubPhoneSbp.trim() : "",
@@ -263,8 +237,8 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
                 <FileText className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold">{t("reg.title")}</h2>
-                <p className="text-sm text-white/80">{t("reg.subtitle")}</p>
+                <h2 className="text-xl font-bold">{t("reg.kyc_title")}</h2>
+                <p className="text-sm text-white/80">{t("reg.kyc_subtitle")}</p>
               </div>
             </div>
             {onClose && (
@@ -280,52 +254,8 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
 
         {/* Content */}
         <div className="p-5 space-y-4 max-h-[70vh] overflow-auto">
-          {/* Personal Info Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-maroon-700 font-semibold">
-              <User className="w-4 h-4" />
-              <span>{t("reg.personal_info")}</span>
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">{t("reg.last_name")} <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
-                placeholder={t("reg.last_name")}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500">{t("reg.first_name")} <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
-                placeholder={t("reg.first_name")}
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500 flex items-center gap-1">
-                <Mail className="w-3 h-3" /> {t("reg.email_label")} <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-maroon-200 p-2.5 text-sm"
-                placeholder="example@email.com"
-                required
-              />
-            </div>
-          </div>
-
           {/* RUB Bank Section - Optional */}
-          <div className="space-y-3 pt-3 border-t border-slate-100">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-maroon-700 font-semibold">
                 <CreditCard className="w-4 h-4" />
@@ -520,32 +450,6 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             </div>
           </div>
 
-          {/* Terms Agreement Checkbox */}
-          <div className="pt-3 border-t border-slate-100">
-            <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition">
-              <input
-                type="checkbox"
-                checked={agreedTerms}
-                onChange={(e) => setAgreedTerms(e.target.checked)}
-                className="mt-0.5 w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
-              />
-              <span className="text-sm text-slate-600">
-                {t("reg.terms_prefix")}
-                <a
-                  href={TERMS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-maroon-600 hover:underline font-medium inline-flex items-center gap-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {t("reg.terms_link")}
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-                {t("reg.terms_suffix")} <span className="text-red-500">*</span>
-              </span>
-            </label>
-          </div>
-
           {/* Error */}
           {error && (
             <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -568,13 +472,13 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
             ) : (
               <>
                 <CheckCircle2 className="w-5 h-5" />
-                {t("reg.submit")}
+                {t("reg.kyc_submit")}
               </>
             )}
           </button>
 
           <p className="text-xs text-center text-slate-400">
-            {t("reg.footer_note")}
+            {t("reg.kyc_footer_note")}
           </p>
         </div>
       </div>

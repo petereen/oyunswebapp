@@ -840,6 +840,7 @@ async def register_basic(
     user=Depends(get_jwt_authenticated_user),
 ):
     """Level 1 registration - minimal info, immediate account creation without admin approval."""
+    import re
     from zoneinfo import ZoneInfo
 
     client = get_supabase()
@@ -854,11 +855,17 @@ async def register_basic(
     update_payload = {
         "first_name": payload.first_name,
         "last_name": payload.last_name,
-        "phone": payload.phone,
+        "phone_intl": payload.phone_intl,
         "verification_level": 1,
         "agreed_terms": True,
         "updated_at": now,
     }
+
+    # If the number is Mongolian (+976), also store the 8-digit local part in phone_mnt
+    if payload.phone_intl.startswith("+976"):
+        digits_only = re.sub(r"\D", "", payload.phone_intl.replace("+976", ""))
+        if len(digits_only) >= 8:
+            update_payload["phone_mnt"] = digits_only[-8:]
 
     if payload.email:
         update_payload["email"] = payload.email
@@ -891,19 +898,22 @@ async def register_user(
     
     bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone}"
     
-    # Update user record with registration info
-    # Note: We use the user's provided first_name and last_name from the form,
-    # not overwriting with Telegram profile names
+    # Update user record with KYC info
+    # Name/email already set in Level 1 registration, only update if provided
     update_payload = {
-        "first_name": payload.first_name,
-        "last_name": payload.last_name,
         "bank_mnt": bank_mnt,
         "passport_storage_url": payload.passport_storage_url,
         "ready_for_verification": True,
-        "agreed_terms": True,  # User agreed to terms during registration
+        "agreed_terms": True,
         "verification_level": 1,  # Level 1 until admin approves to Level 2
         "updated_at": now,
     }
+    
+    # Only overwrite name/email if explicitly provided
+    if payload.first_name:
+        update_payload["first_name"] = payload.first_name
+    if payload.last_name:
+        update_payload["last_name"] = payload.last_name
     
     # Add email if provided
     if payload.email:
