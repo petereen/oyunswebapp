@@ -37,9 +37,9 @@ export function TransactionStatusTracker({ userId }: TransactionStatusTrackerPro
 
   if (isLoading || !data) return null;
 
-  // Filter out dismissed transactions (only completed/successful ones can be dismissed)
+  // Filter out dismissed transactions
   const visibleTransactions = data.transactions.filter(
-    (trx) => !dismissedInvoices.includes(trx.invoice) || trx.status === "pending" || trx.status === "approved"
+    (trx) => !dismissedInvoices.includes(trx.invoice)
   );
 
   // Only show pending/approved OR recently completed/successful/rejected that haven't been dismissed
@@ -57,7 +57,7 @@ export function TransactionStatusTracker({ userId }: TransactionStatusTrackerPro
         <TransactionStatusCard
           key={trx.invoice}
           transaction={trx}
-          onDismiss={(trx.status === "completed" || trx.status === "successful" || trx.status === "rejected") ? () => handleDismiss(trx.invoice) : undefined}
+          onDismiss={() => handleDismiss(trx.invoice)}
         />
       ))}
     </div>

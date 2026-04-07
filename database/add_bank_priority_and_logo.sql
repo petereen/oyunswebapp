@@ -5,6 +5,11 @@ ALTER TABLE admin_bank_accounts ADD COLUMN IF NOT EXISTS is_priority BOOLEAN DEF
 INSERT INTO app_settings (key, value) VALUES ('rub_bank_rotation_counter', '0')
 ON CONFLICT (key) DO NOTHING;
 
--- Add logo_url and emoji_id columns to fuel_admin_bank_accounts
+-- Add logo_url, emoji_id, and is_primary columns to fuel_admin_bank_accounts
 ALTER TABLE fuel_admin_bank_accounts ADD COLUMN IF NOT EXISTS logo_url TEXT;
 ALTER TABLE fuel_admin_bank_accounts ADD COLUMN IF NOT EXISTS emoji_id TEXT;
+ALTER TABLE fuel_admin_bank_accounts ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT FALSE;
+
+-- Add always-notify columns to fuel_admin_shift
+ALTER TABLE fuel_admin_shift ADD COLUMN IF NOT EXISTS always_notify_admin_id BIGINT;
+ALTER TABLE fuel_admin_shift ADD COLUMN IF NOT EXISTS always_notify_chat_id BIGINT;

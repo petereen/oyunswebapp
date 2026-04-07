@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Power, User, RefreshCw, AlertTriangle } from "lucide-react";
+import { Power, User, RefreshCw, AlertTriangle, Bell } from "lucide-react";
 import { fetchFuelAdminShift, updateFuelAdminShift, FuelShiftStatus } from "../api";
 import { useFuelLang } from "../i18n/useFuelLang";
 
@@ -32,6 +32,7 @@ export function FuelAdminShift() {
       await updateFuelAdminShift({
         is_active: newActive,
         admin_id: newActive ? shift.current_admin?.admin_id ?? shift.admins[0]?.admin_id : shift.current_admin?.admin_id,
+        always_notify_admin_id: shift.always_notify_admin_id,
       });
       await load();
     } catch {
@@ -45,7 +46,24 @@ export function FuelAdminShift() {
     setSaving(true);
     setError("");
     try {
-      await updateFuelAdminShift({ is_active: shift.is_active, admin_id: adminId });
+      await updateFuelAdminShift({ is_active: shift.is_active, admin_id: adminId, always_notify_admin_id: shift.always_notify_admin_id });
+      await load();
+    } catch {
+      setError(t("shift.changeAdminError"));
+    }
+    setSaving(false);
+  };
+
+  const changeAlwaysNotify = async (adminId: number | null) => {
+    if (!shift) return;
+    setSaving(true);
+    setError("");
+    try {
+      await updateFuelAdminShift({
+        is_active: shift.is_active,
+        admin_id: shift.current_admin?.admin_id,
+        always_notify_admin_id: adminId ?? undefined,
+      });
       await load();
     } catch {
       setError(t("shift.changeAdminError"));
@@ -147,6 +165,67 @@ export function FuelAdminShift() {
                     <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
                       {t("shift.current")}
                     </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Always Notify Admin */}
+      {shift.admins.length > 0 && (
+        <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-amber-500" />
+            <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
+              Байнга мэдэгдэл авах админ
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500 dark:text-ivory-400">
+            Ээлж солигдсон ч энэ админ бүх мэдэгдлийг авна
+          </p>
+          <div className="space-y-2">
+            <button
+              onClick={() => changeAlwaysNotify(null)}
+              disabled={saving || !shift.always_notify_admin_id}
+              className={`w-full flex items-center justify-between p-3 rounded-xl border-2 text-left transition ${
+                !shift.always_notify_admin_id
+                  ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20"
+                  : "border-silver/40 dark:border-dark-600 hover:border-amber-400"
+              } disabled:opacity-60`}
+            >
+              <span className="text-sm text-dark-800 dark:text-ivory-200">Идэвхгүй</span>
+              {!shift.always_notify_admin_id && (
+                <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">Сонгосон</span>
+              )}
+            </button>
+            {shift.admins.map((admin) => {
+              const isAlways = shift.always_notify_admin_id === admin.admin_id;
+              return (
+                <button
+                  key={`always-${admin.admin_id}`}
+                  onClick={() => changeAlwaysNotify(admin.admin_id)}
+                  disabled={saving || isAlways}
+                  className={`w-full flex items-center justify-between p-3 rounded-xl border-2 text-left transition ${
+                    isAlways
+                      ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20"
+                      : "border-silver/40 dark:border-dark-600 hover:border-amber-400"
+                  } disabled:opacity-60`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Bell className={`w-4 h-4 ${isAlways ? "text-amber-500" : "text-slate-400"}`} />
+                    <div>
+                      <div className="text-sm font-medium text-dark-800 dark:text-ivory-200">
+                        {admin.admin_name}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-ivory-400">
+                        ID: {admin.admin_id}
+                      </div>
+                    </div>
+                  </div>
+                  {isAlways && (
+                    <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">🔔 Байнга</span>
                   )}
                 </button>
               );

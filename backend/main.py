@@ -3308,18 +3308,26 @@ def _fuel_calculate(station_name: str, liters: float, price_per_liter: float, pa
 
 
 def _send_fuel_admin_notification(text: str, reply_markup: dict | None = None):
-    """Send notification to the on-shift fuel admin's chat ID. Falls back to all fuel admin chats if no shift."""
+    """Send notification to the on-shift fuel admin's chat ID. Falls back to all fuel admin chats if no shift.
+    Also sends to the always-notify admin if configured."""
     settings = get_settings()
     
     # Check if there's an active shift with a specific admin
     chat_ids = settings.fuel_admin_chat_ids or settings.admin_chat_ids
+    always_notify_chat_id = None
     try:
         client = get_supabase()
         shift_res = client.table("fuel_admin_shift").select("*").eq("id", "current").single().execute()
-        if shift_res.data and shift_res.data.get("is_active") and shift_res.data.get("chat_id"):
-            chat_ids = [shift_res.data["chat_id"]]
+        if shift_res.data:
+            always_notify_chat_id = shift_res.data.get("always_notify_chat_id")
+            if shift_res.data.get("is_active") and shift_res.data.get("chat_id"):
+                chat_ids = [shift_res.data["chat_id"]]
     except Exception:
         pass  # Fall back to default chat IDs
+
+    # Add always-notify admin if configured and not already in the list
+    if always_notify_chat_id and always_notify_chat_id not in chat_ids:
+        chat_ids = list(chat_ids) + [always_notify_chat_id]
 
     for chat_id in chat_ids:
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
@@ -3685,7 +3693,33 @@ async def fuel_admin_inbox(user=Depends(get_fuel_admin_auth)):
     ).order("created_at").execute()
 
     orders = [FuelOrderItem(**o) for o in (res.data or [])]
-    return FuelOrdersResponse(orders=orders, total=len(orders))
+
+    # Compute unread user message counts per order
+    order_ids = [o.id for o in orders]
+    unread_counts: dict[str, int] = {}
+    if order_ids:
+        # Get the last admin-read timestamp per order from app_settings or just count user messages
+        # Simple approach: count user messages that are newer than the latest admin message for each order
+        chat_res = client.table("fuel_chat_messages").select("fuel_order_id, sender_type, created_at").in_("fuel_order_id", order_ids).order("created_at", desc=True).execute()
+        chat_msgs = chat_res.data or []
+        # Group by order_id, find latest admin message time, count user messages after it
+        from collections import defaultdict
+        order_msgs: dict[str, list] = defaultdict(list)
+        for m in chat_msgs:
+            order_msgs[m["fuel_order_id"]].append(m)
+        for oid, msgs in order_msgs.items():
+            last_admin_time = None
+            for m in msgs:
+                if m["sender_type"] == "admin":
+                    last_admin_time = m["created_at"]
+                    break
+            if last_admin_time is None:
+                # No admin message yet, all user messages are unread
+                unread_counts[oid] = sum(1 for m in msgs if m["sender_type"] == "user")
+            else:
+                unread_counts[oid] = sum(1 for m in msgs if m["sender_type"] == "user" and m["created_at"] > last_admin_time)
+
+    return FuelOrdersResponse(orders=orders, total=len(orders), unread_counts=unread_counts)
 
 
 @app.post("/api/fuel-admin/presign", response_model=PresignResponse)
@@ -3836,7 +3870,7 @@ async def fuel_admin_bank_account_create(payload: dict, user=Depends(get_fuel_ad
         raise HTTPException(status_code=403, detail="Fuel admin access required")
 
     client = get_supabase()
-    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id", "logo_url", "emoji_id"]
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "is_primary", "display_order", "admin_id", "logo_url", "emoji_id"]
     data = {k: v for k, v in payload.items() if k in allowed}
     res = client.table("fuel_admin_bank_accounts").insert(data).execute()
     if not res.data:
@@ -3853,7 +3887,7 @@ async def fuel_admin_bank_account_update(account_id: str, payload: dict, user=De
         raise HTTPException(status_code=403, detail="Fuel admin access required")
 
     client = get_supabase()
-    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id", "logo_url", "emoji_id"]
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "is_primary", "display_order", "admin_id", "logo_url", "emoji_id"]
     data = {k: v for k, v in payload.items() if k in allowed}
     res = client.table("fuel_admin_bank_accounts").update(data).eq("id", account_id).execute()
     if not res.data:
@@ -4034,10 +4068,11 @@ async def fuel_admin_get_shift(user=Depends(get_fuel_admin_auth)):
         if res.data:
             is_active = res.data.get("is_active", False)
             current_admin_id = res.data.get("admin_id")
+            always_notify_admin_id = res.data.get("always_notify_admin_id")
             current_admin = None
             if current_admin_id:
                 current_admin = next((a for a in admins if a.admin_id == current_admin_id), None)
-            return FuelShiftStatus(is_active=is_active, current_admin=current_admin, admins=admins)
+            return FuelShiftStatus(is_active=is_active, current_admin=current_admin, admins=admins, always_notify_admin_id=always_notify_admin_id)
     except Exception:
         pass
 
@@ -4072,6 +4107,12 @@ async def fuel_admin_update_shift(payload: FuelShiftUpdateRequest, user=Depends(
         "chat_id": chat_id,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Handle always-notify admin
+    if payload.always_notify_admin_id is not None:
+        always_admin = next((a for a in admins if a.admin_id == payload.always_notify_admin_id), None)
+        shift_data["always_notify_admin_id"] = payload.always_notify_admin_id
+        shift_data["always_notify_chat_id"] = always_admin.chat_id if always_admin else None
 
     try:
         client.table("fuel_admin_shift").upsert(shift_data).execute()

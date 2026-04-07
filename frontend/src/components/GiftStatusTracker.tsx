@@ -63,13 +63,7 @@ export function GiftStatusTracker({ userId }: GiftStatusTrackerProps) {
         <GiftStatusCard
           key={gift.invoice}
           gift={gift}
-          onDismiss={
-            gift.status === "completed" ||
-            gift.status === "approved" ||
-            gift.status === "rejected"
-              ? () => handleDismiss(gift.invoice)
-              : undefined
-          }
+          onDismiss={() => handleDismiss(gift.invoice)}
         />
       ))}
     </div>

@@ -790,6 +790,7 @@ export interface FuelAdminBankAccount {
   owner_name: string;
   currency: 'RUB' | 'MNT';
   is_active: boolean;
+  is_primary: boolean;
   display_order: number;
   admin_id?: number;
   logo_url?: string;
@@ -808,6 +809,7 @@ export interface FuelShiftStatus {
   is_active: boolean;
   current_admin?: FuelShiftAdmin;
   admins: FuelShiftAdmin[];
+  always_notify_admin_id?: number;
 }
 
 // --- Fuel User API ---
@@ -876,7 +878,7 @@ export async function fetchFuelAdminBanks(): Promise<{ accounts: FuelAdminBankAc
 
 // --- Fuel Admin API ---
 
-export async function fetchFuelAdminInbox(): Promise<{ orders: FuelOrder[]; total: number }> {
+export async function fetchFuelAdminInbox(): Promise<{ orders: FuelOrder[]; total: number; unread_counts?: Record<string, number> }> {
   const res = await fuelAdminApi.get('/fuel-admin/inbox');
   return res.data;
 }
@@ -975,7 +977,7 @@ export async function fetchFuelAdminShift(): Promise<FuelShiftStatus> {
   return res.data;
 }
 
-export async function updateFuelAdminShift(params: { is_active: boolean; admin_id?: number }) {
+export async function updateFuelAdminShift(params: { is_active: boolean; admin_id?: number; always_notify_admin_id?: number }) {
   const res = await fuelAdminApi.put('/fuel-admin/shift', params);
   return res.data;
 }

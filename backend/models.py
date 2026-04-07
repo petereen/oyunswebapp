@@ -637,6 +637,7 @@ class FuelOrderItem(BaseModel):
 class FuelOrdersResponse(BaseModel):
     orders: list[FuelOrderItem]
     total: int = 0
+    unread_counts: Optional[dict[str, int]] = None
 
 
 class FuelAdminActionRequest(BaseModel):
@@ -680,6 +681,7 @@ class FuelAdminBankAccount(BaseModel):
     owner_name: str
     currency: str
     is_active: bool = True
+    is_primary: bool = False
     display_order: int = 0
     admin_id: Optional[int] = None
     logo_url: Optional[str] = None
@@ -702,8 +704,10 @@ class FuelShiftStatus(BaseModel):
     is_active: bool
     current_admin: Optional[FuelShiftAdmin] = None
     admins: list[FuelShiftAdmin] = []
+    always_notify_admin_id: Optional[int] = None
 
 
 class FuelShiftUpdateRequest(BaseModel):
     is_active: bool
     admin_id: Optional[int] = None
+    always_notify_admin_id: Optional[int] = None

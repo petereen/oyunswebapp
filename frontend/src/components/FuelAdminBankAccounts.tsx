@@ -82,6 +82,7 @@ export function FuelAdminBankAccounts() {
         owner_name: editingAccount.owner_name,
         currency: editingAccount.currency,
         is_active: editingAccount.is_active,
+        is_primary: editingAccount.is_primary ?? false,
         display_order: editingAccount.display_order,
         admin_id: editingAccount.admin_id || undefined,
         logo_url: editingAccount.logo_url || undefined,
@@ -270,6 +271,15 @@ export function FuelAdminBankAccounts() {
             />
             {t("common.active")}
           </label>
+          <label className="flex items-center gap-2 text-xs text-dark-800 dark:text-ivory-200">
+            <input
+              type="checkbox"
+              checked={editingAccount.is_primary === true}
+              onChange={(e) => setEditingAccount({ ...editingAccount, is_primary: e.target.checked })}
+              className="accent-amber-600"
+            />
+            ⭐ Үндсэн данс
+          </label>
           <div className="flex gap-2">
             <button
               onClick={handleSave}
@@ -311,6 +321,9 @@ export function FuelAdminBankAccounts() {
                 <CheckCircle2 className="w-3 h-3 text-green-500" />
               ) : (
                 <XCircle className="w-3 h-3 text-red-500" />
+              )}
+              {account.is_primary && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">⭐ ҮНДСЭН</span>
               )}
             </div>
             <div className="flex items-center gap-1">

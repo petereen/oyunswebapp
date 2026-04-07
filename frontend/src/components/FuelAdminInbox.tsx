@@ -14,6 +14,7 @@ import {
   Upload,
   Loader2,
   Camera,
+  MessageCircle,
 } from "lucide-react";
 import {
   fetchFuelAdminInbox,
@@ -74,12 +75,14 @@ export function FuelAdminInbox() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [approvalImageUrl, setApprovalImageUrl] = useState<Record<string, string>>({});
   const [approvalUploading, setApprovalUploading] = useState<string | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const load = async () => {
     setLoading(true);
     try {
       const res = await fetchFuelAdminInbox();
       setOrders(res.orders || []);
+      if (res.unread_counts) setUnreadCounts(res.unread_counts);
     } catch {
       /* ignore */
     }
@@ -171,6 +174,12 @@ export function FuelAdminInbox() {
                   <span className="text-[10px] text-slate-400">
                     #{order.invoice}
                   </span>
+                  {(unreadCounts[order.id] ?? 0) > 0 && !expanded && (
+                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500 text-white font-medium">
+                      <MessageCircle className="w-3 h-3" />
+                      {unreadCounts[order.id]}
+                    </span>
+                  )}
                 </div>
                 <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">
                   {order.station_name} • {order.liters}л
@@ -382,7 +391,7 @@ export function FuelAdminInbox() {
                   <div className="flex flex-wrap gap-2 pt-2">
                     <button
                       onClick={() => handleAction(order.id, "approved")}
-                      disabled={actionLoading === order.id}
+                      disabled={actionLoading === order.id || (!order.dispenser_number && !approvalImageUrl[order.id])}
                       className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-500 text-white text-xs font-semibold rounded-xl hover:bg-green-600 transition disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-3 h-3" /> {t("inbox.approve")}

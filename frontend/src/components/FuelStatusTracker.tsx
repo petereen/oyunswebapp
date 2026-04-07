@@ -59,11 +59,7 @@ export function FuelStatusTracker({ userId, onOpenOrder }: Props) {
           key={order.id}
           order={order}
           onOpen={onOpenOrder ? () => onOpenOrder(order.id) : undefined}
-          onDismiss={
-            ["completed", "rejected", "cancelled"].includes(order.status)
-              ? () => handleDismiss(order.id)
-              : undefined
-          }
+          onDismiss={() => handleDismiss(order.id)}
         />
       ))}
     </div>
