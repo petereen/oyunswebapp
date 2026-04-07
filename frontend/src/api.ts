@@ -6,7 +6,7 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
-const JWT_STORAGE_KEY = 'oyuns_jwt';
+const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
 const FUEL_ADMIN_KEY_STORAGE = 'fuel_admin_key';
 
 // Fuel admin axios instance - sends API key header for browser-based admin access
@@ -72,7 +72,7 @@ api.interceptors.response.use(
           if (authResponse.ok) {
             const authData = await authResponse.json();
             localStorage.setItem(JWT_STORAGE_KEY, authData.token);
-            localStorage.setItem('oyuns_user', JSON.stringify(authData.user));
+            localStorage.setItem('oyuns_user_v2', JSON.stringify(authData.user));
             console.log('✅ Re-authentication successful, retrying original request');
             
             // Retry the original request with new token
@@ -86,7 +86,7 @@ api.interceptors.response.use(
       
       // If re-auth failed, clear stored auth and dispatch event
       localStorage.removeItem(JWT_STORAGE_KEY);
-      localStorage.removeItem('oyuns_user');
+      localStorage.removeItem('oyuns_user_v2');
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     

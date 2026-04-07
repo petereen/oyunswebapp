@@ -1,0 +1,9 @@
+# Exclude local development dependencies and artifacts
+node_modules
+dist
+
+# Exclude local dev env files - production uses Dockerfile ENV VITE_API_BASE=/api
+# These files point to localhost:8000 and must NOT be copied into the Docker image
+.env
+.env.local
+.env.*.local

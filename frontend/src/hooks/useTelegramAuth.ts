@@ -42,9 +42,9 @@ declare global {
   }
 }
 
-const JWT_STORAGE_KEY = 'oyuns_jwt';
-const USER_STORAGE_KEY = 'oyuns_user';
-const INIT_DATA_STORAGE_KEY = 'oyuns_init_data'; // cached for menu-button / refresh reopens
+const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
+const USER_STORAGE_KEY = 'oyuns_user_v2';
+const INIT_DATA_STORAGE_KEY = 'oyuns_init_data_v2'; // cached for menu-button / refresh reopens
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
 // Default dev user for local testing without Telegram

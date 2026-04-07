@@ -33,8 +33,8 @@ export const DevToolbar: React.FC = () => {
   const switchRole = (user: { id: number; first_name: string; last_name: string; username: string }) => {
     localStorage.setItem(DEV_USER_KEY, JSON.stringify(user));
     // Clear JWT so useTelegramAuth re-authenticates with the new identity
-    localStorage.removeItem('oyuns_jwt');
-    localStorage.removeItem('oyuns_user');
+    localStorage.removeItem('oyuns_jwt_v2');
+    localStorage.removeItem('oyuns_user_v2');
   };
 
   const setUserMode = () => {
