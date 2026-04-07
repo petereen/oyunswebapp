@@ -9,6 +9,8 @@ import {
   RefreshCw,
   CheckCircle2,
   XCircle,
+  Upload,
+  Image,
 } from "lucide-react";
 import {
   fetchFuelAdminBankAccounts,
@@ -16,6 +18,7 @@ import {
   updateFuelAdminBankAccount,
   deleteFuelAdminBankAccount,
   FuelAdminBankAccount,
+  requestPresign,
 } from "../api";
 import { useFuelLang } from "../i18n/useFuelLang";
 
@@ -81,6 +84,8 @@ export function FuelAdminBankAccounts() {
         is_active: editingAccount.is_active,
         display_order: editingAccount.display_order,
         admin_id: editingAccount.admin_id || undefined,
+        logo_url: editingAccount.logo_url || undefined,
+        emoji_id: editingAccount.emoji_id || undefined,
       };
       if (editingAccount.isNew) {
         await createFuelAdminBankAccount(payload);
@@ -187,7 +192,75 @@ export function FuelAdminBankAccounts() {
               onChange={(e) => setEditingAccount({ ...editingAccount, admin_id: e.target.value ? parseInt(e.target.value) : undefined })}
               className="px-3 py-2 text-xs border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200"
             />
+            <input
+              placeholder="Telegram Emoji ID"
+              value={editingAccount.emoji_id || ""}
+              onChange={(e) => setEditingAccount({ ...editingAccount, emoji_id: e.target.value })}
+              className="px-3 py-2 text-xs border border-silver/60 dark:border-dark-600 rounded-xl bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200"
+            />
           </div>
+
+          {/* Bank Logo Upload */}
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-dark-700 dark:text-ivory-300 flex items-center gap-1">
+              <Image className="w-3 h-3" /> Банкны лого (1:1, макс 256x256)
+            </div>
+            {editingAccount.logo_url ? (
+              <div className="flex items-center gap-3">
+                <img src={editingAccount.logo_url} alt="logo" className="w-12 h-12 rounded-lg object-contain border border-silver/60 dark:border-dark-600" />
+                <button
+                  onClick={() => setEditingAccount({ ...editingAccount, logo_url: undefined })}
+                  className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" /> Устгах
+                </button>
+              </div>
+            ) : (
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    // Validate aspect ratio and resolution
+                    const img = new window.Image();
+                    img.onload = async () => {
+                      URL.revokeObjectURL(img.src);
+                      if (Math.abs(img.width / img.height - 1) > 0.1) {
+                        setError("Лого нь 1:1 харьцаатай байх ёстой (жишээ: 128x128)");
+                        return;
+                      }
+                      if (img.width > 256 || img.height > 256) {
+                        setError("Лого нь 256x256 хэмжээнээс хэтрэхгүй байх ёстой");
+                        return;
+                      }
+                      try {
+                        const ext = file.name.split(".").pop() || "png";
+                        const path = `fuel/logos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+                        const presigned = await requestPresign({ bucket: "bills", path });
+                        await fetch(presigned.upload_url, {
+                          method: "PUT",
+                          body: file,
+                          headers: { "Content-Type": file.type },
+                        });
+                        setEditingAccount({ ...editingAccount, logo_url: presigned.public_url });
+                      } catch {
+                        setError("Лого оруулахад алдаа гарлаа");
+                      }
+                    };
+                    img.src = URL.createObjectURL(file);
+                  }}
+                />
+                <div className="border-2 border-dashed border-silver/60 dark:border-dark-600 rounded-xl p-3 text-center hover:border-amber-400 transition">
+                  <Upload className="w-4 h-4 text-dark-400 mx-auto mb-1" />
+                  <div className="text-[10px] text-dark-500 dark:text-ivory-400">PNG/JPG/WEBP, 1:1, макс 256×256</div>
+                </div>
+              </label>
+            )}
+          </div>
+
           <label className="flex items-center gap-2 text-xs text-dark-800 dark:text-ivory-200">
             <input
               type="checkbox"
@@ -227,6 +300,9 @@ export function FuelAdminBankAccounts() {
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
+              {account.logo_url && (
+                <img src={account.logo_url} alt="" className="w-6 h-6 rounded object-contain" />
+              )}
               <span className="text-sm font-semibold text-dark-800 dark:text-ivory-200">{account.bank_name}</span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${account.currency === "RUB" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                 {account.currency}
@@ -258,6 +334,7 @@ export function FuelAdminBankAccounts() {
             {account.account_number && <div>{t("banks.accountLabel")} {account.account_number}</div>}
             {account.phone && <div>{t("banks.phoneLabel")} {account.phone}</div>}
             {account.admin_id && <div>{t("banks.adminIdLabel")} {account.admin_id}</div>}
+            {account.emoji_id && <div>Emoji ID: {account.emoji_id}</div>}
           </div>
         </div>
       ))}

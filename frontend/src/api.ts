@@ -128,6 +128,7 @@ export type AdminBankAccount = {
   owner_name: string;
   currency: "RUB" | "MNT";
   is_active: boolean;
+  is_priority?: boolean;
 };
 
 export type RegistrationInput = {
@@ -499,6 +500,7 @@ export interface AdminBankAccountFull {
   owner_name: string;
   currency: "RUB" | "MNT";
   is_active: boolean;
+  is_priority: boolean;
   display_order: number;
   admin_id?: number;
   created_at?: string;
@@ -790,6 +792,8 @@ export interface FuelAdminBankAccount {
   is_active: boolean;
   display_order: number;
   admin_id?: number;
+  logo_url?: string;
+  emoji_id?: string;
   created_at?: string;
   updated_at?: string;
 }

@@ -216,6 +216,7 @@ class AdminBankAccount(BaseModel):
     currency: str  # "RUB" or "MNT"
     is_active: bool = True
     admin_id: Optional[int] = None  # Telegram user ID of admin who owns this account
+    is_priority: bool = False  # Priority card for rotation
 
 
 class AdminBankAccountsResponse(BaseModel):
@@ -681,6 +682,8 @@ class FuelAdminBankAccount(BaseModel):
     is_active: bool = True
     display_order: int = 0
     admin_id: Optional[int] = None
+    logo_url: Optional[str] = None
+    emoji_id: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

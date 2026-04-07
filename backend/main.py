@@ -1820,6 +1820,8 @@ async def get_admin_bank_accounts(currency: str = None):
     Get list of active admin bank accounts for the admin currently on shift.
     Users need to see these to know where to send their money.
     Optional currency filter: RUB or MNT
+    For RUB accounts: implements priority rotation — alternates between
+    the priority card and a random non-priority card.
     """
     client = get_supabase()
     
@@ -1854,7 +1856,7 @@ async def get_admin_bank_accounts(currency: str = None):
     
     res = query.execute()
     
-    accounts = [
+    all_accounts = [
         AdminBankAccount(
             id=str(row.get("id")),
             bank_name=row.get("bank_name"),
@@ -1865,9 +1867,43 @@ async def get_admin_bank_accounts(currency: str = None):
             currency=row.get("currency"),
             is_active=row.get("is_active", True),
             admin_id=row.get("admin_id"),
+            is_priority=row.get("is_priority", False),
         )
         for row in res.data or []
     ]
+
+    # RUB priority rotation: alternate priority card with random non-priority
+    rub_accounts = [a for a in all_accounts if a.currency == "RUB"]
+    non_rub_accounts = [a for a in all_accounts if a.currency != "RUB"]
+    priority_rub = [a for a in rub_accounts if a.is_priority]
+    non_priority_rub = [a for a in rub_accounts if not a.is_priority]
+
+    if priority_rub and non_priority_rub:
+        import random
+        # Get and increment rotation counter from app_settings
+        try:
+            counter_res = client.table("app_settings").select("value").eq("key", "rub_bank_rotation_counter").single().execute()
+            counter = int(counter_res.data["value"]) if counter_res.data else 0
+        except Exception:
+            counter = 0
+
+        next_counter = counter + 1
+        try:
+            client.table("app_settings").upsert({"key": "rub_bank_rotation_counter", "value": str(next_counter)}).execute()
+        except Exception:
+            pass
+
+        if counter % 2 == 0:
+            # Even: show priority card
+            selected_rub = [priority_rub[0]]
+        else:
+            # Odd: show random non-priority card
+            selected_rub = [random.choice(non_priority_rub)]
+        
+        accounts = selected_rub + non_rub_accounts
+    else:
+        accounts = all_accounts
+
     return AdminBankAccountsResponse(accounts=accounts)
 
 
@@ -1896,6 +1932,7 @@ async def get_all_admin_bank_accounts(admin=Depends(require_admin)):
             "owner_name": row.get("owner_name"),
             "currency": row.get("currency"),
             "is_active": row.get("is_active", True),
+            "is_priority": row.get("is_priority", False),
             "display_order": row.get("display_order", 0),
             "admin_id": row.get("admin_id"),
             "created_at": row.get("created_at"),
@@ -1933,6 +1970,7 @@ async def create_admin_bank_account(
         "owner_name": payload.get("owner_name"),
         "currency": payload.get("currency"),
         "is_active": payload.get("is_active", True),
+        "is_priority": payload.get("is_priority", False),
         "display_order": payload.get("display_order", 0),
         "admin_id": payload.get("admin_id"),
         "created_at": now,
@@ -1963,7 +2001,7 @@ async def update_admin_bank_account(
     
     update_data = {"updated_at": now}
     
-    allowed_fields = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id"]
+    allowed_fields = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "is_priority", "display_order", "admin_id"]
     for field in allowed_fields:
         if field in payload:
             update_data[field] = payload[field]
@@ -3403,13 +3441,15 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
     }
 
     # Snapshot bank account details so they're preserved even if the account is changed/deleted
+    bank_emoji_id = None
     if payload.admin_bank_id:
         try:
-            bank_res = client.table("fuel_admin_bank_accounts").select("bank_name, owner_name, card_number").eq("id", payload.admin_bank_id).single().execute()
+            bank_res = client.table("fuel_admin_bank_accounts").select("bank_name, owner_name, card_number, emoji_id").eq("id", payload.admin_bank_id).single().execute()
             if bank_res.data:
                 order_data["admin_bank_name"] = bank_res.data.get("bank_name")
                 order_data["admin_bank_owner"] = bank_res.data.get("owner_name")
                 order_data["admin_bank_card"] = bank_res.data.get("card_number")
+                bank_emoji_id = bank_res.data.get("emoji_id")
         except Exception:
             pass
 
@@ -3434,6 +3474,16 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
 
     curr_symbol = "₽" if payload.payment_currency == "RUB" else "₮"
     dispenser_line = tb("ru", "fuel_admin_dispenser_line", number=payload.dispenser_number) if payload.dispenser_number else ""
+
+    # Build bank name line with optional premium emoji
+    bank_name_display = order_data.get("admin_bank_name", "")
+    if bank_emoji_id and bank_name_display:
+        bank_line = f'\n🏦 Банк: <tg-emoji emoji-id="{bank_emoji_id}">🏦</tg-emoji> <b>{bank_name_display}</b>'
+    elif bank_name_display:
+        bank_line = f"\n🏦 Банк: <b>{bank_name_display}</b>"
+    else:
+        bank_line = ""
+
     admin_text = tb("ru", "fuel_admin_new_order",
         invoice=payload.invoice,
         user_name=user_name,
@@ -3447,7 +3497,7 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
         final_amount=calc['final_amount'],
         curr_symbol=curr_symbol,
         payment_currency=payload.payment_currency,
-    )
+    ) + bank_line
 
     reply_markup = None
     fuel_settings = get_settings()
@@ -3786,7 +3836,7 @@ async def fuel_admin_bank_account_create(payload: dict, user=Depends(get_fuel_ad
         raise HTTPException(status_code=403, detail="Fuel admin access required")
 
     client = get_supabase()
-    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id"]
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id", "logo_url", "emoji_id"]
     data = {k: v for k, v in payload.items() if k in allowed}
     res = client.table("fuel_admin_bank_accounts").insert(data).execute()
     if not res.data:
@@ -3803,7 +3853,7 @@ async def fuel_admin_bank_account_update(account_id: str, payload: dict, user=De
         raise HTTPException(status_code=403, detail="Fuel admin access required")
 
     client = get_supabase()
-    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id"]
+    allowed = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "display_order", "admin_id", "logo_url", "emoji_id"]
     data = {k: v for k, v in payload.items() if k in allowed}
     res = client.table("fuel_admin_bank_accounts").update(data).eq("id", account_id).execute()
     if not res.data:

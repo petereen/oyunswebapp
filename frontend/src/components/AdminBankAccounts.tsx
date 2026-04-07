@@ -219,6 +219,11 @@ export function AdminBankAccounts() {
                     <span className="font-semibold text-slate-800">
                       {account.bank_name}
                     </span>
+                    {account.is_priority && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-700">
+                        ⭐ PRIORITY
+                      </span>
+                    )}
                     {account.is_active ? (
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
                     ) : (
@@ -404,6 +409,15 @@ function AccountForm({
             className="w-4 h-4 text-maroon-600 border-slate-300 rounded"
           />
           Идэвхтэй
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={account.is_priority ?? false}
+            onChange={(e) => onChange({ ...account, is_priority: e.target.checked })}
+            className="w-4 h-4 text-amber-600 border-slate-300 rounded"
+          />
+          ⭐ Priority карта
         </label>
       </div>
 

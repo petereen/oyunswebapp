@@ -1131,13 +1131,20 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                 <button
                   key={bank.id}
                   onClick={() => setSelectedBank(bank)}
-                  className={`w-full p-4 rounded-xl border-2 text-left transition ${
+                  className={`w-full p-4 rounded-xl border-2 text-left transition relative overflow-hidden ${
                     selectedBank?.id === bank.id
                       ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
                       : "border-silver/40 dark:border-dark-600 bg-white dark:bg-dark-800"
                   }`}
                 >
-                  <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200">{bank.bank_name}</div>
+                  {bank.logo_url && (
+                    <img
+                      src={bank.logo_url}
+                      alt=""
+                      className="absolute right-3 top-1/2 -translate-y-1/2 h-[70%] w-auto max-w-[60px] object-contain opacity-80"
+                    />
+                  )}
+                  <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200 pr-16">{bank.bank_name}</div>
                   <div className="text-xs text-dark-500 dark:text-ivory-400 mt-1 space-y-0.5">
                     {bank.card_number && (
                       <div className="flex items-center gap-1">
@@ -1169,6 +1176,16 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
               ))
             )}
           </div>
+
+          {/* MNT bank warning */}
+          {paymentCurrency === "MNT" && (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+              <span className="text-xs text-yellow-700 dark:text-yellow-400 font-medium">
+                {t("fuel.mnt_bank_warning")}
+              </span>
+            </div>
+          )}
 
           {/* Receipt upload */}
           <div className="bg-white dark:bg-dark-800 p-4 rounded-2xl border border-silver/60 dark:border-dark-600 space-y-3">
