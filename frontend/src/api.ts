@@ -6,7 +6,7 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
-const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
+const JWT_STORAGE_KEY = 'oyuns_jwt';
 const FUEL_ADMIN_KEY_STORAGE = 'fuel_admin_key';
 
 // Fuel admin axios instance - sends API key header for browser-based admin access
