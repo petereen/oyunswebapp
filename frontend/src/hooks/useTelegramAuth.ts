@@ -144,12 +144,17 @@ export function useTelegramAuth() {
       console.log('Version:', tg?.version);
       console.log('===========================');
 
+      // Always signal ready + expand immediately so Telegram dismisses its loading overlay,
+      // regardless of whether initData is populated (e.g. opened via menu/keyboard button).
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+
       // PRIORITY 1: Real Telegram WebApp context (always use if available)
       if (tg?.initData && tg.initData.length > 0) {
         console.log('📱 Real Telegram WebApp detected! Using initData for authentication...');
-        tg.ready();
-        tg.expand();
-        
+        // tg.ready() / tg.expand() already called above
         // Clear any old dev mode tokens to force fresh auth with real user
         localStorage.removeItem(JWT_STORAGE_KEY);
         localStorage.removeItem(USER_STORAGE_KEY);
