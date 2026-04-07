@@ -657,6 +657,19 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               </span>
             </div>
           )}
+
+          {/* Volume discount banner */}
+          {hasVolumeDiscount && !promoDiscount && (
+            <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+              <span>🎉</span>
+              <span>
+                {direction === "buy" 
+                  ? `100K+ ₽ — курс +${VOLUME_DISCOUNT} (${effectiveRate.toFixed(1)})`
+                  : `100K+ ₽ — курс -${VOLUME_DISCOUNT} (${effectiveRate.toFixed(1)})`
+                }
+              </span>
+            </div>
+          )}
           
           {/* Minimum RUB warning for MNT->RUB direction */}
           {direction === "sell" && convertedAmount > 0 && convertedAmount < minRubAmount && (
