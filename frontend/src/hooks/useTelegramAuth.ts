@@ -44,6 +44,7 @@ declare global {
 
 const JWT_STORAGE_KEY = 'oyuns_jwt';
 const USER_STORAGE_KEY = 'oyuns_user';
+const INIT_DATA_STORAGE_KEY = 'oyuns_init_data'; // cached for menu-button / refresh reopens
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
 // Default dev user for local testing without Telegram
@@ -103,6 +104,10 @@ export function useTelegramAuth() {
       // Store JWT and user in localStorage
       localStorage.setItem(JWT_STORAGE_KEY, data.token);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
+      // Cache initData so menu-button / refresh reopens can replay it when Telegram sends empty initData
+      if (!initData.startsWith('dev_mode_bypass')) {
+        localStorage.setItem(INIT_DATA_STORAGE_KEY, initData);
+      }
 
       setState({
         initData,
@@ -158,6 +163,7 @@ export function useTelegramAuth() {
         // Clear any old dev mode tokens to force fresh auth with real user
         localStorage.removeItem(JWT_STORAGE_KEY);
         localStorage.removeItem(USER_STORAGE_KEY);
+        // Don't remove INIT_DATA_STORAGE_KEY here — we're about to overwrite it on success
         
         try {
           await authenticate(tg.initData);
@@ -168,7 +174,26 @@ export function useTelegramAuth() {
         }
       }
 
-      // PRIORITY 2: Check for existing valid JWT token (only if no Telegram context)
+      // PRIORITY 2: Telegram context exists but initData is EMPTY (menu button / page refresh on mobile).
+      // Replay the cached initData from the last successful real auth.
+      if (tg && (!tg.initData || tg.initData.length === 0)) {
+        const cachedInitData = localStorage.getItem(INIT_DATA_STORAGE_KEY);
+        if (cachedInitData) {
+          console.log('📲 Menu button / refresh detected (empty initData). Replaying cached initData...');
+          try {
+            await authenticate(cachedInitData);
+            return;
+          } catch {
+            // Cached initData expired or invalid — clear it and fall through
+            console.warn('⚠️ Cached initData auth failed, clearing cache');
+            localStorage.removeItem(INIT_DATA_STORAGE_KEY);
+            localStorage.removeItem(JWT_STORAGE_KEY);
+            localStorage.removeItem(USER_STORAGE_KEY);
+          }
+        }
+      }
+
+      // PRIORITY 3: Check for existing valid JWT token (no live Telegram initData available)
       const storedToken = localStorage.getItem(JWT_STORAGE_KEY);
       const storedUser = localStorage.getItem(USER_STORAGE_KEY);
       
@@ -198,7 +223,7 @@ export function useTelegramAuth() {
         }
       }
 
-      // PRIORITY 3: Dev mode fallback (only in dev mode, no Telegram context)
+      // PRIORITY 4: Dev mode fallback (only in dev mode, no Telegram context)
       if (DEV_MODE) {
         console.log('🔧 Dev mode: Using mock user (no Telegram context)');
         
@@ -222,7 +247,7 @@ export function useTelegramAuth() {
         return;
       }
 
-      // PRIORITY 4: Production without Telegram context - show error
+      // PRIORITY 5: Production without Telegram context - show error
       console.error('❌ No Telegram context and not in dev mode');
       setState({
         initData: '',
@@ -240,6 +265,7 @@ export function useTelegramAuth() {
   const clearAuth = useCallback(() => {
     localStorage.removeItem(JWT_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(INIT_DATA_STORAGE_KEY);
     setState({
       initData: '',
       user: null,
