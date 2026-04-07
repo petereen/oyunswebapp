@@ -146,25 +146,39 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     return direction === "buy" ? buyRate : sellRate;
   }, [direction, buyRate, sellRate]);
 
+  // Volume discount: 0.3 MNT rate adjustment for large transactions (100k+ RUB)
+  const VOLUME_DISCOUNT = 0.3;
+  const VOLUME_THRESHOLD_RUB = 100_000;
+
+  const hasVolumeDiscount = useMemo(() => {
+    if (!amount || !baseRate || !direction) return false;
+    if (direction === "buy") {
+      // RUB→MNT: threshold is 100k RUB (amount is in RUB)
+      return amount >= VOLUME_THRESHOLD_RUB;
+    } else {
+      // MNT→RUB: threshold is 100k * baseRate MNT (amount is in MNT)
+      return amount >= VOLUME_THRESHOLD_RUB * baseRate;
+    }
+  }, [amount, baseRate, direction]);
+
   const effectiveRate = useMemo((): number => {
     const base = Number(baseRate) || 0;
     if (!base) return 0;
     const discount = Number(promoDiscount) || 0;
-    console.log("effectiveRate calc - base:", base, "discount:", discount, "direction:", direction);
-    if (discount > 0) {
-      // Adjust rate by discount amount:
-      // BUY (RUB→MNT): add to rate (user gets more MNT per RUB)
-      // SELL (MNT→RUB): subtract from rate (user pays less MNT per RUB)
+    // Volume discount only applies when no promo code is active
+    const volumeAdj = !discount && hasVolumeDiscount ? VOLUME_DISCOUNT : 0;
+    console.log("effectiveRate calc - base:", base, "discount:", discount, "volumeAdj:", volumeAdj, "direction:", direction);
+    const adj = discount || volumeAdj;
+    if (adj > 0) {
       const result = direction === "buy" 
-        ? base + discount 
-        : base - discount;
-      // Round to 1 decimal place to avoid floating point precision issues (e.g., 46.199999999996 -> 46.2)
+        ? base + adj 
+        : base - adj;
       const roundedResult = Math.round(result * 10) / 10;
       console.log("effectiveRate result:", roundedResult);
       return roundedResult;
     }
     return base;
-  }, [baseRate, promoDiscount, direction]);
+  }, [baseRate, promoDiscount, direction, hasVolumeDiscount]);
 
   const currencyFrom = direction === "buy" ? "RUB" : "MNT";
   const currencyTo = direction === "buy" ? "MNT" : "RUB";
@@ -618,9 +632,9 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
             <span>{currencyFrom} → {currencyTo}</span>
             <span className="ml-auto font-semibold">
               {t("stats.rate")}: {effectiveRate.toFixed(2)}
-              {promoDiscount > 0 && (
+              {(promoDiscount > 0 || (!promoDiscount && hasVolumeDiscount)) && (
                 <span className="text-green-600 ml-1">
-                  ({direction === "buy" ? "+" : "-"}{promoDiscount})
+                  ({direction === "buy" ? "+" : "-"}{(promoDiscount || (hasVolumeDiscount ? VOLUME_DISCOUNT : 0)).toFixed(1)})
                 </span>
               )}
             </span>
