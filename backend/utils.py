@@ -240,20 +240,14 @@ def _verify_with_hash_raw(raw_pairs: list, received_hash: str, bot_token: str) -
 def _verify_with_signature_raw(raw_pairs: list, received_signature: str, bot_token: str) -> AuthenticatedUser:
     """
     Verify using Ed25519 signature with raw pairs.
+    Tries raw (URL-encoded) values first, then URL-decoded as fallback
+    (mirrors the hash verification behavior for mobile compatibility).
     """
     if not CRYPTO_AVAILABLE:
         raise TelegramAuthError("Cryptography library not available for Ed25519 verification")
     
     # Extract bot ID from token (token format: 123456:ABC-...)
     bot_id = bot_token.split(":")[0]
-    
-    # Sort pairs and create data check string
-    raw_pairs.sort(key=lambda x: x[0])
-    data_check_string = "\n".join(f"{k}={v}" for k, v in raw_pairs)
-    
-    # Construct full message per Telegram docs:
-    # '<bot_id>:WebAppData\n<data_check_string>'
-    full_message = f"{bot_id}:WebAppData\n{data_check_string}"
     
     # Decode signature (base64url)
     try:
@@ -266,37 +260,51 @@ def _verify_with_signature_raw(raw_pairs: list, received_signature: str, bot_tok
         signature_bytes = base64.b64decode(sig_b64)
     except Exception as e:
         raise TelegramAuthError(f"Invalid signature encoding: {e}")
-        
-    # Verify with Telegram's public key
-    try:
-        public_key_bytes = bytes.fromhex(TELEGRAM_PUBLIC_KEY_HEX)
-        public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
-        public_key.verify(signature_bytes, full_message.encode())
-    except Exception as e:
-        logger.error(f"Ed25519 verification failed: {e}")
-        raise TelegramAuthError("Invalid initData signature")
-        
-    # Extract User (URL-decode if needed)
-    user_raw = None
-    for k, v in raw_pairs:
-        if k == "user":
-            user_raw = unquote(v) if '%' in v else v
-            break
     
-    if not user_raw:
-        raise TelegramAuthError("Missing user payload")
+    public_key_bytes = bytes.fromhex(TELEGRAM_PUBLIC_KEY_HEX)
+    public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
+
+    # Try with raw (URL-encoded) values first, then decoded — same fallback as hash path
+    attempts = [
+        ("raw", sorted(raw_pairs, key=lambda x: x[0])),
+        ("decoded", sorted([(k, unquote(v)) for k, v in raw_pairs], key=lambda x: x[0])),
+    ]
+    
+    last_error = None
+    for label, pairs in attempts:
+        data_check_string = "\n".join(f"{k}={v}" for k, v in pairs)
+        full_message = f"{bot_id}:WebAppData\n{data_check_string}"
         
-    try:
-        user_payload = json.loads(user_raw)
-    except json.JSONDecodeError:
-        raise TelegramAuthError("Invalid user payload JSON")
-        
-    return AuthenticatedUser(
-        id=user_payload.get("id"),
-        first_name=user_payload.get("first_name"),
-        last_name=user_payload.get("last_name"),
-        username=user_payload.get("username"),
-    )
+        try:
+            public_key.verify(signature_bytes, full_message.encode())
+            logger.info(f"✅ Ed25519 verified with {label} values")
+            
+            # Extract User
+            user_raw = None
+            for k, v in pairs:
+                if k == "user":
+                    user_raw = unquote(v) if '%' in v else v
+                    break
+            
+            if not user_raw:
+                raise TelegramAuthError("Missing user payload")
+            
+            user_payload = json.loads(user_raw)
+            return AuthenticatedUser(
+                id=user_payload.get("id"),
+                first_name=user_payload.get("first_name"),
+                last_name=user_payload.get("last_name"),
+                username=user_payload.get("username"),
+            )
+        except TelegramAuthError:
+            raise
+        except Exception as e:
+            logger.info(f"Ed25519 {label} attempt failed: {e}")
+            last_error = e
+            continue
+    
+    logger.error(f"Ed25519 verification failed (both raw and decoded): {last_error}")
+    raise TelegramAuthError("Invalid initData signature")
 
 
 def debug_telegram_validation(init_data: str, bot_token: str) -> Dict[str, Any]:
