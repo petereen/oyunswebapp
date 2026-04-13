@@ -260,7 +260,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
         receipt_path: receiptUrls[0],
         receipt_paths: receiptUrls,
         promo_code: promoValid ? promoCode : undefined,
-        admin_bank_id: selectedAdminBank?.id,
+        admin_bank_id: selectedAdminBank?.id != null ? Number(selectedAdminBank.id) : undefined,
         invoice: invoiceId,
       };
       const res = await createExchange(payload);
@@ -525,10 +525,20 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
                 <div className="text-xs text-dark-600 dark:text-ivory-300">{t("txn.select_transfer_bank")}</div>
                 {availableAdminBanks.map((bank) => (
                   <button key={bank.id} onClick={() => setSelectedAdminBank(bank)}
-                    className={`p-4 rounded-xl border-2 text-left transition ${
+                    className={`p-4 rounded-xl border-2 text-left transition relative overflow-hidden ${
                       selectedAdminBank?.id === bank.id ? "border-maroon-600 bg-maroon-50 dark:bg-maroon-900/20 dark:border-maroon-500" : "border-silver dark:border-dark-600 hover:border-maroon-300 dark:hover:border-maroon-700"
                     }`}>
-                    <div className="font-semibold text-maroon-700 dark:text-maroon-400">{bank.bank_name}</div>
+                    {bank.logo_url && (
+                      <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                        <img
+                          src={bank.logo_url}
+                          alt=""
+                          className="h-10 w-10 object-contain opacity-90"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    <div className={`font-semibold text-maroon-700 dark:text-maroon-400 ${bank.logo_url ? "pr-16" : ""}`}>{bank.bank_name}</div>
                     <div className="text-sm text-dark-600 dark:text-ivory-300 font-mono">{bank.card_number || bank.account_number}</div>
                     {bank.phone && <div className="text-xs text-dark-600 dark:text-ivory-400">{bank.phone}</div>}
                     <div className="text-xs text-dark-600 dark:text-ivory-400">{bank.owner_name}</div>
@@ -588,10 +598,20 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
                 <div className="text-xs text-dark-600 dark:text-ivory-300">{t("txn.select_mnt_bank")}</div>
                 {availableMntAdminBanks.map((bank) => (
                   <button key={bank.id} onClick={() => setSelectedMntAdminBank(bank)}
-                    className={`p-4 rounded-xl border-2 text-left transition ${
+                    className={`p-4 rounded-xl border-2 text-left transition relative overflow-hidden ${
                       selectedMntAdminBank?.id === bank.id ? "border-maroon-600 bg-maroon-50 dark:bg-maroon-900/20 dark:border-maroon-500" : "border-silver dark:border-dark-600 hover:border-maroon-300 dark:hover:border-maroon-700"
                     }`}>
-                    <div className="font-semibold text-maroon-700 dark:text-maroon-400">{bank.bank_name}</div>
+                    {bank.logo_url && (
+                      <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                        <img
+                          src={bank.logo_url}
+                          alt=""
+                          className="h-10 w-10 object-contain opacity-90"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    <div className={`font-semibold text-maroon-700 dark:text-maroon-400 ${bank.logo_url ? "pr-16" : ""}`}>{bank.bank_name}</div>
                     <div className="text-sm text-dark-600 dark:text-ivory-300 font-mono">{bank.account_number}</div>
                     <div className="text-xs text-dark-600 dark:text-ivory-400">{bank.owner_name}</div>
                   </button>
