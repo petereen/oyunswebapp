@@ -1918,6 +1918,7 @@ async def get_admin_bank_accounts(currency: str = None):
             is_active=row.get("is_active", True),
             admin_id=row.get("admin_id"),
             is_priority=row.get("is_priority", False),
+            logo_url=row.get("logo_url"),
         )
         for row in res.data or []
     ]
@@ -1985,6 +1986,7 @@ async def get_all_admin_bank_accounts(admin=Depends(require_admin)):
             "is_priority": row.get("is_priority", False),
             "display_order": row.get("display_order", 0),
             "admin_id": row.get("admin_id"),
+            "logo_url": row.get("logo_url"),
             "created_at": row.get("created_at"),
             "updated_at": row.get("updated_at"),
         }
@@ -2023,6 +2025,7 @@ async def create_admin_bank_account(
         "is_priority": payload.get("is_priority", False),
         "display_order": payload.get("display_order", 0),
         "admin_id": payload.get("admin_id"),
+        "logo_url": payload.get("logo_url"),
         "created_at": now,
         "updated_at": now,
     }
@@ -2051,7 +2054,7 @@ async def update_admin_bank_account(
     
     update_data = {"updated_at": now}
     
-    allowed_fields = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "is_priority", "display_order", "admin_id"]
+    allowed_fields = ["bank_name", "account_number", "card_number", "phone", "owner_name", "currency", "is_active", "is_priority", "display_order", "admin_id", "logo_url"]
     for field in allowed_fields:
         if field in payload:
             update_data[field] = payload[field]

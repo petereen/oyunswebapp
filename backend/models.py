@@ -228,6 +228,7 @@ class AdminBankAccount(BaseModel):
     is_active: bool = True
     admin_id: Optional[int] = None  # Telegram user ID of admin who owns this account
     is_priority: bool = False  # Priority card for rotation
+    logo_url: Optional[str] = None
 
 
 class AdminBankAccountsResponse(BaseModel):

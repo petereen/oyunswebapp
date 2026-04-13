@@ -712,13 +712,20 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     <button
                       key={bank.id}
                       onClick={() => setSelectedAdminBank(bank)}
-                      className={`p-4 rounded-xl border-2 text-left transition ${
+                      className={`p-4 rounded-xl border-2 text-left transition relative overflow-hidden ${
                         selectedAdminBank?.id === bank.id
                           ? "border-maroon-500 bg-maroon-50"
                           : "border-maroon-100 hover:border-maroon-300"
                       }`}
                     >
-                      <div className="font-semibold text-maroon-700">{bank.bank_name}</div>
+                      {bank.logo_url && (
+                        <img
+                          src={bank.logo_url}
+                          alt=""
+                          className="absolute right-3 top-1/2 -translate-y-1/2 h-[70%] w-auto max-w-[60px] object-contain opacity-80"
+                        />
+                      )}
+                      <div className={`font-semibold text-maroon-700 ${bank.logo_url ? "pr-16" : ""}`}>{bank.bank_name}</div>
                       <div className="text-sm text-slate-600 font-mono">{bank.card_number || bank.account_number}</div>
                       {bank.phone && <div className="text-xs text-slate-500">{bank.phone}</div>}
                       <div className="text-xs text-slate-500">{bank.owner_name}</div>
@@ -743,13 +750,20 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                     <button
                       key={bank.id}
                       onClick={() => setSelectedMntAdminBank(bank)}
-                      className={`p-4 rounded-xl border-2 text-left transition ${
+                      className={`p-4 rounded-xl border-2 text-left transition relative overflow-hidden ${
                         selectedMntAdminBank?.id === bank.id
                           ? "border-maroon-500 bg-maroon-50"
                           : "border-maroon-100 hover:border-maroon-300"
                       }`}
                     >
-                      <div className="font-semibold text-maroon-700">{bank.bank_name}</div>
+                      {bank.logo_url && (
+                        <img
+                          src={bank.logo_url}
+                          alt=""
+                          className="absolute right-3 top-1/2 -translate-y-1/2 h-[70%] w-auto max-w-[60px] object-contain opacity-80"
+                        />
+                      )}
+                      <div className={`font-semibold text-maroon-700 ${bank.logo_url ? "pr-16" : ""}`}>{bank.bank_name}</div>
                       <div className="text-sm text-slate-600 font-mono">{bank.account_number}</div>
                       <div className="text-xs text-slate-500">{bank.owner_name}</div>
                     </button>

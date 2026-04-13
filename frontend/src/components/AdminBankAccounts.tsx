@@ -12,6 +12,8 @@ import {
   RefreshCw,
   CheckCircle2,
   XCircle,
+  Upload,
+  Image,
 } from "lucide-react";
 import {
   fetchAllAdminBankAccounts,
@@ -21,6 +23,7 @@ import {
   AdminBankAccountFull,
   fetchAdminUsers,
   AdminUser,
+  requestPresignAdmin,
 } from "../api";
 
 interface EditingAccount extends Partial<AdminBankAccountFull> {
@@ -207,6 +210,9 @@ export function AdminBankAccounts() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2">
+                    {account.logo_url && (
+                      <img src={account.logo_url} alt="" className="w-6 h-6 rounded object-contain" />
+                    )}
                     <span
                       className={`px-2 py-0.5 text-xs font-semibold rounded ${
                         account.currency === "RUB"
@@ -400,6 +406,27 @@ function AccountForm({
         </div>
       </div>
 
+      {/* Bank Logo Upload */}
+      <div className="space-y-2">
+        <div className="text-xs text-slate-500 flex items-center gap-1">
+          <Image className="w-3 h-3" /> Банкны лого (1:1, макс 256×256)
+        </div>
+        {account.logo_url ? (
+          <div className="flex items-center gap-3">
+            <img src={account.logo_url} alt="logo" className="w-12 h-12 rounded-lg object-contain border border-slate-200" />
+            <button
+              type="button"
+              onClick={() => onChange({ ...account, logo_url: undefined })}
+              className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+            >
+              <X className="w-3 h-3" /> Устгах
+            </button>
+          </div>
+        ) : (
+          <BankLogoUpload onChange={onChange} account={account} />
+        )}
+      </div>
+
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -443,5 +470,69 @@ function AccountForm({
         </button>
       </div>
     </div>
+  );
+}
+
+// Bank Logo Upload Component
+function BankLogoUpload({
+  onChange,
+  account,
+}: {
+  onChange: (account: EditingAccount) => void;
+  account: EditingAccount;
+}) {
+  const [uploadError, setUploadError] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  return (
+    <label className="block cursor-pointer">
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setUploadError("");
+          const img = new window.Image();
+          img.onload = async () => {
+            URL.revokeObjectURL(img.src);
+            if (Math.abs(img.width / img.height - 1) > 0.1) {
+              setUploadError("Лого нь 1:1 харьцаатай байх ёстой (жишээ: 128×128)");
+              return;
+            }
+            if (img.width > 256 || img.height > 256) {
+              setUploadError("Лого нь 256×256 хэмжээнээс хэтрэхгүй байх ёстой");
+              return;
+            }
+            setUploading(true);
+            try {
+              const ext = file.name.split(".").pop() || "png";
+              const path = `bank-logos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+              const presigned = await requestPresignAdmin({ bucket: "bills", path });
+              await fetch(presigned.upload_url, {
+                method: "PUT",
+                body: file,
+                headers: { "Content-Type": file.type },
+              });
+              onChange({ ...account, logo_url: presigned.public_url });
+            } catch {
+              setUploadError("Лого оруулахад алдаа гарлаа");
+            }
+            setUploading(false);
+          };
+          img.src = URL.createObjectURL(file);
+        }}
+      />
+      <div className="border-2 border-dashed border-slate-300 rounded-lg p-3 text-center hover:border-maroon-400 transition">
+        {uploading ? (
+          <RefreshCw className="w-4 h-4 text-slate-400 mx-auto animate-spin" />
+        ) : (
+          <Upload className="w-4 h-4 text-slate-400 mx-auto mb-1" />
+        )}
+        <div className="text-xs text-slate-500">PNG/JPG/WEBP, 1:1, макс 256×256</div>
+      </div>
+      {uploadError && <div className="text-xs text-red-500 mt-1">{uploadError}</div>}
+    </label>
   );
 }

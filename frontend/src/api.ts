@@ -131,6 +131,7 @@ export type AdminBankAccount = {
   currency: "RUB" | "MNT";
   is_active: boolean;
   is_priority?: boolean;
+  logo_url?: string;
 };
 
 export type RegistrationInput = {
@@ -514,6 +515,7 @@ export interface AdminBankAccountFull {
   is_priority: boolean;
   display_order: number;
   admin_id?: number;
+  logo_url?: string;
   created_at?: string;
   updated_at?: string;
 }
