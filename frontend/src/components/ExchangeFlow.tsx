@@ -399,7 +399,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         receipt_path: receiptUrls[0], // First image for backward compatibility
         receipt_paths: receiptUrls, // All images
         promo_code: promoValid ? promoCode : undefined,
-        admin_bank_id: selectedAdminBank?.id,
+        admin_bank_id: selectedAdminBank?.id != null ? Number(selectedAdminBank.id) : undefined,
         invoice: invoiceId, // Pass the pre-generated invoice ID
       };
       console.log("Creating exchange with payload:", payload);
@@ -719,11 +719,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                       }`}
                     >
                       {bank.logo_url && (
-                        <img
-                          src={bank.logo_url}
-                          alt=""
-                          className="absolute right-3 top-1/2 -translate-y-1/2 h-[70%] w-auto max-w-[60px] object-contain opacity-80"
-                        />
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                          <img
+                            src={bank.logo_url}
+                            alt=""
+                            className="h-10 w-10 object-contain opacity-90"
+                            loading="lazy"
+                          />
+                        </div>
                       )}
                       <div className={`font-semibold text-maroon-700 ${bank.logo_url ? "pr-16" : ""}`}>{bank.bank_name}</div>
                       <div className="text-sm text-slate-600 font-mono">{bank.card_number || bank.account_number}</div>
@@ -757,11 +760,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
                       }`}
                     >
                       {bank.logo_url && (
-                        <img
-                          src={bank.logo_url}
-                          alt=""
-                          className="absolute right-3 top-1/2 -translate-y-1/2 h-[70%] w-auto max-w-[60px] object-contain opacity-80"
-                        />
+                        <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                          <img
+                            src={bank.logo_url}
+                            alt=""
+                            className="h-10 w-10 object-contain opacity-90"
+                            loading="lazy"
+                          />
+                        </div>
                       )}
                       <div className={`font-semibold text-maroon-700 ${bank.logo_url ? "pr-16" : ""}`}>{bank.bank_name}</div>
                       <div className="text-sm text-slate-600 font-mono">{bank.account_number}</div>
