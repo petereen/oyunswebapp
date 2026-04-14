@@ -185,7 +185,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "services.gift_title": { ru: "Отправить подарок", mn: "Бэлэг илгээх" },
   "services.gift_desc": { ru: "Отправить деньги человеку за рубежом", mn: "Гадаадад буй хүнд мөнгө илгээх" },
   "services.fuel_title": { ru: "Купить топливо", mn: "Түлш худалдаж авах" },
-  "services.fuel_desc": { ru: "Для водителей", mn: "Жолоочд танд зориулсан" },
+  "services.fuel_desc": { ru: "Для водителей", mn: "Жолооч танд зориулсан" },
 
   // ─── StatsTab ───
   "stats.title": { ru: "Статистика", mn: "Статистик" },

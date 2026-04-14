@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Gift, Flame, Lock } from "lucide-react";
 import { GiftFlow } from "../components/GiftFlow";
-import { FuelPlaceholder } from "../components/FuelPlaceholder";
 import { FuelFlow } from "../components/FuelFlow";
 import { fetchRates, fetchMe } from "../api";
 import { useLang } from "../i18n/useLang";
@@ -13,7 +12,7 @@ interface Props {
 }
 
 export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {}) {
-  const [activeService, setActiveService] = useState<"gift" | "fuel" | "fuel-dev" | null>(null);
+  const [activeService, setActiveService] = useState<"gift" | "fuel" | null>(null);
   const [pendingFuelOrderId, setPendingFuelOrderId] = useState<string | null>(null);
   const { t } = useLang();
 
@@ -37,7 +36,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
   useEffect(() => {
     if (initialFuelOrderId) {
       setPendingFuelOrderId(initialFuelOrderId);
-      setActiveService("fuel-dev");
+      setActiveService("fuel");
       onFuelOrderOpened?.();
     }
   }, [initialFuelOrderId]);
@@ -55,7 +54,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
     );
   }
 
-  if (activeService === "fuel-dev") {
+  if (activeService === "fuel") {
     return (
       <div className="animate-fadeIn">
         <FuelFlow
@@ -66,10 +65,6 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
         />
       </div>
     );
-  }
-
-  if (activeService === "fuel") {
-    return <FuelPlaceholder onBack={() => setActiveService(null)} onDevEnter={() => setActiveService("fuel-dev")} />;
   }
 
   return (
