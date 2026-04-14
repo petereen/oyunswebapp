@@ -12,7 +12,7 @@ const translations: Record<string, Record<FuelLang, string>> = {
   "tab.inbox": { ru: "Заявки", mn: "Хүсэлт" },
   "tab.history": { ru: "История", mn: "Түүх" },
   "tab.banks": { ru: "Счета", mn: "Данс" },
-  "tab.stations": { ru: "АЗС", mn: "АЗС" },
+  "tab.stations": { ru: "АЗС", mn: "ШТС" },
   "tab.shift": { ru: "Смена", mn: "Ээлж" },
   "header.logout": { ru: "Выйти", mn: "Гарах" },
 
@@ -110,7 +110,7 @@ const translations: Record<string, Record<FuelLang, string>> = {
   "shift.active": { ru: "Смена: АКТИВНА", mn: "Ээлж: ИДЭВХТЭЙ" },
   "shift.inactive": { ru: "Смена: ВЫКЛЮЧЕНА", mn: "Ээлж: УНТАРСАН" },
   "shift.onDuty": { ru: "На смене:", mn: "Ээлжинд:" },
-  "shift.offWarning": { ru: "Когда смена выключена, клиенты не могут заказать топливо", mn: "Ээлж унтарсан үед хэрэглэгчид түлш захиалах боломжгүй" },
+  "shift.offWarning": { ru: "Когда смена выключена, клиенты не могут заказать топливо", mn: "Ээлж унтарсан үед хэрэглэгчид шатахуун худалдан авах боломжгүй" },
   "shift.turnOff": { ru: "Выключить смену", mn: "Ээлж унтраах" },
   "shift.turnOn": { ru: "Включить смену", mn: "Ээлж асаах" },
   "shift.changeAdmin": { ru: "Сменить администратора", mn: "Ээлжийн админ солих" },

@@ -191,7 +191,7 @@ function getStatusConfig(status: string, rejectionComment?: string, t?: (key: st
         barBg: "bg-green-100 dark:bg-green-900/40",
         progress: 100,
         label: t?.("fuel_status.completed") ?? "Амжилттай",
-        description: t?.("fuel_status.completed_desc") ?? "Түлш амжилттай цэнэглэгдлээ!",
+        description: t?.("fuel_status.completed_desc") ?? "Шатахуун амжилттай цэнэглэгдлээ!",
       };
     case "rejected":
       return {
