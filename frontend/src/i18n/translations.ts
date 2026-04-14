@@ -344,7 +344,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "fuel.dispenser_required": { ru: "На станции {station} номер колонки обязателен.", mn: "{station} станцад колонканы дугаар зайлшгүй шаардлагатай." },
   "fuel.dispenser_example": { ru: "Напр: 3", mn: "Жиш: 3" },
   "fuel.fuel_info": { ru: "Информация о топливе", mn: "Шатахууны мэдээлэл" },
-  "fuel.liters_input": { ru: "Литры", mn: "Хэдэн литр шатахуун авах вэ?" },
+  "fuel.liters_input": { ru: "Литры", mn: "Литр" },
   "fuel.dt_price": { ru: "Цена ДТ (₽/литр)", mn: "Шатахууны литрын үнэ (₽/литр)" },
   "fuel.liters_example": { ru: "Напр: 100", mn: "Жиш: 100" },
   "fuel.price_example": { ru: "Напр: 62.50", mn: "Жиш: 62.50" },
