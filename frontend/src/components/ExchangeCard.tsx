@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { ArrowUpDown, Info } from "lucide-react";
-import { Rate } from "../api";
+import { Rate, fetchAppSettings } from "../api";
 import { useLang } from "../i18n/useLang";
 
 interface Props {
@@ -15,12 +15,24 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
   const [inputValue, setInputValue] = useState("");
   const [swapRotation, setSwapRotation] = useState(0);
 
+  // Fetch exchange limits from DB
+  const [minRubBuy, setMinRubBuy] = useState(100);
+  const [minRubSell, setMinRubSell] = useState(5000);
+
+  useEffect(() => {
+    fetchAppSettings()
+      .then((res) => {
+        setMinRubBuy(res.min_rub_buy || 100);
+        setMinRubSell(res.min_rub_amount || 5000);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (initialDirection) setDirection(initialDirection);
   }, [initialDirection]);
 
-  // RUB→MNT (buy): min 100₽ | MNT→RUB (sell): min 5000₽
-  const effectiveMinRub = direction === "buy" ? 100 : 5000;
+  const effectiveMinRub = direction === "buy" ? minRubBuy : minRubSell;
 
   const currentRate = useMemo(() => {
     if (!rate) return 0;

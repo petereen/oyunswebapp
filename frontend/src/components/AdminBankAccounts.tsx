@@ -14,6 +14,7 @@ import {
   XCircle,
   Upload,
   Image,
+  Settings,
 } from "lucide-react";
 import {
   fetchAllAdminBankAccounts,
@@ -24,6 +25,9 @@ import {
   fetchAdminUsers,
   AdminUser,
   requestPresignAdmin,
+  fetchAppSettings,
+  updateAppSettings,
+  AppSettings,
 } from "../api";
 
 interface EditingAccount extends Partial<AdminBankAccountFull> {
@@ -39,15 +43,25 @@ export function AdminBankAccounts() {
   const [editingAccount, setEditingAccount] = useState<EditingAccount | null>(null);
   const [error, setError] = useState("");
 
+  // Exchange limits state
+  const [exchangeLimits, setExchangeLimits] = useState<AppSettings>({ min_rub_amount: 5000, min_rub_buy: 100 });
+  const [editingLimits, setEditingLimits] = useState<AppSettings>({ min_rub_amount: 5000, min_rub_buy: 100 });
+  const [limitsChanged, setLimitsChanged] = useState(false);
+  const [savingLimits, setSavingLimits] = useState(false);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [accountsRes, adminsRes] = await Promise.all([
+      const [accountsRes, adminsRes, settingsRes] = await Promise.all([
         fetchAllAdminBankAccounts(),
         fetchAdminUsers(),
+        fetchAppSettings(),
       ]);
       setAccounts(accountsRes.accounts);
       setAdmins(adminsRes.admins);
+      setExchangeLimits(settingsRes);
+      setEditingLimits(settingsRes);
+      setLimitsChanged(false);
     } catch (err) {
       console.error("Failed to load bank accounts:", err);
       setError("Дансны мэдээлэл ачаалахад алдаа гарлаа");
@@ -127,6 +141,33 @@ export function AdminBankAccounts() {
     return admin?.name || `ID: ${adminId}`;
   };
 
+  const handleLimitsChange = (field: keyof AppSettings, value: string) => {
+    const num = parseInt(value, 10);
+    if (value !== "" && isNaN(num)) return;
+    const updated = { ...editingLimits, [field]: value === "" ? 0 : num };
+    setEditingLimits(updated);
+    setLimitsChanged(
+      updated.min_rub_amount !== exchangeLimits.min_rub_amount ||
+      updated.min_rub_buy !== exchangeLimits.min_rub_buy
+    );
+  };
+
+  const handleSaveLimits = async () => {
+    setSavingLimits(true);
+    setError("");
+    try {
+      const result = await updateAppSettings(editingLimits);
+      setExchangeLimits(result);
+      setEditingLimits(result);
+      setLimitsChanged(false);
+    } catch (err) {
+      console.error("Failed to save exchange limits:", err);
+      setError("Лимит хадгалахад алдаа гарлаа");
+    } finally {
+      setSavingLimits(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -163,6 +204,56 @@ export function AdminBankAccounts() {
       {error && (
         <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>
       )}
+
+      {/* Exchange Limits Section */}
+      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+        <h4 className="font-semibold text-amber-800 flex items-center gap-2">
+          <Settings className="w-4 h-4" />
+          Гүйлгээний доод лимит (₽)
+        </h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-slate-600 font-medium">
+              🇷🇺→🇲🇳 RUB→MNT (доод ₽)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={editingLimits.min_rub_buy}
+              onChange={(e) => handleLimitsChange("min_rub_buy", e.target.value)}
+              className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-600 font-medium">
+              🇲🇳→🇷🇺 MNT→RUB (доод ₽)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={editingLimits.min_rub_amount}
+              onChange={(e) => handleLimitsChange("min_rub_amount", e.target.value)}
+              className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+            />
+          </div>
+        </div>
+        {limitsChanged && (
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveLimits}
+              disabled={savingLimits}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition text-sm disabled:opacity-50"
+            >
+              {savingLimits ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Лимит хадгалах
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* New Account Form */}
       {editingId === "new" && editingAccount && (

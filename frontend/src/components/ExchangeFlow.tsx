@@ -84,6 +84,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   
   // App settings
   const [minRubAmount, setMinRubAmount] = useState<number>(5000);
+  const [minRubBuy, setMinRubBuy] = useState<number>(100);
   
   // Final
   const [useSavedBank, setUseSavedBank] = useState<boolean | null>(null);
@@ -117,10 +118,16 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       .then((res) => setAdminBanks(res.accounts || []))
       .catch(() => setAdminBanks([]));
     
-    // Load app settings (min_rub_amount)
+    // Load app settings (min_rub_amount, min_rub_buy)
     fetchAppSettings()
-      .then((res) => setMinRubAmount(res.min_rub_amount || 5000))
-      .catch(() => setMinRubAmount(5000));
+      .then((res) => {
+        setMinRubAmount(res.min_rub_amount || 5000);
+        setMinRubBuy(res.min_rub_buy || 100);
+      })
+      .catch(() => {
+        setMinRubAmount(5000);
+        setMinRubBuy(100);
+      });
     
     // Load user's promo codes (active codes belonging to this user)
     fetchUserPromoCodes()
@@ -678,6 +685,14 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               <span>MNT→RUB {t("txn.min_rub_warning", { amount: minRubAmount.toLocaleString() })}</span>
             </div>
           )}
+
+          {/* Minimum RUB warning for RUB->MNT direction */}
+          {direction === "buy" && amount > 0 && amount < minRubBuy && (
+            <div className="text-sm text-red-500 flex items-center gap-1">
+              <span>⚠️</span>
+              <span>RUB→MNT {t("txn.min_rub_warning", { amount: minRubBuy.toLocaleString() })}</span>
+            </div>
+          )}
           
           <button
             className="mt-2 w-full rounded-xl bg-maroon-600 text-white py-3 font-semibold disabled:opacity-50"
@@ -688,7 +703,11 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               }
               setStep(3);
             }}
-            disabled={amount <= 0 || (direction === "sell" && convertedAmount < minRubAmount)}
+            disabled={
+              amount <= 0 ||
+              (direction === "sell" && convertedAmount < minRubAmount) ||
+              (direction === "buy" && amount < minRubBuy)
+            }
           >
             {t("txn.continue")}
           </button>

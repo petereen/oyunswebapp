@@ -92,6 +92,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
 
   // App settings
   const [minRubAmount, setMinRubAmount] = useState<number>(5000);
+  const [minRubBuy, setMinRubBuy] = useState<number>(100);
 
   // Load gift cards
   useEffect(() => {
@@ -113,10 +114,16 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       .then((res) => setAdminBanks(res.accounts || []))
       .catch(() => setAdminBanks([]));
     
-    // Load app settings (min_rub_amount)
+    // Load app settings (min_rub_amount, min_rub_buy)
     fetchAppSettings()
-      .then((res) => setMinRubAmount(res.min_rub_amount || 5000))
-      .catch(() => setMinRubAmount(5000));
+      .then((res) => {
+        setMinRubAmount(res.min_rub_amount || 5000);
+        setMinRubBuy(res.min_rub_buy || 100);
+      })
+      .catch(() => {
+        setMinRubAmount(5000);
+        setMinRubBuy(100);
+      });
   }, []);
 
   // Generate invoice ID
@@ -545,7 +552,15 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
             {direction === "sell" && convertedAmount > 0 && convertedAmount < minRubAmount && (
               <div className="mt-2 text-sm text-red-500 flex items-center gap-1">
                 <span>⚠️</span>
-                <span>{t("txn.min_rub_warning", { amount: minRubAmount.toLocaleString() })}</span>
+                <span>MNT→RUB {t("txn.min_rub_warning", { amount: minRubAmount.toLocaleString() })}</span>
+              </div>
+            )}
+
+            {/* Minimum RUB warning for RUB->MNT direction */}
+            {direction === "buy" && amount && parseFloat(amount) > 0 && parseFloat(amount) < minRubBuy && (
+              <div className="mt-2 text-sm text-red-500 flex items-center gap-1">
+                <span>⚠️</span>
+                <span>RUB→MNT {t("txn.min_rub_warning", { amount: minRubBuy.toLocaleString() })}</span>
               </div>
             )}
           </div>
@@ -577,7 +592,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
                 if (!invoiceId) setInvoiceId(generateInvoiceId());
                 setStep(3);
               }}
-              disabled={!amount || parseFloat(amount) <= 0 || (direction === "sell" && convertedAmount < minRubAmount)}
+              disabled={!amount || parseFloat(amount) <= 0 || (direction === "sell" && convertedAmount < minRubAmount) || (direction === "buy" && parseFloat(amount) < minRubBuy)}
               className="flex-1 py-3 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-600 transition disabled:opacity-50"
             >
               {t("txn.continue")}

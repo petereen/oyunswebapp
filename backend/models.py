@@ -29,6 +29,12 @@ class RateResponse(BaseModel):
 
 class AppSettingsResponse(BaseModel):
     min_rub_amount: int = 5000  # Default minimum RUB for MNT->RUB
+    min_rub_buy: int = 100      # Default minimum RUB for RUB->MNT
+
+
+class AppSettingsUpdateRequest(BaseModel):
+    min_rub_amount: Optional[int] = None
+    min_rub_buy: Optional[int] = None
 
 
 class ExchangeCreateRequest(BaseModel):

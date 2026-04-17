@@ -189,6 +189,7 @@ export type PresignRequest = {
 
 export type AppSettings = {
   min_rub_amount: number;
+  min_rub_buy: number;
 };
 
 export async function fetchRates() {
@@ -537,6 +538,13 @@ export async function updateAdminBankAccount(id: string, payload: Partial<AdminB
 
 export async function deleteAdminBankAccount(id: string) {
   const res = await api.delete(`/admin/bank-accounts/${id}`);
+  return res.data;
+}
+
+// ============= Admin Exchange Limits =============
+
+export async function updateAppSettings(payload: Partial<AppSettings>): Promise<AppSettings> {
+  const res = await api.put<AppSettings>('/admin/settings', payload);
   return res.data;
 }
 

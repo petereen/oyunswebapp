@@ -28,6 +28,7 @@ _admin_media_flush_scheduled: Set[str] = set()
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 MIN_RUB = 5000
+MIN_RUB_TO_MNT = 100
 UB_TZ = ZoneInfo("Asia/Ulaanbaatar")
 MIN_VOLUME_RUB      = 50_000    # threshold in 
 MIN_VOLUME_RUB_2      = 100_000
@@ -882,13 +883,6 @@ def contact_support_handler(call):
         t(lang, "contact_support_msg"),
         parse_mode="Markdown"
     )
-@bot.callback_query_handler(func=lambda call: call.data == "restart_registration")
-def restart_registration(call):
-    user_id = call.message.chat.id
-    lang = get_user_lang(user_id)
-    bot.send_message(user_id, t(lang, "register_restarting"))
-    update_user_session(user_id, {"state": "register_last_name"})
-    bot.send_message(user_id, t(lang, "register_enter_last_name"), reply_markup=cancel_markup(lang))
 
     
 
@@ -1656,15 +1650,14 @@ def send_verification_alert_to_operator(user_id, user):
 
 @bot.callback_query_handler(func=lambda call: call.data == "start_registration")
 def start_registration_from_menu(call):
+    lang = get_user_lang(call.from_user.id)
     bot.answer_callback_query(call.id)
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("📱 Апп нээх", web_app=WebAppInfo(url=WEBAPP_URL)))
-    markup.add(InlineKeyboardButton("🔙 Буцах", callback_data="back_main"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main"))
     bot.send_message(
         call.message.chat.id,
-        "📝 *Бүртгүүлэх*\n\n"
-        "Та бүртгүүлэхийн тулд OYUNS FINANCE APP-аар дамжуулан бүртгүүлнэ үү.\n\n"
-        "✅ Апп дээр бүртгүүлснээр та манай үйлчилгээг ашиглах боломжтой болно.",
+        t(lang, "register_open_app_prompt"),
         parse_mode="Markdown",
         reply_markup=markup
     )
@@ -2244,6 +2237,14 @@ def selected_common_amount(call):
 
     final_rate = round(max(final_rate, 0.01), 2)
 
+    if currency == "rub" and amount < MIN_RUB_TO_MNT:
+        lang = get_user_lang(user_id)
+        return bot.send_message(
+            user_id,
+            t(lang, "exchange_min_rub_to_mnt", min_rub=MIN_RUB_TO_MNT),
+            parse_mode="Markdown"
+        )
+
     # enforce 1 000 RUB-min on MNT→RUB
     if currency == "mnt":
         # final_rate is MNT per 1 RUB, so to get MIN_RUB you need MIN_RUB * final_rate MNT
@@ -2368,6 +2369,13 @@ def receive_custom_amount(message):
         else:
             final_rate = base_rate - best_disc
         final_rate = round(max(final_rate, 0.01), 2)
+
+        if currency == "rub" and amount < MIN_RUB_TO_MNT:
+            return bot.send_message(
+                user_id,
+                t(lang, "exchange_min_rub_to_mnt", min_rub=MIN_RUB_TO_MNT),
+                parse_mode="Markdown"
+            )
 
 
         currency_from = currency
@@ -3894,35 +3902,6 @@ def payment_receipt(message):
         reply_markup=markup,
         parse_mode="Markdown"
     )
-@bot.callback_query_handler(func=lambda call: call.data == "review_registration")
-def handle_review_registration(call):
-    user_id = call.message.chat.id
-    review_registration(user_id)
-
-def review_registration(user_id):
-    response = supabase.table("users").select("*").eq("id", user_id).execute()
-    user = response.data[0] if response.data else {}
-
-    text = (
-        "📋 **Бүртгэлийн мэдээлэл шалгах:**\n\n"
-        f"👤 Овог: {user.get('last_name', '-')}\n"
-        f"👤 Нэр: {user.get('first_name', '-')}\n"
-        f"📞 Утас: {user.get('phone', '-')}\n"
-        f"🪪 Паспортын дугаар: {user.get('registration_number', '-')}\n"
-        f"🏦 Монгол банк: {user.get('bank_mnt', '-')}\n"
-        f"🇷🇺 Орос банк: {user.get('bank_rub', '-')}\n"
-        f"📷 Паспорт зураг: {'🟢 Байгаа' if user.get('passport_file_id') else '🔴 Байхгүй'}"
-    )
-
-    markup = InlineKeyboardMarkup()
-    markup.add(
-        InlineKeyboardButton("📤 Баталгаажуулах хүсэлт илгээх", callback_data="submit_verification"),
-        InlineKeyboardButton("🔙 Буцах", callback_data="back_main")
-    )
-
-    bot.send_message(user_id, text, parse_mode="Markdown", reply_markup=markup)
-
-
 @bot.message_handler(content_types=['document'])
 def reject_file_receipts(message):
     user_id = message.chat.id
@@ -4114,7 +4093,7 @@ def handle_passport_or_receipt(message):
     admin_id = user_id  # for clarity
 
     # --- 1) PASSPORT UPLOAD FLOW (for new-user registration) ---
-    if state in ["waiting_for_passport", "register_passport"]:
+    if state == "waiting_for_passport":
         try:
             file_info = bot.get_file(photo_id)
             file_url  = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
@@ -4139,14 +4118,6 @@ def handle_passport_or_receipt(message):
             }).eq("id", user_id).execute()
 
             bot.send_message(user_id, "🪪 Паспортын зураг амжилттай хадгалагдлаа!")
-            if state == "register_passport":
-                bot.send_message(
-                    user_id,
-                    "🎉 Бүртгэл дууслаа!\n📋 Та бүртгэлийн мэдээллээ дахин шалгаад баталгаажуулах хүсэлт илгээнэ үү 👇",
-                    reply_markup=InlineKeyboardMarkup().add(
-                        InlineKeyboardButton("📋 Мэдээлэл шалгах", callback_data="review_registration")
-                    )
-                )
         except Exception as e:
             print(f"❌ Passport upload error: {e}")
             bot.send_message(user_id, f"❌ Алдаа гарлаа: {e}")
@@ -4567,28 +4538,6 @@ def save_text_feedback(message):
     finally:
         clear_state(user_id)
 
-def cancel_markup(lang=None):
-    if lang is None:
-        lang = "mn"
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton(t(lang, "btn_cancel"), callback_data="cancel_registration"))
-    return markup
-
-def restart_registration_markup(lang=None):
-    if lang is None:
-        lang = "mn"
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton(t(lang, "btn_restart_registration"), callback_data="restart_registration"))
-    return markup
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "cancel_registration")
-def cancel_registration(call):
-    user_id = call.message.chat.id
-    lang = get_user_lang(user_id)
-    clear_state(user_id)
-    bot.send_message(user_id, t(lang, "register_action_cancelled"))
-
 #REGISTRATION FORM
 
 @bot.message_handler(commands=['register'])
@@ -4597,136 +4546,16 @@ def register(message):
     if not has_agreed_terms(user_id):
         ask_terms_agreement(message.chat.id)
         return
-    # Check if user is already verified
-    response = supabase.table("users").select("verified").eq("id", user_id).execute()
-    user = response.data[0] if response.data else None
-
     lang = get_user_lang(user_id)
-    if user and user.get("verified"):
-        bot.send_message(user_id, t(lang, "register_already_verified"))
-        return
-
-    # Insert placeholder user if not exists
-    if not user:
-        supabase.table("users").upsert({"id": user_id}).execute()
-
-    bot.send_message(user_id, t(lang, "register_intro"))
-    update_user_session(user_id, {"state": "register_last_name"})
-
-    bot.send_message(user_id, t(lang, "register_enter_last_name"), reply_markup=cancel_markup(lang))
-
-@bot.callback_query_handler(func=lambda c: c.data == "enter_rub")
-def handle_rub_choice(c):
-    user_id = c.message.chat.id
-    # Move straight to entering RUB info
-    update_user_session(user_id, {"state": "register_bank_rub"})
-    lang = get_user_lang(user_id)
+    clear_state(user_id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
     bot.send_message(
         user_id,
-        t(lang, "register_enter_bank_rub"),
+        t(lang, "register_open_app_prompt"),
         parse_mode="Markdown",
-        reply_markup=cancel_markup(lang)
+        reply_markup=markup
     )
-    bot.answer_callback_query(c.id)
-
-@bot.message_handler(func=lambda m: get_state(m.chat.id) in [
-    "register_last_name",
-    "register_first_name",
-    "register_phone",
-    "register_reg",
-    "register_bank_mnt",
-    "register_bank_rub",
-    "register_passport"
-])
-
-def handle_registration_sequence(message):
-    user_id = message.chat.id
-    session = get_user_session(user_id)
-    state = session["state"] if session else None
-    text = message.text.strip()
-
-    lang = get_user_lang(user_id)
-    if state == "register_last_name":
-        supabase.table("users").upsert({"id": user_id, "last_name": text}).execute()
-        update_user_session(user_id, {"state": "register_first_name"})
-        bot.send_message(user_id, t(lang, "register_enter_first_name"), reply_markup=cancel_markup(lang))
-
-    elif state == "register_first_name":
-        supabase.table("users").upsert({"id": user_id, "first_name": text}).execute()
-        update_user_session(user_id, {"state": "register_phone"})
-        bot.send_message(user_id, t(lang, "register_enter_phone"), reply_markup=cancel_markup(lang))
-
-    elif state == "register_phone":
-        supabase.table("users").upsert({"id": user_id, "phone": text}).execute()
-        update_user_session(user_id, {"state": "register_reg"})
-        bot.send_message(user_id, t(lang, "register_enter_passport"), reply_markup=cancel_markup(lang))
-
-    elif state == "register_reg":
-        # Remove spaces before validating
-        clean_text = text.replace(" ", "")
-    
-        # Check only letters and numbers (spaces ignored)
-        if not re.fullmatch(r'[A-Za-z0-9]+', clean_text):
-            msg = bot.send_message(
-                user_id,
-                t(lang, "register_passport_error"),
-                reply_markup=cancel_markup(lang)
-            )
-            bot.register_next_step_handler(msg, handle_registration_sequence)
-            return
-                
-        supabase.table("users").upsert({"id": user_id, "registration_number": text}).execute()
-        update_user_session(user_id, {"state": "register_bank_mnt"})
-        bot.send_message(user_id, t(lang, "register_enter_bank_mnt"), reply_markup=cancel_markup(lang))
-
-    elif state == "register_bank_mnt":
-        parts = [x.strip() for x in text.split(",")]
-        if len(parts) != 3:
-            bot.send_message(user_id,
-                t(lang, "register_bank_mnt_error"),
-                reply_markup=cancel_markup(lang))
-            return
-
-        # Save MNT info
-        supabase.table("users").upsert({"id": user_id, "bank_mnt": text}).execute()
-
-        # **Now require RUB info immediately**
-        update_user_session(user_id, {"state": "register_bank_rub"})
-        bot.send_message(
-            user_id,
-            t(lang, "register_enter_bank_rub_2"),
-            reply_markup=cancel_markup(lang)
-        )
-
-    elif state == "register_bank_rub":
-        parts = [x.strip() for x in text.split(",")]
-        if len(parts) != 4:
-            bot.send_message(
-                user_id,
-                t(lang, "register_bank_rub_error"),
-                reply_markup=cancel_markup(lang)
-            )
-            return
-        supabase.table("users").upsert({"id": user_id, "bank_rub": text}).execute()
-        update_user_session(user_id, {"state": "register_passport"})
-        bot.send_message(user_id, t(lang, "register_enter_passport_photo"), reply_markup=cancel_markup(lang))
-
-    elif state == "register_passport":
-        bot.send_message(user_id, t(lang, "register_photo_not_text"), reply_markup=cancel_markup(lang))
-        clear_state(user_id)
-
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "cancel_registration")
-def cancel_registration(call):
-    user_id = call.message.chat.id
-    clear_state(user_id)  # Clear current state
-
-    # Optional: delete unverified user data
-    supabase.table("users").delete().eq("id", user_id).execute()
-
-    lang = get_user_lang(user_id)
-    bot.send_message(user_id, t(lang, "register_cancelled"), reply_markup=restart_registration_markup(lang))
 
 
 

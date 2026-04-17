@@ -25,6 +25,7 @@ from models import (
     AdminUser,
     AdminUsersResponse,
     AppSettingsResponse,
+    AppSettingsUpdateRequest,
     AuthRequest,
     AuthResponse,
     BasicRegistrationRequest,
@@ -497,7 +498,7 @@ async def get_app_settings():
     res = (
         client.table("app_settings")
         .select("key,value")
-        .in_("key", ["min_rub_amount"])
+        .in_("key", ["min_rub_amount", "min_rub_buy"])
         .execute()
     )
     
@@ -505,8 +506,32 @@ async def get_app_settings():
     settings_dict = {row["key"]: row["value"] for row in (res.data or [])}
     
     return AppSettingsResponse(
-        min_rub_amount=int(settings_dict.get("min_rub_amount", 5000))
+        min_rub_amount=int(settings_dict.get("min_rub_amount", 5000)),
+        min_rub_buy=int(settings_dict.get("min_rub_buy", 100)),
     )
+
+
+@app.put("/api/admin/settings", response_model=AppSettingsResponse)
+async def update_app_settings(
+    payload: AppSettingsUpdateRequest,
+    admin=Depends(require_admin),
+):
+    """Admin endpoint - update exchange limit settings"""
+    client = get_supabase()
+    allowed_keys = {"min_rub_amount", "min_rub_buy"}
+
+    updates = payload.model_dump(exclude_none=True)
+    for key, value in updates.items():
+        if key not in allowed_keys:
+            continue
+        if value < 0:
+            raise HTTPException(status_code=400, detail=f"{key} must be >= 0")
+        client.table("app_settings").upsert(
+            {"key": key, "value": str(value)},
+            on_conflict="key",
+        ).execute()
+
+    return await get_app_settings()
 
 
 def moscow_to_ub_hour(moscow_hour: int) -> int:
