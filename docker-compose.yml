@@ -76,8 +76,6 @@ services:
       mc mb --ignore-existing local/bills;
       mc anonymous set download local/passports;
       mc anonymous set download local/bills;
-      mc cors set local/passports /config/cors.json;
-      mc cors set local/bills /config/cors.json;
       exit 0;
       "
     restart: "no"

@@ -67,44 +67,83 @@ This repo currently needs these upload buckets:
 - `passports`
 - `bills`
 
-Create them with `mc`:
+Do not run `mc` directly on the VPS unless you installed the MinIO client on the host.
+This repo already includes `mc` inside the `minio-init` container, so use that.
+
+Create the buckets with:
 
 ```bash
-mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+docker compose run --rm minio-init
+```
+
+If you want to run `mc` commands manually, run them through the container:
+
+```bash
+docker compose run --rm minio-init /bin/sh -c '
+until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do sleep 2; done
 mc mb --ignore-existing local/passports
 mc mb --ignore-existing local/bills
+'
 ```
 
 For immediate compatibility with the current app, allow public downloads:
 
 ```bash
+docker compose run --rm minio-init /bin/sh -c '
+until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do sleep 2; done
 mc anonymous set download local/passports
 mc anonymous set download local/bills
+'
 ```
 
 ## 3. Configure Browser CORS
 
 The frontend uploads directly from the browser using presigned `PUT` URLs, so MinIO needs CORS.
 
+For this repo, the recommended immediate fix is to let Nginx handle CORS on the MinIO API port `9443`.
+That avoids the `mc cors set ... decoding xml: EOF` issue entirely.
+
 Create `minio-cors.json`:
 
 ```json
-[
-  {
-    "AllowedOrigins": ["https://your-app-domain.com"],
-    "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://your-app-domain.com"],
+      "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3000
+    }
+  ]
+}
 ```
 
 Apply it:
 
 ```bash
-mc cors set local/passports ./minio-cors.json
-mc cors set local/bills ./minio-cors.json
+docker compose run --rm minio-init /bin/sh -c '
+until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do sleep 2; done
+mc cors set local/passports /config/cors.json
+mc cors set local/bills /config/cors.json
+mc cors info local/passports
+mc cors info local/bills
+'
+```
+
+If `mc cors set` keeps failing with `decoding xml: EOF`, skip the bucket-level CORS step and rely on the Nginx proxy CORS headers in `nginx/conf.d/app.conf`.
+After updating Nginx, restart it:
+
+```bash
+docker compose up -d nginx
+```
+
+If you prefer having `mc` available directly on the VPS host, install it first:
+
+```bash
+curl -L https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc
+chmod +x /usr/local/bin/mc
+mc --version
 ```
 
 ## 4. App Environment Variables
