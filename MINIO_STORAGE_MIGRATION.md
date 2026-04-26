@@ -543,27 +543,27 @@ Run these checks immediately after the rewrite:
 ```sql
 SELECT COUNT(*) AS remaining_old_passports
 FROM public.users
-WHERE passport_storage_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+WHERE passport_storage_url LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%';
 
 SELECT COUNT(*) AS remaining_old_transaction_urls
 FROM public.transactions
-WHERE COALESCE(bill_url, '') LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/%'
-   OR COALESCE(receipt_id, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%'
-   OR COALESCE(admin_bill_url, '') LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/%';
+WHERE COALESCE(bill_url, '') LIKE '%https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(receipt_id, '') LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(admin_bill_url, '') LIKE '%https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%';
 
 SELECT COUNT(*) AS remaining_old_admin_bank_logos
 FROM public.admin_bank_accounts
-WHERE COALESCE(logo_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+WHERE COALESCE(logo_url, '') LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%';
 
 SELECT COUNT(*) AS remaining_old_fuel_bank_logos
 FROM public.fuel_admin_bank_accounts
-WHERE COALESCE(logo_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+WHERE COALESCE(logo_url, '') LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%';
 
 SELECT COUNT(*) AS remaining_old_gift_urls
 FROM public.gifts
-WHERE COALESCE(sender_receipt_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%'
-   OR COALESCE(admin_bill_url, '') LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/%'
-   OR COALESCE(gift_card_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+WHERE COALESCE(sender_receipt_url, '') LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(admin_bill_url, '') LIKE '%https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(gift_card_url, '') LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/%';
 ```
 
 ## 7. Restart The App
