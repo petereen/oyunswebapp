@@ -214,7 +214,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       setUploading(true);
       const path = `${direction}/${Date.now()}-${file.name}`;
       const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
-      await fetch(presigned.upload_url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      const res = await fetch(presigned.upload_url, { method: "PUT", body: file, headers: { "Content-Type": file.type } }); if (!res.ok) { const text = await res.text(); alert("UPLOAD FAIL: " + res.status + "\n" + text); throw new Error(text); }
       setReceiptUrls((prev) => [...prev, presigned.public_url]);
     } catch {
       setError(t("txn.upload_error"));
