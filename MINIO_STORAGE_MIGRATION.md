@@ -22,7 +22,16 @@ Touched code:
 
 Use MinIO behind HTTPS. For the fastest cutover, keep buckets public-read so your current URL-based data model still works.
 
-Example Compose service:
+This repo now includes `minio` and `minio-init` services in `docker-compose.yml`.
+
+Install and initialize them with:
+
+```bash
+docker compose up -d minio
+docker compose run --rm minio-init
+```
+
+If you want to see the raw service shape, it is equivalent to:
 
 ```yaml
 services:
@@ -43,6 +52,13 @@ Recommended domains:
 - `https://minio.your-domain.com` for the MinIO console
 
 If you expose MinIO through Nginx, route the API domain to port `9000` and the console domain to port `9001`.
+
+If you do not have a separate `s3.` subdomain, use the same app domain with different HTTPS ports instead:
+
+- `https://app.oyuns.mn:9443` for the S3 API
+- `https://app.oyuns.mn:9444` for the MinIO console
+
+That is safer than trying to serve MinIO behind a path prefix like `/s3`. Presigned S3 URLs are signed against the full request path, so path-prefix proxying is easy to break.
 
 ## 2. Create Buckets
 
@@ -106,6 +122,19 @@ S3_REGION=us-east-1
 S3_ADDRESSING_STYLE=path
 ```
 
+If you are reusing the existing app domain without a dedicated `s3.` subdomain, use:
+
+```env
+STORAGE_BACKEND=s3
+S3_ENDPOINT_URL=https://app.oyuns.mn:9443
+S3_PRESIGN_ENDPOINT_URL=https://app.oyuns.mn:9443
+S3_PUBLIC_BASE_URL=https://app.oyuns.mn:9443
+S3_ACCESS_KEY=replace-with-minio-access-key
+S3_SECRET_KEY=replace-with-minio-secret-key
+S3_REGION=us-east-1
+S3_ADDRESSING_STYLE=path
+```
+
 Notes:
 
 - `S3_ENDPOINT_URL` is used by the API and legacy bot for server-side uploads.
@@ -153,6 +182,12 @@ with the new MinIO public base URL:
 
 ```text
 https://s3.your-domain.com
+```
+
+If you are reusing the main app domain without a dedicated `s3.` subdomain, replace it with:
+
+```text
+https://app.oyuns.mn:9443
 ```
 
 Columns that need rewriting for the immediate storage cutover:
