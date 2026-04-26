@@ -14,3 +14,7 @@ frontend/dist
 *.log
 .vscode
 .idea
+.venv
+venv
+minio/
+certbot/
