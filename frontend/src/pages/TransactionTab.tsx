@@ -213,7 +213,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       setError("");
       setUploading(true);
       const path = `${direction}/${Date.now()}-${file.name}`;
-      const presigned = await requestPresign({ bucket: "bills", path });
+      const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
       await fetch(presigned.upload_url, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
       setReceiptUrls((prev) => [...prev, presigned.public_url]);
     } catch {

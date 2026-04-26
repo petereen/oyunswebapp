@@ -290,7 +290,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `fuel/${prefix}/${invoiceId || "unknown"}_${Date.now()}.${ext}`;
-      const presigned = await requestPresign({ bucket: "bills", path });
+      const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,

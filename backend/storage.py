@@ -61,16 +61,21 @@ def _build_s3_public_url(bucket: str, path: str) -> str:
     return f"{base_url}/{bucket}/{quoted_path}"
 
 
-def presign_upload(client: Client, bucket: str, path: str, expires_in: int | None = None) -> tuple[str, int]:
+def presign_upload(client: Client, bucket: str, path: str, content_type: str | None = None, expires_in: int | None = None) -> tuple[str, int]:
     settings = get_settings()
     ttl = expires_in or settings.presigned_ttl_seconds
     normalized_path = _normalize_path(path)
 
     if _is_s3_backend():
         try:
+            # We must explicitly add ContentType so browser JS Fetch doesn't trigger MinIO Signature errors
+            params = {"Bucket": bucket, "Key": normalized_path}
+            if content_type:
+                params["ContentType"] = content_type
+
             signed_url = _get_s3_client(True).generate_presigned_url(
                 "put_object",
-                Params={"Bucket": bucket, "Key": normalized_path},
+                Params=params,
                 ExpiresIn=ttl,
                 HttpMethod="PUT",
             )

@@ -202,6 +202,7 @@ export type ExchangeCreateResponse = {
 export type PresignRequest = {
   bucket: string;
   path: string;
+  content_type?: string;
 };
 
 // NO AUTH MODE - All API calls work without authentication

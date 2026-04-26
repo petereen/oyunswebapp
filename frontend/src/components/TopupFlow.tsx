@@ -124,7 +124,7 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
     try {
       for (const file of Array.from(files)) {
         const path = `phone-topup/${invoiceId || Date.now()}-${file.name}`;
-        const presigned = await requestPresign({ bucket: "bills", path });
+        const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
         await fetch(presigned.upload_url, {
           method: "PUT",
           body: file,

@@ -70,6 +70,7 @@ class AdminActionRequest(BaseModel):
 class PresignRequest(BaseModel):
     bucket: str
     path: str
+    content_type: str | None = None
     expires_in: int | None = None
 
 

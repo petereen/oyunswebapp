@@ -240,7 +240,7 @@ export function FuelAdminBankAccounts() {
                       try {
                         const ext = file.name.split(".").pop() || "png";
                         const path = `fuel/logos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-                        const presigned = await requestPresignAdmin({ bucket: "bills", path });
+                        const presigned = await requestPresignAdmin({ bucket: "bills", path, content_type: file.type });
                         await fetch(presigned.upload_url, {
                           method: "PUT",
                           body: file,
