@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import oyunsIcon from "../assets/oyuns-icon.png";
 import { useMemo, useState } from "react";
 import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Languages } from "lucide-react";
 import { Converter } from "../components/Converter";
@@ -131,7 +132,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-3">
           <img
-            src="https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/icon%20only.png"
+            src={oyunsIcon}
             alt="Oyuns Finance"
             className="h-10 w-10 shadow-card-xs object-contain"
           />

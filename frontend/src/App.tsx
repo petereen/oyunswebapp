@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import oyunsLogo from "./assets/oyuns-logo.png";
 import { useQuery } from "@tanstack/react-query";
 import { AdminPanel } from "./pages/AdminPanel";
 import { FuelAdminPanel } from "./pages/FuelAdminPanel";
@@ -86,7 +87,7 @@ export default function App() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <img
-                src="https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/oyuns%20finance%20logo%203%20tp.png"
+                src={oyunsLogo}
                 alt="OYUNS FINANCE"
                 className="h-10 w-auto object-contain"
               />
