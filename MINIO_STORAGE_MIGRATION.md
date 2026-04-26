@@ -188,7 +188,224 @@ Because this app stores full public URLs in the database, the migration has two 
 1. Copy the objects from Supabase Storage to MinIO.
 2. Rewrite the stored URLs in the database to point to the new MinIO base URL.
 
+Use the steps below in order.
+
+### 5.0. Safety Backup
+
+Before changing anything, take a database backup or at minimum export the affected columns:
+
+- `users.passport_storage_url`
+- `transactions.bill_url`
+- `transactions.receipt_id`
+- `transactions.admin_bill_url`
+- `admin_bank_accounts.logo_url`
+- `fuel_admin_bank_accounts.logo_url`
+- `gifts.sender_receipt_url`
+- `gifts.admin_bill_url`
+- `gifts.gift_card_url` if you also move the `gift_card` bucket
+
+### 5.1. Export All Existing Storage URLs From Supabase
+
+Run this query in the Supabase SQL editor and export the result as CSV.
+Name it something like `storage-urls-export.csv`.
+
+Replace these placeholders first:
+
+- `https://<your-project>.supabase.co/storage/v1/object/public/`
+- `https://app.oyuns.mn:9443/` or your actual MinIO public base URL
+
+```sql
+WITH settings AS (
+  SELECT
+    'https://<your-project>.supabase.co/storage/v1/object/public/'::text AS old_base,
+    'https://app.oyuns.mn:9443/'::text AS new_base
+),
+raw_urls AS (
+  SELECT 'users'::text AS source_table, 'passport_storage_url'::text AS source_column, id::text AS row_id, passport_storage_url AS old_url
+  FROM public.users
+  WHERE passport_storage_url LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'transactions', 'bill_url', id::text, bill_url
+  FROM public.transactions
+  WHERE bill_url LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'transactions', 'bill_url', t.id::text, elem.value
+  FROM public.transactions t,
+       LATERAL jsonb_array_elements_text(t.bill_url::jsonb) AS elem(value)
+  WHERE t.bill_url LIKE '[%'
+
+  UNION ALL
+
+  SELECT 'transactions', 'receipt_id', id::text, receipt_id
+  FROM public.transactions
+  WHERE receipt_id LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'transactions', 'admin_bill_url', id::text, admin_bill_url
+  FROM public.transactions
+  WHERE admin_bill_url LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'transactions', 'admin_bill_url', t.id::text, elem.value
+  FROM public.transactions t,
+       LATERAL jsonb_array_elements_text(t.admin_bill_url::jsonb) AS elem(value)
+  WHERE t.admin_bill_url LIKE '[%'
+
+  UNION ALL
+
+  SELECT 'admin_bank_accounts', 'logo_url', id::text, logo_url
+  FROM public.admin_bank_accounts
+  WHERE logo_url LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'fuel_admin_bank_accounts', 'logo_url', id::text, logo_url
+  FROM public.fuel_admin_bank_accounts
+  WHERE logo_url LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'gifts', 'sender_receipt_url', id::text, sender_receipt_url
+  FROM public.gifts
+  WHERE sender_receipt_url LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'gifts', 'admin_bill_url', id::text, admin_bill_url
+  FROM public.gifts
+  WHERE admin_bill_url LIKE 'https://%/storage/v1/object/public/%'
+
+  UNION ALL
+
+  SELECT 'gifts', 'admin_bill_url', g.id::text, elem.value
+  FROM public.gifts g,
+       LATERAL jsonb_array_elements_text(g.admin_bill_url::jsonb) AS elem(value)
+  WHERE g.admin_bill_url LIKE '[%'
+
+  UNION ALL
+
+  SELECT 'gifts', 'gift_card_url', id::text, gift_card_url
+  FROM public.gifts
+  WHERE gift_card_url LIKE 'https://%/storage/v1/object/public/%'
+),
+normalized AS (
+  SELECT DISTINCT
+    source_table,
+    source_column,
+    row_id,
+    old_url,
+    REPLACE(old_url, settings.old_base, '') AS relative_path,
+    settings.new_base
+  FROM raw_urls
+  CROSS JOIN settings
+  WHERE old_url IS NOT NULL
+),
+parsed AS (
+  SELECT
+    source_table,
+    source_column,
+    row_id,
+    old_url,
+    split_part(relative_path, '/', 1) AS bucket,
+    substring(relative_path FROM length(split_part(relative_path, '/', 1)) + 2) AS object_key,
+    new_base || relative_path AS new_url
+  FROM normalized
+)
+SELECT *
+FROM parsed
+ORDER BY bucket, object_key, source_table, source_column, row_id;
+```
+
+### 5.2. Check What Will Be Migrated
+
+Before copying files, inspect the export with these checks in Supabase:
+
+```sql
+SELECT 'users.passport_storage_url' AS source, COUNT(*)
+FROM public.users
+WHERE passport_storage_url LIKE 'https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'transactions.bill_url', COUNT(*)
+FROM public.transactions
+WHERE bill_url LIKE '%https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'transactions.receipt_id', COUNT(*)
+FROM public.transactions
+WHERE receipt_id LIKE 'https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'transactions.admin_bill_url', COUNT(*)
+FROM public.transactions
+WHERE admin_bill_url LIKE '%https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'admin_bank_accounts.logo_url', COUNT(*)
+FROM public.admin_bank_accounts
+WHERE logo_url LIKE 'https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'fuel_admin_bank_accounts.logo_url', COUNT(*)
+FROM public.fuel_admin_bank_accounts
+WHERE logo_url LIKE 'https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'gifts.sender_receipt_url', COUNT(*)
+FROM public.gifts
+WHERE sender_receipt_url LIKE 'https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'gifts.admin_bill_url', COUNT(*)
+FROM public.gifts
+WHERE admin_bill_url LIKE '%https://%/storage/v1/object/public/%'
+
+UNION ALL
+
+SELECT 'gifts.gift_card_url', COUNT(*)
+FROM public.gifts
+WHERE gift_card_url LIKE 'https://%/storage/v1/object/public/%';
+```
+
 ### 5.1. Copy Objects
+
+Copy the exported URLs with the helper script in this repo:
+
+```bash
+python scripts/copy_storage_urls_to_minio.py \
+  --input-csv storage-urls-export.csv \
+  --endpoint-url https://app.oyuns.mn:9443 \
+  --access-key "$S3_ACCESS_KEY" \
+  --secret-key "$S3_SECRET_KEY" \
+  --skip-existing
+```
+
+Dry run first if you want to verify the object list without uploading:
+
+```bash
+python scripts/copy_storage_urls_to_minio.py \
+  --input-csv storage-urls-export.csv \
+  --endpoint-url https://app.oyuns.mn:9443 \
+  --access-key "$S3_ACCESS_KEY" \
+  --secret-key "$S3_SECRET_KEY" \
+  --skip-existing \
+  --dry-run
+```
+
+If the script reports failures, it writes them to `failed-storage-urls.csv`.
 
 Minimum buckets to copy for the immediate fix:
 
@@ -205,9 +422,7 @@ When copying, preserve the same object keys. The current code already generates 
 - `bills/<filename>`
 - `bills/bank-logos/<filename>`
 
-If you already have the files downloaded locally, upload them with `mc cp` or `mc mirror`.
-
-If you only have Supabase public URLs, copy each object to the same bucket and object key on MinIO.
+After the copy completes, rerun the export query from step `5.1` and verify that every `old_url` now loads from the corresponding `new_url`.
 
 ## 6. Rewrite Stored URLs In Supabase DB
 
@@ -234,9 +449,14 @@ Columns that need rewriting for the immediate storage cutover:
 - `users.passport_storage_url`
 - `transactions.bill_url`
 - `transactions.receipt_id` when it contains a URL instead of a Telegram file id
+- `transactions.admin_bill_url`
 - `admin_bank_accounts.logo_url`
 - `fuel_admin_bank_accounts.logo_url`
+- `gifts.sender_receipt_url`
 - `gifts.admin_bill_url`
+- `gifts.gift_card_url` if you also migrate the `gift_card` bucket
+
+Run the rewrite only after the files are already in MinIO.
 
 SQL template:
 
@@ -265,6 +485,14 @@ SET receipt_id = REPLACE(
 )
 WHERE receipt_id LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
 
+UPDATE transactions
+SET admin_bill_url = REPLACE(
+  admin_bill_url,
+  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
+  'https://s3.your-domain.com/bills/'
+)
+WHERE admin_bill_url LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+
 UPDATE admin_bank_accounts
 SET logo_url = REPLACE(
   logo_url,
@@ -282,15 +510,61 @@ SET logo_url = REPLACE(
 WHERE logo_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE gifts
+SET sender_receipt_url = REPLACE(
+  sender_receipt_url,
+  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
+  'https://s3.your-domain.com/bills/'
+)
+WHERE sender_receipt_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+
+UPDATE gifts
 SET admin_bill_url = REPLACE(
   admin_bill_url,
   'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
   'https://s3.your-domain.com/bills/'
 )
 WHERE admin_bill_url LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+
+UPDATE gifts
+SET gift_card_url = REPLACE(
+  gift_card_url,
+  'https://<your-project>.supabase.co/storage/v1/object/public/gift_card/',
+  'https://s3.your-domain.com/gift_card/'
+)
+WHERE gift_card_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/gift_card/%';
 ```
 
-`transactions.bill_url` and `gifts.admin_bill_url` are stored as text and may contain JSON arrays of URLs. Plain `REPLACE(...)` still works because the old bucket URL appears inside that text.
+`transactions.bill_url`, `transactions.admin_bill_url`, and `gifts.admin_bill_url` are stored as text and may contain JSON arrays of URLs. Plain `REPLACE(...)` still works because the old bucket URL appears inside that text.
+
+### 6.1. Post-Update Verification
+
+Run these checks immediately after the rewrite:
+
+```sql
+SELECT COUNT(*) AS remaining_old_passports
+FROM public.users
+WHERE passport_storage_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+
+SELECT COUNT(*) AS remaining_old_transaction_urls
+FROM public.transactions
+WHERE COALESCE(bill_url, '') LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(receipt_id, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(admin_bill_url, '') LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/%';
+
+SELECT COUNT(*) AS remaining_old_admin_bank_logos
+FROM public.admin_bank_accounts
+WHERE COALESCE(logo_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+
+SELECT COUNT(*) AS remaining_old_fuel_bank_logos
+FROM public.fuel_admin_bank_accounts
+WHERE COALESCE(logo_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+
+SELECT COUNT(*) AS remaining_old_gift_urls
+FROM public.gifts
+WHERE COALESCE(sender_receipt_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(admin_bill_url, '') LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/%'
+   OR COALESCE(gift_card_url, '') LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/%';
+```
 
 ## 7. Restart The App
 
