@@ -136,6 +136,9 @@ class AdminInboxItem(BaseModel):
     admin_bill_url: Optional[str] = None
     rejection_comment: Optional[str] = None
     direction: Optional[str] = None
+    service_kind: Optional[str] = None
+    topup_phone: Optional[str] = None
+    topup_telecom: Optional[str] = None
     bank_mismatch: bool = False  # True if user used different bank account than saved
     saved_bank_info: Optional[str] = None  # User's saved bank info for comparison
     admin_label: Optional[str] = None  # Admin label for user (e.g. Тэмдэглэл, Сэжигтэй)

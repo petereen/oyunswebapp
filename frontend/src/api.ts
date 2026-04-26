@@ -180,6 +180,25 @@ export type ExchangeCreateInput = {
   admin_bank_id?: number;
 };
 
+export type PhoneTopupCreateInput = {
+  rub_amount: number;
+  sell_rate: number;
+  phone: string;
+  telecom: string;
+  receipt_path?: string;
+  receipt_paths?: string[];
+  invoice?: string;
+  admin_bank_id?: number;
+};
+
+export type ExchangeCreateResponse = {
+  id: string;
+  invoice: string;
+  status: string;
+  bill_url?: string;
+  created_at: string;
+};
+
 export type PresignRequest = {
   bucket: string;
   path: string;
@@ -248,7 +267,23 @@ export async function updateBankInfo(payload: UpdateBankInfoInput) {
 
 export async function createExchange(payload: ExchangeCreateInput) {
   const res = await api.post('/exchange/create', payload);
-  return res.data;
+  return res.data as ExchangeCreateResponse;
+}
+
+export async function createPhoneTopup(payload: PhoneTopupCreateInput) {
+  const payableMnt = Number((payload.rub_amount * payload.sell_rate).toFixed(2));
+  return createExchange({
+    direction: 'sell',
+    amount: payableMnt,
+    currency_from: 'MNT',
+    currency_to: 'RUB',
+    rate: payload.sell_rate,
+    bank_details: `${payload.phone}, ${payload.telecom}`,
+    receipt_path: payload.receipt_path,
+    receipt_paths: payload.receipt_paths,
+    invoice: payload.invoice,
+    admin_bank_id: payload.admin_bank_id,
+  });
 }
 
 export async function requestPresign(payload: PresignRequest) {
@@ -315,9 +350,37 @@ export async function submitBasicRegistration(payload: BasicRegistrationInput) {
   return res.data as { ok: boolean; message: string; verification_level: number };
 }
 
-export async function fetchInbox() {
+export interface AdminInboxItem {
+  invoice: string;
+  user_id: number;
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  status: string;
+  timestamp: string;
+  rate: number;
+  bank_details?: string;
+  receipt_id?: string;
+  bill_url?: string;
+  admin_bill_url?: string;
+  rejection_comment?: string;
+  direction?: string;
+  service_kind?: 'exchange' | 'phone_topup';
+  topup_phone?: string;
+  topup_telecom?: string;
+  bank_mismatch?: boolean;
+  saved_bank_info?: string;
+  admin_label?: string;
+  admin_label_note?: string;
+}
+
+export interface AdminInboxResponse {
+  items: AdminInboxItem[];
+}
+
+export async function fetchInbox(): Promise<AdminInboxResponse> {
   const res = await api.get('/admin/inbox');
-  return res.data as { items: any[] };
+  return res.data as AdminInboxResponse;
 }
 
 // ============= Admin History =============

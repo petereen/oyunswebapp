@@ -27,6 +27,14 @@ class Settings:
     storage_bucket_passports: str = "passports"
     storage_bucket_receipts: str = "bills"
     presigned_ttl_seconds: int = 900  # 15 minutes
+    storage_backend: str = "supabase"
+    s3_endpoint_url: str | None = None
+    s3_presign_endpoint_url: str | None = None
+    s3_public_base_url: str | None = None
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_region: str = "us-east-1"
+    s3_addressing_style: str = "path"
     dev_mode: bool = False
     # Fuel service settings
     fuel_admin_api_key: str | None = None
@@ -53,6 +61,16 @@ def get_settings() -> Settings:
     webapp_url = os.getenv("WEBAPP_URL")  # Telegram Mini App URL
     admin_api_key = os.getenv("ADMIN_API_KEY")
     jwt_secret = os.getenv("JWT_SECRET", "").strip().strip('"').strip("'")
+    storage_backend = os.getenv("STORAGE_BACKEND", "supabase").strip().strip('"').strip("'").lower()
+    if storage_backend == "minio":
+        storage_backend = "s3"
+    s3_endpoint_url = os.getenv("S3_ENDPOINT_URL", "").strip().strip('"').strip("'") or None
+    s3_presign_endpoint_url = os.getenv("S3_PRESIGN_ENDPOINT_URL", "").strip().strip('"').strip("'") or None
+    s3_public_base_url = os.getenv("S3_PUBLIC_BASE_URL", "").strip().strip('"').strip("'") or None
+    s3_access_key = os.getenv("S3_ACCESS_KEY", "").strip().strip('"').strip("'") or None
+    s3_secret_key = os.getenv("S3_SECRET_KEY", "").strip().strip('"').strip("'") or None
+    s3_region = os.getenv("S3_REGION", "us-east-1").strip().strip('"').strip("'") or "us-east-1"
+    s3_addressing_style = os.getenv("S3_ADDRESSING_STYLE", "path").strip().strip('"').strip("'").lower() or "path"
     # DEV MODE: Telegram auth bypass - defaults to FALSE for production safety
     dev_mode = os.getenv("DEV_MODE", "false").lower() == "true"
 
@@ -66,6 +84,25 @@ def get_settings() -> Settings:
     
     if not jwt_secret:
         raise RuntimeError("JWT_SECRET must be set for secure authentication")
+
+    if storage_backend not in {"supabase", "s3"}:
+        raise RuntimeError("STORAGE_BACKEND must be one of: supabase, s3, minio")
+
+    if s3_addressing_style not in {"path", "virtual"}:
+        raise RuntimeError("S3_ADDRESSING_STYLE must be either 'path' or 'virtual'")
+
+    if storage_backend == "s3":
+        missing_s3 = [
+            name
+            for name, value in {
+                "S3_ENDPOINT_URL": s3_endpoint_url,
+                "S3_ACCESS_KEY": s3_access_key,
+                "S3_SECRET_KEY": s3_secret_key,
+            }.items()
+            if not value
+        ]
+        if missing_s3:
+            raise RuntimeError(f"Missing required S3/MinIO settings: {', '.join(missing_s3)}")
 
     # Parse admin chat IDs (support multiple IDs)
     admin_chat_ids: List[int] = []
@@ -121,6 +158,14 @@ def get_settings() -> Settings:
         user_panel_url=user_panel_url,
         webapp_url=webapp_url,
         admin_api_key=admin_api_key,
+        storage_backend=storage_backend,
+        s3_endpoint_url=s3_endpoint_url,
+        s3_presign_endpoint_url=s3_presign_endpoint_url,
+        s3_public_base_url=s3_public_base_url,
+        s3_access_key=s3_access_key,
+        s3_secret_key=s3_secret_key,
+        s3_region=s3_region,
+        s3_addressing_style=s3_addressing_style,
         dev_mode=dev_mode,
         fuel_admin_api_key=fuel_admin_api_key,
         fuel_admin_user_ids=fuel_admin_user_ids,

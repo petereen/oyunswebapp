@@ -22,6 +22,7 @@ from telebot.types import InputMediaPhoto
 from typing import Dict, List, Set
 
 from bot_translations import t
+from backend.storage import public_url as storage_public_url, upload_file as storage_upload_file
 
 _admin_media_buffers: Dict[str, List[str]] = {}
 _admin_media_flush_scheduled: Set[str] = set()
@@ -4105,12 +4106,7 @@ def handle_passport_or_receipt(message):
                 tmp.write(resp.content)
                 temp_path = tmp.name
 
-            supabase.storage.from_("passports").upload(
-                file_name,
-                temp_path,
-                {"content-type": "image/jpeg", "x-upsert": "true"}
-            )
-            public_url = supabase.storage.from_("passports").get_public_url(file_name)
+            public_url = storage_upload_file(supabase, "passports", file_name, temp_path, "image/jpeg")
 
             supabase.table("users").update({
                 "passport_file_id": photo_id,
@@ -4144,12 +4140,7 @@ def handle_passport_or_receipt(message):
                 tmp.write(resp.content)
                 temp_path = tmp.name
 
-            supabase.storage.from_("bills").upload(
-                file_name,
-                temp_path,
-                {"content-type": "image/jpeg", "x-upsert": "true"}
-            )
-            bill_url = supabase.storage.from_("bills").get_public_url(file_name)
+            bill_url = storage_upload_file(supabase, "bills", file_name, temp_path, "image/jpeg")
 
             # Log transaction start time when user sends bill screenshot
             receipt_submitted_at = datetime.now(MOSCOW_TZ).isoformat()
@@ -4208,12 +4199,7 @@ def handle_passport_or_receipt(message):
                 tmp.write(resp.content)
                 temp_path = tmp.name
             
-            supabase.storage.from_("bills").upload(
-                file_name,
-                temp_path,
-                {"content-type": "image/jpeg", "x-upsert": "true"}
-            )
-            bill_url = supabase.storage.from_("bills").get_public_url(file_name)
+            bill_url = storage_upload_file(supabase, "bills", file_name, temp_path, "image/jpeg")
             
             # Record transaction
             receipt_submitted_at = datetime.now(MOSCOW_TZ).isoformat()
@@ -4725,7 +4711,7 @@ def show_pending_transactions(message):
         if not bill_url:
             try:
                 file_name = f"{invoice}_{user_id}.jpg"
-                bill_url = supabase.storage.from_("bills").get_public_url(file_name)
+                bill_url = storage_public_url(supabase, "bills", file_name)
 
                 # Confirm it's accessible
                 check = requests.get(bill_url)

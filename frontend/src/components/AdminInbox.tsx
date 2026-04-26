@@ -21,6 +21,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { 
+  AdminInboxItem as InboxItem,
   adminAction, 
   fetchInbox, 
   requestPresign,
@@ -36,27 +37,6 @@ import {
   AdminUser,
   WorkingHoursConfig,
 } from "../api";
-
-interface InboxItem {
-  invoice: string;
-  user_id: number;
-  amount: number;
-  currency_from: string;
-  currency_to: string;
-  status: string;
-  timestamp: string;
-  rate: number;
-  bank_details?: string;
-  receipt_id?: string;
-  bill_url?: string;
-  admin_bill_url?: string;
-  rejection_comment?: string;
-  direction?: string;
-  bank_mismatch?: boolean;
-  saved_bank_info?: string;
-  admin_label?: string;
-  admin_label_note?: string;
-}
 
 const LABEL_PRESETS: { name: string; color: string; bg: string; border: string }[] = [
   { name: "Тэмдэглэл", color: "text-green-700", bg: "bg-green-100", border: "border-green-300" },
@@ -505,6 +485,16 @@ export function AdminInbox() {
     return result;
   };
 
+  const isPhoneTopup = (item: InboxItem) => item.service_kind === "phone_topup";
+
+  const getTopupDetails = (item: InboxItem) => {
+    const fallbackParts = (item.bank_details || "").split(",").map((part) => part.trim()).filter(Boolean);
+    return {
+      phone: item.topup_phone || fallbackParts[0] || "-",
+      telecom: item.topup_telecom || fallbackParts[1] || "-",
+    };
+  };
+
   const handleAdminBillUpload = async (files: FileList) => {
     if (!confirmModal || files.length === 0) return;
     setUploading(true);
@@ -546,6 +536,9 @@ export function AdminInbox() {
   };
 
   const getDirectionLabel = (item: InboxItem) => {
+    if (isPhoneTopup(item)) {
+      return { label: "TOPUP", color: "bg-sky-100 text-sky-700" };
+    }
     if (item.direction === "buy" || item.currency_from.toUpperCase() === "RUB") {
       return { label: "BUY", color: "bg-green-100 text-green-700" };
     }
@@ -741,11 +734,13 @@ export function AdminInbox() {
         <div className="flex flex-col gap-2 p-3 max-h-[250px] overflow-auto bg-amber-50/30">
           {pendingItems.map((item) => {
             const dirInfo = getDirectionLabel(item);
+            const topup = getTopupDetails(item);
+            const topupRequest = isPhoneTopup(item);
             return (
               <div
                 key={item.invoice}
                 onClick={() => setDetailModal(item)}
-                className="border border-amber-200 rounded-xl bg-white p-3 cursor-pointer hover:bg-amber-50 transition"
+                className={`border rounded-xl bg-white p-3 cursor-pointer transition ${topupRequest ? "border-sky-200 hover:bg-sky-50/70" : "border-amber-200 hover:bg-amber-50"}`}
               >
                 <div className="flex items-center gap-3">
                   <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
@@ -768,6 +763,12 @@ export function AdminInbox() {
                     </span>
                   )}
                 </div>
+                {topupRequest && (
+                  <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                    <div>📱 {topup.phone}</div>
+                    <div>📶 {topup.telecom}</div>
+                  </div>
+                )}
                 <div className="mt-1 text-xs text-slate-400 font-mono truncate">#{item.invoice}</div>
               </div>
             );
@@ -795,6 +796,8 @@ export function AdminInbox() {
               ? (Number(item.amount) * Number(item.rate)).toFixed(0)
               : (Number(item.amount) / Number(item.rate)).toFixed(2);
             const transferCur = isBuy ? "₮" : "₽";
+            const topup = getTopupDetails(item);
+            const topupRequest = isPhoneTopup(item);
             
             return (
               <div
@@ -803,7 +806,7 @@ export function AdminInbox() {
                   setConfirmModal(item);
                   setAdminBillUrls(parseBillUrls(item.admin_bill_url));
                 }}
-                className="border border-green-200 rounded-xl bg-white p-3 cursor-pointer hover:bg-green-50 transition"
+                className={`border rounded-xl bg-white p-3 cursor-pointer transition ${topupRequest ? "border-sky-200 hover:bg-sky-50/70" : "border-green-200 hover:bg-green-50"}`}
               >
                 <div className="flex items-center gap-3">
                   <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
@@ -821,8 +824,14 @@ export function AdminInbox() {
                     {getTimeAgo(item.timestamp)}
                   </div>
                 </div>
+                {topupRequest && (
+                  <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                    <div>📱 {topup.phone}</div>
+                    <div>📶 {topup.telecom}</div>
+                  </div>
+                )}
                 <div className="mt-2 p-2 bg-green-100 rounded-lg flex items-center justify-between">
-                  <span className="text-sm text-green-700">Шилжүүлэх дүн:</span>
+                  <span className="text-sm text-green-700">{topupRequest ? "Цэнэглэх дүн:" : "Шилжүүлэх дүн:"}</span>
                   <span className="font-bold text-green-800">{Number(transferAmt).toLocaleString()} {transferCur}</span>
                 </div>
                 <div className="mt-1 text-xs text-slate-400 font-mono truncate">#{item.invoice}</div>
@@ -851,6 +860,8 @@ export function AdminInbox() {
       {/* Detail Modal - Full transaction details popup */}
       {detailModal && (() => {
         const item = detailModal;
+        const topupRequest = isPhoneTopup(item);
+        const topup = getTopupDetails(item);
         const isBuy = item.direction === "buy" || item.currency_from.toUpperCase() === "RUB";
         const parsed = parseBankDetails(item.bank_details || "", isBuy);
         const transferAmount = isBuy 
@@ -1014,7 +1025,7 @@ export function AdminInbox() {
 
                 {/* Transfer Amount - What admin needs to send */}
                 <div className="p-3 bg-gradient-to-r from-maroon-50 to-sky-50 rounded-lg border border-maroon-200">
-                  <div className="text-xs text-slate-500 mb-1">Шилжүүлэх дүн:</div>
+                  <div className="text-xs text-slate-500 mb-1">{topupRequest ? "Цэнэглэх дүн:" : "Шилжүүлэх дүн:"}</div>
                   <div className="flex items-center justify-between">
                     <span className="text-xl font-bold text-maroon-700">
                       {Number(transferAmount).toLocaleString()} {transferCurrency}
@@ -1036,8 +1047,39 @@ export function AdminInbox() {
                   </div>
                 </div>
 
-                {/* Bank Details */}
-                {item.bank_details && (
+                {topupRequest ? (
+                  <div className="p-3 bg-white rounded-lg border border-sky-200">
+                    <div className="text-xs text-slate-500 mb-2">Утас цэнэглэх мэдээлэл:</div>
+                    <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                      <div className="text-xs text-slate-500">Утасны дугаар</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-medium text-sky-800">{topup.phone}</span>
+                        <button onClick={() => handleCopy(topup.phone, "detail-topup-phone")} className="p-1.5 rounded hover:bg-sky-100">
+                          {copiedField === "detail-topup-phone" ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-sky-600" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <div className="text-xs text-slate-500">Оператор</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sky-800">{topup.telecom}</span>
+                        <button onClick={() => handleCopy(topup.telecom, "detail-topup-telecom")} className="p-1.5 rounded hover:bg-sky-100">
+                          {copiedField === "detail-topup-telecom" ? (
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-sky-600" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                /* Bank Details */
+                item.bank_details && (
                   <div className="p-3 bg-white rounded-lg border border-maroon-200">
                     <div className="text-xs text-slate-500 mb-2">Хэрэглэгчийн банкны мэдээлэл:</div>
                     
@@ -1163,7 +1205,7 @@ export function AdminInbox() {
                       </div>
                     )}
                   </div>
-                )}
+                ))}
 
                 {/* Actions for Pending - Pre-approve or Reject */}
                 {item.status === "pending" && (
@@ -1417,6 +1459,8 @@ export function AdminInbox() {
 
       {/* Confirm Transaction Modal */}
       {confirmModal && (() => {
+        const topupRequest = isPhoneTopup(confirmModal);
+        const topup = getTopupDetails(confirmModal);
         const isBuy = confirmModal.direction === "buy" || confirmModal.currency_from.toUpperCase() === "RUB";
         const parsed = parseBankDetails(confirmModal.bank_details || "", isBuy);
         const transferAmount = isBuy 
@@ -1452,7 +1496,7 @@ export function AdminInbox() {
 
             {/* Transfer Amount */}
             <div className="mb-4 p-3 bg-gradient-to-r from-maroon-50 to-sky-50 rounded-lg border border-maroon-200">
-              <div className="text-xs text-slate-500 mb-1">Шилжүүлэх дүн:</div>
+              <div className="text-xs text-slate-500 mb-1">{topupRequest ? "Цэнэглэх дүн:" : "Шилжүүлэх дүн:"}</div>
               <div className="flex items-center justify-between">
                 <span className="text-xl font-bold text-maroon-700">
                   {Number(transferAmount).toLocaleString()} {transferCurrency}
@@ -1471,7 +1515,38 @@ export function AdminInbox() {
               </div>
             </div>
 
-            {/* User's Bank Info - Structured */}
+            {topupRequest ? (
+              <div className="mb-4 p-3 bg-white rounded-lg border border-sky-200">
+                <div className="text-xs text-slate-500 mb-2">Утас цэнэглэх мэдээлэл:</div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                  <div className="text-xs text-slate-500">Утасны дугаар</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium text-sky-800">{topup.phone}</span>
+                    <button onClick={() => handleCopy(topup.phone, "modal-topup-phone")} className="p-1 rounded hover:bg-sky-100">
+                      {copiedField === "modal-topup-phone" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-sky-600" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <div className="text-xs text-slate-500">Оператор</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sky-800">{topup.telecom}</span>
+                    <button onClick={() => handleCopy(topup.telecom, "modal-topup-telecom")} className="p-1 rounded hover:bg-sky-100">
+                      {copiedField === "modal-topup-telecom" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-sky-600" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+            /* User's Bank Info - Structured */
             <div className="mb-4 p-3 bg-white rounded-lg border border-maroon-200">
               <div className="text-xs text-slate-500 mb-2">Хэрэглэгчийн данс руу шилжүүлэх дүн:</div>
               
@@ -1606,7 +1681,7 @@ export function AdminInbox() {
                   </button>
                 </div>
               )}
-            </div>
+            </div>)}
 
             {/* Upload Admin's Bills - Multiple photos support */}
             <div className="mb-4">

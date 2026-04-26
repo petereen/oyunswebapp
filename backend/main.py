@@ -1452,6 +1452,24 @@ async def admin_action(
 
 @app.get("/api/admin/inbox", response_model=AdminInboxResponse)
 async def admin_inbox(admin=Depends(require_admin)):
+    def classify_service(direction: str, bank_details: str) -> tuple[str, str | None, str | None]:
+        if direction != "sell" or not bank_details:
+            return "exchange", None, None
+
+        parts = [part.strip() for part in bank_details.split(",") if part.strip()]
+        if len(parts) != 2:
+            return "exchange", None, None
+
+        phone_candidate, telecom = parts
+        normalized_phone = phone_candidate.replace(" ", "").replace("-", "")
+        if normalized_phone.startswith("+"):
+            normalized_phone = normalized_phone[1:]
+
+        if normalized_phone.isdigit() and 7 <= len(normalized_phone) <= 15:
+            return "phone_topup", phone_candidate, telecom
+
+        return "exchange", None, None
+
     client = get_supabase()
     res = (
         client.table("transactions")
@@ -1481,14 +1499,15 @@ async def admin_inbox(admin=Depends(require_admin)):
     for row in res.data or []:
         # Determine direction from currency pair (case-insensitive)
         direction = "buy" if (row.get("currency_from") or "").upper() == "RUB" else "sell"
+        bank_details = row.get("bank_details") or ""
+        service_kind, topup_phone, topup_telecom = classify_service(direction, bank_details)
         
         # Check for bank mismatch
         user_id = row.get("user_id")
-        bank_details = row.get("bank_details") or ""
         bank_mismatch = False
         saved_bank_info = None
         
-        if user_id and user_id in user_bank_info:
+        if service_kind == "exchange" and user_id and user_id in user_bank_info:
             user_banks = user_bank_info[user_id]
             # For buy (RUB->MNT), user receives MNT, so check bank_mnt
             # For sell (MNT->RUB), user receives RUB, so check bank_rub
@@ -1544,6 +1563,9 @@ async def admin_inbox(admin=Depends(require_admin)):
             admin_bill_url=row.get("admin_bill_url"),
             rejection_comment=row.get("rejection_comment"),
             direction=direction,
+            service_kind=service_kind,
+            topup_phone=topup_phone,
+            topup_telecom=topup_telecom,
             bank_mismatch=bank_mismatch,
             saved_bank_info=saved_bank_info,
             admin_label=user_label,
