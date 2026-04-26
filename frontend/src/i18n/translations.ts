@@ -186,10 +186,10 @@ const translations: Record<string, Record<Lang, string>> = {
   "services.gift_desc": { ru: "Отправить деньги человеку за рубежом", mn: "Гадаадад буй хүнд мөнгө илгээх" },
   "services.fuel_title": { ru: "Купить топливо", mn: "Шатахуун худалдаж авах" },
   "services.fuel_desc": { ru: "Для водителей", mn: "Жолооч танд зориулсан" },
-  "services.topup_title": { ru: "Пополнение телефона", mn: "Утасны цэнэглэлт" },
-  "services.topup_desc": { ru: "Оплата мобильного номера в России", mn: "ОХУ-ын дугаарт цэнэглэлт хийх" },
-  "services.ticket_title": { ru: "Билеты и перелёты", mn: "Тасалбар, нислэг" },
-  "services.ticket_desc": { ru: "Переход в Telegram к OYUNS Finance", mn: "Telegram дахь OYUNS Finance руу шилжих" },
+  "services.topup_title": { ru: "Пополнение телефона", mn: "Утасны дугаар цэнэглэлт" },
+  "services.topup_desc": { ru: "Оплата мобильного номера в России", mn: "ОХУ-ын утасны дугаар цэнэглэх" },
+  "services.ticket_title": { ru: "Билеты и перелёты", mn: "Нислэг захиалга" },
+  "services.ticket_desc": { ru: "Заказ авиабилетов", mn: "Нислэгийн тийз захиалах" },
 
   // ─── StatsTab ───
   "stats.title": { ru: "Статистика", mn: "Статистик" },

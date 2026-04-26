@@ -464,74 +464,74 @@ SQL template:
 UPDATE users
 SET passport_storage_url = REPLACE(
   passport_storage_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/passports/',
-  'https://s3.your-domain.com/passports/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/passports/',
+  'https://app.oyuns.mn:9443/passports/'
 )
-WHERE passport_storage_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/passports/%';
+WHERE passport_storage_url LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/passports/%';
 
 UPDATE transactions
 SET bill_url = REPLACE(
   bill_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
-  'https://s3.your-domain.com/bills/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/',
+  'https://app.oyuns.mn:9443/bills/'
 )
-WHERE bill_url LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+WHERE bill_url LIKE '%https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE transactions
 SET receipt_id = REPLACE(
   receipt_id,
-  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
-  'https://s3.your-domain.com/bills/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/',
+  'https://app.oyuns.mn:9443/bills/'
 )
-WHERE receipt_id LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+WHERE receipt_id LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE transactions
 SET admin_bill_url = REPLACE(
   admin_bill_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
-  'https://s3.your-domain.com/bills/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/',
+  'https://app.oyuns.mn:9443/bills/'
 )
-WHERE admin_bill_url LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+WHERE admin_bill_url LIKE '%https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE admin_bank_accounts
 SET logo_url = REPLACE(
   logo_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
-  'https://s3.your-domain.com/bills/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/',
+  'https://app.oyuns.mn:9443/bills/'
 )
-WHERE logo_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+WHERE logo_url LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE fuel_admin_bank_accounts
 SET logo_url = REPLACE(
   logo_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
-  'https://s3.your-domain.com/bills/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/',
+  'https://app.oyuns.mn:9443/bills/'
 )
-WHERE logo_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+WHERE logo_url LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE gifts
 SET sender_receipt_url = REPLACE(
   sender_receipt_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
-  'https://s3.your-domain.com/bills/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/',
+  'https://app.oyuns.mn:9443/bills/'
 )
-WHERE sender_receipt_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+WHERE sender_receipt_url LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE gifts
 SET admin_bill_url = REPLACE(
   admin_bill_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/bills/',
-  'https://s3.your-domain.com/bills/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/',
+  'https://app.oyuns.mn:9443/bills/'
 )
-WHERE admin_bill_url LIKE '%https://<your-project>.supabase.co/storage/v1/object/public/bills/%';
+WHERE admin_bill_url LIKE '%https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/bills/%';
 
 UPDATE gifts
 SET gift_card_url = REPLACE(
   gift_card_url,
-  'https://<your-project>.supabase.co/storage/v1/object/public/gift_card/',
-  'https://s3.your-domain.com/gift_card/'
+  'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/',
+  'https://app.oyuns.mn:9443/gift_card/'
 )
-WHERE gift_card_url LIKE 'https://<your-project>.supabase.co/storage/v1/object/public/gift_card/%';
+WHERE gift_card_url LIKE 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/gift_card/%';
 ```
 
 `transactions.bill_url`, `transactions.admin_bill_url`, and `gifts.admin_bill_url` are stored as text and may contain JSON arrays of URLs. Plain `REPLACE(...)` still works because the old bucket URL appears inside that text.
