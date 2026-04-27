@@ -10,8 +10,10 @@ COPY requirements.txt .
 # Install the dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application files (including your Python script) into the container
-COPY . .
+# Copy only the runtime files the bot actually imports
+COPY oyunsbot.py .
+COPY bot_translations.py .
+COPY backend/ ./backend/
 
 # Run the Python script when the container starts
 CMD ["python", "oyunsbot.py"]
