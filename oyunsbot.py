@@ -1827,14 +1827,21 @@ def show_common_rub_amounts(user_id):
     try:
         lang = get_user_lang(user_id)
         markup = InlineKeyboardMarkup()
-        markup.add(
+        # Add buttons in rows of 2 or 3 for better UX and to avoid Telegram issues
+        markup.row(
             InlineKeyboardButton("1,000 РУБ", callback_data="amount_rub_1000"),
             InlineKeyboardButton("5,000 РУБ", callback_data="amount_rub_5000"),
+        )
+        markup.row(
             InlineKeyboardButton("10,000 РУБ", callback_data="amount_rub_10000"),
             InlineKeyboardButton("20,000 РУБ", callback_data="amount_rub_20000"),
+        )
+        markup.row(
             InlineKeyboardButton("30,000 РУБ", callback_data="amount_rub_30000"),
+        )
+        markup.row(
             InlineKeyboardButton(t(lang, "btn_custom_amount"), callback_data="custom_rub"),
-            InlineKeyboardButton(t(lang, "btn_back"), callback_data="exchange_menu")
+            InlineKeyboardButton(t(lang, "btn_back"), callback_data="exchange_menu"),
         )
         bot.send_message(user_id, t(lang, "exchange_choose_rub_amount"), reply_markup=markup)
     except Exception as e:
