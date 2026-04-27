@@ -90,6 +90,17 @@ export function AdminHistory() {
     return new Intl.NumberFormat("mn-MN").format(amount) + (currency === "RUB" ? " ₽" : " ₮");
   };
 
+  const parseBillUrls = (billUrl?: string): string[] => {
+    if (!billUrl) return [];
+    try {
+      const parsed = JSON.parse(billUrl);
+      if (Array.isArray(parsed)) return parsed;
+      return [billUrl];
+    } catch {
+      return [billUrl];
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -272,26 +283,28 @@ export function AdminHistory() {
                         <ExternalLink className="w-3 h-3" /> Хэрэглэгчийн баримт
                       </a>
                     )}
-                    {item.bill_url && (
+                    {parseBillUrls(item.bill_url).map((url, idx) => (
                       <a
-                        href={item.bill_url}
+                        key={`bill-${idx}`}
+                        href={url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-maroon-600 hover:underline"
                       >
-                        <ExternalLink className="w-3 h-3" /> Bill URL
+                        <ExternalLink className="w-3 h-3" /> Хэрэглэгчийн bill{parseBillUrls(item.bill_url).length > 1 ? ` ${idx + 1}` : ""}
                       </a>
-                    )}
-                    {item.admin_bill_url && (
+                    ))}
+                    {parseBillUrls(item.admin_bill_url).map((url, idx) => (
                       <a
-                        href={item.admin_bill_url}
+                        key={`admin-bill-${idx}`}
+                        href={url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-green-600 hover:underline"
                       >
-                        <ExternalLink className="w-3 h-3" /> Админы баримт
+                        <ExternalLink className="w-3 h-3" /> Админы баримт{parseBillUrls(item.admin_bill_url).length > 1 ? ` ${idx + 1}` : ""}
                       </a>
-                    )}
+                    ))}
                   </div>
 
                   {item.completed_by_admin && (
