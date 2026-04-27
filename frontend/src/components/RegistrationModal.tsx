@@ -148,7 +148,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
       const ext = file.name.split('.').pop() || 'jpg';
       const safeFilename = `passport_${Date.now()}.${ext}`;
       const path = `passport/${safeFilename}`;
-      const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
+      const presigned = await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,

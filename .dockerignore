@@ -16,5 +16,4 @@ frontend/dist
 .idea
 .venv
 venv
-minio/
 certbot/

@@ -365,7 +365,7 @@ export function AdminInbox() {
       const uploadedUrls: string[] = [...rejectBillUrls];
       for (const file of Array.from(files)) {
         const path = `admin/${Date.now()}-${file.name}`;
-        const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
+        const presigned = await requestPresign({ bucket: "bills", path });
         await fetch(presigned.upload_url, {
           method: "PUT",
           body: file,
@@ -502,7 +502,7 @@ export function AdminInbox() {
       const uploadedUrls: string[] = [...adminBillUrls];
       for (const file of Array.from(files)) {
         const path = `admin/${Date.now()}-${file.name}`;
-        const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
+        const presigned = await requestPresign({ bucket: "bills", path });
         await fetch(presigned.upload_url, {
           method: "PUT",
           body: file,

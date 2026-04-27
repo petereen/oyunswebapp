@@ -22,7 +22,6 @@ from telebot.types import InputMediaPhoto
 from typing import Dict, List, Set
 
 from bot_translations import t
-from backend.storage import public_url as storage_public_url, upload_file as storage_upload_file
 
 _admin_media_buffers: Dict[str, List[str]] = {}
 _admin_media_flush_scheduled: Set[str] = set()
@@ -4106,7 +4105,12 @@ def handle_passport_or_receipt(message):
                 tmp.write(resp.content)
                 temp_path = tmp.name
 
-            public_url = storage_upload_file(supabase, "passports", file_name, temp_path, "image/jpeg")
+            public_url = supabase.storage.from_("passports").get_public_url(file_name)
+            supabase.storage.from_("passports").upload(
+                file_name,
+                temp_path,
+                {"content-type": "image/jpeg", "x-upsert": "true"}
+            )
 
             supabase.table("users").update({
                 "passport_file_id": photo_id,

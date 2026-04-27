@@ -67,8 +67,8 @@ export function FuelChat({ orderId, isAdmin }: Props) {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `fuel/chat/${orderId}_${Date.now()}.${ext}`;
       const presigned = isAdmin
-        ? await requestPresignAdmin({ bucket: "bills", path, content_type: file.type })
-        : await requestPresign({ bucket: "bills", path, content_type: file.type });
+        ? await requestPresignAdmin({ bucket: "bills", path })
+        : await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,

@@ -209,7 +209,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
       const ext = file.name.split(".").pop() || "jpg";
       const safeFilename = `gift_receipt_${Date.now()}.${ext}`;
       const path = `gift_receipts/${safeFilename}`;
-      const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
+      const presigned = await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,

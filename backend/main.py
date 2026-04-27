@@ -622,7 +622,7 @@ async def create_presigned_url(
     bucket = payload.bucket
     if bucket not in {settings.storage_bucket_passports, settings.storage_bucket_receipts}:
         raise HTTPException(status_code=400, detail="Invalid bucket")
-    signed_url, ttl = presign_upload(client, bucket, payload.path, getattr(payload, "content_type", None), payload.expires_in)
+    signed_url, ttl = presign_upload(client, bucket, payload.path, payload.expires_in)
     public = public_url(client, bucket, payload.path)
     return PresignResponse(upload_url=signed_url, public_url=public, expires_in=ttl, path=payload.path)
 
@@ -3851,7 +3851,7 @@ async def fuel_admin_presign(payload: PresignRequest, user=Depends(get_fuel_admi
     bucket = payload.bucket
     if bucket not in {settings.storage_bucket_passports, settings.storage_bucket_receipts}:
         raise HTTPException(status_code=400, detail="Invalid bucket")
-    signed_url, ttl = presign_upload(client, bucket, payload.path, getattr(payload, "content_type", None), payload.expires_in)
+    signed_url, ttl = presign_upload(client, bucket, payload.path, payload.expires_in)
     public = public_url(client, bucket, payload.path)
     return PresignResponse(upload_url=signed_url, public_url=public, expires_in=ttl, path=payload.path)
 

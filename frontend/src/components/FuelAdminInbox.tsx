@@ -118,7 +118,7 @@ export function FuelAdminInbox() {
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const path = `fuel/approval/${orderId}_${Date.now()}.${ext}`;
-      const presigned = await requestPresignAdmin({ bucket: "bills", path, content_type: file.type });
+      const presigned = await requestPresignAdmin({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,

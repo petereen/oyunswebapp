@@ -294,7 +294,7 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       setError("");
       setUploading(true);
       const path = `${direction}/${Date.now()}-${file.name}`;
-      const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
+      const presigned = await requestPresign({ bucket: "bills", path });
       await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,

@@ -71,7 +71,7 @@ export function AdminGifts() {
         const ext = file.name.split('.').pop() || 'jpg';
         const safeFilename = `gift_admin_bill_${Date.now()}_${i}.${ext}`;
         const path = `gift_bills/${safeFilename}`;
-        const presigned = await requestPresign({ bucket: "bills", path, content_type: file.type });
+        const presigned = await requestPresign({ bucket: "bills", path });
         await fetch(presigned.upload_url, {
           method: "PUT",
           body: file,
