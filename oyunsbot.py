@@ -2200,7 +2200,7 @@ def reject_referral_callback(call):
 
 
 # 💰 Handle Common Amount Selection
-def selected_common_amount(call):
+# 💰 Handle Common Amount Selection
 @bot.callback_query_handler(func=lambda call: call.data.startswith("amount_"))
 def selected_common_amount(call):
     print(f"[DEBUG] selected_common_amount callback data: {call.data}")
@@ -2306,7 +2306,7 @@ def selected_common_amount(call):
 
 
 # ✏️ Handle Custom Amount Entry
-def custom_amount(call):
+# ✏️ Handle Custom Amount Entry
 @bot.callback_query_handler(func=lambda call: call.data.startswith("custom_"))
 def custom_amount(call):
     print(f"[DEBUG] custom_amount callback data: {call.data}")
