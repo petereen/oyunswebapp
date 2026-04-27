@@ -149,11 +149,12 @@ def collect_urls_from_db(sb) -> list[tuple[str, str, str]]:
                 pass
         add(label, raw)
 
-    # transactions – receipt_id, bill_url
-    rows = sb.table("transactions").select("invoice,receipt_id,bill_url").execute().data or []
+    # transactions – receipt_id, bill_url, admin_bill_url
+    rows = sb.table("transactions").select("invoice,receipt_id,bill_url,admin_bill_url").execute().data or []
     for r in rows:
         add(f"tx:{r.get('invoice')}/receipt_id", r.get("receipt_id"))
         add_json_array(f"tx:{r.get('invoice')}/bill_url", r.get("bill_url"))
+        add_json_array(f"tx:{r.get('invoice')}/admin_bill_url", r.get("admin_bill_url"))
 
     # users – passport_storage_url
     rows = sb.table("users").select("id,passport_storage_url").execute().data or []
