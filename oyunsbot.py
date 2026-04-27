@@ -2200,13 +2200,21 @@ def reject_referral_callback(call):
 
 
 # 💰 Handle Common Amount Selection
+def selected_common_amount(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("amount_"))
 def selected_common_amount(call):
+    print(f"[DEBUG] selected_common_amount callback data: {call.data}")
     user_id = call.message.chat.id
     if not ensure_exchange_available(user_id):
         bot.answer_callback_query(call.id)
         return
-    currency, amount = call.data.split("_")[1], int(call.data.split("_")[2])
+    try:
+        parts = call.data.split("_")
+        currency, amount = parts[1], int(parts[2])
+    except Exception as e:
+        print(f"[ERROR] Invalid callback_data for selected_common_amount: {call.data} ({e})")
+        bot.answer_callback_query(call.id, "❌ Invalid button data.", show_alert=True)
+        return
     invoice = generate_invoice()
     # Get base rate and promo discount
     base_rate = exchange_rates["BUY_RATE"] if currency == "rub" else exchange_rates["SELL_RATE"]
@@ -2298,13 +2306,20 @@ def selected_common_amount(call):
 
 
 # ✏️ Handle Custom Amount Entry
+def custom_amount(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("custom_"))
 def custom_amount(call):
+    print(f"[DEBUG] custom_amount callback data: {call.data}")
     user_id = call.message.chat.id
     if not ensure_exchange_available(user_id):
         bot.answer_callback_query(call.id)
         return
-    currency = call.data.split("_")[1]
+    try:
+        currency = call.data.split("_")[1]
+    except Exception as e:
+        print(f"[ERROR] Invalid callback_data for custom_amount: {call.data} ({e})")
+        bot.answer_callback_query(call.id, "❌ Invalid button data.", show_alert=True)
+        return
     update_user_session(call.message.chat.id, {"state": f"custom_amount_{currency}"})
 
     lang = get_user_lang(call.from_user.id)
