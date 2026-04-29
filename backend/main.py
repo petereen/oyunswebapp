@@ -2257,7 +2257,7 @@ async def transfer_shift(payload: ShiftTransferRequest, admin=Depends(require_ad
         f"👤 Өмнөх админ: {from_name}\n"
         f"👤 Шинэ админ: {to_name}\n\n"
         f"⚠️ <b>Шилжүүлэхээс өмнө банкны дансны үлдэгдлийг бүртгээрэй!</b>\n\n"
-        f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS FINANCE ДОТООД СИСТЕМ</a>"
+        f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS ALL-IN-ONE ДОТООД СИСТЕМ</a>"
     )
     send_user_notification(payload.to_admin_id, notification_text)
     
@@ -2265,7 +2265,7 @@ async def transfer_shift(payload: ShiftTransferRequest, admin=Depends(require_ad
     prev_admin_notification = (
         f"🔄 <b>Ээлж шилжүүллээ</b>\n\n"
         f"👤 Таны ээлжийг {to_name} хүлээж авлаа.\n\n"
-        f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS FINANCE ДОТООД СИСТЕМ</a>"
+        f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS ALL-IN-ONE ДОТООД СИСТЕМ</a>"
     )
     send_user_notification(payload.from_admin_id, prev_admin_notification)
     
@@ -2310,7 +2310,7 @@ async def close_shift(payload: ShiftCloseRequest, admin=Depends(require_admin)):
         f"🔒 <b>Ээлж хаагдлаа</b>\n\n"
         f"👤 Админ: {admin_name}\n\n"
         f"⚠️ <b>Ээлж хаасны дараа банкны дансны үлдэгдлийг бүртгээрэй!</b>\n\n"
-        f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS FINANCE ДОТООД СИСТЕМ</a>"
+        f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS ALL-IN-ONE ДОТООД СИСТЕМ</a>"
     )
     send_user_notification(payload.admin_id, notification_text)
     

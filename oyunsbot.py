@@ -995,7 +995,7 @@ def other_services_menu(call):
 def flight_booking_info(call):
     lang = get_user_lang(call.from_user.id)
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("📨 OYUNS FINANCE", url=f"https://t.me/{FLIGHT_BOOKING_TG}"))
+    kb.add(InlineKeyboardButton("📨 OYUNS ALL-IN-ONE", url=f"https://t.me/{FLIGHT_BOOKING_TG}"))
     kb.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="other_services"))
 
     bot.send_message(
@@ -3434,10 +3434,10 @@ def invite_friend_handler(call):
     
     text = (
         f"👥 Найз урих хөтөлбөр\n\n"
-        f"Та {REFERRAL_REQUIRED_COUNT} найзаа OYUNS FINANCE сувагт уриад промокод авах боломжтой.\n\n"
+        f"Та {REFERRAL_REQUIRED_COUNT} найзаа OYUNS ALL-IN-ONE сувагт уриад промокод авах боломжтой.\n\n"
         f"✅ Одоогийн статус: Та {accepted_count}/{REFERRAL_REQUIRED_COUNT} найзаа урьсан байна.\n\n"
         f"📋 Заавар:\n\n"
-        f"1️⃣ Та найзуудаа OYUNS FINANCE сувагт дараах линкээр урина уу:\n"
+        f"1️⃣ Та найзуудаа OYUNS ALL-IN-ONE сувагт дараах линкээр урина уу:\n"
         f"🔗 {channel_link}\n\n"
         f"2️⃣ Таны найзууд манай телеграм сувагт нэгдсэний дараа доорх '✅ Би урьсан' товчийг дарна уу.\n\n"
         f"3️⃣ Товч дарсны дараагаар найзуудынхаа телеграм хаягийг илгээнэ.\n\n"
@@ -3452,13 +3452,13 @@ def invite_friend_handler(call):
     
     # Send forwardable message for sharing with friends
     forward_text = (
-        f"Сайн уу! Би чамайг OYUNS FINANCE сувагт нэгдэхийг урьж байна.\n\n"
+        f"Сайн уу! Би чамайг OYUNS ALL-IN-ONE сувагт нэгдэхийг урьж байна.\n\n"
         f"Доорх линкээр телеграм сувагт нэгдээрэй.\n\n"
         f"📰 Өдөр тутмын санхүүгийн мэдээлэл\n"
         f"💱 Валютын ханш\n"
-        f"🤖 OYUNS Finance Telegram ботын мэдээлэл\n\n"
+        f"🤖 OYUNS ALL-IN-ONE Telegram ботын мэдээлэл\n\n"
         f"👉 {channel_link}\n\n"
-        f"OYUNS FINANCE – Илүү хурдан, илүү хялбар"
+        f"OYUNS ALL-IN-ONE – Илүү хурдан, илүү хялбар"
     )
     
     bot.send_message(user_id, forward_text)
@@ -3478,14 +3478,14 @@ def prompt_channel_join(user_id: int, referrer_id: int):
         text = (
             f"👋 Сайн байна уу!\n\n"
             f"Та урилгын линкээр ирсэн байна. Үргэлжлүүлэхийн тулд:\n\n"
-            f"1️⃣ Эхлээд OYUNS FINANCE сувагт нэгдэнэ үү:\n"
+            f"1️⃣ Эхлээд OYUNS ALL-IN-ONE сувагт нэгдэнэ үү:\n"
             f"👉 {channel_link}\n\n"
             f"2️⃣ Нэгдсэний дараа доорх **'✅ Би нэгдсэн'** товчийг дарж баталгаажуулна уу.\n\n"
             f"📌 Зөвхөн сувагт нэгдсэн тохиолдолд таны урьсан найз промокод авах боломжтой болно."
         )
         
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("📢 Oyuns Finance суваг", url=channel_link))
+        markup.add(InlineKeyboardButton("📢 OYUNS ALL-IN-ONE суваг", url=channel_link))
         markup.add(InlineKeyboardButton("✅ Би нэгдсэн", callback_data="verify_channel_join"))
         
         bot.send_message(user_id, text, parse_mode="Markdown", reply_markup=markup)
@@ -3494,7 +3494,7 @@ def prompt_channel_join(user_id: int, referrer_id: int):
     except Exception as e:
         print(f"❌ Failed to prompt channel join for user {user_id}: {e}")
         # Fallback: just show main menu
-        bot.send_message(user_id, "👋 Сайн уу! OYUNS Finance ботод тавтай морил.", reply_markup=main_menu())
+        bot.send_message(user_id, "👋 Сайн уу! OYUNS ALL-IN-ONE ботод тавтай морил.", reply_markup=main_menu())
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "verify_channel_join")
@@ -3582,7 +3582,7 @@ def verify_channel_join_handler(call):
         channel_link = f"https://t.me/{channel_username.replace('@', '')}" if channel_username else "https://t.me/oyuns_alo"
         
         markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("📢 Oyuns Finance суваг", url=channel_link))
+        markup.add(InlineKeyboardButton("📢 OYUNS ALL-IN-ONE суваг", url=channel_link))
         markup.add(InlineKeyboardButton("✅ Би нэгдсэн", callback_data="verify_channel_join"))
         
         bot.send_message(
@@ -5033,7 +5033,7 @@ def broadcast_rates(message):
         f"\n"
         f"💬  Хэрэв танд апп-тай холбоотой ямар нэгэн асуудал гарвал @oyuns_finance хаягааp холбогдоно уу.\n"
         f"\n"
-        f"⚡️<b>OYUNS FINANCE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
+        f"⚡️<b>OYUNS ALL-IN-ONE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
         f"\n"
         f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
     )
@@ -5107,7 +5107,7 @@ def _build_broadcast_caption() -> str | None:
         f"\n"
         f"💬  Хэрэв танд апп-тай холбоотой ямар нэгэн асуудал гарвал @oyuns_finance хаягааp холбогдоно уу.\n"
         f"\n"
-        f"⚡️<b>OYUNS FINANCE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
+        f"⚡️<b>OYUNS ALL-IN-ONE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
         f"\n"
         f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
     )
@@ -5218,7 +5218,7 @@ def test_broadcast_rates(message):
         f"\n"
         f"💬  Хэрэв танд апп-тай холбоотой ямар нэгэн асуудал гарвал @oyuns_finance хаягааp холбогдоно уу.\n"
         f"\n"
-        f"⚡️<b>OYUNS FINANCE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
+        f"⚡️<b>OYUNS ALL-IN-ONE</b> – Илүү хялбар, илүү найдвартай, илүү хурдан\n"
         f"\n"
         f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
     )
@@ -5278,7 +5278,7 @@ def initialize_bot():
         # Set the "launch app" button next to the text field
         bot.set_chat_menu_button(
             menu_button=telebot.types.MenuButtonWebApp(
-                text="OYUNS Finance",
+                text="OYUNS ALL-IN-ONE",
                 web_app=WebAppInfo(url=WEBAPP_URL),
             )
         )
@@ -5309,7 +5309,7 @@ def initialize_bot():
     print("✅ Auto-broadcast scheduler started (10:00–11:00 MSK daily)")
 
 # Initialize bot on startup
-print("🤖 Starting OYUNS Finance Bot...")
+print("🤖 Starting OYUNS ALL-IN-ONE Bot...")
 initialize_bot()
 print("✅ Bot initialized, starting polling...")
 bot.polling(none_stop=True)

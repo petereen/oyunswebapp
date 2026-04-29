@@ -133,7 +133,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
         <div className="flex items-center gap-3">
           <img
             src={oyunsIcon}
-            alt="Oyuns Finance"
+            alt="OYUNS ALL-IN-ONE"
             className="h-10 w-10 shadow-card-xs object-contain"
           />
           <div>
@@ -328,7 +328,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
 
       {/* Copyright */}
       <div className="text-center text-[11px] text-dark-600 dark:text-ivory-400 pb-4">
-        © 2026 Oyuns Finance. All rights reserved.
+        © 2026 OYUNS ALL-IN-ONE. All rights reserved.
       </div>
 
       {/* Registration Modal - Level 1 Quick */}

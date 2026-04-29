@@ -88,7 +88,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <img
                 src={oyunsLogo}
-                alt="OYUNS FINANCE"
+                alt="OYUNS ALL-IN-ONE"
                 className="h-10 w-auto object-contain"
               />
             </div>

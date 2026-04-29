@@ -168,7 +168,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
       {/* Header with Profile */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-maroon-600">OYUNS FINANCE</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-maroon-600">OYUNS ALL-IN-ONE</div>
           <div className="text-2xl font-bold text-maroon-700">{t("home.platform_title")}</div>
           {user && (
             <div className="text-sm text-slate-500">{t("home.greeting", { name: user.first_name || "" })}</div>
@@ -374,7 +374,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
 
           {/* Copyright */}
           <div className="mt-8 text-center text-xs text-slate-400">
-            © 2026 OYUNS FINANCE. All rights reserved.
+            © 2026 OYUNS ALL-IN-ONE. All rights reserved.
           </div>
         </>
       ) : (

@@ -1,4 +1,4 @@
-# OYUNS FINANCE — Dev Mode Guide
+# OYUNS ALL-IN-ONE — Dev Mode Guide
 
 ## Quick Start
 

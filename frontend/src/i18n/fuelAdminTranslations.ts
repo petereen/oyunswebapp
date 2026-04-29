@@ -2,7 +2,7 @@ export type FuelLang = "ru" | "mn";
 
 const translations: Record<string, Record<FuelLang, string>> = {
   // ─── Login ───
-  "login.title": { ru: "⛽ OYUNS FINANCE ADMIN-F", mn: "⛽ OYUNS FINANCE ADMIN-F" },
+  "login.title": { ru: "⛽ OYUNS ALL-IN-ONE ADMIN-F", mn: "⛽ OYUNS ALL-IN-ONE ADMIN-F" },
   "login.subtitle": { ru: "Введите API ключ", mn: "API түлхүүр оруулна уу" },
   "login.placeholder": { ru: "API ключ", mn: "API түлхүүр" },
   "login.button": { ru: "Войти", mn: "Нэвтрэх" },

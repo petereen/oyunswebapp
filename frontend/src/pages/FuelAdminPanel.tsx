@@ -126,7 +126,7 @@ function FuelAdminPanelInner() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold text-lg">
-            <Fuel className="w-5 h-5" /> OYUNS FINANCE ADMIN-F
+            <Fuel className="w-5 h-5" /> OYUNS ALL-IN-ONE ADMIN-F
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">

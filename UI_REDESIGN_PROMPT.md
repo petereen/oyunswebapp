@@ -1,8 +1,8 @@
-# OYUNS FINANCE — Comprehensive UI/UX Redesign Prompt
+# OYUNS ALL-IN-ONE — Comprehensive UI/UX Redesign Prompt
 
 ## Overview
 
-Redesign the existing Oyuns Finance Telegram Mini-App (React 18 + TypeScript + Tailwind CSS + Vite + Lucide-react icons) from a single-page modal-based layout into a **tab-based navigation app with a persistent bottom navbar**. The current ocean-blue glass-card design language must be preserved and refined — not replaced. All existing backend API endpoints, data models, authentication (Telegram JWT), and business logic remain unchanged. This is a **frontend-only** restructuring.
+Redesign the existing OYUNS ALL-IN-ONE Telegram Mini-App (React 18 + TypeScript + Tailwind CSS + Vite + Lucide-react icons) from a single-page modal-based layout into a **tab-based navigation app with a persistent bottom navbar**. The current ocean-blue glass-card design language must be preserved and refined — not replaced. All existing backend API endpoints, data models, authentication (Telegram JWT), and business logic remain unchanged. This is a **frontend-only** restructuring.
 
 ---
 
@@ -101,7 +101,7 @@ Additionally, a **full-screen Profile page** (not a modal) accessible from the H
 ## TAB 0 — HOME (Нүүр)
 
 ### Top Bar Layout
-- **Left side**: Oyuns Finance icon-only logo loaded from:  
+- **Left side**: OYUNS ALL-IN-ONE icon-only logo loaded from:  
   `https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/icon%20only.png`  
   Size: `h-9 w-9 rounded-xl` — just the icon, no text logo
 - **Right side**: User profile avatar/icon button
@@ -393,7 +393,7 @@ Move the existing `AnalyticsModal` and `HistoryModal` content here as **inline s
 - **Delete account**: A danger-zone button (can be a placeholder that says "Холбоо барина уу" / Contact us)
 
 ### Section 3 — Oyuns (Oyuns)
-- Section header: "Oyuns Finance" with the logo icon
+- Section header: "OYUNS ALL-IN-ONE" with the logo icon
 - **User Agreement**: Tappable row → opens `https://oyuns.mn/user-agreement` in external browser
 - **Contacts**: Display support contacts
   - Telegram: `@oyuns_finance` (tappable link to `https://t.me/oyuns_finance`)

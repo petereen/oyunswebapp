@@ -330,7 +330,7 @@ export function ProfilePage({ userId, onBack }: Props) {
 
               {/* App Version */}
               <div className="text-center text-xs text-dark-600 dark:text-ivory-400 pt-2">
-                Oyuns Finance v2.0 • © 2026
+                OYUNS ALL-IN-ONE v2.0 • © 2026
               </div>
             </div>
           )}

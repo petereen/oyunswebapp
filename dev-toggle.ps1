@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Toggle OYUNS FINANCE dev mode ON or OFF.
+  Toggle OYUNS ALL-IN-ONE dev mode ON or OFF.
 .DESCRIPTION
   Flips DEV_MODE in backend\.env and VITE_DEV_MODE in frontend\.env simultaneously.
   Run without arguments to toggle, or pass -On / -Off explicitly.
@@ -57,7 +57,7 @@ Set-EnvValue -File $frontendEnv -Key "VITE_DEV_MODE"  -Value $target
 # --- Report ---
 $icon = if ($target -eq "true") { "[ON]" } else { "[OFF]" }
 Write-Host ""
-Write-Host "  OYUNS FINANCE  Dev Mode: $icon" -ForegroundColor $(if ($target -eq "true") { "Green" } else { "Yellow" })
+Write-Host "  OYUNS ALL-IN-ONE  Dev Mode: $icon" -ForegroundColor $(if ($target -eq "true") { "Green" } else { "Yellow" })
 Write-Host ""
 Write-Host "  backend\.env   -> DEV_MODE=$target"
 Write-Host "  frontend\.env  -> VITE_DEV_MODE=$target"

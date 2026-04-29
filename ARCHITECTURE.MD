@@ -1,4 +1,4 @@
-# OYUNS FINANCE WEBAPP Architecture Overview
+# OYUNS ALL-IN-ONE WEBAPP Architecture Overview
 
 ## 1. Project Structure
 
@@ -147,7 +147,7 @@ Key buckets: `passports`, `bills`.
 
 - Project Name: Oyunsbot WebApp
 - Repository URL: https://github.com/petereen/oyunswebapp
-- Primary Contact/Team: Oyuns Finance team
+- Primary Contact/Team: OYUNS ALL-IN-ONE TEAM
 - Date of Last Update: 2026-04-21
 
 ## 11. Glossary / Acronyms

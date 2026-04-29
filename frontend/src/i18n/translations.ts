@@ -33,7 +33,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "home.profile_load_failed": { ru: "❌ Не удалось загрузить профиль:", mn: "❌ Профайл ачаалж чадсангүй:" },
   "home.theme_toggle": { ru: "Сменить тему", mn: "Загвар солих" },
   "home.profile": { ru: "Профиль", mn: "Профайл" },
-  "home.copyright": { ru: "© 2026 Oyuns Finance. All rights reserved.", mn: "© 2026 Oyuns Finance. All rights reserved." },
+  "home.copyright": { ru: "© 2026 OYUNS ALL-IN-ONE. All rights reserved.", mn: "© 2026 OYUNS ALL-IN-ONE. All rights reserved." },
 
   // ─── RateCard ───
   "rate.title": { ru: "Курс валют", mn: "Ханшийн мэдээлэл" },
@@ -455,7 +455,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "fuel.rate_hint": { ru: "курс: {rate}", mn: "ханш: {rate}" },
 
   // ─── RegistrationModal ───
-  "reg.title": { ru: "РЕГИСТРАЦИЯ ПОЛЬЗОВАТЕЛЯ OYUNS FINANCE", mn: "OYUNS FINANCE ХЭРЭГЛЭГЧИЙН БҮРТГЭЛ" },
+  "reg.title": { ru: "РЕГИСТРАЦИЯ ПОЛЬЗОВАТЕЛЯ OYUNS ALL-IN-ONE", mn: "OYUNS ALL-IN-ONE ХЭРЭГЛЭГЧИЙН БҮРТГЭЛ" },
   "reg.subtitle": { ru: "Зарегистрируйтесь для использования нашего сервиса", mn: "Та манай үйлчилгээг ашиглахын өмнө бүртгүүлнэ үү" },
   "reg.personal_info": { ru: "Личные данные", mn: "Хувийн мэдээлэл" },
   "reg.last_name": { ru: "Фамилия", mn: "Овог" },
@@ -539,7 +539,7 @@ const translations: Record<string, Record<Lang, string>> = {
   // ─── TermsAgreementModal ───
   "terms.title": { ru: "Пользовательское соглашение", mn: "Үйлчилгээний нөхцөл" },
   "terms.subtitle": { ru: "Для использования сервиса необходимо принять соглашение", mn: "Манай үйлчилгээг ашиглахын тулд зөвшөөрөх шаардлагатай" },
-  "terms.intro": { ru: "Для использования платформы OYUNS FINANCE необходимо ознакомиться с пользовательским соглашением и принять его.", mn: "OYUNS FINANCE платформыг ашиглахын тулд та манай үйлчилгээний нөхцөлтэй танилцаж, зөвшөөрөх шаардлагатай." },
+  "terms.intro": { ru: "Для использования платформы OYUNS ALL-IN-ONE необходимо ознакомиться с пользовательским соглашением и принять его.", mn: "OYUNS ALL-IN-ONE платформыг ашиглахын тулд та манай үйлчилгээний нөхцөлтэй танилцаж, зөвшөөрөх шаардлагатай." },
   "terms.includes": { ru: "Соглашение содержит:", mn: "Үйлчилгээний нөхцөлд дараах мэдээллүүд багтана:" },
   "terms.item1": { ru: "Общие положения", mn: "Ерөнхий үндэслэл" },
   "terms.item2": { ru: "Сбор, использование и защита персональных данных", mn: "Хувийн мэдээлэл цуглуулах, ашиглах, хамгаалах журам" },
