@@ -2290,9 +2290,14 @@ def selected_common_amount(call):
         if not rub_bank_options:
             bot.send_message(user_id, t(lang, "exchange_no_banks"))
             return
-        for bank in rub_bank_options:
-            markup.add(InlineKeyboardButton(bank, callback_data=f"rubmnt_bank_{bank}"))
+        bank_map = {}
+        for idx, bank in enumerate(rub_bank_options):
+            key = f"b{idx}"
+            bank_map[key] = bank
+            markup.add(InlineKeyboardButton(bank, callback_data=f"rubmnt_bank_{key}"))
 
+        # Save mapping in session
+        update_user_session(user_id, {"rub_bank_map": bank_map})
         bot.send_message(
             user_id,
             t(lang, "exchange_choose_rub_bank"),
@@ -2312,7 +2317,7 @@ def selected_common_amount(call):
 
 
 
-# ✏️ Handle Custom Amount Entry
+
 # ✏️ Handle Custom Amount Entry
 @bot.callback_query_handler(func=lambda call: call.data.startswith("custom_"))
 def custom_amount(call):
@@ -2468,23 +2473,20 @@ def handle_rub_mnt_bank_selection(call):
         bot.answer_callback_query(call.id)
         return
     lang = get_user_lang(user_id)
-    selected_bank = call.data.replace("rubmnt_bank_", "")
 
-    # Store selected bank in session
-    update_user_session(user_id, {
-        "selected_rub_bank": selected_bank,
-    })
-
-    rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
-    bank_details = rub_bank_options.get(selected_bank)
-    if not bank_details:
+    # Place the following lines here:
+    key = call.data.replace("rubmnt_bank_", "")
+    session = get_user_session(user_id)
+    bank_map = session.get("rub_bank_map", {})
+    selected_bank = bank_map.get(key)
+    if not selected_bank:
         bot.send_message(user_id, t(lang, "exchange_bank_not_found"))
         return
-
     session = get_user_session(user_id)
     if not session:
         bot.send_message(user_id, t(lang, "error_session_not_found"))
         return
+    
     amount = session.get("amount")
     invoice = session.get("invoice")
     final_rate = session.get("rate")
