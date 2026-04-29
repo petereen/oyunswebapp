@@ -28,7 +28,7 @@ _admin_media_flush_scheduled: Set[str] = set()
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 MIN_RUB = 2000
-MIN_RUB_TO_MNT = 2000
+MIN_RUB_TO_MNT = 100
 UB_TZ = ZoneInfo("Asia/Ulaanbaatar")
 MIN_VOLUME_RUB      = 50_000    # threshold in 
 MIN_VOLUME_RUB_2      = 100_000
