@@ -212,8 +212,8 @@ export type AppSettings = {
   min_rub_buy: number;
 };
 
-export const DEFAULT_MIN_RUB_AMOUNT = 5000;
-export const DEFAULT_MIN_RUB_BUY = 100;
+export const DEFAULT_MIN_RUB_AMOUNT = 2000;
+export const DEFAULT_MIN_RUB_BUY = 2000;
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   min_rub_amount: DEFAULT_MIN_RUB_AMOUNT,
