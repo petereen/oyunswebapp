@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toSafeNumber } from "./utils/exchangePricing";
 
 // Use relative '/api' by default for production behind Nginx.
 // Override with VITE_API_BASE (e.g., http://localhost:8000/api) for local dev.
@@ -213,7 +214,11 @@ export type AppSettings = {
 
 export async function fetchRates() {
   const res = await api.get<Rate>('/rates');
-  return res.data;
+  return {
+    ...res.data,
+    buy_rate: toSafeNumber(res.data?.buy_rate, 0),
+    sell_rate: toSafeNumber(res.data?.sell_rate, 0),
+  } as Rate;
 }
 
 export interface RateHistoryPoint {
@@ -271,13 +276,15 @@ export async function createExchange(payload: ExchangeCreateInput) {
 }
 
 export async function createPhoneTopup(payload: PhoneTopupCreateInput) {
-  const payableMnt = Number((payload.rub_amount * payload.sell_rate).toFixed(2));
+  const safeSellRate = toSafeNumber(payload.sell_rate, 0);
+  const safeRubAmount = toSafeNumber(payload.rub_amount, 0);
+  const payableMnt = Number((safeRubAmount * safeSellRate).toFixed(2));
   return createExchange({
     direction: 'sell',
     amount: payableMnt,
     currency_from: 'MNT',
     currency_to: 'RUB',
-    rate: payload.sell_rate,
+    rate: safeSellRate,
     bank_details: `${payload.phone}, ${payload.telecom}`,
     receipt_path: payload.receipt_path,
     receipt_paths: payload.receipt_paths,
@@ -311,18 +318,64 @@ export type ActiveTransaction = {
   amount: number;
   currency_from: string;
   currency_to: string;
-  status: 'pending' | 'approved' | 'completed' | 'successful' | 'rejected';
+  status: 'pending' | 'approved' | 'completed' | 'successful' | 'rejected' | 'waiting_edit';
   timestamp: string;
   admin_comment?: string;
+  can_edit?: boolean;
 };
 
 export async function fetchActiveTransactions(): Promise<{ transactions: ActiveTransaction[] }> {
   try {
     const res = await api.get('/active-transactions');
-    return res.data as { transactions: ActiveTransaction[] };
+    const payload = res.data as { transactions?: ActiveTransaction[] };
+    const transactions = (payload.transactions || []).map((trx) => ({
+      ...trx,
+      amount: toSafeNumber(trx.amount, 0),
+      can_edit: Boolean((trx as any).can_edit),
+    }));
+    return { transactions };
   } catch {
     return { transactions: [] };
   }
+}
+
+export interface ExchangeEditableResponse {
+  invoice: string;
+  direction: 'buy' | 'sell';
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  rate: number;
+  bank_details: string;
+  receipt_urls: string[];
+  can_edit: boolean;
+}
+
+export async function fetchEditableExchange(invoice: string): Promise<ExchangeEditableResponse> {
+  const params = new URLSearchParams({ invoice });
+  const res = await api.get(`/exchange/editable?${params.toString()}`);
+  const data = res.data as ExchangeEditableResponse;
+  return {
+    ...data,
+    amount: toSafeNumber(data.amount, 0),
+    rate: toSafeNumber(data.rate, 0),
+    receipt_urls: Array.isArray(data.receipt_urls) ? data.receipt_urls : [],
+    can_edit: Boolean(data.can_edit),
+  };
+}
+
+export interface ExchangeResubmitInput {
+  invoice: string;
+  amount: number;
+  rate: number;
+  bank_details: string;
+  receipt_path?: string;
+  receipt_paths?: string[];
+}
+
+export async function resubmitExchange(payload: ExchangeResubmitInput) {
+  const res = await api.post('/exchange/resubmit', payload);
+  return res.data as ExchangeCreateResponse;
 }
 
 export async function fetchAdminBankAccounts(): Promise<{ accounts: AdminBankAccount[] }> {

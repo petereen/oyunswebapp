@@ -1272,6 +1272,9 @@ def notify_phone_topup_operator(user_id, invoice, receipt_id, amount_rub, amount
         InlineKeyboardButton(t(lang, "admin_btn_confirm"), callback_data=f"confirm_{user_id}"),
         InlineKeyboardButton(t(lang, "admin_btn_reject"), callback_data=f"reject_{user_id}")
     )
+    markup.add(
+        InlineKeyboardButton(t(lang, "admin_btn_waiting_edit"), callback_data=f"waitedit_{user_id}")
+    )
     
     operator_id = get_current_shift_operator_id()
     # ➤ Always send to current shift operator
@@ -1540,7 +1543,7 @@ def txn_history_page(call):
         )
 
     # Build page text
-    status_icon = {"pending": "🕒", "successful": "✅", "rejected": "❌"}
+    status_icon = {"pending": "🕒", "successful": "✅", "rejected": "❌", "waiting_edit": "❌"}
     lines = ["📜 *Гүйлгээний түүх*"]
     for tx in rows:
         conv, tocur = compute_converted(tx)
@@ -2762,7 +2765,7 @@ def notify_operator(user_id, invoice, receipt_id, bank_details, operator_chat_id
                 bot.send_photo(special_op, receipt_id, caption=caption, parse_mode="Markdown", reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_") or call.data.startswith("reject_") or call.data.startswith("pending_") or call.data.startswith("refresh_"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_") or call.data.startswith("reject_") or call.data.startswith("pending_") or call.data.startswith("waitedit_") or call.data.startswith("refresh_"))
 def handle_transaction_action(call):
     if call.from_user.id not in ALLOWED_ADMINS:
         bot.answer_callback_query(call.id, t(get_user_lang(call.from_user.id), "admin_unauthorized"), show_alert=True)
@@ -2771,6 +2774,7 @@ def handle_transaction_action(call):
     action, user_id_str = call.data.split("_", 1)
     is_confirmed = action == "confirm"
     is_pending = action == "pending"
+    is_waiting_edit = action == "waitedit"
     is_refresh = action == "refresh"
     user_id = int(user_id_str)
 
@@ -2815,8 +2819,14 @@ def handle_transaction_action(call):
                    .execute()
     current_status = resp.data[0]["status"] if resp.data else None
 
-    if not is_pending and current_status != "pending":
+    if not is_pending and not is_waiting_edit and current_status != "pending":
         # if it's already successful or rejected, tell the admin
+        return bot.answer_callback_query(
+            call.id,
+            t(get_user_lang(call.from_user.id), "admin_already_processed"),
+            show_alert=True
+        )
+    if is_waiting_edit and current_status not in ["pending", "approved"]:
         return bot.answer_callback_query(
             call.id,
             t(get_user_lang(call.from_user.id), "admin_already_processed"),
@@ -2843,6 +2853,14 @@ def handle_transaction_action(call):
             "status":       "successful",
             "completed_at": now_moscow,
             "completed_by_admin": call.from_user.id,
+        }
+    elif is_waiting_edit:
+        updates = {
+            "status": "waiting_edit",
+            "waiting_started_at": now_moscow,
+            "timer_paused_at": now_moscow,
+            "completed_at": None,
+            "completed_by_admin": None,
         }
     elif is_pending:
         updates = {
@@ -2879,6 +2897,21 @@ def handle_transaction_action(call):
             parse_mode="Markdown"
         )
         bot.answer_callback_query(call.id, t(lang_admin, "admin_set_pending"), show_alert=True)
+    elif is_waiting_edit:
+        lang_user = get_user_lang(user_id)
+        edit_url = WEBAPP_URL
+        separator = "&" if "?" in edit_url else "?"
+        edit_link = f"{edit_url}{separator}edit-invoice={invoice}"
+        edit_markup = InlineKeyboardMarkup()
+        edit_markup.add(InlineKeyboardButton(t(lang_user, "btn_edit_request"), web_app=WebAppInfo(url=edit_link)))
+
+        bot.send_message(
+            user_id,
+            t(lang_user, "txn_waiting_edit", invoice=invoice),
+            parse_mode="Markdown",
+            reply_markup=edit_markup,
+        )
+        bot.answer_callback_query(call.id, t(lang_admin, "admin_set_waiting_edit"), show_alert=True)
     elif is_confirmed:
         # ✅ Calculate how much to send
         converted = round(amount * rate if currency_from == "RUB" else amount / rate, 2)

@@ -22,7 +22,7 @@ interface Props {
   user: TelegramUser | null;
   isAuthenticating?: boolean;
   authError?: string | null;
-  onNavigateToTransaction: (direction?: "buy" | "sell") => void;
+  onNavigateToTransaction: (direction?: "buy" | "sell", editInvoice?: string) => void;
   onNavigateToProfile: () => void;
   onNavigateToFuelOrder?: (orderId: string) => void;
 }
@@ -101,6 +101,10 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
     } else {
       onNavigateToTransaction();
     }
+  };
+
+  const handleEditTransaction = (invoice: string) => {
+    onNavigateToTransaction(undefined, invoice);
   };
 
   const isServiceOpen = serviceStatus?.is_open !== false;
@@ -198,7 +202,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
       ) : null}
 
       {/* Transaction Status Trackers */}
-      {user?.id && <TransactionStatusTracker userId={user.id} />}
+      {user?.id && <TransactionStatusTracker userId={user.id} onEditRequest={handleEditTransaction} />}
       {user?.id && isVerified && <GiftStatusTracker userId={user.id} />}
       {user?.id && isBasicRegistered && <FuelStatusTracker userId={user.id} onOpenOrder={onNavigateToFuelOrder} />}
       {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: ["me", user?.id] })} />}

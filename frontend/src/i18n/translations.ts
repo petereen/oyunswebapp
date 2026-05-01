@@ -61,6 +61,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "exchange.min": { ru: "Мин", mn: "Мин" },
   "exchange.swap": { ru: "Поменять направление", mn: "Чиглэл солих" },
   "exchange.min_amount": { ru: "Минимальная сумма {amount} рублей", mn: "Хамгийн бага дүн {amount} рубль" },
+  "exchange.volume_discount_applied": { ru: "Сделка от {threshold} ₽: применена скидка к курсу {discount}", mn: "{threshold} ₽-с дээш дүнд ханшийн {discount} хөнгөлөлт тооцогдлоо" },
   "exchange.proceed": { ru: "Продолжить", mn: "Үргэлжлүүлэх" },
 
   // ─── TransactionTab ───
@@ -84,6 +85,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "txn.promo_error": { ru: "Ошибка проверки промо-кода", mn: "Промо код шалгахад алдаа гарлаа" },
   "txn.promo_buy_applied": { ru: "+{amount} ₮ добавлено к курсу!", mn: "+{amount} ₮ ханшинд нэмэгдлээ!" },
   "txn.promo_sell_applied": { ru: "-{amount} ₮ снято с курса!", mn: "-{amount} ₮ ханшнаас хасагдлаа!" },
+  "txn.volume_discount_skip_promo": { ru: "Для крупной суммы применена скидка к курсу.", mn: "Өндөр дүнтэй гүйлгээ тул ханшийн хөнгөлөлт автоматаар тооцогдлоо." },
   "txn.skip": { ru: "Пропустить", mn: "Алгасах" },
   "txn.activate_proceed": { ru: "Активировать и продолжить", mn: "Идэвхжүүлээд үргэлжлэх" },
   "txn.validating": { ru: "Проверка...", mn: "Шалгаж байна..." },
@@ -134,6 +136,14 @@ const translations: Record<string, Record<Lang, string>> = {
   "txn.iban_label": { ru: "Номер счёта (IBAN)", mn: "Дансны дугаар (IBAN)" },
   "txn.min_rub_warning": { ru: "Минимальная сумма для MNT→RUB {amount} рублей", mn: "MNT→RUB чиглэлд хамгийн бага дүн {amount} рубль байх ёстой" },
   "txn.copy_failed": { ru: "Не удалось скопировать", mn: "Хуулж чадсангүй" },
+  "txn.edit_loading": { ru: "Загружаем данные заявки для редактирования...", mn: "Засварлах хүсэлтийн мэдээллийг ачаалж байна..." },
+  "txn.edit_load_error": { ru: "Не удалось открыть заявку для редактирования", mn: "Засварлах хүсэлтийг нээж чадсангүй" },
+  "txn.edit_title": { ru: "Исправить и отправить заново", mn: "Засаад дахин илгээх" },
+  "txn.edit_invoice_label": { ru: "Invoice:", mn: "Invoice:" },
+  "txn.edit_amount_label": { ru: "Сумма ({currency})", mn: "Дүн ({currency})" },
+  "txn.fill_all_edit_fields": { ru: "Заполните сумму, реквизиты и загрузите чек", mn: "Дүн, дансны мэдээллээ бөглөж баримтаа оруулна уу" },
+  "txn.edit_resubmit": { ru: "Сохранить и отправить заново", mn: "Хадгалаад дахин илгээх" },
+  "txn.edit_resubmit_error": { ru: "Не удалось отправить исправленную заявку", mn: "Зассан хүсэлтийг илгээж чадсангүй" },
 
   // ─── TransactionStatusTracker ───
   "status.pending": { ru: "В ожидании", mn: "Хүлээгдэж байна" },
@@ -144,6 +154,9 @@ const translations: Record<string, Record<Lang, string>> = {
   "status.completed_desc": { ru: "Транзакция успешно завершена", mn: "Гүйлгээ амжилттай хийгдлээ" },
   "status.rejected": { ru: "Отклонено", mn: "Цуцлагдсан" },
   "status.rejected_desc": { ru: "Ваша заявка отклонена", mn: "Таны хүсэлт цуцлагдсан" },
+  "status.waiting_edit": { ru: "Отклонено (нужно исправить)", mn: "Таны гүйлгээг татгалзсан (засвар шаардлагатай)" },
+  "status.waiting_edit_desc": { ru: "Исправьте данные и отправьте заявку повторно", mn: "Мэдээллээ засаад хүсэлтээ дахин илгээнэ үү" },
+  "status.edit_request": { ru: "Исправить заявку", mn: "Хүсэлт засах" },
   "status.unknown": { ru: "Неизвестно", mn: "Тодорхойгүй" },
   "status.close": { ru: "Закрыть", mn: "Хаах" },
   "status.support_contact": { ru: "При проблемах — обратитесь в support", mn: "Асуудал гарсан гэж үзвэл support хаягтай холбогдоорой" },
@@ -215,6 +228,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "stats.confirmed": { ru: "Подтверждено", mn: "Баталгаажсан" },
   "stats.pending": { ru: "В ожидании", mn: "Хүлээгдэж буй" },
   "stats.rejected": { ru: "Отклонено", mn: "Татгалзсан" },
+  "stats.waiting_edit": { ru: "Отклонено (исправление)", mn: "Татгалзсан (засвар)" },
   "stats.bought_label": { ru: "Куплено (₽)", mn: "Авсан (₽)" },
   "stats.sold_label": { ru: "Продано (₮)", mn: "Зарсан (₮)" },
 
@@ -314,6 +328,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "topup.amount_placeholder": { ru: "Например, 1000", mn: "Жишээ нь 1000" },
   "topup.amount_hint": { ru: "Курс продажи: {rate} MNT за 1 RUB", mn: "Зарах ханш: 1 RUB = {rate} MNT" },
   "topup.payable_preview": { ru: "К оплате: {amount} MNT", mn: "Төлөх дүн: {amount} MNT" },
+  "topup.rate_unavailable": { ru: "Курс временно недоступен. Попробуйте позже.", mn: "Ханш түр авах боломжгүй байна. Дараа дахин оролдоно уу." },
   "topup.invalid_amount": { ru: "Введите корректную сумму пополнения", mn: "Зөв дүн оруулна уу" },
   "topup.phone_title": { ru: "Номер получателя", mn: "Хүлээн авагчийн дугаар" },
   "topup.phone_desc": { ru: "Укажите телефон, который нужно пополнить.", mn: "Цэнэглэлт хийх утасны дугаараа оруулна уу." },

@@ -7,9 +7,10 @@ import { useSwipeToDismiss } from "../hooks/useSwipeToDismiss";
 
 interface TransactionStatusTrackerProps {
   userId?: number;
+  onEditRequest?: (invoice: string) => void;
 }
 
-export function TransactionStatusTracker({ userId }: TransactionStatusTrackerProps) {
+export function TransactionStatusTracker({ userId, onEditRequest }: TransactionStatusTrackerProps) {
   // Track which transactions user has dismissed
   const [dismissedInvoices, setDismissedInvoices] = useState<string[]>(() => {
     try {
@@ -47,7 +48,7 @@ export function TransactionStatusTracker({ userId }: TransactionStatusTrackerPro
   const activeTransactions = visibleTransactions.filter(
     (trx) => trx.status === "pending" || trx.status === "approved" || 
              ((trx.status === "completed" || trx.status === "successful") && !dismissedInvoices.includes(trx.invoice)) ||
-             (trx.status === "rejected" && !dismissedInvoices.includes(trx.invoice))
+             ((trx.status === "rejected" || trx.status === "waiting_edit") && !dismissedInvoices.includes(trx.invoice))
   );
 
   if (activeTransactions.length === 0) return null;
@@ -59,6 +60,7 @@ export function TransactionStatusTracker({ userId }: TransactionStatusTrackerPro
           key={trx.invoice}
           transaction={trx}
           onDismiss={() => handleDismiss(trx.invoice)}
+          onEditRequest={onEditRequest}
         />
       ))}
     </div>
@@ -68,9 +70,10 @@ export function TransactionStatusTracker({ userId }: TransactionStatusTrackerPro
 interface TransactionStatusCardProps {
   transaction: ActiveTransaction;
   onDismiss?: () => void;
+  onEditRequest?: (invoice: string) => void;
 }
 
-function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCardProps) {
+function TransactionStatusCard({ transaction, onDismiss, onEditRequest }: TransactionStatusCardProps) {
   const { status, invoice, amount, currency_from, currency_to, admin_comment } = transaction;
   const { t } = useLang();
 
@@ -121,6 +124,17 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
           label: t("status.rejected"),
           description: admin_comment || t("status.rejected_desc"),
         };
+      case "waiting_edit":
+        return {
+          icon: AlertTriangle,
+          iconBg: "bg-amber-100",
+          iconColor: "text-amber-600",
+          barColor: "bg-amber-500",
+          barBg: "bg-amber-100",
+          progress: 100,
+          label: t("status.waiting_edit"),
+          description: admin_comment || t("status.waiting_edit_desc"),
+        };
       default:
         return {
           icon: Clock,
@@ -137,7 +151,8 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
 
   const config = getStatusConfig();
   const Icon = config.icon;
-  const { swipeHandlers, swipeStyle } = useSwipeToDismiss({ onDismiss });
+  const canDismiss = Boolean(onDismiss && (status === "completed" || status === "successful" || status === "rejected"));
+  const { swipeHandlers, swipeStyle } = useSwipeToDismiss({ onDismiss: canDismiss ? onDismiss : undefined });
 
   return (
     <div
@@ -146,7 +161,7 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
       className={`relative p-4 rounded-xl border ${status === "rejected" ? "bg-red-50 border-red-200" : "bg-white border-maroon-100"}`}
     >
       {/* Dismiss button for completed/rejected */}
-      {onDismiss && (
+      {canDismiss && (
         <button
           onClick={onDismiss}
           className="absolute top-2 right-2 p-1 rounded-full hover:bg-slate-100 transition"
@@ -185,8 +200,17 @@ function TransactionStatusCard({ transaction, onDismiss }: TransactionStatusCard
       {/* Description */}
       <p className="text-xs text-slate-500 mt-2">{config.description}</p>
 
+      {status === "waiting_edit" && onEditRequest && (
+        <button
+          onClick={() => onEditRequest(invoice)}
+          className="mt-3 w-full rounded-lg bg-amber-600 text-white py-2 text-xs font-semibold hover:bg-amber-700 transition"
+        >
+          {t("status.edit_request")}
+        </button>
+      )}
+
       {/* Support contact for rejected */}
-      {status === "rejected" && (
+      {(status === "rejected" || status === "waiting_edit") && (
         <a
           href="https://t.me/oyuns_finance"
           target="_blank"

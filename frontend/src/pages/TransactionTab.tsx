@@ -1,22 +1,25 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2 } from "lucide-react";
 import { ExchangeCard } from "../components/ExchangeCard";
 import {
   fetchRates, fetchMe, createExchange, ExchangeCreateInput, requestPresign,
   fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes,
-  UserPromoCode, fetchServiceStatus,
+  UserPromoCode, fetchServiceStatus, fetchEditableExchange, resubmitExchange,
 } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, RegistrationModal } from "../components/RegistrationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useLang } from "../i18n/useLang";
+import { getAppliedRateAdjustment } from "../utils/exchangePricing";
 
 interface Props {
   initData: string;
   user: TelegramUser | null;
   initialDirection?: "buy" | "sell" | null;
+  initialEditInvoice?: string | null;
   onResetDirection: () => void;
+  onEditInvoiceHandled?: () => void;
 }
 
 const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
@@ -35,7 +38,14 @@ function parseSavedBank(saved: string | undefined): Record<string, string> {
   return result;
 }
 
-export function TransactionTab({ initData, user, initialDirection, onResetDirection }: Props) {
+export function TransactionTab({
+  initData,
+  user,
+  initialDirection,
+  initialEditInvoice,
+  onResetDirection,
+  onEditInvoiceHandled,
+}: Props) {
   const { t, lang } = useLang();
   const { data: rate } = useQuery({ queryKey: ["rates"], queryFn: fetchRates, retry: 2 });
   const { data: serviceStatus } = useQuery({
@@ -98,6 +108,8 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const [successInvoice, setSuccessInvoice] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editInvoiceId, setEditInvoiceId] = useState<string | null>(initialEditInvoice || null);
 
   useEffect(() => {
     fetchAdminBankAccounts()
@@ -111,16 +123,33 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       .catch(() => {});
   }, []);
 
-  const effectiveRate = useMemo(() => {
-    const base = baseRate || 0;
-    if (!base) return 0;
-    const discount = promoDiscount || 0;
-    if (discount > 0) {
-      const result = direction === "buy" ? base + discount : base - discount;
-      return Math.round(result * 10) / 10;
+  useEffect(() => {
+    if (initialEditInvoice) {
+      setEditInvoiceId(initialEditInvoice);
     }
-    return base;
-  }, [baseRate, promoDiscount, direction]);
+  }, [initialEditInvoice]);
+
+  const pricing = useMemo(() => {
+    if (!direction) {
+      return {
+        effectiveRate: 0,
+        rubEquivalent: 0,
+        adjustment: 0,
+        adjustmentSource: "none" as const,
+      };
+    }
+    return getAppliedRateAdjustment({
+      direction,
+      amount,
+      baseRate,
+      promoDiscount,
+    });
+  }, [direction, amount, baseRate, promoDiscount]);
+
+  const effectiveRate = pricing.effectiveRate;
+  const appliedAdjustment = pricing.adjustment;
+  const adjustmentSource = pricing.adjustmentSource;
+  const isVolumeDiscountApplied = adjustmentSource === "volume";
 
   const currencyFrom = direction === "buy" ? "RUB" : "MNT";
   const currencyTo = direction === "buy" ? "MNT" : "RUB";
@@ -128,6 +157,12 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
     if (!effectiveRate || !amount) return 0;
     return direction === "buy" ? amount * effectiveRate : amount / effectiveRate;
   }, [amount, effectiveRate, direction]);
+
+  useEffect(() => {
+    if (flowStep === "promo" && isVolumeDiscountApplied) {
+      setFlowStep("adminBank");
+    }
+  }, [flowStep, isVolumeDiscountApplied]);
 
   const availableAdminBanks = useMemo(() => {
     if (direction === "buy") return adminBanks.filter((b) => b.currency === "RUB" && b.is_active);
@@ -144,6 +179,78 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       setSelectedMntAdminBank(availableMntAdminBanks[0]);
     }
   }, [direction, availableMntAdminBanks, selectedMntAdminBank]);
+
+  useEffect(() => {
+    if (!editInvoiceId || !user?.id) return;
+    let cancelled = false;
+
+    const loadEditable = async () => {
+      setEditLoading(true);
+      setError("");
+      try {
+        const editable = await fetchEditableExchange(editInvoiceId);
+        if (cancelled) return;
+
+        if (!editable.can_edit) {
+          throw new Error("Transaction is not editable");
+        }
+
+        const dir = editable.direction;
+        const fallbackRate = dir === "buy"
+          ? Number(rate?.buy_rate || editable.rate || 0)
+          : Number(rate?.sell_rate || editable.rate || 0);
+
+        setDirection(dir);
+        setAmount(Number(editable.amount) || 0);
+        setBaseRate(fallbackRate);
+        setInvoiceId(editable.invoice);
+        setReceiptUrls(editable.receipt_urls || []);
+        setPromoCode("");
+        setPromoDiscount(0);
+        setPromoValid(false);
+        setPromoMessage("");
+        setPromoError("");
+        setUseSavedBank(false);
+
+        const parts = (editable.bank_details || "").split(",").map((part) => part.trim());
+        if (dir === "buy") {
+          setMntBank(parts[0] || "");
+          setMntIban(parts[1] || "");
+          setMntOwnerName(parts[2] || "");
+          setRubBank("");
+          setRubPhone("");
+          setRubCardNumber("");
+          setRubOwnerName("");
+        } else {
+          setRubBank(parts[0] || "");
+          setRubPhone(parts[1] || "");
+          setRubCardNumber(parts[2] || "");
+          setRubOwnerName(parts[3] || "");
+          setMntBank("");
+          setMntIban("");
+          setMntOwnerName("");
+        }
+
+        setFlowStep("edit");
+      } catch (err) {
+        console.error("Failed to load editable transaction:", err);
+        setError(t("txn.edit_load_error"));
+        setFlowStep("card");
+      } finally {
+        if (!cancelled) {
+          setEditLoading(false);
+          setEditInvoiceId(null);
+          onEditInvoiceHandled?.();
+        }
+      }
+    };
+
+    loadEditable();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editInvoiceId, user?.id]);
 
   const generateInvoiceId = () => {
     const now = new Date();
@@ -164,8 +271,22 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
     setDirection(dir);
     setAmount(amt);
     setBaseRate(rt);
+    setError("");
+    setPromoCode("");
+    setPromoDiscount(0);
+    setPromoValid(false);
+    setPromoMessage("");
+    setPromoError("");
+
+    const nextPricing = getAppliedRateAdjustment({
+      direction: dir,
+      amount: amt,
+      baseRate: rt,
+      promoDiscount: 0,
+    });
+
     if (!invoiceId) setInvoiceId(generateInvoiceId());
-    setFlowStep("promo");
+    setFlowStep(nextPricing.adjustmentSource === "volume" ? "adminBank" : "promo");
     onResetDirection();
   };
 
@@ -259,7 +380,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
         bank_details: overrideBankDetails || buildBankDetails(),
         receipt_path: receiptUrls[0],
         receipt_paths: receiptUrls,
-        promo_code: promoValid ? promoCode : undefined,
+        promo_code: promoValid && !isVolumeDiscountApplied ? promoCode : undefined,
         admin_bank_id: selectedAdminBank?.id != null ? Number(selectedAdminBank.id) : undefined,
         invoice: invoiceId,
       };
@@ -268,6 +389,33 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       setFlowStep("success");
     } catch {
       setError(t("txn.exchange_error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResubmit = async () => {
+    if (!direction || !invoiceId) return;
+    if (!isBankValid() || receiptUrls.length === 0 || amount <= 0) {
+      setError(t("txn.fill_all_edit_fields"));
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const response = await resubmitExchange({
+        invoice: invoiceId,
+        amount,
+        rate: effectiveRate,
+        bank_details: buildBankDetails(),
+        receipt_path: receiptUrls[0],
+        receipt_paths: receiptUrls,
+      });
+      setSuccessInvoice(response.invoice);
+      setFlowStep("success");
+    } catch {
+      setError(t("txn.edit_resubmit_error"));
     } finally {
       setLoading(false);
     }
@@ -304,6 +452,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
     setMntBank("");
     setMntIban("");
     setMntOwnerName("");
+    setEditInvoiceId(null);
   };
 
   // Registration modal state
@@ -404,10 +553,24 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
     );
   }
 
+  if (editLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4 animate-fadeIn">
+        <Loader2 className="w-10 h-10 text-maroon-600 animate-spin" />
+        <div className="text-sm text-dark-600 dark:text-ivory-300">{t("txn.edit_loading")}</div>
+      </div>
+    );
+  }
+
   // Exchange Card view
   if (flowStep === "card") {
     return (
-      <div className="animate-fadeIn">
+      <div className="animate-fadeIn space-y-3">
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         <ExchangeCard rate={rate} initialDirection={initialDirection} onProceed={handleProceed} />
       </div>
     );
@@ -443,12 +606,115 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       <span className="text-dark-600 dark:text-ivory-300 font-medium">{currencyFrom} → {currencyTo}</span>
       <span className="ml-auto font-bold text-dark-800 dark:text-ivory-200">
         {effectiveRate.toFixed(2)}
-        {promoDiscount > 0 && (
-          <span className="text-green-600 ml-1 font-semibold">({direction === "buy" ? "+" : "-"}{promoDiscount})</span>
+        {appliedAdjustment > 0 && (
+          <span className="text-green-600 ml-1 font-semibold">({direction === "buy" ? "+" : "-"}{appliedAdjustment})</span>
         )}
       </span>
     </div>
   );
+
+  if (flowStep === "edit" && direction) {
+    return (
+      <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
+        <FlowHeader title={t("txn.edit_title")} onBack={resetFlow} />
+        <RateInfo />
+
+        <div className="space-y-3">
+          <div className="rounded-xl bg-surface-50 dark:bg-dark-700 border border-silver/60 dark:border-dark-600 p-3 text-sm text-dark-600 dark:text-ivory-300">
+            <div>{t("txn.edit_invoice_label")} <span className="font-mono font-semibold">{invoiceId}</span></div>
+          </div>
+
+          <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.edit_amount_label", { currency: currencyFrom })}</label>
+          <input
+            type="number"
+            min={0}
+            value={amount || ""}
+            onChange={(e) => setAmount(Number(e.target.value || 0))}
+            className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3 text-lg"
+            placeholder="0"
+          />
+
+          {amount > 0 && (
+            <div className="text-sm text-dark-600 dark:text-ivory-300">
+              {t("txn.receive_amount")}{" "}
+              <span className="font-bold text-maroon-700 dark:text-maroon-300">
+                {convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}
+              </span>
+            </div>
+          )}
+
+          {isVolumeDiscountApplied && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-400 text-sm">
+              <Gift className="w-4 h-4" />
+              <span>{t("txn.volume_discount_skip_promo")}</span>
+            </div>
+          )}
+
+          {direction === "sell" && (
+            <>
+              <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.bank_label")}</label>
+              <input value={rubBank} onChange={(e) => setRubBank(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder={t("txn.bank_placeholder_sell")} />
+              <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.card_number")}</label>
+              <input value={rubCardNumber} onChange={(e) => setRubCardNumber(formatCardNumber(e.target.value))} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="XXXX XXXX XXXX XXXX" maxLength={19} />
+              <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.phone_sbp")}</label>
+              <input value={rubPhone} onChange={(e) => setRubPhone(formatRussianPhone(e.target.value))} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="+7 XXX XXX XX XX" />
+              <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.owner_name")}</label>
+              <input value={rubOwnerName} onChange={(e) => setRubOwnerName(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="Иван Иванов" />
+            </>
+          )}
+
+          {direction === "buy" && (
+            <>
+              <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.bank_label")}</label>
+              <input value={mntBank} onChange={(e) => setMntBank(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder={t("txn.bank_placeholder_buy")} />
+              <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.iban_label")}</label>
+              <input value={mntIban} onChange={(e) => setMntIban(formatIBAN(e.target.value))} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="MN XX XXXX XX XXXXXXXXXX" />
+              <label className="text-xs text-dark-600 dark:text-ivory-400">{t("txn.owner_name")}</label>
+              <input value={mntOwnerName} onChange={(e) => setMntOwnerName(e.target.value)} className="rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3" placeholder="Бат-Эрдэнэ" />
+            </>
+          )}
+
+          {receiptUrls.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {receiptUrls.map((url, index) => (
+                <div key={index} className="relative">
+                  <img src={url} alt={`Receipt ${index + 1}`} className="w-20 h-20 object-cover rounded-lg border border-maroon-200 dark:border-maroon-800" />
+                  <button onClick={() => removeReceipt(index)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <label className="flex flex-col items-center justify-center border-2 border-dashed border-maroon-200 dark:border-maroon-700 rounded-xl py-6 cursor-pointer bg-white/60 dark:bg-dark-700/60 hover:bg-maroon-50 dark:hover:bg-maroon-900/20 transition">
+            <Upload className="w-6 h-6 text-maroon-600 dark:text-maroon-400" />
+            <span className="text-sm text-dark-600 dark:text-ivory-300 mt-2">{uploading ? t("txn.uploading") : t("txn.upload_screenshot")}</span>
+            <span className="text-xs text-dark-600 dark:text-ivory-400 mt-1">{t("txn.multiple_photos")}</span>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0) handleMultipleUpload(files);
+              }}
+              disabled={uploading}
+            />
+          </label>
+
+          {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
+
+          <button
+            className="w-full rounded-2xl bg-maroon-600 text-white py-4 font-bold text-lg shadow-btn hover:bg-maroon-500 active:scale-[0.98] transition-all disabled:bg-silver disabled:text-dark-600 disabled:shadow-none"
+            onClick={handleResubmit}
+            disabled={loading || amount <= 0 || !isBankValid() || receiptUrls.length === 0}
+          >
+            {loading ? t("txn.submitting") : t("txn.edit_resubmit")}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Promo step
   if (flowStep === "promo") {
@@ -456,6 +722,13 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
         <FlowHeader title={t("txn.promo_code")} onBack={() => setFlowStep("card")} />
         <RateInfo />
+
+        {isVolumeDiscountApplied && (
+          <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-400 mb-3">
+            <Gift className="w-5 h-5" />
+            <span>{t("txn.volume_discount_skip_promo")}</span>
+          </div>
+        )}
 
         {userPromoCodes.length > 0 && (
           <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800 rounded-xl mb-3">
@@ -511,7 +784,7 @@ export function TransactionTab({ initData, user, initialDirection, onResetDirect
   if (flowStep === "adminBank") {
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
-        <FlowHeader title={t("txn.select_bank")} onBack={() => setFlowStep("promo")} />
+        <FlowHeader title={t("txn.select_bank")} onBack={() => setFlowStep(isVolumeDiscountApplied ? "card" : "promo")} />
         <RateInfo />
 
         <div className="text-sm text-dark-600 dark:text-ivory-300 mb-3">

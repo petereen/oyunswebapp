@@ -17,20 +17,24 @@ import { DevToolbar } from "./components/DevToolbar";
 import { fetchMe } from "./api";
 
 export default function App() {
+  const queryParams = new URLSearchParams(window.location.search);
+
   // Check URL for fuel admin panel
-  const isFuelAdmin = new URLSearchParams(window.location.search).has("fuel-admin");
+  const isFuelAdmin = queryParams.has("fuel-admin");
   if (isFuelAdmin) return <FuelAdminPanel />;
 
   // Check URL for fuel order deep link
-  const urlFuelOrderId = new URLSearchParams(window.location.search).get("fuel-order");
+  const urlFuelOrderId = queryParams.get("fuel-order");
+  const urlEditInvoice = queryParams.get("edit-invoice");
 
   const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
   const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
-  const [activeTab, setActiveTab] = useState(urlFuelOrderId ? 2 : 0);
+  const [activeTab, setActiveTab] = useState(urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0);
   const [showProfile, setShowProfile] = useState(false);
   const [transactionDirection, setTransactionDirection] = useState<"buy" | "sell" | null>(null);
   const [fuelOrderId, setFuelOrderId] = useState<string | null>(urlFuelOrderId);
+  const [editInvoiceId, setEditInvoiceId] = useState<string | null>(urlEditInvoice);
 
   // Listen for auth:unauthorized events and trigger re-authentication
   useEffect(() => {
@@ -53,9 +57,26 @@ export default function App() {
 
   const isAdmin = profile?.is_admin || false;
 
-  const handleNavigateToTransaction = (direction?: "buy" | "sell") => {
-    setTransactionDirection(direction || null);
+  const handleNavigateToTransaction = (direction?: "buy" | "sell", editInvoice?: string) => {
+    if (editInvoice) {
+      setEditInvoiceId(editInvoice);
+      setTransactionDirection(null);
+    } else {
+      setEditInvoiceId(null);
+      setTransactionDirection(direction || null);
+    }
     setActiveTab(1);
+  };
+
+  const handleEditInvoiceConsumed = () => {
+    setEditInvoiceId(null);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("edit-invoice")) {
+      params.delete("edit-invoice");
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+    }
   };
 
   const handleNavigateToProfile = () => {
@@ -76,6 +97,7 @@ export default function App() {
     setActiveTab(tab);
     setShowProfile(false);
     if (tab !== 1) setTransactionDirection(null);
+    if (tab !== 1) setEditInvoiceId(null);
     if (tab !== 2) setFuelOrderId(null);
   };
 
@@ -150,7 +172,9 @@ export default function App() {
                 initData={initData}
                 user={user}
                 initialDirection={transactionDirection}
+                initialEditInvoice={editInvoiceId}
                 onResetDirection={() => setTransactionDirection(null)}
+                onEditInvoiceHandled={handleEditInvoiceConsumed}
               />
             )}
             {activeTab === 2 && <ServicesTab initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />}

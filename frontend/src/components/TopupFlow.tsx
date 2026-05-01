@@ -14,6 +14,7 @@ import {
   fetchAdminBankAccounts,
   requestPresign,
 } from "../api";
+import { toSafeNumber } from "../utils/exchangePricing";
 import { useLang } from "../i18n/useLang";
 
 interface Props {
@@ -99,9 +100,13 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
     return digits ? Number.parseInt(digits, 10) : 0;
   }, [amountRub]);
 
+  const safeSellRate = useMemo(() => toSafeNumber(sellRate, 0), [sellRate]);
   const normalizedPhone = useMemo(() => sanitizePhone(phone), [phone]);
   const telecom = selectedTelecom === "custom" ? customTelecom.trim() : selectedTelecom;
-  const payableMnt = useMemo(() => Number((parsedAmountRub * sellRate).toFixed(2)), [parsedAmountRub, sellRate]);
+  const payableMnt = useMemo(
+    () => Number((parsedAmountRub * safeSellRate).toFixed(2)),
+    [parsedAmountRub, safeSellRate],
+  );
   const selectedBank = useMemo(
     () => availableBanks.find((bank) => String(bank.id) === selectedBankId) || null,
     [availableBanks, selectedBankId],
@@ -154,7 +159,7 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
       setError("");
       const response = await createPhoneTopup({
         rub_amount: parsedAmountRub,
-        sell_rate: sellRate,
+        sell_rate: safeSellRate,
         phone: normalizedPhone,
         telecom,
         receipt_path: receiptUrls[0],
@@ -222,7 +227,7 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
           </label>
 
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
-            <div>{t("topup.amount_hint", { rate: sellRate.toFixed(2) })}</div>
+            <div>{t("topup.amount_hint", { rate: safeSellRate.toFixed(2) })}</div>
             <div className="mt-1 font-semibold">
               {t("topup.payable_preview", { amount: formatDisplayAmount(payableMnt) })}
             </div>
@@ -230,6 +235,10 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
 
           <button
             onClick={() => {
+              if (!safeSellRate) {
+                setError(t("topup.rate_unavailable"));
+                return;
+              }
               if (!parsedAmountRub) {
                 setError(t("topup.invalid_amount"));
                 return;

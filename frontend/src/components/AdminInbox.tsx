@@ -340,6 +340,22 @@ export function AdminInbox() {
     }
   };
 
+  const handleSetWaitingEdit = async (invoice: string) => {
+    const reason = window.prompt("Хэрэглэгчид харагдах тайлбар (заавал биш):", "Мэдээллээ засаад дахин илгээнэ үү.");
+    if (reason === null) return;
+    try {
+      await adminAction({
+        invoice,
+        status: "waiting_edit",
+        rejection_comment: reason.trim() || undefined,
+      });
+      setDetailModal(null);
+      await load();
+    } catch (err) {
+      console.error("Set waiting_edit error:", err);
+    }
+  };
+
   const handleReject = async () => {
     if (!rejectModal) return;
     try {
@@ -847,6 +863,19 @@ export function AdminInbox() {
                     <RefreshCw className="w-3 h-3" />
                     Буцаах
                   </button>
+                  {!topupRequest && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSetWaitingEdit(item.invoice);
+                      }}
+                      className="ml-2 flex items-center gap-1 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition font-medium border border-red-200"
+                      title="Хэрэглэгчээс засвар авч дахин илгээх"
+                    >
+                      <Pause className="w-3 h-3" />
+                      Засвар хүлээх
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1209,7 +1238,7 @@ export function AdminInbox() {
 
                 {/* Actions for Pending - Pre-approve or Reject */}
                 {item.status === "pending" && (
-                  <div className="flex gap-2">
+                  <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
                     <button
                       onClick={async () => {
                         try {
@@ -1228,6 +1257,14 @@ export function AdminInbox() {
                     >
                       <ShieldCheck className="w-5 h-5" /> Урьдчилан батлах
                     </button>
+                    {!topupRequest && (
+                      <button
+                        onClick={() => handleSetWaitingEdit(item.invoice)}
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
+                      >
+                        <Pause className="w-5 h-5" /> Засвар хүлээх
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setRejectModal(item.invoice);
@@ -1242,7 +1279,7 @@ export function AdminInbox() {
 
                 {/* Actions for Approved - Open confirm modal to finalize */}
                 {item.status === "approved" && (
-                  <div className="flex gap-2">
+                  <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
                     <button
                       onClick={() => {
                         setConfirmModal(item);
@@ -1253,6 +1290,14 @@ export function AdminInbox() {
                     >
                       <Upload className="w-5 h-5" /> Гүйлгээ дуусгах
                     </button>
+                    {!topupRequest && (
+                      <button
+                        onClick={() => handleSetWaitingEdit(item.invoice)}
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
+                      >
+                        <Pause className="w-5 h-5" /> Засвар хүлээх
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setRejectModal(item.invoice);

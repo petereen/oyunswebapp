@@ -91,16 +91,16 @@ CREATE TRIGGER update_admin_bank_accounts_updated_at
 
 CREATE TABLE IF NOT EXISTS working_hours (
     id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),  -- Single row only
-    start_hour_moscow INT NOT NULL DEFAULT 4 CHECK (start_hour_moscow >= 0 AND start_hour_moscow <= 23),
-    end_hour_moscow INT NOT NULL DEFAULT 23 CHECK (end_hour_moscow >= 0 AND end_hour_moscow <= 23),
+    start_hour_moscow INT NOT NULL DEFAULT 4 CHECK (start_hour_moscow >= 0 AND start_hour_moscow <= 24),
+    end_hour_moscow INT NOT NULL DEFAULT 24 CHECK (end_hour_moscow >= 0 AND end_hour_moscow <= 24),
     is_enabled BOOLEAN DEFAULT TRUE,              -- Quick toggle to disable service
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     updated_by BIGINT                             -- Telegram user ID of admin who last updated
 );
 
--- Insert default working hours (04:00 - 23:00 Moscow = 09:00 - 04:00 UB)
+-- Insert default working hours (04:00 - 24:00 Moscow = 09:00 - 05:00 UB)
 INSERT INTO working_hours (id, start_hour_moscow, end_hour_moscow, is_enabled)
-VALUES (1, 4, 23, TRUE)
+VALUES (1, 4, 24, TRUE)
 ON CONFLICT (id) DO NOTHING;
 
 -- Enable RLS

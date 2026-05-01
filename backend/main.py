@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 import asyncio
 import logging
 import math
+import json
+from decimal import Decimal, InvalidOperation
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,8 +31,10 @@ from models import (
     AuthRequest,
     AuthResponse,
     BasicRegistrationRequest,
+    ExchangeEditableResponse,
     ExchangeCreateRequest,
     ExchangeCreateResponse,
+    ExchangeResubmitRequest,
     HealthResponse,
     HistoryItem,
     HistoryResponse,
@@ -116,6 +120,103 @@ from utils import (
 )
 
 logger = logging.getLogger("uvicorn.error")
+
+
+VOLUME_DISCOUNT_TIERS: list[tuple[Decimal, Decimal]] = [
+    (Decimal("100000"), Decimal("0.3")),
+    (Decimal("50000"), Decimal("0.2")),
+]
+COMPENSATION_PROMO_MAX_RUB = Decimal("30000")
+
+
+def _to_decimal(value: object, default: Decimal = Decimal("0")) -> Decimal:
+    try:
+        if value is None:
+            return default
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return default
+
+
+def _parse_receipt_urls(raw_bill_url: str | None, raw_receipt_id: str | None) -> list[str]:
+    urls: list[str] = []
+    if raw_bill_url:
+        try:
+            parsed = json.loads(raw_bill_url)
+            if isinstance(parsed, list):
+                urls.extend([str(url) for url in parsed if url])
+            elif isinstance(parsed, str) and parsed:
+                urls.append(parsed)
+        except (json.JSONDecodeError, TypeError):
+            urls.append(raw_bill_url)
+
+    if raw_receipt_id and raw_receipt_id not in urls:
+        urls.insert(0, raw_receipt_id)
+
+    return urls
+
+
+def _load_latest_rates(client) -> tuple[Decimal, Decimal]:
+    rates_res = (
+        client.table("bot_rates")
+        .select("buy_rate,sell_rate,updated_at,created_at")
+        .order("updated_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not rates_res.data:
+        return Decimal("0"), Decimal("0")
+
+    row = rates_res.data[0]
+    return _to_decimal(row.get("buy_rate")), _to_decimal(row.get("sell_rate"))
+
+
+def _get_rub_equivalent(direction: str, amount: Decimal, base_rate: Decimal) -> Decimal:
+    if amount <= 0 or base_rate <= 0:
+        return Decimal("0")
+    if direction.lower() == "buy":
+        return amount
+    return amount / base_rate
+
+
+def _get_volume_adjustment(rub_equivalent: Decimal) -> Decimal:
+    for threshold, adjustment in VOLUME_DISCOUNT_TIERS:
+        if rub_equivalent >= threshold:
+            return adjustment
+    return Decimal("0")
+
+
+def _compute_effective_rate(
+    *,
+    direction: str,
+    amount: Decimal,
+    base_rate: Decimal,
+    promo_discount: Decimal = Decimal("0"),
+) -> tuple[Decimal, str, Decimal, Decimal]:
+    """Return effective rate and metadata (source, adjustment, rub_equivalent)."""
+    if base_rate <= 0:
+        return Decimal("0"), "none", Decimal("0"), Decimal("0")
+
+    rub_equivalent = _get_rub_equivalent(direction, amount, base_rate)
+    volume_adjustment = _get_volume_adjustment(rub_equivalent)
+
+    adjustment = Decimal("0")
+    source = "none"
+    if volume_adjustment > 0:
+        adjustment = volume_adjustment
+        source = "volume"
+    elif promo_discount > 0:
+        adjustment = promo_discount
+        source = "promo"
+
+    effective = base_rate
+    if adjustment > 0:
+        if direction.lower() == "buy":
+            effective = base_rate + adjustment
+        else:
+            effective = max(Decimal("0"), base_rate - adjustment)
+
+    return effective.quantize(Decimal("0.01")), source, adjustment, rub_equivalent
 
 
 def _get_user_lang(user_id: int) -> str:
@@ -631,12 +732,12 @@ async def create_presigned_url(
 async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
     """Get user's active (pending/approved) and recently completed/rejected transactions."""
     client = get_supabase()
-    # Get pending and approved transactions (include 'successful' for legacy data)
+    # Get active and recently closed transactions (include legacy 'successful').
     res = (
         client.table("transactions")
-        .select("invoice,amount,currency_from,currency_to,status,timestamp,admin_comment")
+        .select("invoice,amount,currency_from,currency_to,status,timestamp,admin_comment,rejection_comment")
         .eq("user_id", user.id)
-        .in_("status", ["pending", "approved", "completed", "successful", "rejected"])
+        .in_("status", ["pending", "approved", "waiting_edit", "completed", "successful", "rejected"])
         .order("timestamp", desc=True)
         .limit(10)
         .execute()
@@ -648,7 +749,14 @@ async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
     items = []
     for row in res.data or []:
         status = row.get("status")
-        if status in ["pending", "approved"]:
+        if not row.get("admin_comment") and row.get("rejection_comment"):
+            row["admin_comment"] = row.get("rejection_comment")
+
+        if status == "waiting_edit":
+            row["can_edit"] = True
+            items.append(row)
+        elif status in ["pending", "approved"]:
+            row["can_edit"] = False
             items.append(row)
         elif status in ["completed", "successful", "rejected"]:
             # Include if completed/successful/rejected within last 24 hours
@@ -657,6 +765,7 @@ async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
                 try:
                     timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
                     if (now.astimezone() - timestamp).total_seconds() < 86400:  # 24 hours
+                        row["can_edit"] = False
                         items.append(row)
                 except:
                     pass
@@ -670,7 +779,7 @@ async def history(user=Depends(get_jwt_authenticated_user)):
     res = (
         client.table("transactions")
         .select(
-            "invoice,amount,currency_from,currency_to,status,timestamp,rate,bill_url,receipt_id,admin_comment"
+            "invoice,amount,currency_from,currency_to,status,timestamp,rate,bill_url,receipt_id,admin_comment,rejection_comment"
         )
         .eq("user_id", user.id)
         .order("timestamp", desc=True)
@@ -688,7 +797,7 @@ async def history(user=Depends(get_jwt_authenticated_user)):
             rate=row.get("rate"),
             bill_url=row.get("bill_url"),
             receipt_id=row.get("receipt_id"),
-            admin_comment=row.get("admin_comment"),
+            admin_comment=row.get("admin_comment") or row.get("rejection_comment"),
         )
         for row in res.data or []
     ]
@@ -1093,6 +1202,89 @@ async def create_exchange(
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz)
     invoice = payload.invoice or generate_invoice(now)
+    direction = payload.direction.lower()
+    if direction not in {"buy", "sell"}:
+        raise HTTPException(status_code=400, detail="Invalid direction")
+
+    # Always calculate effective rate on backend to keep pricing rules authoritative.
+    buy_rate, sell_rate = _load_latest_rates(client)
+    base_rate = buy_rate if direction == "buy" else sell_rate
+    if base_rate <= 0:
+        base_rate = _to_decimal(payload.rate)
+    if base_rate <= 0:
+        raise HTTPException(status_code=400, detail="Rate unavailable")
+
+    promo_discount = Decimal("0")
+    applied_promo_code: str | None = None
+    applied_promo_source: str | None = None
+
+    _, preview_source, _, _ = _compute_effective_rate(
+        direction=direction,
+        amount=_to_decimal(payload.amount),
+        base_rate=base_rate,
+        promo_discount=Decimal("0"),
+    )
+
+    if payload.promo_code and preview_source != "volume":
+        promo_code_upper = payload.promo_code.upper().strip()
+        promo_res = (
+            client.table("promo_codes")
+            .select("code,discount,active,user_id,source,aliases,expires_at")
+            .eq("active", True)
+            .execute()
+        )
+
+        matched_promo = None
+        for promo in promo_res.data or []:
+            code_value = (promo.get("code") or "").upper()
+            aliases = promo.get("aliases") or []
+            alias_match = any(str(alias).upper() == promo_code_upper for alias in aliases)
+            if code_value == promo_code_upper or alias_match:
+                promo_user_id = promo.get("user_id")
+                if promo_user_id and int(promo_user_id) != user.id:
+                    continue
+
+                expires_at = promo.get("expires_at")
+                if expires_at:
+                    try:
+                        expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                        if expiry.tzinfo is None:
+                            expiry = expiry.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) > expiry:
+                            continue
+                    except Exception:
+                        continue
+
+                matched_promo = promo
+                break
+
+        if matched_promo:
+            promo_discount = _to_decimal(matched_promo.get("discount"))
+            applied_promo_code = matched_promo.get("code")
+            applied_promo_source = matched_promo.get("source")
+
+    effective_rate, rate_source, applied_adjustment, rub_equivalent = _compute_effective_rate(
+        direction=direction,
+        amount=_to_decimal(payload.amount),
+        base_rate=base_rate,
+        promo_discount=promo_discount,
+    )
+
+    if rate_source == "volume":
+        # Volume-discounted requests should never consume promo codes.
+        applied_promo_code = None
+        applied_promo_source = None
+        promo_discount = Decimal("0")
+
+    logger.info(
+        "Pricing resolved for %s: base=%s effective=%s source=%s adjustment=%s rub_equivalent=%s",
+        invoice,
+        base_rate,
+        effective_rate,
+        rate_source,
+        applied_adjustment,
+        rub_equivalent,
+    )
 
     # ensure user row exists - but don't overwrite registered names
     existing = client.table("users").select("id,first_name").eq("id", user.id).limit(1).execute()
@@ -1121,21 +1313,21 @@ async def create_exchange(
         "amount": str(payload.amount),
         "currency_from": payload.currency_from,
         "currency_to": payload.currency_to,
-        "rate": str(payload.rate),
+        "rate": str(effective_rate),
         "status": "pending",
         "timestamp": now.isoformat(),
         "bill_url": bill_url_value,
         "receipt_id": receipt_id_value,
-        "promo_code": payload.promo_code,
+        "promo_code": applied_promo_code,
         "bank_details": payload.bank_details,
         "receipt_submitted_at": now.isoformat() if receipt_paths_list else None,
     }
 
     # snapshot buy/sell side
-    if payload.direction.lower() == "buy":
-        insert_payload["buy_rate"] = str(payload.rate)
-    elif payload.direction.lower() == "sell":
-        insert_payload["sell_rate"] = str(payload.rate)
+    if direction == "buy":
+        insert_payload["buy_rate"] = str(effective_rate)
+    elif direction == "sell":
+        insert_payload["sell_rate"] = str(effective_rate)
 
     result = client.table("transactions").insert(insert_payload).execute()
     if not result.data:
@@ -1144,30 +1336,24 @@ async def create_exchange(
     transaction = result.data[0]
 
     # Mark one-time promo codes as inactive (source != 'default')
-    if payload.promo_code:
-        promo_code_upper = payload.promo_code.upper()
-        # Find the promo code and check its source
-        promo_res = client.table("promo_codes").select("code,source").eq("active", True).execute()
-        for p in promo_res.data or []:
-            if p.get("code", "").upper() == promo_code_upper:
-                # If source is not 'default', mark as inactive (one-time use)
-                if p.get("source") and p.get("source") != "default":
-                    client.table("promo_codes").update({"active": False}).eq("code", p.get("code")).execute()
-                break
+    if applied_promo_code and applied_promo_source and applied_promo_source != "default":
+        client.table("promo_codes").update({"active": False}).eq("code", applied_promo_code).execute()
 
     settings = get_settings()
     
     # Calculate admin transfer amount
-    if payload.direction.lower() == "buy":
+    if direction == "buy":
         # User sends RUB, admin sends MNT (amount * rate)
-        admin_sends = round(payload.amount * payload.rate)
+        admin_sends = round(_to_decimal(payload.amount) * effective_rate)
         admin_sends_currency = "MNT"
     else:
         # User sends MNT, admin sends RUB (amount / rate)
-        admin_sends = round(payload.amount / payload.rate, 2)
+        if effective_rate <= 0:
+            raise HTTPException(status_code=400, detail="Invalid effective rate")
+        admin_sends = round(_to_decimal(payload.amount) / effective_rate, 2)
         admin_sends_currency = "RUB"
     
-    direction_text = "🟢 ТӨГРӨГ АВАХ" if payload.direction.lower() == "buy" else "🟠 РУБ АВАХ"
+    direction_text = "🟢 ТӨГРӨГ АВАХ" if direction == "buy" else "🟠 РУБ АВАХ"
     
     # Single notification to shift admin (removed duplicate to general admin chat)
     shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
@@ -1195,7 +1381,7 @@ async def create_exchange(
         f"🔄 Чиглэл: {direction_text}\n\n"
         f"💰 Хэрэглэгч илгээх: <b>{payload.amount}</b> {payload.currency_from}\n"
         f"💸 Админ шилжүүлэх: <b>{admin_sends}</b> {admin_sends_currency}\n"
-        f"📊 Ханш: {payload.rate}\n"
+        f"📊 Ханш: {effective_rate}\n"
     )
     
     if shift_res.data and shift_res.data[0].get("current_admin_id"):
@@ -1208,9 +1394,9 @@ async def create_exchange(
 
     # Send confirmation notification to user
     user_lang = _get_user_lang(user.id)
-    user_direction_text = "Төгрөг авах (RUB → MNT)" if payload.direction.lower() == "buy" else "Рубль авах (MNT → RUB)"
+    user_direction_text = "Төгрөг авах (RUB → MNT)" if direction == "buy" else "Рубль авах (MNT → RUB)"
     user_notification = (
-        f"{tb(user_lang, 'notif_exchange_received', invoice=invoice, amount=f'{payload.amount:,.0f}', from_=payload.currency_from, to=payload.currency_to, rate=payload.rate)}\n\n"
+        f"{tb(user_lang, 'notif_exchange_received', invoice=invoice, amount=f'{payload.amount:,.0f}', from_=payload.currency_from, to=payload.currency_to, rate=effective_rate)}\n\n"
         f"🔄 {user_direction_text}\n"
         f"💰 {payload.amount:,.0f} {payload.currency_from} → {admin_sends:,.0f} {admin_sends_currency}"
     )
@@ -1226,6 +1412,222 @@ async def create_exchange(
         invoice=invoice,
         status=transaction.get("status"),
         bill_url=transaction.get("bill_url"),
+        created_at=now,
+    )
+
+
+@app.get("/api/exchange/editable", response_model=ExchangeEditableResponse)
+async def get_editable_exchange(
+    invoice: str,
+    user=Depends(get_jwt_authenticated_user),
+):
+    client = get_supabase()
+    res = (
+        client.table("transactions")
+        .select("id,invoice,user_id,amount,currency_from,currency_to,rate,bank_details,bill_url,receipt_id,status")
+        .eq("invoice", invoice)
+        .eq("user_id", user.id)
+        .limit(1)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    trx = res.data[0]
+    if trx.get("status") != "waiting_edit":
+        raise HTTPException(status_code=400, detail="Transaction is not editable")
+
+    direction = "buy" if (trx.get("currency_from") or "").upper() == "RUB" else "sell"
+    receipt_urls = _parse_receipt_urls(trx.get("bill_url"), trx.get("receipt_id"))
+
+    return ExchangeEditableResponse(
+        invoice=trx.get("invoice"),
+        direction=direction,
+        amount=_to_decimal(trx.get("amount")),
+        currency_from=trx.get("currency_from"),
+        currency_to=trx.get("currency_to"),
+        rate=_to_decimal(trx.get("rate")),
+        bank_details=trx.get("bank_details") or "",
+        receipt_urls=receipt_urls,
+        can_edit=True,
+    )
+
+
+@app.post("/api/exchange/resubmit", response_model=ExchangeCreateResponse)
+async def resubmit_exchange(
+    payload: ExchangeResubmitRequest,
+    user=Depends(get_jwt_authenticated_user),
+):
+    if payload.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+
+    client = get_supabase()
+    now = datetime.now(timezone.utc)
+    trx_res = (
+        client.table("transactions")
+        .select("*")
+        .eq("invoice", payload.invoice)
+        .eq("user_id", user.id)
+        .limit(1)
+        .execute()
+    )
+    if not trx_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    trx = trx_res.data[0]
+    if trx.get("status") != "waiting_edit":
+        raise HTTPException(status_code=400, detail="Transaction cannot be resubmitted")
+
+    direction = "buy" if (trx.get("currency_from") or "").upper() == "RUB" else "sell"
+    buy_rate, sell_rate = _load_latest_rates(client)
+    base_rate = buy_rate if direction == "buy" else sell_rate
+    if base_rate <= 0:
+        base_rate = _to_decimal(payload.rate)
+    if base_rate <= 0:
+        raise HTTPException(status_code=400, detail="Rate unavailable")
+
+    existing_promo_code = trx.get("promo_code")
+    promo_discount = Decimal("0")
+    resolved_promo_code: str | None = None
+    resolved_promo_source: str | None = None
+
+    _, preview_source, _, _ = _compute_effective_rate(
+        direction=direction,
+        amount=_to_decimal(payload.amount),
+        base_rate=base_rate,
+        promo_discount=Decimal("0"),
+    )
+
+    if existing_promo_code and preview_source != "volume":
+        promo_res = (
+            client.table("promo_codes")
+            .select("code,discount,active,user_id,source,expires_at")
+            .eq("active", True)
+            .eq("code", existing_promo_code)
+            .limit(1)
+            .execute()
+        )
+        if promo_res.data:
+            promo_row = promo_res.data[0]
+            promo_user_id = promo_row.get("user_id")
+            valid_for_user = not promo_user_id or int(promo_user_id) == user.id
+            not_expired = True
+            expires_at = promo_row.get("expires_at")
+            if expires_at:
+                try:
+                    expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                    if expiry.tzinfo is None:
+                        expiry = expiry.replace(tzinfo=timezone.utc)
+                    not_expired = datetime.now(timezone.utc) <= expiry
+                except Exception:
+                    not_expired = False
+
+            if valid_for_user and not_expired:
+                promo_discount = _to_decimal(promo_row.get("discount"))
+                resolved_promo_code = promo_row.get("code")
+                resolved_promo_source = promo_row.get("source")
+
+    effective_rate, rate_source, _, _ = _compute_effective_rate(
+        direction=direction,
+        amount=_to_decimal(payload.amount),
+        base_rate=base_rate,
+        promo_discount=promo_discount,
+    )
+
+    if rate_source == "volume":
+        resolved_promo_code = None
+        resolved_promo_source = None
+
+    receipt_paths_list = payload.receipt_paths or []
+    if payload.receipt_path and payload.receipt_path not in receipt_paths_list:
+        receipt_paths_list.append(payload.receipt_path)
+
+    bill_url_value = json.dumps(receipt_paths_list) if receipt_paths_list else None
+    receipt_id_value = receipt_paths_list[0] if receipt_paths_list else None
+
+    total_paused_seconds = _to_decimal(trx.get("total_paused_seconds"), Decimal("0"))
+    paused_at_raw = trx.get("timer_paused_at")
+    if paused_at_raw:
+        paused_at = datetime.fromisoformat(str(paused_at_raw).replace("Z", "+00:00"))
+        if paused_at.tzinfo is None:
+            paused_at = paused_at.replace(tzinfo=timezone.utc)
+        total_paused_seconds += Decimal(str(max(0.0, (now - paused_at).total_seconds())))
+
+    update_payload = {
+        "status": "pending",
+        "amount": str(payload.amount),
+        "rate": str(effective_rate),
+        "bank_details": payload.bank_details,
+        "bill_url": bill_url_value,
+        "receipt_id": receipt_id_value,
+        "promo_code": resolved_promo_code,
+        "timestamp": now.isoformat(),
+        "receipt_submitted_at": now.isoformat() if receipt_paths_list else trx.get("receipt_submitted_at"),
+        "rejection_comment": None,
+        "admin_comment": None,
+        "admin_bill_url": None,
+        "completed_at": None,
+        "completed_by_admin": None,
+        "completion_duration_minutes": None,
+        "waiting_started_at": None,
+        "timer_paused_at": None,
+        "total_paused_seconds": float(total_paused_seconds),
+    }
+
+    if direction == "buy":
+        update_payload["buy_rate"] = str(effective_rate)
+    else:
+        update_payload["sell_rate"] = str(effective_rate)
+
+    update_res = (
+        client.table("transactions")
+        .update(update_payload)
+        .eq("invoice", payload.invoice)
+        .eq("user_id", user.id)
+        .execute()
+    )
+    if not update_res.data:
+        raise HTTPException(status_code=500, detail="Failed to resubmit transaction")
+
+    if resolved_promo_code and resolved_promo_source and resolved_promo_source != "default":
+        client.table("promo_codes").update({"active": False}).eq("code", resolved_promo_code).execute()
+
+    # Notify shift admin that a waiting-edit request has been resubmitted.
+    settings = get_settings()
+    shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
+    if shift_res.data and shift_res.data[0].get("current_admin_id"):
+        shift_admin_id = shift_res.data[0].get("current_admin_id")
+        reply_markup = None
+        if settings.admin_panel_url and "localhost" not in settings.admin_panel_url and settings.admin_panel_url.startswith("https://"):
+            separator = "&" if "?" in settings.admin_panel_url else "?"
+            reply_markup = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "🔗 Админ хэсэгт харах",
+                            "web_app": {"url": f"{settings.admin_panel_url}{separator}invoice={payload.invoice}"},
+                        }
+                    ]
+                ]
+            }
+
+        send_user_notification(
+            int(shift_admin_id),
+            (
+                f"🔁 <b>Засварласан хүсэлт дахин илгээгдлээ</b>\n\n"
+                f"📋 Invoice: <code>{payload.invoice}</code>\n"
+                f"👤 User: <code>{user.id}</code>\n"
+                f"💰 Amount: <b>{payload.amount}</b> {trx.get('currency_from')}\n"
+                f"📊 Rate: {effective_rate}"
+            ),
+            reply_markup=reply_markup,
+        )
+
+    return ExchangeCreateResponse(
+        id=str(update_res.data[0].get("id")),
+        invoice=payload.invoice,
+        status="pending",
+        bill_url=bill_url_value,
         created_at=now,
     )
 
@@ -1261,6 +1663,16 @@ async def admin_action(
     
     logger.info(f"Admin action: invoice={payload.invoice}, new_status={payload.status}, current_status={trx.get('status')}")
 
+    if payload.status == "waiting_edit":
+        bank_details = (trx.get("bank_details") or "").strip()
+        parts = [part.strip() for part in bank_details.split(",") if part.strip()]
+        if (trx.get("currency_from", "").upper() == "MNT" and trx.get("currency_to", "").upper() == "RUB" and len(parts) == 2):
+            phone_candidate = parts[0].replace(" ", "").replace("-", "")
+            if phone_candidate.startswith("+"):
+                phone_candidate = phone_candidate[1:]
+            if phone_candidate.isdigit() and 7 <= len(phone_candidate) <= 15:
+                raise HTTPException(status_code=400, detail="waiting_edit is only supported for exchange requests")
+
     # Build update payload - only include non-None values
     update_payload = {"status": payload.status}
     
@@ -1270,6 +1682,32 @@ async def admin_action(
         update_payload["admin_comment"] = payload.admin_comment
     if payload.completed_by_admin is not None:
         update_payload["completed_by_admin"] = payload.completed_by_admin
+
+    total_paused_seconds = _to_decimal(trx.get("total_paused_seconds"), Decimal("0"))
+    paused_at_raw = trx.get("timer_paused_at")
+    if paused_at_raw and payload.status != "waiting_edit":
+        try:
+            paused_at = datetime.fromisoformat(str(paused_at_raw).replace("Z", "+00:00"))
+            if paused_at.tzinfo is None:
+                paused_at = paused_at.replace(tzinfo=timezone.utc)
+            total_paused_seconds += Decimal(str(max(0.0, (now - paused_at).total_seconds())))
+            update_payload["total_paused_seconds"] = float(total_paused_seconds)
+        except Exception as e:
+            logger.warning(f"Could not calculate paused seconds: {e}")
+
+    if payload.status == "waiting_edit":
+        update_payload["waiting_started_at"] = now.isoformat()
+        update_payload["timer_paused_at"] = now.isoformat()
+        update_payload["completed_at"] = None
+        update_payload["completed_by_admin"] = None
+        update_payload["completion_duration_minutes"] = None
+        update_payload["admin_bill_url"] = None
+        update_payload["admin_comment"] = None
+    elif payload.status == "pending":
+        update_payload["waiting_started_at"] = None
+        update_payload["timer_paused_at"] = None
+    elif payload.status in ["completed", "successful", "rejected"]:
+        update_payload["timer_paused_at"] = None
     
     # Track admin bill submission time
     if payload.admin_bill_url:
@@ -1299,8 +1737,11 @@ async def admin_action(
                 # Get current time in Moscow timezone
                 now_moscow = datetime.now(moscow_tz)
                 
-                # Calculate duration in minutes
-                duration_minutes = (now_moscow - receipt_time).total_seconds() / 60
+                paused_seconds = _to_decimal(update_payload.get("total_paused_seconds", trx.get("total_paused_seconds")), Decimal("0"))
+
+                # Calculate duration in minutes and subtract paused waiting-edit time
+                raw_minutes = (now_moscow - receipt_time).total_seconds() / 60
+                duration_minutes = max(0.0, raw_minutes - (float(paused_seconds) / 60.0))
                 update_payload["completion_duration_minutes"] = round(duration_minutes, 2)
                 logger.info(f"Completion duration: {duration_minutes:.2f} minutes (from receipt_submitted_at: {receipt_submitted_str})")
             except Exception as e:
@@ -1372,8 +1813,16 @@ async def admin_action(
             else:
                 send_user_notification(user_id=int(user_id), text=completion_text)
             
-            # If completion took more than 10 minutes, generate a compensation promo code
-            if duration_minutes and duration_minutes > 10:
+            trx_amount = _to_decimal(trx.get("amount"))
+            trx_rate = _to_decimal(trx.get("rate"))
+            if (trx.get("currency_from") or "").upper() == "RUB":
+                rub_equivalent = trx_amount
+            else:
+                rub_equivalent = (trx_amount / trx_rate) if trx_rate > 0 else Decimal("0")
+
+            # If completion took more than 10 minutes for requests under 30k RUB,
+            # generate a compensation promo code.
+            if duration_minutes and duration_minutes > 10 and rub_equivalent < COMPENSATION_PROMO_MAX_RUB:
                 try:
                     import secrets
                     import string
@@ -1397,6 +1846,33 @@ async def admin_action(
                     logger.info(f"Generated compensation promo code {promo_code} for user {user_id}")
                 except Exception as e:
                     logger.error(f"Failed to create compensation promo code: {e}")
+        elif payload.status == "waiting_edit":
+            waiting_text = tb(user_lang, "notif_tx_waiting_edit", invoice=payload.invoice)
+            if payload.rejection_comment:
+                waiting_text += tb(user_lang, "notif_tx_waiting_edit_reason", reason=payload.rejection_comment)
+
+            settings = get_settings()
+            user_panel_url = settings.user_panel_url or settings.webapp_url
+            reply_markup = None
+            if user_panel_url and user_panel_url.startswith("https://"):
+                separator = "&" if "?" in user_panel_url else "?"
+                edit_url = f"{user_panel_url}{separator}edit-invoice={payload.invoice}"
+                reply_markup = {
+                    "inline_keyboard": [
+                        [
+                            {
+                                "text": tb(user_lang, "notif_tx_waiting_edit_button"),
+                                "web_app": {"url": edit_url},
+                            }
+                        ]
+                    ]
+                }
+
+            send_user_notification(
+                user_id=int(user_id),
+                text=waiting_text,
+                reply_markup=reply_markup,
+            )
         elif payload.status == "rejected":
             rejection_msg = tb(user_lang, "notif_tx_rejected", invoice=payload.invoice)
             if payload.rejection_comment:

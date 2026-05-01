@@ -43,6 +43,8 @@ function getStatusInfo(status: string, t: (k: string) => string) {
       return { label: t("stats.pending"), color: "bg-amber-100 text-amber-700", icon: Clock };
     case "rejected":
       return { label: t("stats.rejected"), color: "bg-red-100 text-red-700", icon: XCircle };
+    case "waiting_edit":
+      return { label: t("stats.waiting_edit"), color: "bg-amber-100 text-amber-700", icon: AlertCircle };
     default:
       return { label: status, color: "bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-300", icon: AlertCircle };
   }
@@ -359,7 +361,7 @@ export function StatsTab({ userId }: Props) {
                   <div>{formatDate(item.timestamp, lang === "ru" ? "ru-RU" : "mn-MN")}</div>
                 </div>
 
-                {item.status === "rejected" && item.admin_comment && (
+                {(item.status === "rejected" || item.status === "waiting_edit") && item.admin_comment && (
                   <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-100">
                     <div className="text-xs text-red-600 font-medium mb-1">{t("stats.rejection_reason")}</div>
                     <div className="text-sm text-red-700">{item.admin_comment}</div>

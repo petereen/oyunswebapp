@@ -58,9 +58,30 @@ class ExchangeCreateResponse(BaseModel):
     created_at: datetime
 
 
+class ExchangeResubmitRequest(BaseModel):
+    invoice: str
+    amount: Decimal
+    rate: Decimal
+    bank_details: str
+    receipt_path: Optional[str] = None
+    receipt_paths: Optional[list[str]] = None
+
+
+class ExchangeEditableResponse(BaseModel):
+    invoice: str
+    direction: str
+    amount: Decimal
+    currency_from: str
+    currency_to: str
+    rate: Decimal
+    bank_details: str
+    receipt_urls: list[str] = Field(default_factory=list)
+    can_edit: bool = False
+
+
 class AdminActionRequest(BaseModel):
     invoice: str
-    status: str  # "approved", "completed", "rejected"
+    status: str  # "approved", "completed", "rejected", "waiting_edit"
     rejection_comment: Optional[str] = None
     admin_comment: Optional[str] = None
     admin_bill_url: Optional[str] = None  # Admin's transaction proof

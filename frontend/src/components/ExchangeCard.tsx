@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { ArrowUpDown, Info } from "lucide-react";
 import { Rate, fetchAppSettings } from "../api";
 import { useLang } from "../i18n/useLang";
+import { getAppliedRateAdjustment, toSafeNumber } from "../utils/exchangePricing";
 
 interface Props {
   rate?: Rate;
@@ -36,7 +37,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
 
   const currentRate = useMemo(() => {
     if (!rate) return 0;
-    return direction === "buy" ? Number(rate.buy_rate) : Number(rate.sell_rate);
+    return direction === "buy" ? toSafeNumber(rate.buy_rate, 0) : toSafeNumber(rate.sell_rate, 0);
   }, [direction, rate]);
 
   const amount = useMemo(() => {
@@ -44,10 +45,24 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
     return parseFloat(cleaned) || 0;
   }, [inputValue]);
 
+  const pricing = useMemo(
+    () =>
+      getAppliedRateAdjustment({
+        direction,
+        amount,
+        baseRate: currentRate,
+      }),
+    [direction, amount, currentRate],
+  );
+
+  const effectiveRate = pricing.effectiveRate;
+  const volumeAdjustment = pricing.adjustmentSource === "volume" ? pricing.adjustment : 0;
+  const rubEquivalent = pricing.rubEquivalent;
+
   const convertedAmount = useMemo(() => {
-    if (!currentRate || !amount) return 0;
-    return direction === "buy" ? amount * currentRate : amount / currentRate;
-  }, [amount, currentRate, direction]);
+    if (!effectiveRate || !amount) return 0;
+    return direction === "buy" ? amount * effectiveRate : amount / effectiveRate;
+  }, [amount, effectiveRate, direction]);
 
   const fromCurrency = direction === "buy"
     ? { symbol: "₽", flag: "🇷🇺", code: "RUB" }
@@ -81,9 +96,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
   const isBelowMin = amount > 0 && (direction === "sell" ? convertedAmount < effectiveMinRub : amount < effectiveMinRub);
   const canProceed = amount > 0 && !isBelowMin;
 
-  const rateDisplay = direction === "buy"
-    ? `1 RUB = ${currentRate} MNT`
-    : `1 RUB = ${currentRate} MNT`;
+  const rateDisplay = `1 RUB = ${effectiveRate.toFixed(2)} MNT`;
 
   return (
     <div className="space-y-4 animate-fadeIn">
@@ -152,7 +165,21 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
       <div className="flex items-center justify-center gap-1.5 text-[12px] text-dark-600 dark:text-ivory-300 font-medium">
         <Info className="w-3.5 h-3.5" />
         <span>{rateDisplay}</span>
+        {volumeAdjustment > 0 && (
+          <span className="text-green-600 dark:text-green-400">
+            ({direction === "buy" ? "+" : "-"}{volumeAdjustment.toFixed(1)})
+          </span>
+        )}
       </div>
+
+      {volumeAdjustment > 0 && (
+        <div className="text-sm text-center text-green-700 dark:text-green-400 font-medium">
+          {t("exchange.volume_discount_applied", {
+            threshold: rubEquivalent >= 100_000 ? "100,000" : "50,000",
+            discount: volumeAdjustment.toFixed(1),
+          })}
+        </div>
+      )}
 
       {/* Min amount warning */}
       {isBelowMin && (
