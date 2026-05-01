@@ -1262,7 +1262,7 @@ export function AdminInbox() {
                         onClick={() => handleSetWaitingEdit(item.invoice)}
                         className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
                       >
-                        <Pause className="w-5 h-5" /> Засвар хүлээх
+                        <Pause className="w-5 h-5" /> Засвар шаардах
                       </button>
                     )}
                     <button
@@ -1295,7 +1295,7 @@ export function AdminInbox() {
                         onClick={() => handleSetWaitingEdit(item.invoice)}
                         className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
                       >
-                        <Pause className="w-5 h-5" /> Засвар хүлээх
+                        <Pause className="w-5 h-5" /> Засвар шаардах
                       </button>
                     )}
                     <button
