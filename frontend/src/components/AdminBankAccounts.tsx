@@ -17,6 +17,7 @@ import {
   Settings,
 } from "lucide-react";
 import {
+  DEFAULT_APP_SETTINGS,
   fetchAllAdminBankAccounts,
   createAdminBankAccount,
   updateAdminBankAccount,
@@ -44,8 +45,8 @@ export function AdminBankAccounts() {
   const [error, setError] = useState("");
 
   // Exchange limits state
-  const [exchangeLimits, setExchangeLimits] = useState<AppSettings>({ min_rub_amount: 5000, min_rub_buy: 100 });
-  const [editingLimits, setEditingLimits] = useState<AppSettings>({ min_rub_amount: 5000, min_rub_buy: 100 });
+  const [exchangeLimits, setExchangeLimits] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [editingLimits, setEditingLimits] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [limitsChanged, setLimitsChanged] = useState(false);
   const [savingLimits, setSavingLimits] = useState(false);
 

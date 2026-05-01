@@ -5,6 +5,10 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
+DEFAULT_MIN_RUB_AMOUNT = 5000
+DEFAULT_MIN_RUB_BUY = 100
+
+
 class AuthenticatedUser(BaseModel):
     id: int
     first_name: Optional[str] = None
@@ -28,8 +32,8 @@ class RateResponse(BaseModel):
 
 
 class AppSettingsResponse(BaseModel):
-    min_rub_amount: int = 5000  # Default minimum RUB for MNT->RUB
-    min_rub_buy: int = 100      # Default minimum RUB for RUB->MNT
+    min_rub_amount: int = DEFAULT_MIN_RUB_AMOUNT  # Default minimum RUB for MNT->RUB
+    min_rub_buy: int = DEFAULT_MIN_RUB_BUY  # Default minimum RUB for RUB->MNT
 
 
 class AppSettingsUpdateRequest(BaseModel):

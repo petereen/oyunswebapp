@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
-import { createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
+import { DEFAULT_MIN_RUB_AMOUNT, DEFAULT_MIN_RUB_BUY, createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 import { useLang } from "../i18n/useLang";
 
@@ -83,8 +83,8 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   const [invoiceId, setInvoiceId] = useState<string>("");
   
   // App settings
-  const [minRubAmount, setMinRubAmount] = useState<number>(5000);
-  const [minRubBuy, setMinRubBuy] = useState<number>(100);
+  const [minRubAmount, setMinRubAmount] = useState<number>(DEFAULT_MIN_RUB_AMOUNT);
+  const [minRubBuy, setMinRubBuy] = useState<number>(DEFAULT_MIN_RUB_BUY);
   
   // Final
   const [useSavedBank, setUseSavedBank] = useState<boolean | null>(null);
@@ -121,12 +121,12 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     // Load app settings (min_rub_amount, min_rub_buy)
     fetchAppSettings()
       .then((res) => {
-        setMinRubAmount(res.min_rub_amount || 5000);
-        setMinRubBuy(res.min_rub_buy || 100);
+        setMinRubAmount(res.min_rub_amount);
+        setMinRubBuy(res.min_rub_buy);
       })
       .catch(() => {
-        setMinRubAmount(5000);
-        setMinRubBuy(100);
+        setMinRubAmount(DEFAULT_MIN_RUB_AMOUNT);
+        setMinRubBuy(DEFAULT_MIN_RUB_BUY);
       });
     
     // Load user's promo codes (active codes belonging to this user)

@@ -66,7 +66,7 @@ function formatToTimezone(dateStr: string, tz: string): string {
   });
 }
 
-function getTimeAgo(dateStr: string): string {
+function getTimeAgo(dateStr: string, nowMs: number): string {
   // Parse the timestamp as UTC
   let then: Date;
   if (dateStr.endsWith('Z') || dateStr.includes('+')) {
@@ -77,7 +77,7 @@ function getTimeAgo(dateStr: string): string {
   }
   
   // Get current time in UTC
-  const now = Date.now();
+  const now = nowMs;
   const thenMs = then.getTime();
   
   // Calculate difference in milliseconds
@@ -102,6 +102,7 @@ export function AdminInbox() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [relativeNowMs, setRelativeNowMs] = useState(() => Date.now());
 
   // UI state - Changed from expandedInvoice to detailModal for popup
   const [detailModal, setDetailModal] = useState<InboxItem | null>(null);
@@ -273,6 +274,16 @@ export function AdminInbox() {
     loadShift();
     loadWorkingHours();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRelativeNowMs(Date.now());
+    }, 30000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   // Sort and filter items
@@ -771,7 +782,7 @@ export function AdminInbox() {
                   </div>
                   <div className="flex items-center gap-1 text-xs text-slate-500">
                     <Clock className="w-3 h-3" />
-                    {getTimeAgo(item.timestamp)}
+                    {getTimeAgo(item.timestamp, relativeNowMs)}
                   </div>
                   {item.bill_url && (
                     <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
@@ -837,7 +848,7 @@ export function AdminInbox() {
                   </div>
                   <div className="flex items-center gap-1 text-xs text-slate-500">
                     <Clock className="w-3 h-3" />
-                    {getTimeAgo(item.timestamp)}
+                    {getTimeAgo(item.timestamp, relativeNowMs)}
                   </div>
                 </div>
                 {topupRequest && (
@@ -1027,7 +1038,7 @@ export function AdminInbox() {
                 <div className="text-xs text-slate-500 space-y-1 p-2 bg-slate-50 rounded-lg">
                   <div>УБ: {formatToTimezone(item.timestamp, "Asia/Ulaanbaatar")}</div>
                   <div>МСК: {formatToTimezone(item.timestamp, "Europe/Moscow")}</div>
-                  <div className="text-slate-400">{getTimeAgo(item.timestamp)}</div>
+                  <div className="text-slate-400">{getTimeAgo(item.timestamp, relativeNowMs)}</div>
                 </div>
 
                 {/* User's Receipt Photos - Support multiple */}

@@ -212,6 +212,21 @@ export type AppSettings = {
   min_rub_buy: number;
 };
 
+export const DEFAULT_MIN_RUB_AMOUNT = 5000;
+export const DEFAULT_MIN_RUB_BUY = 100;
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  min_rub_amount: DEFAULT_MIN_RUB_AMOUNT,
+  min_rub_buy: DEFAULT_MIN_RUB_BUY,
+};
+
+export function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
+  return {
+    min_rub_amount: Math.max(0, toSafeNumber(settings?.min_rub_amount, DEFAULT_MIN_RUB_AMOUNT)),
+    min_rub_buy: Math.max(0, toSafeNumber(settings?.min_rub_buy, DEFAULT_MIN_RUB_BUY)),
+  };
+}
+
 export async function fetchRates() {
   const res = await api.get<Rate>('/rates');
   return {
@@ -233,8 +248,8 @@ export async function fetchRateHistory(days: number = 30) {
 }
 
 export async function fetchAppSettings() {
-  const res = await api.get<AppSettings>('/settings');
-  return res.data;
+  const res = await api.get<Partial<AppSettings>>('/settings');
+  return normalizeAppSettings(res.data);
 }
 
 export async function fetchServiceStatus() {
@@ -660,8 +675,8 @@ export async function deleteAdminBankAccount(id: string) {
 // ============= Admin Exchange Limits =============
 
 export async function updateAppSettings(payload: Partial<AppSettings>): Promise<AppSettings> {
-  const res = await api.put<AppSettings>('/admin/settings', payload);
-  return res.data;
+  const res = await api.put<Partial<AppSettings>>('/admin/settings', payload);
+  return normalizeAppSettings(res.data);
 }
 
 // ============= Gift Feature =============

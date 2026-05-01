@@ -23,6 +23,8 @@ import {
   fetchAdminBankAccounts,
   requestPresign,
   fetchAppSettings,
+  DEFAULT_MIN_RUB_AMOUNT,
+  DEFAULT_MIN_RUB_BUY,
   AdminBankAccount,
   GiftCard,
   GiftCreateInput,
@@ -91,8 +93,8 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   const [fromName, setFromName] = useState("");
 
   // App settings
-  const [minRubAmount, setMinRubAmount] = useState<number>(5000);
-  const [minRubBuy, setMinRubBuy] = useState<number>(100);
+  const [minRubAmount, setMinRubAmount] = useState<number>(DEFAULT_MIN_RUB_AMOUNT);
+  const [minRubBuy, setMinRubBuy] = useState<number>(DEFAULT_MIN_RUB_BUY);
 
   // Load gift cards
   useEffect(() => {
@@ -117,12 +119,12 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
     // Load app settings (min_rub_amount, min_rub_buy)
     fetchAppSettings()
       .then((res) => {
-        setMinRubAmount(res.min_rub_amount || 5000);
-        setMinRubBuy(res.min_rub_buy || 100);
+        setMinRubAmount(res.min_rub_amount);
+        setMinRubBuy(res.min_rub_buy);
       })
       .catch(() => {
-        setMinRubAmount(5000);
-        setMinRubBuy(100);
+        setMinRubAmount(DEFAULT_MIN_RUB_AMOUNT);
+        setMinRubBuy(DEFAULT_MIN_RUB_BUY);
       });
   }, []);
 

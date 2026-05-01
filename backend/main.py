@@ -26,6 +26,8 @@ from models import (
     AdminShiftResponse,
     AdminUser,
     AdminUsersResponse,
+    DEFAULT_MIN_RUB_AMOUNT,
+    DEFAULT_MIN_RUB_BUY,
     AppSettingsResponse,
     AppSettingsUpdateRequest,
     AuthRequest,
@@ -607,8 +609,8 @@ async def get_app_settings():
     settings_dict = {row["key"]: row["value"] for row in (res.data or [])}
     
     return AppSettingsResponse(
-        min_rub_amount=int(settings_dict.get("min_rub_amount", 5000)),
-        min_rub_buy=int(settings_dict.get("min_rub_buy", 100)),
+        min_rub_amount=int(settings_dict.get("min_rub_amount", DEFAULT_MIN_RUB_AMOUNT)),
+        min_rub_buy=int(settings_dict.get("min_rub_buy", DEFAULT_MIN_RUB_BUY)),
     )
 
 
