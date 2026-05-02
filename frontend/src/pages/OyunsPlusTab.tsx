@@ -245,13 +245,13 @@ export function OyunsPlusTab({ userId }: Props) {
             <div className="flex items-center justify-between rounded-xl bg-surface-50 dark:bg-dark-700 px-3 py-2.5">
               <div className="text-xs text-dark-700 dark:text-ivory-300">{t("oyuns_plus.settings_earn_exchange")}</div>
               <div className="text-xs font-bold text-maroon-600 dark:text-gold-400">
-                {summary ? `${summary.points_per_threshold} pts / ${summary.threshold_rub.toLocaleString()} ₽` : "—"}
+                {summary ? `${summary.points_per_threshold} OYUNS Plus / ${summary.threshold_rub.toLocaleString()} ₽` : "—"}
               </div>
             </div>
             <div className="flex items-center justify-between rounded-xl bg-surface-50 dark:bg-dark-700 px-3 py-2.5">
               <div className="text-xs text-dark-700 dark:text-ivory-300">{t("oyuns_plus.settings_earn_referral")}</div>
               <div className="text-xs font-bold text-maroon-600 dark:text-gold-400">
-                {summary ? `+${summary.referral_reward_points} pts` : "—"}
+                {summary ? `+${summary.referral_reward_points} OYUNS Plus` : "—"}
               </div>
             </div>
           </div>

@@ -86,6 +86,9 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   const [minRubAmount, setMinRubAmount] = useState<number>(DEFAULT_MIN_RUB_AMOUNT);
   const [minRubBuy, setMinRubBuy] = useState<number>(DEFAULT_MIN_RUB_BUY);
   
+  // Show Russian bank warning when user tries to sell (MNT->RUB) without bank info
+  const [showRubBankWarning, setShowRubBankWarning] = useState(false);
+
   // Final
   const [useSavedBank, setUseSavedBank] = useState<boolean | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -220,6 +223,13 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   }, [direction, availableMntAdminBanks, selectedMntAdminBank]);
 
   const handleSelectDirection = (dir: "buy" | "sell") => {
+    if (dir === "sell") {
+      const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
+      if (!hasRubBank) {
+        setShowRubBankWarning(true);
+        return;
+      }
+    }
     setDirection(dir);
     setStep(1); // Go to promo code step
   };
@@ -456,45 +466,39 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         </button>
       </div>
 
-      {/* Check if user has Russian bank info - show message if not */}
-      {(() => {
-        const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
-        if (!hasRubBank) {
-          return (
-            <div className="flex flex-col items-center gap-4 py-6">
-              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
-                <CreditCard className="w-8 h-8 text-amber-600" />
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-amber-700 mb-2">
-                  {t("ef.rub_bank_required_title")}
-                </div>
-                <div className="text-sm text-slate-600 mb-4">
-                  {t("ef.rub_bank_required_desc")}
-                </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
-                  <div className="text-sm text-amber-800 font-medium mb-2">{t("ef.rub_bank_instructions")}</div>
-                  <ol className="text-sm text-amber-700 list-decimal list-inside space-y-1">
-                    <li>{t("ef.rub_bank_step1")}</li>
-                    <li>{t("ef.rub_bank_step2")}</li>
-                    <li>{t("ef.rub_bank_step3")}</li>
-                  </ol>
-                </div>
-              </div>
-              <button
-                onClick={onBack}
-                className="mt-2 px-6 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition"
-              >
-                {t("ef.understood")}
-              </button>
+      {/* RUB bank warning - only shown when user tries MNT->RUB without bank info */}
+      {showRubBankWarning && (
+        <div className="flex flex-col items-center gap-4 py-6">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+            <CreditCard className="w-8 h-8 text-amber-600" />
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-amber-700 mb-2">
+              {t("ef.rub_bank_required_title")}
             </div>
-          );
-        }
-        return null;
-      })()}
+            <div className="text-sm text-slate-600 mb-4">
+              {t("ef.rub_bank_required_desc")}
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
+              <div className="text-sm text-amber-800 font-medium mb-2">{t("ef.rub_bank_instructions")}</div>
+              <ol className="text-sm text-amber-700 list-decimal list-inside space-y-1">
+                <li>{t("ef.rub_bank_step1")}</li>
+                <li>{t("ef.rub_bank_step2")}</li>
+                <li>{t("ef.rub_bank_step3")}</li>
+              </ol>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowRubBankWarning(false)}
+            className="mt-2 px-6 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition"
+          >
+            {t("ef.understood")}
+          </button>
+        </div>
+      )}
 
-      {/* Step 0: Direction Selection - only show if user has Russian bank info */}
-      {step === 0 && savedBankRub && savedBankRub.trim() && savedBankRub !== ",,," && (
+      {/* Step 0: Direction Selection */}
+      {step === 0 && !showRubBankWarning && (
         <div className="flex flex-col gap-4">
           <div className="text-center text-slate-600 mb-2">{t("ef.select_direction")}</div>
           <button
@@ -512,45 +516,21 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
               <div className="font-bold text-maroon-600">{buyRate}</div>
             </div>
           </button>
-          {/* Check if user has RUB bank info - disable sell button if not */}
-          {(() => {
-            const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
-            return hasRubBank ? (
-              <button
-                onClick={() => handleSelectDirection("sell")}
-                className="p-4 rounded-xl border-2 border-maroon-200 hover:border-maroon-500 hover:bg-maroon-50 transition flex items-center justify-between"
-              >
-                <div className="text-left">
-                  <div className="font-semibold text-maroon-700 flex items-center gap-2">
-                    {t("ef.get_rub")}
-                  </div>
-                  <div className="text-sm text-slate-500">{t("ef.send_mnt_get_rub")}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-400">{t("stats.rate")}</div>
-                  <div className="font-bold text-maroon-600">{sellRate}</div>
-                </div>
-              </button>
-            ) : (
-              <div className="p-4 rounded-xl border-2 border-slate-200 bg-slate-50 flex items-center justify-between opacity-70">
-                <div className="text-left">
-                  <div className="font-semibold text-slate-500 flex items-center gap-2">
-                    {t("ef.get_rub")} ❌
-                  </div>
-                  <div className="text-sm text-red-500">
-                    {t("ef.no_rub_bank")}
-                  </div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    {t("ef.no_rub_bank_desc")}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-400">{t("stats.rate")}</div>
-                  <div className="font-bold text-slate-400">{sellRate}</div>
-                </div>
+          <button
+            onClick={() => handleSelectDirection("sell")}
+            className="p-4 rounded-xl border-2 border-maroon-200 hover:border-maroon-500 hover:bg-maroon-50 transition flex items-center justify-between"
+          >
+            <div className="text-left">
+              <div className="font-semibold text-maroon-700 flex items-center gap-2">
+                {t("ef.get_rub")}
               </div>
-            );
-          })()}
+              <div className="text-sm text-slate-500">{t("ef.send_mnt_get_rub")}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-slate-400">{t("stats.rate")}</div>
+              <div className="font-bold text-maroon-600">{sellRate}</div>
+            </div>
+          </button>
         </div>
       )}
 
