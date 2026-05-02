@@ -257,8 +257,8 @@ export function AdminBankAccounts() {
         <div className="pt-3 mt-1 border-t border-amber-200 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-700">Oyuns Plus идэвхжил</p>
-              <p className="text-xs text-slate-500">Гүйлгээ дуусахад оноо бодох систем</p>
+              <p className="text-sm font-semibold text-slate-700">OYUNS Plus</p>
+              <p className="text-xs text-slate-500">Оноо тооцох систем</p>
             </div>
             <label className="inline-flex items-center cursor-pointer">
               <input
@@ -294,7 +294,7 @@ export function AdminBankAccounts() {
             </div>
 
             <div>
-              <label className="text-xs text-slate-600 font-medium">Босгот харгалзах оноо (шугаман)</label>
+              <label className="text-xs text-slate-600 font-medium">Босго рублид харгалзах оноо</label>
               <input
                 type="number"
                 min={1}
@@ -305,7 +305,7 @@ export function AdminBankAccounts() {
             </div>
 
             <div>
-              <label className="text-xs text-slate-600 font-medium">Referral KYC шагнал (оноо)</label>
+              <label className="text-xs text-slate-600 font-medium">Найзаа уриад авах OYUNS+ оноо</label>
               <input
                 type="number"
                 min={0}
@@ -316,7 +316,7 @@ export function AdminBankAccounts() {
             </div>
 
             <div>
-              <label className="text-xs text-slate-600 font-medium">Нэг кодын max ашиглалт</label>
+              <label className="text-xs text-slate-600 font-medium">Нэг хэрэглэгчийн урих найзын хязгаар</label>
               <input
                 type="number"
                 min={1}

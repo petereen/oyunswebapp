@@ -263,6 +263,10 @@ export function OyunsPlusTab({ userId }: Props) {
               </div>
             </div>
           </div>
+
+          <p className="text-[11px] text-dark-500 dark:text-ivory-400 leading-relaxed whitespace-pre-line">
+            {t("oyuns_plus.settings_earn_disclaimer")}
+          </p>
         </div>
 
         {/* Points history */}
