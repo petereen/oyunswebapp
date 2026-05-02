@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trophy, Calendar, MapPin, Users } from "lucide-react";
+import { Trophy, Calendar, MapPin } from "lucide-react";
 import {
-  fetchOyunsPlusSummary,
   fetchTournamentMyVotes,
   fetchTournamentOverview,
-  OYUNS_PLUS_LOGO_DEFAULT_URL,
   submitTournamentVote,
   TournamentCategory,
   TournamentVenue,
@@ -24,13 +22,6 @@ export function OyunsPlusTab({ userId }: Props) {
   const [voteMessage, setVoteMessage] = useState("");
   const [activeTournamentSection, setActiveTournamentSection] = useState<"basketball" | null>(null);
   const [tournamentInnerTab, setTournamentInnerTab] = useState<"schedule" | "leaderboard">("schedule");
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["oyuns-plus-summary", userId],
-    queryFn: () => fetchOyunsPlusSummary(),
-    enabled: Boolean(userId),
-    retry: 1,
-  });
 
   const { data: tournamentOverview, isLoading: tournamentLoading } = useQuery({
     queryKey: ["tournament-overview"],
@@ -58,7 +49,6 @@ export function OyunsPlusTab({ userId }: Props) {
 
   const teams = tournamentOverview?.teams || [];
   const games = tournamentOverview?.games || [];
-  const logoUrl = tournamentOverview?.logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL;
 
   const menTeams = useMemo(
     () => teams.filter((team) => team.category === "men").sort((a, b) => b.votes_count - a.votes_count || a.display_order - b.display_order),
@@ -169,53 +159,9 @@ export function OyunsPlusTab({ userId }: Props) {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="animate-fadeIn space-y-4">
-        <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("profile.oyuns_title")}</h2>
-        <div className="bg-white dark:bg-dark-800 rounded-2xl p-5 border border-silver/60 dark:border-dark-600 text-sm text-dark-600 dark:text-ivory-300">
-          {t("profile.loading")}
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="animate-fadeIn space-y-4">
-        <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("profile.oyuns_title")}</h2>
-        <div className="bg-white dark:bg-dark-800 rounded-2xl p-5 border border-silver/60 dark:border-dark-600 text-sm text-dark-600 dark:text-ivory-300">
-          {t("profile.load_failed")}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="animate-fadeIn space-y-4">
       <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("profile.oyuns_title")}</h2>
-
-      {/* Points summary card - always visible */}
-      <div className="bg-gradient-to-br from-maroon-700 via-maroon-800 to-dark-900 dark:from-maroon-900 dark:via-dark-900 dark:to-black rounded-3xl p-5 text-white shadow-card-dark">
-        <div className="flex items-center gap-2 mb-4">
-          <img src={logoUrl} alt={t("profile.oyuns_title")} className="w-5 h-5 object-contain" />
-          <div className="font-bold text-base">{t("profile.oyuns_title")}</div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white/10 rounded-xl p-3">
-            <div className="text-[11px] text-white/70">{t("profile.oyuns_points")}</div>
-            <div className="text-2xl font-bold text-gold-400">{data.points_balance}</div>
-          </div>
-          <div className="bg-white/10 rounded-xl p-3">
-            <div className="text-[11px] text-white/70 flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              {t("profile.oyuns_verified_out_of_invited")}
-            </div>
-            <div className="text-2xl font-bold">{data.invited_verified}/{data.invited_total}</div>
-          </div>
-        </div>
-      </div>
 
       {activeTournamentSection === null ? (
         /* Outer selector — Services-style */
