@@ -309,29 +309,107 @@ export function OyunsPlusTab({ userId }: Props) {
                 <div className="text-xs text-dark-600 dark:text-ivory-400">{t("oyuns_plus.no_games")}</div>
               ) : (
                 <div className="space-y-2">
-                  {filteredGames.slice(0, 12).map((game) => (
-                    <div key={game.id} className="rounded-xl border border-silver/60 dark:border-dark-600 p-3 bg-surface-50 dark:bg-dark-700">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="text-xs font-semibold text-dark-800 dark:text-ivory-200 truncate">
-                          {game.home_team_name || t("oyuns_plus.team_unknown")} vs {game.away_team_name || t("oyuns_plus.team_unknown")}
+                  {filteredGames.slice(0, 12).map((game) => {
+                    const isLive = game.status === "live";
+                    const isCompleted = game.status === "completed";
+                    const homeWins = isCompleted && game.home_score > game.away_score;
+                    const awayWins = isCompleted && game.away_score > game.home_score;
+
+                    const TeamLogo = ({ logoUrl, name }: { logoUrl?: string; name?: string }) => (
+                      logoUrl ? (
+                        <img src={logoUrl} alt={name || ""} className="w-11 h-11 rounded-full object-cover border-2 border-silver/50 dark:border-dark-600 shadow-sm" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-full bg-maroon-100 dark:bg-maroon-900/30 flex items-center justify-center text-sm font-bold text-maroon-700 dark:text-maroon-300 border-2 border-silver/30 dark:border-dark-600">
+                          {(name || "?").slice(0, 1).toUpperCase()}
                         </div>
-                        <div className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                          game.status === "live"
-                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
-                            : game.status === "completed"
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                            : "bg-slate-100 text-slate-700 dark:bg-dark-600 dark:text-ivory-300"
-                        }`}>
-                          {t(`oyuns_plus.status_${game.status}`)}
+                      )
+                    );
+
+                    return (
+                      <div
+                        key={game.id}
+                        className={`rounded-2xl border-2 p-3 transition-all ${
+                          isLive
+                            ? "border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 shadow-md shadow-rose-300/30 dark:shadow-rose-900/20"
+                            : isCompleted
+                            ? "border-silver/40 dark:border-dark-600 bg-white dark:bg-dark-800"
+                            : "border-silver/40 dark:border-dark-600 bg-surface-50 dark:bg-dark-700"
+                        }`}
+                      >
+                        {/* Header row: venue + category + status */}
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="flex items-center gap-1 text-[11px] text-dark-500 dark:text-ivory-400">
+                            <MapPin className="w-3 h-3" />
+                            {game.venue === "a_hall" ? t("oyuns_plus.hall_a") : t("oyuns_plus.hall_b")}
+                            <span className="mx-0.5 text-dark-300 dark:text-ivory-600">·</span>
+                            <span className="capitalize">{game.category === "men" ? t("oyuns_plus.vote_men") : t("oyuns_plus.vote_women")}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {isLive && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                            )}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              isLive
+                                ? "bg-rose-500 text-white"
+                                : isCompleted
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                : "bg-slate-100 text-slate-600 dark:bg-dark-600 dark:text-ivory-400"
+                            }`}>
+                              {t(`oyuns_plus.status_${game.status}`)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Main matchup row: logo | name | score | name | logo */}
+                        <div className="flex items-center gap-2">
+                          {/* Home team */}
+                          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                            <TeamLogo logoUrl={game.home_team_logo_url} name={game.home_team_name} />
+                            <div className={`text-[11px] text-center leading-tight w-full truncate ${
+                              homeWins
+                                ? "font-bold text-blue-600 dark:text-blue-400"
+                                : awayWins
+                                ? "font-normal text-dark-500 dark:text-ivory-400"
+                                : "font-medium text-dark-700 dark:text-ivory-200"
+                            }`}>
+                              {game.home_team_name || t("oyuns_plus.team_unknown")}
+                            </div>
+                          </div>
+
+                          {/* Score */}
+                          <div className="flex flex-col items-center gap-0.5 shrink-0 px-1">
+                            <div className={`text-xl font-black tabular-nums tracking-tight ${
+                              isLive
+                                ? "text-rose-600 dark:text-rose-400"
+                                : isCompleted
+                                ? "text-dark-800 dark:text-ivory-100"
+                                : "text-dark-500 dark:text-ivory-400"
+                            }`}>
+                              {game.home_score} : {game.away_score}
+                            </div>
+                            <div className="text-[10px] text-dark-400 dark:text-ivory-500 flex items-center gap-0.5">
+                              <Calendar className="w-2.5 h-2.5" />
+                              {formatGameTime(game.starts_at)}
+                            </div>
+                          </div>
+
+                          {/* Away team */}
+                          <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                            <TeamLogo logoUrl={game.away_team_logo_url} name={game.away_team_name} />
+                            <div className={`text-[11px] text-center leading-tight w-full truncate ${
+                              awayWins
+                                ? "font-bold text-blue-600 dark:text-blue-400"
+                                : homeWins
+                                ? "font-normal text-dark-500 dark:text-ivory-400"
+                                : "font-medium text-dark-700 dark:text-ivory-200"
+                            }`}>
+                              {game.away_team_name || t("oyuns_plus.team_unknown")}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-dark-600 dark:text-ivory-400">
-                        <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{game.venue === "a_hall" ? t("oyuns_plus.hall_a") : t("oyuns_plus.hall_b")}</div>
-                        <div className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatGameTime(game.starts_at)}</div>
-                      </div>
-                      <div className="mt-1 text-sm font-bold text-maroon-700 dark:text-gold-400">{game.home_score}:{game.away_score}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

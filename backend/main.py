@@ -1524,7 +1524,7 @@ async def tournament_vote(payload: TournamentVoteRequest, user=Depends(get_jwt_a
 
     return TournamentVoteResponse(
         ok=True,
-        message="Vote submitted",
+        message="Санал бүртгэгдсэн",
         vote=TournamentVoteStatus(category=category, team_id=payload.team_id, voted=True),
     )
 
