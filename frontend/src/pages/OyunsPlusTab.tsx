@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trophy, Calendar, MapPin, Users, ShieldCheck, Clock3 } from "lucide-react";
+import { Trophy, Calendar, MapPin, Users } from "lucide-react";
 import {
   fetchOyunsPlusSummary,
   fetchTournamentMyVotes,
@@ -22,6 +22,8 @@ export function OyunsPlusTab({ userId }: Props) {
   const [gameCategoryFilter, setGameCategoryFilter] = useState<"all" | TournamentCategory>("all");
   const [gameVenueFilter, setGameVenueFilter] = useState<"all" | TournamentVenue>("all");
   const [voteMessage, setVoteMessage] = useState("");
+  const [activeTournamentSection, setActiveTournamentSection] = useState<"basketball" | null>(null);
+  const [tournamentInnerTab, setTournamentInnerTab] = useState<"schedule" | "leaderboard">("schedule");
 
   const { data, isLoading } = useQuery({
     queryKey: ["oyuns-plus-summary", userId],
@@ -193,6 +195,7 @@ export function OyunsPlusTab({ userId }: Props) {
     <div className="animate-fadeIn space-y-4">
       <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("profile.oyuns_title")}</h2>
 
+      {/* Points summary card - always visible */}
       <div className="bg-gradient-to-br from-maroon-700 via-maroon-800 to-dark-900 dark:from-maroon-900 dark:via-dark-900 dark:to-black rounded-3xl p-5 text-white shadow-card-dark">
         <div className="flex items-center gap-2 mb-4">
           <img src={logoUrl} alt={t("profile.oyuns_title")} className="w-5 h-5 object-contain" />
@@ -214,129 +217,141 @@ export function OyunsPlusTab({ userId }: Props) {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card">
-        <div className="flex items-center gap-2 mb-2">
-          <Trophy className="w-5 h-5 text-amber-500" />
-          <h3 className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.tournament_title")}</h3>
+      {activeTournamentSection === null ? (
+        /* Outer selector — Services-style */
+        <div className="grid grid-cols-1 gap-3">
+          <button
+            onClick={() => setActiveTournamentSection("basketball")}
+            className="relative overflow-hidden bg-gradient-to-br from-maroon-700 via-maroon-800 to-dark-900 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-maroon-200/30 hover:from-maroon-600 hover:via-maroon-700 hover:to-dark-800"
+          >
+            <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
+            <Trophy className="w-8 h-8 mb-3 opacity-90 text-gold-400" />
+            <div className="font-bold text-sm mb-0.5">{t("oyuns_plus.tournament_section_title")}</div>
+            <div className="text-[11px] text-white/60 leading-relaxed">{t("oyuns_plus.tournament_desc")}</div>
+          </button>
         </div>
-        <p className="text-xs text-dark-600 dark:text-ivory-300">{t("oyuns_plus.tournament_desc")}</p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
-          <div className="rounded-xl bg-surface-50 dark:bg-dark-700 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-dark-700 dark:text-ivory-300">
-              <Users className="w-3.5 h-3.5 text-maroon-600 dark:text-gold-400" />
-              {t("oyuns_plus.tournament_categories")}
-            </div>
-          </div>
-          <div className="rounded-xl bg-surface-50 dark:bg-dark-700 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-dark-700 dark:text-ivory-300">
-              <MapPin className="w-3.5 h-3.5 text-maroon-600 dark:text-gold-400" />
-              {t("oyuns_plus.tournament_venues")}
-            </div>
-          </div>
-          <div className="rounded-xl bg-surface-50 dark:bg-dark-700 p-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-dark-700 dark:text-ivory-300">
-              <Calendar className="w-3.5 h-3.5 text-maroon-600 dark:text-gold-400" />
-              {t("oyuns_plus.tournament_schedule")}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 text-[11px] text-dark-600 dark:text-ivory-400">{t("oyuns_plus.tournament_note")}</div>
-      </div>
-
-      <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card space-y-3">
-        <div className="flex items-center gap-2">
-          <Clock3 className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
-          <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.schedule_title")}</div>
-        </div>
-
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { value: "all", label: t("oyuns_plus.filter_all") },
-            { value: "men", label: t("oyuns_plus.vote_men") },
-            { value: "women", label: t("oyuns_plus.vote_women") },
-          ].map((opt) => (
+      ) : (
+        /* Inner view with 2 tabs */
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
             <button
-              key={opt.value}
-              onClick={() => setGameCategoryFilter(opt.value as "all" | TournamentCategory)}
-              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition ${
-                gameCategoryFilter === opt.value ? "bg-maroon-600 text-white" : "bg-surface-100 dark:bg-dark-700 text-dark-700 dark:text-ivory-300"
+              onClick={() => setActiveTournamentSection(null)}
+              className="text-xs text-maroon-600 dark:text-gold-400 font-semibold hover:underline flex items-center gap-1"
+            >
+              ← {t("common.back")}
+            </button>
+            <span className="text-dark-400 dark:text-ivory-500">/</span>
+            <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.tournament_section_title")}</div>
+          </div>
+
+          {/* Inner tab switcher */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setTournamentInnerTab("schedule")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                tournamentInnerTab === "schedule" ? "bg-maroon-600 text-white" : "bg-surface-100 dark:bg-dark-700 text-dark-700 dark:text-ivory-300"
               }`}
             >
-              {opt.label}
+              {t("oyuns_plus.tab_schedule")}
             </button>
-          ))}
-        </div>
-
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { value: "all", label: t("oyuns_plus.filter_all_venue") },
-            { value: "a_hall", label: t("oyuns_plus.hall_a") },
-            { value: "b_hall", label: t("oyuns_plus.hall_b") },
-          ].map((opt) => (
             <button
-              key={opt.value}
-              onClick={() => setGameVenueFilter(opt.value as "all" | TournamentVenue)}
-              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition ${
-                gameVenueFilter === opt.value ? "bg-maroon-600 text-white" : "bg-surface-100 dark:bg-dark-700 text-dark-700 dark:text-ivory-300"
+              onClick={() => setTournamentInnerTab("leaderboard")}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                tournamentInnerTab === "leaderboard" ? "bg-maroon-600 text-white" : "bg-surface-100 dark:bg-dark-700 text-dark-700 dark:text-ivory-300"
               }`}
             >
-              {opt.label}
+              {t("oyuns_plus.tab_leaderboard")}
             </button>
-          ))}
-        </div>
+          </div>
 
-        {tournamentLoading ? (
-          <div className="text-xs text-dark-600 dark:text-ivory-400">{t("profile.loading")}</div>
-        ) : filteredGames.length === 0 ? (
-          <div className="text-xs text-dark-600 dark:text-ivory-400">{t("oyuns_plus.no_games")}</div>
-        ) : (
-          <div className="space-y-2">
-            {filteredGames.slice(0, 12).map((game) => (
-              <div key={game.id} className="rounded-xl border border-silver/60 dark:border-dark-600 p-3 bg-surface-50 dark:bg-dark-700">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="text-xs font-semibold text-dark-800 dark:text-ivory-200 truncate">
-                    {game.home_team_name || t("oyuns_plus.team_unknown")} vs {game.away_team_name || t("oyuns_plus.team_unknown")}
-                  </div>
-                  <div className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                    game.status === "live"
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
-                      : game.status === "completed"
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                      : "bg-slate-100 text-slate-700 dark:bg-dark-600 dark:text-ivory-300"
-                  }`}>
-                    {t(`oyuns_plus.status_${game.status}`)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-dark-600 dark:text-ivory-400">
-                  <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{game.venue === "a_hall" ? t("oyuns_plus.hall_a") : t("oyuns_plus.hall_b")}</div>
-                  <div className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatGameTime(game.starts_at)}</div>
-                </div>
-                <div className="mt-1 text-sm font-bold text-maroon-700 dark:text-gold-400">{game.home_score}:{game.away_score}</div>
+          {tournamentInnerTab === "schedule" ? (
+            /* Schedule and Scores tab */
+            <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card space-y-3">
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { value: "all", label: t("oyuns_plus.filter_all") },
+                  { value: "men", label: t("oyuns_plus.vote_men") },
+                  { value: "women", label: t("oyuns_plus.vote_women") },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setGameCategoryFilter(opt.value as "all" | TournamentCategory)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                      gameCategoryFilter === opt.value ? "bg-maroon-600 text-white" : "bg-surface-100 dark:bg-dark-700 text-dark-700 dark:text-ivory-300"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card space-y-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
-          <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.vote_title")}</div>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { value: "all", label: t("oyuns_plus.filter_all_venue") },
+                  { value: "a_hall", label: t("oyuns_plus.hall_a") },
+                  { value: "b_hall", label: t("oyuns_plus.hall_b") },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setGameVenueFilter(opt.value as "all" | TournamentVenue)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition ${
+                      gameVenueFilter === opt.value ? "bg-maroon-600 text-white" : "bg-surface-100 dark:bg-dark-700 text-dark-700 dark:text-ivory-300"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {tournamentLoading ? (
+                <div className="text-xs text-dark-600 dark:text-ivory-400">{t("profile.loading")}</div>
+              ) : filteredGames.length === 0 ? (
+                <div className="text-xs text-dark-600 dark:text-ivory-400">{t("oyuns_plus.no_games")}</div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredGames.slice(0, 12).map((game) => (
+                    <div key={game.id} className="rounded-xl border border-silver/60 dark:border-dark-600 p-3 bg-surface-50 dark:bg-dark-700">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="text-xs font-semibold text-dark-800 dark:text-ivory-200 truncate">
+                          {game.home_team_name || t("oyuns_plus.team_unknown")} vs {game.away_team_name || t("oyuns_plus.team_unknown")}
+                        </div>
+                        <div className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                          game.status === "live"
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+                            : game.status === "completed"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                            : "bg-slate-100 text-slate-700 dark:bg-dark-600 dark:text-ivory-300"
+                        }`}>
+                          {t(`oyuns_plus.status_${game.status}`)}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-dark-600 dark:text-ivory-400">
+                        <div className="flex items-center gap-1"><MapPin className="w-3 h-3" />{game.venue === "a_hall" ? t("oyuns_plus.hall_a") : t("oyuns_plus.hall_b")}</div>
+                        <div className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatGameTime(game.starts_at)}</div>
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-maroon-700 dark:text-gold-400">{game.home_score}:{game.away_score}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Team leaderboard tab */
+            <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card space-y-3">
+              {voteMessage && (
+                <div className="text-xs rounded-lg px-3 py-2 bg-maroon-50 text-maroon-700 dark:bg-maroon-900/20 dark:text-maroon-300 border border-maroon-200/60 dark:border-maroon-800/40">
+                  {voteMessage}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {renderLeaderboard("men", menTeams)}
+                {renderLeaderboard("women", womenTeams)}
+              </div>
+            </div>
+          )}
         </div>
-
-        {voteMessage && (
-          <div className="text-xs rounded-lg px-3 py-2 bg-maroon-50 text-maroon-700 dark:bg-maroon-900/20 dark:text-maroon-300 border border-maroon-200/60 dark:border-maroon-800/40">
-            {voteMessage}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {renderLeaderboard("men", menTeams)}
-          {renderLeaderboard("women", womenTeams)}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
