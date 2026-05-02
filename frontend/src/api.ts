@@ -9,9 +9,14 @@ const api = axios.create({
 
 const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
 const FUEL_ADMIN_KEY_STORAGE = 'fuel_admin_key';
+const OYUNS_SAGS_ADMIN_KEY_STORAGE = 'oyuns_sags_admin_key';
 
 // Fuel admin axios instance - sends API key header for browser-based admin access
 const fuelAdminApi = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE || "/api",
+});
+
+const oyunsSagsAdminApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
@@ -25,6 +30,14 @@ fuelAdminApi.interceptors.request.use(config => {
   const apiKey = localStorage.getItem(FUEL_ADMIN_KEY_STORAGE);
   if (apiKey) {
     config.headers['X-Fuel-Admin-Key'] = apiKey;
+  }
+  return config;
+});
+
+oyunsSagsAdminApi.interceptors.request.use(config => {
+  const apiKey = localStorage.getItem(OYUNS_SAGS_ADMIN_KEY_STORAGE);
+  if (apiKey) {
+    config.headers['X-Oyuns-Sags-Key'] = apiKey;
   }
   return config;
 });
@@ -474,6 +487,206 @@ export interface OyunsPlusSummary {
 export async function fetchOyunsPlusSummary(): Promise<OyunsPlusSummary> {
   const res = await api.get('/oyuns-plus/summary');
   return res.data as OyunsPlusSummary;
+}
+
+export const OYUNS_PLUS_LOGO_DEFAULT_URL = 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/OYUNS%20Plus.png';
+
+export type TournamentCategory = 'men' | 'women';
+export type TournamentVenue = 'a_hall' | 'b_hall';
+export type TournamentGameStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
+
+export interface TournamentTeam {
+  id: string;
+  name: string;
+  short_name?: string;
+  category: TournamentCategory;
+  logo_url?: string;
+  is_active: boolean;
+  display_order: number;
+  votes_count: number;
+}
+
+export interface TournamentGame {
+  id: string;
+  category: TournamentCategory;
+  venue: TournamentVenue;
+  home_team_id: string;
+  away_team_id: string;
+  starts_at: string;
+  status: TournamentGameStatus;
+  home_score: number;
+  away_score: number;
+  is_featured: boolean;
+  home_team_name?: string;
+  away_team_name?: string;
+  home_team_logo_url?: string;
+  away_team_logo_url?: string;
+}
+
+export interface TournamentVoteStatus {
+  category: TournamentCategory;
+  team_id?: string | null;
+  voted: boolean;
+}
+
+export interface TournamentOverview {
+  enabled: boolean;
+  logo_url?: string;
+  teams: TournamentTeam[];
+  games: TournamentGame[];
+  votes: TournamentVoteStatus[];
+}
+
+export interface TournamentVoteResponse {
+  ok: boolean;
+  message: string;
+  vote: TournamentVoteStatus;
+}
+
+export async function fetchTournamentOverview(params?: {
+  category?: TournamentCategory;
+  venue?: TournamentVenue;
+  status?: TournamentGameStatus;
+}): Promise<TournamentOverview> {
+  const qp = new URLSearchParams();
+  if (params?.category) qp.set('category', params.category);
+  if (params?.venue) qp.set('venue', params.venue);
+  if (params?.status) qp.set('status', params.status);
+  const query = qp.toString();
+  const res = await api.get(`/tournament/overview${query ? `?${query}` : ''}`);
+  const data = res.data as TournamentOverview;
+  return {
+    enabled: Boolean(data.enabled),
+    logo_url: data.logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL,
+    teams: Array.isArray(data.teams) ? data.teams : [],
+    games: Array.isArray(data.games) ? data.games : [],
+    votes: Array.isArray(data.votes) ? data.votes : [],
+  };
+}
+
+export async function fetchTournamentMyVotes(): Promise<TournamentVoteStatus[]> {
+  const res = await api.get('/tournament/my-votes');
+  return Array.isArray(res.data) ? (res.data as TournamentVoteStatus[]) : [];
+}
+
+export async function submitTournamentVote(payload: { category: TournamentCategory; team_id: string }): Promise<TournamentVoteResponse> {
+  const res = await api.post('/tournament/vote', payload);
+  return res.data as TournamentVoteResponse;
+}
+
+export interface OyunsSagsAdminSettings {
+  oyuns_tournament_enabled: number;
+  oyuns_plus_logo_url: string;
+}
+
+export async function fetchOyunsSagsAdminTeams(params?: { category?: TournamentCategory; include_inactive?: boolean }): Promise<{ items: TournamentTeam[] }> {
+  const qp = new URLSearchParams();
+  if (params?.category) qp.set('category', params.category);
+  if (typeof params?.include_inactive === 'boolean') qp.set('include_inactive', String(params.include_inactive));
+  const query = qp.toString();
+  const res = await oyunsSagsAdminApi.get(`/oyuns-sags/admin/teams${query ? `?${query}` : ''}`);
+  return res.data as { items: TournamentTeam[] };
+}
+
+export async function createOyunsSagsAdminTeam(payload: {
+  name: string;
+  short_name?: string;
+  category: TournamentCategory;
+  logo_url?: string;
+  is_active?: boolean;
+  display_order?: number;
+}): Promise<TournamentTeam> {
+  const res = await oyunsSagsAdminApi.post('/oyuns-sags/admin/teams', payload);
+  return res.data as TournamentTeam;
+}
+
+export async function updateOyunsSagsAdminTeam(teamId: string, payload: Partial<{
+  name: string;
+  short_name: string;
+  category: TournamentCategory;
+  logo_url: string;
+  is_active: boolean;
+  display_order: number;
+}>): Promise<TournamentTeam> {
+  const res = await oyunsSagsAdminApi.put(`/oyuns-sags/admin/teams/${teamId}`, payload);
+  return res.data as TournamentTeam;
+}
+
+export async function deleteOyunsSagsAdminTeam(teamId: string): Promise<{ ok: boolean }> {
+  const res = await oyunsSagsAdminApi.delete(`/oyuns-sags/admin/teams/${teamId}`);
+  return res.data as { ok: boolean };
+}
+
+export async function fetchOyunsSagsAdminGames(params?: {
+  category?: TournamentCategory;
+  venue?: TournamentVenue;
+  status?: TournamentGameStatus;
+}): Promise<{ items: TournamentGame[] }> {
+  const qp = new URLSearchParams();
+  if (params?.category) qp.set('category', params.category);
+  if (params?.venue) qp.set('venue', params.venue);
+  if (params?.status) qp.set('status', params.status);
+  const query = qp.toString();
+  const res = await oyunsSagsAdminApi.get(`/oyuns-sags/admin/games${query ? `?${query}` : ''}`);
+  return res.data as { items: TournamentGame[] };
+}
+
+export async function createOyunsSagsAdminGame(payload: {
+  category: TournamentCategory;
+  venue: TournamentVenue;
+  home_team_id: string;
+  away_team_id: string;
+  starts_at: string;
+  status?: TournamentGameStatus;
+  home_score?: number;
+  away_score?: number;
+  is_featured?: boolean;
+}): Promise<TournamentGame> {
+  const res = await oyunsSagsAdminApi.post('/oyuns-sags/admin/games', payload);
+  return res.data as TournamentGame;
+}
+
+export async function updateOyunsSagsAdminGame(gameId: string, payload: Partial<{
+  category: TournamentCategory;
+  venue: TournamentVenue;
+  home_team_id: string;
+  away_team_id: string;
+  starts_at: string;
+  status: TournamentGameStatus;
+  home_score: number;
+  away_score: number;
+  is_featured: boolean;
+}>): Promise<TournamentGame> {
+  const res = await oyunsSagsAdminApi.put(`/oyuns-sags/admin/games/${gameId}`, payload);
+  return res.data as TournamentGame;
+}
+
+export async function deleteOyunsSagsAdminGame(gameId: string): Promise<{ ok: boolean }> {
+  const res = await oyunsSagsAdminApi.delete(`/oyuns-sags/admin/games/${gameId}`);
+  return res.data as { ok: boolean };
+}
+
+export async function fetchOyunsSagsAdminVotes(): Promise<{ items: TournamentTeam[]; total_votes: number }> {
+  const res = await oyunsSagsAdminApi.get('/oyuns-sags/admin/votes');
+  return res.data as { items: TournamentTeam[]; total_votes: number };
+}
+
+export async function fetchOyunsSagsAdminSettings(): Promise<OyunsSagsAdminSettings> {
+  const res = await oyunsSagsAdminApi.get('/oyuns-sags/admin/settings');
+  const data = res.data as OyunsSagsAdminSettings;
+  return {
+    oyuns_tournament_enabled: data.oyuns_tournament_enabled > 0 ? 1 : 0,
+    oyuns_plus_logo_url: data.oyuns_plus_logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL,
+  };
+}
+
+export async function updateOyunsSagsAdminSettings(payload: Partial<OyunsSagsAdminSettings>): Promise<OyunsSagsAdminSettings> {
+  const res = await oyunsSagsAdminApi.put('/oyuns-sags/admin/settings', payload);
+  const data = res.data as OyunsSagsAdminSettings;
+  return {
+    oyuns_tournament_enabled: data.oyuns_tournament_enabled > 0 ? 1 : 0,
+    oyuns_plus_logo_url: data.oyuns_plus_logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL,
+  };
 }
 
 export interface AdminInboxItem {

@@ -294,7 +294,7 @@ export function AdminBankAccounts() {
             </div>
 
             <div>
-              <label className="text-xs text-slate-600 font-medium">Босго тутамд өгөх оноо</label>
+              <label className="text-xs text-slate-600 font-medium">Босгот харгалзах оноо (шугаман)</label>
               <input
                 type="number"
                 min={1}

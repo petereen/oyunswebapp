@@ -72,7 +72,7 @@ VALUES ('oyuns_plus_threshold_rub', '10000', 'RUB threshold for awarding Oyuns P
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO app_settings (key, value, description)
-VALUES ('oyuns_plus_points_per_threshold', '10', 'Points awarded for each threshold block (10,000 RUB -> 10 points by default)')
+VALUES ('oyuns_plus_points_per_threshold', '10', 'Reference points at threshold (linear accrual above threshold; 10,000 RUB -> 10 points by default)')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO app_settings (key, value, description)

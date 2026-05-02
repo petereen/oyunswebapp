@@ -112,6 +112,18 @@ from models import (
     FuelShiftAdmin,
     FuelShiftStatus,
     FuelShiftUpdateRequest,
+    TournamentGame,
+    TournamentGameCreateRequest,
+    TournamentGameUpdateRequest,
+    TournamentGamesResponse,
+    TournamentOverviewResponse,
+    TournamentTeam,
+    TournamentTeamCreateRequest,
+    TournamentTeamUpdateRequest,
+    TournamentTeamsResponse,
+    TournamentVoteRequest,
+    TournamentVoteResponse,
+    TournamentVoteStatus,
 )
 from storage import presign_upload, public_url
 from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
@@ -138,6 +150,11 @@ VOLUME_DISCOUNT_TIERS: list[tuple[Decimal, Decimal]] = [
     (Decimal("50000"), Decimal("0.2")),
 ]
 COMPENSATION_PROMO_MAX_RUB = Decimal("30000")
+
+TOURNAMENT_CATEGORIES = {"men", "women"}
+TOURNAMENT_VENUES = {"a_hall", "b_hall"}
+TOURNAMENT_GAME_STATUSES = {"scheduled", "live", "completed", "cancelled"}
+OYUNS_PLUS_LOGO_DEFAULT = "https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/OYUNS%20Plus.png"
 
 
 def _to_decimal(value: object, default: Decimal = Decimal("0")) -> Decimal:
@@ -434,6 +451,22 @@ async def get_fuel_admin_auth(
     raise HTTPException(status_code=401, detail="Missing authorization token or fuel admin API key")
 
 
+async def get_oyuns_sags_admin_auth(
+    x_oyuns_sags_key: str = Header(None, alias="X-Oyuns-Sags-Key"),
+):
+    """Standalone Oyuns Sags admin auth via API key only (no Telegram auth)."""
+    settings = get_settings()
+    expected = (settings.oyuns_sags_admin_api_key or "").strip()
+
+    if not expected:
+        raise HTTPException(status_code=500, detail="Oyuns Sags admin API key is not configured")
+
+    if not x_oyuns_sags_key or x_oyuns_sags_key.strip() != expected:
+        raise HTTPException(status_code=401, detail="Invalid Oyuns Sags admin API key")
+
+    return {"ok": True}
+
+
 async def get_jwt_authenticated_user(
     authorization: str = Header(None, alias="Authorization")
 ):
@@ -667,11 +700,13 @@ def _calculate_oyuns_plus_points(rub_equivalent: Decimal, oyuns_plus_settings: d
     if threshold <= 0 or points_per_threshold <= 0:
         return 0
 
-    blocks = int(rub_equivalent // threshold)
-    if blocks <= 0:
+    if rub_equivalent < threshold:
         return 0
 
-    return blocks * points_per_threshold
+    # Linear accrual after threshold gate (e.g. 15,000 RUB -> 15 points when 10,000=>10).
+    proportional_points = (rub_equivalent * Decimal(points_per_threshold)) / threshold
+    points = int(proportional_points)
+    return max(0, points)
 
 
 def _award_oyuns_plus_points_once(
@@ -789,6 +824,205 @@ def _validate_referral_code_for_user(client, referral_code: str, user_id: int | 
     except Exception as e:
         logger.warning(f"Referral validation unavailable: {e}")
         return ReferralCodeValidateResponse(valid=False, message="Referral system is temporarily unavailable")
+
+
+def _normalize_tournament_category(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = (value or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized not in TOURNAMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Invalid tournament category")
+    return normalized
+
+
+def _normalize_tournament_venue(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = (value or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized not in TOURNAMENT_VENUES:
+        raise HTTPException(status_code=400, detail="Invalid tournament venue")
+    return normalized
+
+
+def _normalize_tournament_game_status(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = (value or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized not in TOURNAMENT_GAME_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid tournament game status")
+    return normalized
+
+
+def _get_oyuns_plus_logo_url(client) -> str:
+    settings_dict = _get_app_settings_dict(client, ["oyuns_plus_logo_url"])
+    logo_url = (settings_dict.get("oyuns_plus_logo_url") or "").strip()
+    return logo_url or OYUNS_PLUS_LOGO_DEFAULT
+
+
+def _is_tournament_enabled(client) -> bool:
+    settings_dict = _get_app_settings_dict(client, ["oyuns_tournament_enabled"])
+    enabled_raw = _safe_int(settings_dict.get("oyuns_tournament_enabled"), 1)
+    return enabled_raw > 0
+
+
+def _list_tournament_teams(
+    client,
+    *,
+    category: str | None = None,
+    include_inactive: bool = False,
+) -> list[TournamentTeam]:
+    query = client.table("oyuns_tournament_teams").select("*").order("display_order").order("created_at")
+    if category:
+        query = query.eq("category", category)
+    if not include_inactive:
+        query = query.eq("is_active", True)
+
+    teams_res = query.execute()
+    team_rows = teams_res.data or []
+
+    vote_rows = client.table("oyuns_tournament_votes").select("team_id").execute().data or []
+    votes_by_team: dict[str, int] = {}
+    for row in vote_rows:
+        team_id = str(row.get("team_id") or "")
+        if not team_id:
+            continue
+        votes_by_team[team_id] = votes_by_team.get(team_id, 0) + 1
+
+    return [
+        TournamentTeam(
+            id=str(row.get("id")),
+            name=row.get("name") or "",
+            short_name=row.get("short_name"),
+            category=row.get("category") or "",
+            logo_url=row.get("logo_url"),
+            is_active=bool(row.get("is_active", True)),
+            display_order=int(row.get("display_order") or 0),
+            votes_count=votes_by_team.get(str(row.get("id")), 0),
+        )
+        for row in team_rows
+    ]
+
+
+def _list_tournament_games(
+    client,
+    *,
+    category: str | None = None,
+    venue: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+) -> list[TournamentGame]:
+    query = client.table("oyuns_tournament_games").select("*").order("starts_at", desc=False).limit(limit)
+    if category:
+        query = query.eq("category", category)
+    if venue:
+        query = query.eq("venue", venue)
+    if status:
+        query = query.eq("status", status)
+
+    games_rows = query.execute().data or []
+
+    team_ids: list[str] = []
+    for row in games_rows:
+        home_id = str(row.get("home_team_id") or "")
+        away_id = str(row.get("away_team_id") or "")
+        if home_id:
+            team_ids.append(home_id)
+        if away_id:
+            team_ids.append(away_id)
+
+    team_map: dict[str, dict] = {}
+    unique_team_ids = sorted(set(team_ids))
+    if unique_team_ids:
+        teams_rows = (
+            client
+            .table("oyuns_tournament_teams")
+            .select("id,name,logo_url")
+            .in_("id", unique_team_ids)
+            .execute()
+            .data
+            or []
+        )
+        team_map = {str(team.get("id")): team for team in teams_rows}
+
+    items: list[TournamentGame] = []
+    for row in games_rows:
+        home_team_id = str(row.get("home_team_id") or "")
+        away_team_id = str(row.get("away_team_id") or "")
+        home_team = team_map.get(home_team_id, {})
+        away_team = team_map.get(away_team_id, {})
+
+        items.append(
+            TournamentGame(
+                id=str(row.get("id")),
+                category=row.get("category") or "",
+                venue=row.get("venue") or "",
+                home_team_id=home_team_id,
+                away_team_id=away_team_id,
+                starts_at=row.get("starts_at"),
+                status=row.get("status") or "scheduled",
+                home_score=_safe_int(row.get("home_score"), 0),
+                away_score=_safe_int(row.get("away_score"), 0),
+                is_featured=bool(row.get("is_featured", False)),
+                home_team_name=home_team.get("name"),
+                away_team_name=away_team.get("name"),
+                home_team_logo_url=home_team.get("logo_url"),
+                away_team_logo_url=away_team.get("logo_url"),
+            )
+        )
+
+    return items
+
+
+def _list_user_tournament_votes(client, user_id: int) -> list[TournamentVoteStatus]:
+    votes_rows = (
+        client
+        .table("oyuns_tournament_votes")
+        .select("category,team_id")
+        .eq("user_id", user_id)
+        .execute()
+        .data
+        or []
+    )
+    vote_map = {str(row.get("category") or ""): str(row.get("team_id") or "") for row in votes_rows}
+
+    return [
+        TournamentVoteStatus(category="men", team_id=vote_map.get("men") or None, voted=bool(vote_map.get("men"))),
+        TournamentVoteStatus(category="women", team_id=vote_map.get("women") or None, voted=bool(vote_map.get("women"))),
+    ]
+
+
+def _get_tournament_team_or_404(client, team_id: str) -> dict:
+    team_res = (
+        client
+        .table("oyuns_tournament_teams")
+        .select("*")
+        .eq("id", team_id)
+        .limit(1)
+        .execute()
+    )
+    if not team_res.data:
+        raise HTTPException(status_code=404, detail="Tournament team not found")
+    return team_res.data[0]
+
+
+def _get_tournament_game_or_404(client, game_id: str) -> dict:
+    game_res = (
+        client
+        .table("oyuns_tournament_games")
+        .select("*")
+        .eq("id", game_id)
+        .limit(1)
+        .execute()
+    )
+    if not game_res.data:
+        raise HTTPException(status_code=404, detail="Tournament game not found")
+    return game_res.data[0]
 
 
 @app.get("/api/settings", response_model=AppSettingsResponse)
@@ -1207,6 +1441,375 @@ async def oyuns_plus_summary(user=Depends(get_jwt_authenticated_user)):
         invited_total=referral_uses,
         invited_verified=invited_verified,
     )
+
+
+@app.get("/api/tournament/overview", response_model=TournamentOverviewResponse)
+async def tournament_overview(
+    category: str | None = None,
+    venue: str | None = None,
+    status: str | None = None,
+):
+    client = get_supabase()
+    normalized_category = _normalize_tournament_category(category)
+    normalized_venue = _normalize_tournament_venue(venue)
+    normalized_status = _normalize_tournament_game_status(status)
+
+    if not _is_tournament_enabled(client):
+        return TournamentOverviewResponse(enabled=False, logo_url=_get_oyuns_plus_logo_url(client), teams=[], games=[], votes=[])
+
+    try:
+        teams = _list_tournament_teams(client, category=normalized_category, include_inactive=False)
+        games = _list_tournament_games(
+            client,
+            category=normalized_category,
+            venue=normalized_venue,
+            status=normalized_status,
+            limit=200,
+        )
+        return TournamentOverviewResponse(
+            enabled=True,
+            logo_url=_get_oyuns_plus_logo_url(client),
+            teams=teams,
+            games=games,
+            votes=[],
+        )
+    except Exception as e:
+        logger.error(f"Failed to build tournament overview: {e}")
+        return TournamentOverviewResponse(enabled=False, logo_url=_get_oyuns_plus_logo_url(client), teams=[], games=[], votes=[])
+
+
+@app.get("/api/tournament/my-votes", response_model=list[TournamentVoteStatus])
+async def tournament_my_votes(user=Depends(get_jwt_authenticated_user)):
+    client = get_supabase()
+    if not _is_tournament_enabled(client):
+        return [
+            TournamentVoteStatus(category="men", team_id=None, voted=False),
+            TournamentVoteStatus(category="women", team_id=None, voted=False),
+        ]
+    return _list_user_tournament_votes(client, user.id)
+
+
+@app.post("/api/tournament/vote", response_model=TournamentVoteResponse)
+async def tournament_vote(payload: TournamentVoteRequest, user=Depends(get_jwt_authenticated_user)):
+    client = get_supabase()
+    if not _is_tournament_enabled(client):
+        raise HTTPException(status_code=403, detail="Tournament voting is disabled")
+
+    category = _normalize_tournament_category(payload.category)
+    team = _get_tournament_team_or_404(client, payload.team_id)
+
+    if category != (team.get("category") or "").lower():
+        raise HTTPException(status_code=400, detail="Team category mismatch")
+    if not bool(team.get("is_active", True)):
+        raise HTTPException(status_code=400, detail="Cannot vote for inactive team")
+
+    existing_vote = (
+        client
+        .table("oyuns_tournament_votes")
+        .select("team_id")
+        .eq("user_id", user.id)
+        .eq("category", category)
+        .limit(1)
+        .execute()
+    )
+    if existing_vote.data:
+        current_team_id = str(existing_vote.data[0].get("team_id") or "")
+        raise HTTPException(status_code=409, detail=f"Vote already submitted for {category}")
+
+    client.table("oyuns_tournament_votes").insert({
+        "user_id": user.id,
+        "category": category,
+        "team_id": payload.team_id,
+    }).execute()
+
+    return TournamentVoteResponse(
+        ok=True,
+        message="Vote submitted",
+        vote=TournamentVoteStatus(category=category, team_id=payload.team_id, voted=True),
+    )
+
+
+@app.get("/api/oyuns-sags/admin/teams", response_model=TournamentTeamsResponse)
+async def oyuns_sags_admin_teams(
+    category: str | None = None,
+    include_inactive: bool = True,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    normalized_category = _normalize_tournament_category(category)
+    items = _list_tournament_teams(client, category=normalized_category, include_inactive=include_inactive)
+    return TournamentTeamsResponse(items=items)
+
+
+@app.post("/api/oyuns-sags/admin/teams", response_model=TournamentTeam)
+async def oyuns_sags_admin_create_team(
+    payload: TournamentTeamCreateRequest,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    category = _normalize_tournament_category(payload.category)
+
+    now = datetime.now(timezone.utc).isoformat()
+    insert_payload = {
+        "name": payload.name.strip(),
+        "short_name": (payload.short_name or "").strip() or None,
+        "category": category,
+        "logo_url": (payload.logo_url or "").strip() or None,
+        "is_active": bool(payload.is_active),
+        "display_order": int(payload.display_order),
+        "created_at": now,
+        "updated_at": now,
+    }
+    created = client.table("oyuns_tournament_teams").insert(insert_payload).execute().data
+    if not created:
+        raise HTTPException(status_code=500, detail="Failed to create tournament team")
+
+    team_row = created[0]
+    return TournamentTeam(
+        id=str(team_row.get("id")),
+        name=team_row.get("name") or "",
+        short_name=team_row.get("short_name"),
+        category=team_row.get("category") or "",
+        logo_url=team_row.get("logo_url"),
+        is_active=bool(team_row.get("is_active", True)),
+        display_order=_safe_int(team_row.get("display_order"), 0),
+        votes_count=0,
+    )
+
+
+@app.put("/api/oyuns-sags/admin/teams/{team_id}", response_model=TournamentTeam)
+async def oyuns_sags_admin_update_team(
+    team_id: str,
+    payload: TournamentTeamUpdateRequest,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    _get_tournament_team_or_404(client, team_id)
+
+    updates = payload.model_dump(exclude_none=True)
+    if "category" in updates:
+        updates["category"] = _normalize_tournament_category(updates["category"])
+    if "name" in updates:
+        updates["name"] = (updates["name"] or "").strip()
+    if "short_name" in updates:
+        updates["short_name"] = (updates["short_name"] or "").strip() or None
+    if "logo_url" in updates:
+        updates["logo_url"] = (updates["logo_url"] or "").strip() or None
+    if "display_order" in updates:
+        updates["display_order"] = int(updates["display_order"])
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    client.table("oyuns_tournament_teams").update(updates).eq("id", team_id).execute()
+
+    team_row = _get_tournament_team_or_404(client, team_id)
+    votes_count = (
+        client
+        .table("oyuns_tournament_votes")
+        .select("id", count="exact")
+        .eq("team_id", team_id)
+        .execute()
+        .count
+        or 0
+    )
+
+    return TournamentTeam(
+        id=str(team_row.get("id")),
+        name=team_row.get("name") or "",
+        short_name=team_row.get("short_name"),
+        category=team_row.get("category") or "",
+        logo_url=team_row.get("logo_url"),
+        is_active=bool(team_row.get("is_active", True)),
+        display_order=_safe_int(team_row.get("display_order"), 0),
+        votes_count=_safe_int(votes_count, 0),
+    )
+
+
+@app.delete("/api/oyuns-sags/admin/teams/{team_id}")
+async def oyuns_sags_admin_delete_team(
+    team_id: str,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    _get_tournament_team_or_404(client, team_id)
+    client.table("oyuns_tournament_teams").update({
+        "is_active": False,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", team_id).execute()
+    return {"ok": True}
+
+
+@app.get("/api/oyuns-sags/admin/games", response_model=TournamentGamesResponse)
+async def oyuns_sags_admin_games(
+    category: str | None = None,
+    venue: str | None = None,
+    status: str | None = None,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    normalized_category = _normalize_tournament_category(category)
+    normalized_venue = _normalize_tournament_venue(venue)
+    normalized_status = _normalize_tournament_game_status(status)
+
+    items = _list_tournament_games(
+        client,
+        category=normalized_category,
+        venue=normalized_venue,
+        status=normalized_status,
+        limit=500,
+    )
+    return TournamentGamesResponse(items=items)
+
+
+@app.post("/api/oyuns-sags/admin/games", response_model=TournamentGame)
+async def oyuns_sags_admin_create_game(
+    payload: TournamentGameCreateRequest,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    category = _normalize_tournament_category(payload.category)
+    venue = _normalize_tournament_venue(payload.venue)
+    status = _normalize_tournament_game_status(payload.status) or "scheduled"
+
+    if payload.home_team_id == payload.away_team_id:
+        raise HTTPException(status_code=400, detail="Home and away teams must be different")
+
+    home_team = _get_tournament_team_or_404(client, payload.home_team_id)
+    away_team = _get_tournament_team_or_404(client, payload.away_team_id)
+    if (home_team.get("category") or "").lower() != category or (away_team.get("category") or "").lower() != category:
+        raise HTTPException(status_code=400, detail="Selected teams must match game category")
+
+    now = datetime.now(timezone.utc).isoformat()
+    insert_payload = {
+        "category": category,
+        "venue": venue,
+        "home_team_id": payload.home_team_id,
+        "away_team_id": payload.away_team_id,
+        "starts_at": payload.starts_at.isoformat(),
+        "status": status,
+        "home_score": max(0, int(payload.home_score)),
+        "away_score": max(0, int(payload.away_score)),
+        "is_featured": bool(payload.is_featured),
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    created = client.table("oyuns_tournament_games").insert(insert_payload).execute().data
+    if not created:
+        raise HTTPException(status_code=500, detail="Failed to create tournament game")
+
+    game_id = str(created[0].get("id"))
+    games = _list_tournament_games(client, limit=500)
+    game = next((item for item in games if item.id == game_id), None)
+    if not game:
+        raise HTTPException(status_code=500, detail="Created game could not be loaded")
+    return game
+
+
+@app.put("/api/oyuns-sags/admin/games/{game_id}", response_model=TournamentGame)
+async def oyuns_sags_admin_update_game(
+    game_id: str,
+    payload: TournamentGameUpdateRequest,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    current = _get_tournament_game_or_404(client, game_id)
+
+    updates = payload.model_dump(exclude_none=True)
+    if "category" in updates:
+        updates["category"] = _normalize_tournament_category(updates["category"])
+    if "venue" in updates:
+        updates["venue"] = _normalize_tournament_venue(updates["venue"])
+    if "status" in updates:
+        updates["status"] = _normalize_tournament_game_status(updates["status"])
+    if "starts_at" in updates:
+        updates["starts_at"] = updates["starts_at"].isoformat()
+    if "home_score" in updates:
+        updates["home_score"] = max(0, int(updates["home_score"]))
+    if "away_score" in updates:
+        updates["away_score"] = max(0, int(updates["away_score"]))
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    next_category = updates.get("category") or current.get("category")
+    next_home = updates.get("home_team_id") or current.get("home_team_id")
+    next_away = updates.get("away_team_id") or current.get("away_team_id")
+    if str(next_home) == str(next_away):
+        raise HTTPException(status_code=400, detail="Home and away teams must be different")
+
+    home_team = _get_tournament_team_or_404(client, str(next_home))
+    away_team = _get_tournament_team_or_404(client, str(next_away))
+    if (home_team.get("category") or "").lower() != str(next_category).lower() or (away_team.get("category") or "").lower() != str(next_category).lower():
+        raise HTTPException(status_code=400, detail="Selected teams must match game category")
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    client.table("oyuns_tournament_games").update(updates).eq("id", game_id).execute()
+
+    games = _list_tournament_games(client, limit=500)
+    game = next((item for item in games if item.id == game_id), None)
+    if not game:
+        raise HTTPException(status_code=500, detail="Updated game could not be loaded")
+    return game
+
+
+@app.delete("/api/oyuns-sags/admin/games/{game_id}")
+async def oyuns_sags_admin_delete_game(
+    game_id: str,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    _get_tournament_game_or_404(client, game_id)
+    client.table("oyuns_tournament_games").delete().eq("id", game_id).execute()
+    return {"ok": True}
+
+
+@app.get("/api/oyuns-sags/admin/votes")
+async def oyuns_sags_admin_votes(admin=Depends(get_oyuns_sags_admin_auth)):
+    client = get_supabase()
+    teams = _list_tournament_teams(client, include_inactive=True)
+    teams_sorted = sorted(teams, key=lambda item: (item.category, -item.votes_count, item.display_order, item.name.lower()))
+    total_votes = sum(item.votes_count for item in teams_sorted)
+    return {
+        "items": [item.model_dump() for item in teams_sorted],
+        "total_votes": total_votes,
+    }
+
+
+@app.get("/api/oyuns-sags/admin/settings")
+async def oyuns_sags_admin_get_settings(admin=Depends(get_oyuns_sags_admin_auth)):
+    client = get_supabase()
+    settings_dict = _get_app_settings_dict(client, ["oyuns_tournament_enabled", "oyuns_plus_logo_url"])
+    enabled = _safe_int(settings_dict.get("oyuns_tournament_enabled"), 1)
+    logo_url = (settings_dict.get("oyuns_plus_logo_url") or "").strip() or OYUNS_PLUS_LOGO_DEFAULT
+    return {
+        "oyuns_tournament_enabled": 1 if enabled > 0 else 0,
+        "oyuns_plus_logo_url": logo_url,
+    }
+
+
+@app.put("/api/oyuns-sags/admin/settings")
+async def oyuns_sags_admin_update_settings(payload: dict, admin=Depends(get_oyuns_sags_admin_auth)):
+    client = get_supabase()
+    updates: dict[str, str] = {}
+
+    if "oyuns_tournament_enabled" in payload:
+        enabled_raw = 1 if _safe_int(payload.get("oyuns_tournament_enabled"), 0) > 0 else 0
+        updates["oyuns_tournament_enabled"] = str(enabled_raw)
+
+    if "oyuns_plus_logo_url" in payload:
+        logo_url = str(payload.get("oyuns_plus_logo_url") or "").strip() or OYUNS_PLUS_LOGO_DEFAULT
+        updates["oyuns_plus_logo_url"] = logo_url
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No supported settings to update")
+
+    for key, value in updates.items():
+        client.table("app_settings").upsert({"key": key, "value": value}, on_conflict="key").execute()
+
+    return await oyuns_sags_admin_get_settings()
 
 
 @app.post("/api/agree-terms")

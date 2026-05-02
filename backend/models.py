@@ -799,3 +799,109 @@ class FuelShiftUpdateRequest(BaseModel):
     is_active: bool
     admin_id: Optional[int] = None
     always_notify_admin_id: Optional[int] = None
+
+
+# ============= Oyuns Tournament Models =============
+
+class TournamentTeam(BaseModel):
+    id: str
+    name: str
+    short_name: Optional[str] = None
+    category: str  # "men" | "women"
+    logo_url: Optional[str] = None
+    is_active: bool = True
+    display_order: int = 0
+    votes_count: int = 0
+
+
+class TournamentGame(BaseModel):
+    id: str
+    category: str  # "men" | "women"
+    venue: str  # "a_hall" | "b_hall"
+    home_team_id: str
+    away_team_id: str
+    starts_at: datetime
+    status: str  # "scheduled" | "live" | "completed" | "cancelled"
+    home_score: int = 0
+    away_score: int = 0
+    is_featured: bool = False
+    home_team_name: Optional[str] = None
+    away_team_name: Optional[str] = None
+    home_team_logo_url: Optional[str] = None
+    away_team_logo_url: Optional[str] = None
+
+
+class TournamentVoteRequest(BaseModel):
+    category: str  # "men" | "women"
+    team_id: str
+
+
+class TournamentVoteStatus(BaseModel):
+    category: str
+    team_id: Optional[str] = None
+    voted: bool = False
+
+
+class TournamentVoteResponse(BaseModel):
+    ok: bool
+    message: str
+    vote: TournamentVoteStatus
+
+
+class TournamentOverviewResponse(BaseModel):
+    enabled: bool = True
+    logo_url: Optional[str] = None
+    teams: list[TournamentTeam] = []
+    games: list[TournamentGame] = []
+    votes: list[TournamentVoteStatus] = []
+
+
+class TournamentTeamCreateRequest(BaseModel):
+    name: str
+    short_name: Optional[str] = None
+    category: str
+    logo_url: Optional[str] = None
+    is_active: bool = True
+    display_order: int = 0
+
+
+class TournamentTeamUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    short_name: Optional[str] = None
+    category: Optional[str] = None
+    logo_url: Optional[str] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+
+class TournamentTeamsResponse(BaseModel):
+    items: list[TournamentTeam] = []
+
+
+class TournamentGameCreateRequest(BaseModel):
+    category: str
+    venue: str
+    home_team_id: str
+    away_team_id: str
+    starts_at: datetime
+    status: str = "scheduled"
+    home_score: int = 0
+    away_score: int = 0
+    is_featured: bool = False
+
+
+class TournamentGameUpdateRequest(BaseModel):
+    category: Optional[str] = None
+    venue: Optional[str] = None
+    home_team_id: Optional[str] = None
+    away_team_id: Optional[str] = None
+    starts_at: Optional[datetime] = None
+    status: Optional[str] = None
+    home_score: Optional[int] = None
+    away_score: Optional[int] = None
+    is_featured: Optional[bool] = None
+
+
+class TournamentGamesResponse(BaseModel):
+    items: list[TournamentGame] = []
+

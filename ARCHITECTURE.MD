@@ -15,7 +15,7 @@
     - `src/App.tsx` - shell that switches client/admin/fuel views
     - `src/main.tsx` - React root and providers
     - `src/api.ts` - Axios client, JWT attachment, 401 re-auth, typed API wrappers
-    - `src/pages/` - `HomeTab`, `TransactionTab`, `ServicesTab`, `StatsTab`, `ProfilePage`, `AdminPanel`, `FuelAdminPanel`, `Dashboard`
+    - `src/pages/` - `HomeTab`, `TransactionTab`, `ServicesTab`, `OyunsPlusTab`, `StatsTab`, `ProfilePage`, `AdminPanel`, `FuelAdminPanel`, `OyunsSagsAdminPanel`, `Dashboard`
     - `src/components/` - exchange, tracker, modal, navbar, admin, and diagnostic components
     - `src/hooks/` - Telegram auth, theme, swipe helpers
     - `src/i18n/` - `mn`/`ru` translation tables and language hooks
@@ -51,7 +51,7 @@ Certbot -> TLS certificates
 
 Name: Oyunsbot WebApp
 
-Description: Single-page React application used as the Telegram Mini App and as a browser-facing admin UI. `App.tsx` switches between client, admin, and fuel-admin views, supports deep links such as `?fuel-admin` and `?fuel-order=...`, and overlays the profile page on top of the tab shell. `api.ts` attaches JWTs, retries 401s by re-authenticating with Telegram `initData`, and exposes typed wrappers for the backend routes.
+Description: Single-page React application used as the Telegram Mini App and as a browser-facing admin UI. `App.tsx` switches between client, admin, and fuel-admin views, supports deep links such as `?fuel-admin` and `?fuel-order=...`, supports standalone `/oyuns-sags` tournament admin route with API-key auth, and overlays the profile page on top of the tab shell. `api.ts` attaches JWTs, retries 401s by re-authenticating with Telegram `initData`, and exposes typed wrappers for the backend routes.
 
 Technologies: React 18, TypeScript, Vite, Tailwind CSS, React Query, Axios, Recharts, Headless UI, lucide-react.
 
@@ -63,7 +63,7 @@ Deployment: Built by `frontend/Dockerfile` into static assets and served by Ngin
 
 Name: Backend API
 
-Description: A single FastAPI monolith that handles Telegram auth, JWT issuance, rates, app settings, service status, signed storage uploads, user profile data, exchange creation, history, analytics, admin inbox/KYC/shift/bank management, gift flows, fuel flows, and the `stale_transaction_reminder` background task.
+Description: A single FastAPI monolith that handles Telegram auth, JWT issuance, rates, app settings, service status, signed storage uploads, user profile data, exchange creation, history, analytics, admin inbox/KYC/shift/bank management, gift flows, fuel flows, Oyuns Plus referral/points, tournament public endpoints, standalone `/oyuns-sags` admin CRUD APIs, and the `stale_transaction_reminder` background task.
 
 Technologies: Python 3.11, FastAPI, Uvicorn, Pydantic, Supabase Python SDK, python-jose, python-dotenv, requests.
 
@@ -89,7 +89,7 @@ Type: PostgreSQL via Supabase.
 
 Purpose: Stores user profiles, authentication state, exchange transactions, rates, app settings, working hours, admin state, promo/referral data, gifts, fuel data, and audit logs.
 
-Key tables: `users`, `transactions`, `bot_rates`, `app_settings`, `working_hours`, `admin_shifts`, `admin_bank_accounts`, `admin_users`, `admin_activity_logs`, `admin_actions`, `promo_codes`, `user_sessions`, `referrals`, `referral_links`, `feedback`, `gift_cards`, `gifts`, `fuel_stations`, `fuel_orders`, `fuel_chat_messages`, `fuel_admin_bank_accounts`, `fuel_admin_shift`.
+Key tables: `users`, `transactions`, `bot_rates`, `app_settings`, `working_hours`, `admin_shifts`, `admin_bank_accounts`, `admin_users`, `admin_activity_logs`, `admin_actions`, `promo_codes`, `user_sessions`, `referrals`, `referral_links`, `feedback`, `gift_cards`, `gifts`, `fuel_stations`, `fuel_orders`, `fuel_chat_messages`, `fuel_admin_bank_accounts`, `fuel_admin_shift`, `oyuns_plus_points_ledger`, `oyuns_tournament_teams`, `oyuns_tournament_games`, `oyuns_tournament_votes`.
 
 Schema management: The repo uses SQL migration files under `database/` rather than an ORM migration system.
 
@@ -126,6 +126,7 @@ Key buckets: `passports`, `bills`.
 - Transport and storage: Production traffic is expected to run over TLS via Nginx and Let's Encrypt. Supabase Storage uploads use signed URLs rather than direct public writes.
 - Environment safety: `DEV_MODE=true` enables a local/dev auth fallback. That is useful for development, but it should never be assumed safe for production.
 - Additional note: backend CORS currently allows all origins, which is convenient for development but should be tightened if the service is exposed broadly.
+- Additional note: `/api/oyuns-sags/admin/*` endpoints are intentionally API-key-based and independent from Telegram auth for standalone route use.
 
 ## 8. Development & Testing Environment
 

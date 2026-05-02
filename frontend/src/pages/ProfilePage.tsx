@@ -3,9 +3,9 @@ import { useState, useEffect } from "react";
 import {
   ArrowLeft, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp,
   Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save, MessageCircle,
-  ShieldCheck, Sparkles, Users, Copy, Check,
+  ShieldCheck, Users, Copy, Check,
 } from "lucide-react";
-import { fetchMe, fetchOyunsPlusSummary, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput } from "../api";
+import { fetchMe, fetchOyunsPlusSummary, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput, OYUNS_PLUS_LOGO_DEFAULT_URL } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone, RegistrationModal } from "../components/RegistrationModal";
 import { useLang } from "../i18n/useLang";
 
@@ -266,7 +266,7 @@ export function ProfilePage({ userId, onBack }: Props) {
               {oyunsPlusSummary && (
                 <div className="bg-gradient-to-br from-maroon-700 via-maroon-800 to-dark-900 dark:from-maroon-900 dark:via-dark-900 dark:to-black rounded-2xl p-4 text-white shadow-card-dark">
                   <div className="flex items-center gap-2 mb-3">
-                    <Sparkles className="w-4 h-4 text-gold-400" />
+                    <img src={OYUNS_PLUS_LOGO_DEFAULT_URL} alt={t("profile.oyuns_title")} className="w-4 h-4 object-contain" />
                     <div className="text-sm font-bold">{t("profile.oyuns_title")}</div>
                   </div>
 
