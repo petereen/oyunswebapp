@@ -277,6 +277,12 @@ const translations: Record<string, Record<Lang, string>> = {
   "profile.oyuns_uses": { ru: "Использовано", mn: "Ашигласан" },
   "profile.oyuns_remaining": { ru: "Осталось", mn: "Үлдсэн" },
   "profile.oyuns_reward_note": { ru: "Награда начисляется после полной верификации приглашённого пользователя.", mn: "Таны урьсан хэрэглэгч бүрэн баталгаажсаны дараа шагналын оноо орно." },
+  "oyuns_plus.tournament_title": { ru: "Баскетбольный турнир", mn: "Сагсан бөмбөгийн тэмцээн" },
+  "oyuns_plus.tournament_desc": { ru: "Раздел турнира в OYUNS Plus: расписание матчей, счёт и текущие игры.", mn: "OYUNS Plus дотор тэмцээний хэсэг: тоглолтын хуваарь, оноо, явагдаж буй тоглолтууд." },
+  "oyuns_plus.tournament_categories": { ru: "Мужской / Женский", mn: "Эрэгтэй / Эмэгтэй" },
+  "oyuns_plus.tournament_venues": { ru: "А заал / Б заал", mn: "А заал / Б заал" },
+  "oyuns_plus.tournament_schedule": { ru: "Расписание и live", mn: "Хуваарь ба live" },
+  "oyuns_plus.tournament_note": { ru: "Реферальный блок находится в Профиле. Здесь отображается только раздел турнира и баланс баллов.", mn: "Рефералын хэсэг Профайлд үлдэнэ. Энд зөвхөн тэмцээний хэсэг болон онооны үлдэгдэл харагдана." },
 
   // ─── PendingGiftBanner ───
   "gift_banner.you_have_gift": { ru: "🎁 Вам пришёл подарок!", mn: "🎁 Танд бэлэг ирлээ!" },

@@ -9,6 +9,7 @@ import { ServicesTab } from "./pages/ServicesTab";
 import { OyunsPlusTab } from "./pages/OyunsPlusTab";
 import { StatsTab } from "./pages/StatsTab";
 import { ProfilePage } from "./pages/ProfilePage";
+import { OyunsSagsAdminPanel } from "./pages/OyunsSagsAdminPanel";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
 import { Shield } from "lucide-react";
@@ -19,6 +20,12 @@ import { fetchMe } from "./api";
 
 export default function App() {
   const queryParams = new URLSearchParams(window.location.search);
+  const rawPath = window.location.pathname;
+  const normalizedPath = rawPath === "/" ? "/" : rawPath.replace(/\/+$/, "");
+
+  // Standalone tournament admin panel without Telegram auth
+  const isOyunsSagsAdmin = normalizedPath === "/oyuns-sags" || normalizedPath === "/omoh-sags";
+  if (isOyunsSagsAdmin) return <OyunsSagsAdminPanel />;
 
   // Check URL for fuel admin panel
   const isFuelAdmin = queryParams.has("fuel-admin");
