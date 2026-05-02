@@ -1,4 +1,4 @@
-import { Home, ArrowLeftRight, LayoutGrid, BarChart3 } from "lucide-react";
+import { Home, ArrowLeftRight, LayoutGrid, BarChart3, Sparkles } from "lucide-react";
 import { useLang } from "../i18n/useLang";
 
 interface Props {
@@ -10,6 +10,7 @@ const tabKeys = [
   { key: "nav.home", icon: Home },
   { key: "nav.transaction", icon: ArrowLeftRight },
   { key: "nav.services", icon: LayoutGrid },
+  { key: "nav.oyuns_plus", icon: Sparkles },
   { key: "nav.stats", icon: BarChart3 },
 ];
 

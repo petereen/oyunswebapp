@@ -5,6 +5,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.home": { ru: "Главная", mn: "Нүүр" },
   "nav.transaction": { ru: "Обмен", mn: "Гүйлгээ" },
   "nav.services": { ru: "Сервисы", mn: "Үйлчилгээ" },
+  "nav.oyuns_plus": { ru: "OYUNS Plus", mn: "OYUNS Plus" },
   "nav.stats": { ru: "Статистика", mn: "Статистик" },
 
   // ─── App / Admin ───

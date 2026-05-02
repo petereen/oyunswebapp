@@ -6,6 +6,7 @@ import { FuelAdminPanel } from "./pages/FuelAdminPanel";
 import { HomeTab } from "./pages/HomeTab";
 import { TransactionTab } from "./pages/TransactionTab";
 import { ServicesTab } from "./pages/ServicesTab";
+import { OyunsPlusTab } from "./pages/OyunsPlusTab";
 import { StatsTab } from "./pages/StatsTab";
 import { ProfilePage } from "./pages/ProfilePage";
 import { BottomNavBar } from "./components/BottomNavBar";
@@ -178,7 +179,8 @@ export default function App() {
               />
             )}
             {activeTab === 2 && <ServicesTab initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />}
-            {activeTab === 3 && <StatsTab userId={user?.id} />}
+            {activeTab === 3 && <OyunsPlusTab userId={user?.id} />}
+            {activeTab === 4 && <StatsTab userId={user?.id} />}
           </>
         )}
       </div>
