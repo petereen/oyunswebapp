@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trophy, Calendar, MapPin, Settings, Star, Users, Copy, Check, ChevronRight } from "lucide-react";
+import { Trophy, Calendar, MapPin, Settings, Star, Users, Copy, Check, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import {
   fetchOyunsPlusSummary,
+  fetchOyunsPlusHistory,
   fetchTournamentMyVotes,
   fetchTournamentOverview,
   OYUNS_PLUS_LOGO_DEFAULT_URL,
@@ -31,6 +32,13 @@ export function OyunsPlusTab({ userId }: Props) {
     queryKey: ["oyuns-plus-summary", userId],
     queryFn: () => fetchOyunsPlusSummary(),
     enabled: Boolean(userId),
+    retry: 1,
+  });
+
+  const { data: historyData } = useQuery({
+    queryKey: ["oyuns-plus-history", userId],
+    queryFn: () => fetchOyunsPlusHistory(),
+    enabled: Boolean(userId) && showSettings,
     retry: 1,
   });
 
@@ -256,6 +264,48 @@ export function OyunsPlusTab({ userId }: Props) {
             </div>
           </div>
         </div>
+
+        {/* Points history */}
+        <div className="bg-white dark:bg-dark-800 rounded-2xl p-4 border border-silver/60 dark:border-dark-600 shadow-card space-y-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
+            <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.history_title")}</div>
+          </div>
+
+          {!historyData || historyData.entries.length === 0 ? (
+            <div className="text-xs text-dark-500 dark:text-ivory-400 py-2 text-center">{t("oyuns_plus.history_empty")}</div>
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {historyData.entries.map((entry, i) => {
+                const isPositive = entry.points >= 0;
+                const label = entry.source_type === "exchange"
+                  ? t("oyuns_plus.history_source_exchange")
+                  : entry.source_type === "referral"
+                  ? t("oyuns_plus.history_source_referral")
+                  : entry.source_type;
+                const date = entry.created_at
+                  ? new Date(entry.created_at).toLocaleDateString("mn-MN", { month: "short", day: "numeric" })
+                  : "";
+                return (
+                  <div key={entry.id ?? i} className="flex items-center justify-between rounded-xl bg-surface-50 dark:bg-dark-700 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      {isPositive
+                        ? <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        : <TrendingDown className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                      <div>
+                        <div className="text-xs text-dark-700 dark:text-ivory-300 leading-tight">{label}</div>
+                        {date && <div className="text-[10px] text-dark-400 dark:text-ivory-500">{date}</div>}
+                      </div>
+                    </div>
+                    <div className={`text-xs font-bold ${isPositive ? "text-green-600 dark:text-green-400" : "text-red-500"}`}>
+                      {isPositive ? "+" : ""}{entry.points}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -266,11 +316,11 @@ export function OyunsPlusTab({ userId }: Props) {
         <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("profile.oyuns_title")}</h2>
         <button
           onClick={() => setShowSettings(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-400 hover:bg-surface-200 dark:hover:bg-dark-600 transition active:scale-95"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-maroon-600 dark:bg-maroon-500 text-white hover:bg-maroon-700 dark:hover:bg-maroon-400 transition active:scale-95 shadow-sm"
         >
           <Settings className="w-3.5 h-3.5" />
           <span className="text-[11px] font-semibold">{t("oyuns_plus.settings_btn")}</span>
-          <ChevronRight className="w-3 h-3 opacity-50" />
+          <ChevronRight className="w-3 h-3 opacity-75" />
         </button>
       </div>
 

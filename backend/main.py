@@ -52,6 +52,8 @@ from models import (
     KycResponse,
     MeResponse,
     OyunsPlusSummaryResponse,
+    OyunsPlusHistoryEntry,
+    OyunsPlusHistoryResponse,
     PresignRequest,
     PresignResponse,
     PromoCodeValidateRequest,
@@ -1441,6 +1443,31 @@ async def oyuns_plus_summary(user=Depends(get_jwt_authenticated_user)):
         invited_total=referral_uses,
         invited_verified=invited_verified,
     )
+
+
+@app.get("/api/oyuns-plus/history", response_model=OyunsPlusHistoryResponse)
+async def oyuns_plus_history(user=Depends(get_jwt_authenticated_user)):
+    client = get_supabase()
+    res = (
+        client.table("oyuns_plus_points_ledger")
+        .select("id,source_type,source_id,points,rub_equivalent,created_at")
+        .eq("user_id", user.id)
+        .order("created_at", desc=True)
+        .limit(50)
+        .execute()
+    )
+    entries = [
+        OyunsPlusHistoryEntry(
+            id=row.get("id"),
+            source_type=row.get("source_type", ""),
+            source_id=row.get("source_id"),
+            points=_safe_int(row.get("points"), 0),
+            rub_equivalent=row.get("rub_equivalent"),
+            created_at=row.get("created_at"),
+        )
+        for row in (res.data or [])
+    ]
+    return OyunsPlusHistoryResponse(entries=entries)
 
 
 @app.get("/api/tournament/overview", response_model=TournamentOverviewResponse)

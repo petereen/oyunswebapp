@@ -247,6 +247,19 @@ class OyunsPlusSummaryResponse(BaseModel):
     invited_verified: int = 0
 
 
+class OyunsPlusHistoryEntry(BaseModel):
+    id: Optional[int] = None
+    source_type: str
+    source_id: Optional[str] = None
+    points: int
+    rub_equivalent: Optional[float] = None
+    created_at: Optional[str] = None
+
+
+class OyunsPlusHistoryResponse(BaseModel):
+    entries: list[OyunsPlusHistoryEntry] = []
+
+
 class RegistrationRequest(BaseModel):
     # name/email already collected in Level 1, not required here
     last_name: Optional[str] = None

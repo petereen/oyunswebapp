@@ -489,6 +489,24 @@ export async function fetchOyunsPlusSummary(): Promise<OyunsPlusSummary> {
   return res.data as OyunsPlusSummary;
 }
 
+export interface OyunsPlusHistoryEntry {
+  id?: number;
+  source_type: string;
+  source_id?: string;
+  points: number;
+  rub_equivalent?: number;
+  created_at?: string;
+}
+
+export interface OyunsPlusHistory {
+  entries: OyunsPlusHistoryEntry[];
+}
+
+export async function fetchOyunsPlusHistory(): Promise<OyunsPlusHistory> {
+  const res = await api.get('/oyuns-plus/history');
+  return res.data as OyunsPlusHistory;
+}
+
 export const OYUNS_PLUS_LOGO_DEFAULT_URL = 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/OYUNS%20Plus.png';
 
 export type TournamentCategory = 'men' | 'women';
