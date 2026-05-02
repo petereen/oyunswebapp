@@ -101,6 +101,7 @@ export function TransactionTab({
   const [mntIban, setMntIban] = useState("");
   const [mntOwnerName, setMntOwnerName] = useState("");
   const [useSavedBank, setUseSavedBank] = useState<boolean | null>(null);
+  const [showRubBankWarning, setShowRubBankWarning] = useState(false);
 
   // Misc
   const [invoiceId, setInvoiceId] = useState("");
@@ -268,6 +269,10 @@ export function TransactionTab({
   };
 
   const handleProceed = (dir: "buy" | "sell", amt: number, rt: number) => {
+    if (dir === "sell" && !hasRubBank) {
+      setShowRubBankWarning(true);
+      return;
+    }
     setDirection(dir);
     setAmount(amt);
     setBaseRate(rt);
@@ -506,8 +511,8 @@ export function TransactionTab({
     );
   }
 
-  // No RUB bank
-  if (!hasRubBank && flowStep === "card") {
+  // No RUB bank warning (only when user tries MNT->RUB without bank info)
+  if (showRubBankWarning) {
     return (
       <div className="flex flex-col items-center gap-4 py-8 animate-fadeIn">
         <div className="w-16 h-16 bg-gold-100 dark:bg-gold-900/30 rounded-full flex items-center justify-center">
@@ -525,6 +530,12 @@ export function TransactionTab({
             </ol>
           </div>
         </div>
+        <button
+          onClick={() => setShowRubBankWarning(false)}
+          className="mt-2 px-6 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition"
+        >
+          {t("ef.understood")}
+        </button>
       </div>
     );
   }
