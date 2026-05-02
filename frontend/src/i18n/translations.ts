@@ -34,6 +34,11 @@ const translations: Record<string, Record<Lang, string>> = {
   "home.theme_toggle": { ru: "Сменить тему", mn: "Загвар солих" },
   "home.profile": { ru: "Профиль", mn: "Профайл" },
   "home.copyright": { ru: "© 2026 OYUNS ALL-IN-ONE. All rights reserved.", mn: "© 2026 OYUNS ALL-IN-ONE. All rights reserved." },
+  "home.oyuns_title": { ru: "OYUNS Plus", mn: "OYUNS Plus" },
+  "home.oyuns_points": { ru: "Баллы", mn: "Оноо" },
+  "home.oyuns_referrals": { ru: "Рефералы", mn: "Урилга" },
+  "home.oyuns_open_profile": { ru: "Открыть в профиле", mn: "Профайл дээр нээх" },
+  "home.oyuns_verified_ratio": { ru: "Подтверждено", mn: "Баталгаажсан" },
 
   // ─── RateCard ───
   "rate.title": { ru: "Курс валют", mn: "Ханшийн мэдээлэл" },
@@ -262,6 +267,15 @@ const translations: Record<string, Record<Lang, string>> = {
   "profile.promo_added": { ru: "будет добавлено к курсу", mn: "ханшинд нэмэгдэнэ" },
   "profile.help": { ru: "Помощь", mn: "Тусламж" },
   "profile.terms": { ru: "Пользовательское соглашение", mn: "Хэрэглэгчийн гэрээ" },
+  "profile.oyuns_title": { ru: "OYUNS Plus", mn: "OYUNS Plus" },
+  "profile.oyuns_points": { ru: "Баланс баллов", mn: "Онооны үлдэгдэл" },
+  "profile.oyuns_verified_out_of_invited": { ru: "Подтверждено из приглашённых", mn: "Уригдсан дундаас баталгаажсан" },
+  "profile.oyuns_referral_code": { ru: "Ваш реферальный код", mn: "Таны урилгын код" },
+  "profile.oyuns_copy": { ru: "Копировать", mn: "Хуулах" },
+  "profile.oyuns_copied": { ru: "Скопировано", mn: "Хууллаа" },
+  "profile.oyuns_uses": { ru: "Использовано", mn: "Ашигласан" },
+  "profile.oyuns_remaining": { ru: "Осталось", mn: "Үлдсэн" },
+  "profile.oyuns_reward_note": { ru: "Награда начисляется после полной верификации приглашённого пользователя.", mn: "Таны урьсан хэрэглэгч бүрэн баталгаажсаны дараа шагналын оноо орно." },
 
   // ─── PendingGiftBanner ───
   "gift_banner.you_have_gift": { ru: "🎁 Вам пришёл подарок!", mn: "🎁 Танд бэлэг ирлээ!" },

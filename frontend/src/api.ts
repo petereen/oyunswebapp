@@ -109,6 +109,7 @@ export type UserProfile = {
   id: number;
   first_name?: string;
   last_name?: string;
+  username?: string;
   email?: string;
   phone?: string;
   phone_mnt?: string;
@@ -120,6 +121,9 @@ export type UserProfile = {
   agreed_terms?: boolean;
   passport_storage_url?: string;
   verification_level?: number; // 0=new, 1=basic (unverified), 2=fully verified
+  referral_code?: string;
+  referred_by_user_id?: number;
+  referred_by_code?: string;
 };
 
 export type AdminBankAccount = {
@@ -152,6 +156,7 @@ export type BasicRegistrationInput = {
   first_name: string;
   phone_intl: string;  // Full international phone e.g. "+97699112233"
   email?: string;
+  referral_code?: string;
 };
 
 export type KycItem = {
@@ -210,20 +215,40 @@ export type PresignRequest = {
 export type AppSettings = {
   min_rub_amount: number;
   min_rub_buy: number;
+  oyuns_plus_enabled: number;
+  oyuns_plus_threshold_rub: number;
+  oyuns_plus_points_per_threshold: number;
+  oyuns_plus_referral_reward_points: number;
+  oyuns_plus_referral_max_uses: number;
 };
 
 export const DEFAULT_MIN_RUB_AMOUNT = 2000;
 export const DEFAULT_MIN_RUB_BUY = 2000;
+export const DEFAULT_OYUNS_PLUS_ENABLED = 1;
+export const DEFAULT_OYUNS_PLUS_THRESHOLD_RUB = 10000;
+export const DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD = 10;
+export const DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS = 50;
+export const DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES = 5;
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   min_rub_amount: DEFAULT_MIN_RUB_AMOUNT,
   min_rub_buy: DEFAULT_MIN_RUB_BUY,
+  oyuns_plus_enabled: DEFAULT_OYUNS_PLUS_ENABLED,
+  oyuns_plus_threshold_rub: DEFAULT_OYUNS_PLUS_THRESHOLD_RUB,
+  oyuns_plus_points_per_threshold: DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD,
+  oyuns_plus_referral_reward_points: DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS,
+  oyuns_plus_referral_max_uses: DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES,
 };
 
 export function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
   return {
     min_rub_amount: Math.max(0, toSafeNumber(settings?.min_rub_amount, DEFAULT_MIN_RUB_AMOUNT)),
     min_rub_buy: Math.max(0, toSafeNumber(settings?.min_rub_buy, DEFAULT_MIN_RUB_BUY)),
+    oyuns_plus_enabled: toSafeNumber(settings?.oyuns_plus_enabled, DEFAULT_OYUNS_PLUS_ENABLED) > 0 ? 1 : 0,
+    oyuns_plus_threshold_rub: Math.max(1, toSafeNumber(settings?.oyuns_plus_threshold_rub, DEFAULT_OYUNS_PLUS_THRESHOLD_RUB)),
+    oyuns_plus_points_per_threshold: Math.max(1, toSafeNumber(settings?.oyuns_plus_points_per_threshold, DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD)),
+    oyuns_plus_referral_reward_points: Math.max(0, toSafeNumber(settings?.oyuns_plus_referral_reward_points, DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS)),
+    oyuns_plus_referral_max_uses: Math.max(1, toSafeNumber(settings?.oyuns_plus_referral_max_uses, DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES)),
   };
 }
 
@@ -416,6 +441,39 @@ export async function submitRegistration(payload: RegistrationInput) {
 export async function submitBasicRegistration(payload: BasicRegistrationInput) {
   const res = await api.post('/register-basic', payload);
   return res.data as { ok: boolean; message: string; verification_level: number };
+}
+
+export interface ReferralCodeValidation {
+  valid: boolean;
+  message?: string;
+  inviter_user_id?: number;
+  inviter_name?: string;
+  remaining_uses?: number;
+}
+
+export async function validateReferralCode(code: string): Promise<ReferralCodeValidation> {
+  const res = await api.get(`/referral/validate?code=${encodeURIComponent(code)}`);
+  return res.data as ReferralCodeValidation;
+}
+
+export interface OyunsPlusSummary {
+  enabled: boolean;
+  points_balance: number;
+  point_value_rub: number;
+  threshold_rub: number;
+  points_per_threshold: number;
+  referral_reward_points: number;
+  referral_max_uses: number;
+  referral_code?: string;
+  referral_uses: number;
+  referral_uses_remaining: number;
+  invited_total: number;
+  invited_verified: number;
+}
+
+export async function fetchOyunsPlusSummary(): Promise<OyunsPlusSummary> {
+  const res = await api.get('/oyuns-plus/summary');
+  return res.data as OyunsPlusSummary;
 }
 
 export interface AdminInboxItem {

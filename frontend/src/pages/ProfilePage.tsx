@@ -3,9 +3,9 @@ import { useState, useEffect } from "react";
 import {
   ArrowLeft, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp,
   Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save, MessageCircle,
-  ShieldCheck,
+  ShieldCheck, Sparkles, Users, Copy, Check,
 } from "lucide-react";
-import { fetchMe, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput } from "../api";
+import { fetchMe, fetchOyunsPlusSummary, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone, RegistrationModal } from "../components/RegistrationModal";
 import { useLang } from "../i18n/useLang";
 
@@ -38,6 +38,7 @@ export function ProfilePage({ userId, onBack }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [showKycModal, setShowKycModal] = useState(false);
+  const [copiedReferral, setCopiedReferral] = useState(false);
 
   // Bank form state
   const [phone, setPhone] = useState("");
@@ -69,6 +70,13 @@ export function ProfilePage({ userId, onBack }: Props) {
     queryKey: ["user-promos", userId],
     queryFn: () => fetchUserPromoCodes(),
     enabled: Boolean(userId) && showPromos,
+  });
+
+  const { data: oyunsPlusSummary } = useQuery({
+    queryKey: ["oyuns-plus-summary", userId],
+    queryFn: () => fetchOyunsPlusSummary(),
+    enabled: Boolean(userId),
+    retry: 1,
   });
 
   useEffect(() => {
@@ -113,6 +121,19 @@ export function ProfilePage({ userId, onBack }: Props) {
       setError(t("profile.save_error"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCopyReferralCode = async () => {
+    const code = oyunsPlusSummary?.referral_code;
+    if (!code) return;
+
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedReferral(true);
+      setTimeout(() => setCopiedReferral(false), 1500);
+    } catch {
+      setCopiedReferral(false);
     }
   };
 
@@ -241,6 +262,55 @@ export function ProfilePage({ userId, onBack }: Props) {
                   <div className="text-xs text-blue-600 dark:text-blue-400">{t("home.pending_desc")}</div>
                 </div>
               )}
+
+              {oyunsPlusSummary && (
+                <div className="bg-gradient-to-br from-maroon-700 via-maroon-800 to-dark-900 dark:from-maroon-900 dark:via-dark-900 dark:to-black rounded-2xl p-4 text-white shadow-card-dark">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="w-4 h-4 text-gold-400" />
+                    <div className="text-sm font-bold">{t("profile.oyuns_title")}</div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="bg-white/10 rounded-xl p-3">
+                      <div className="text-[11px] text-white/70">{t("profile.oyuns_points")}</div>
+                      <div className="text-lg font-bold text-gold-400">{oyunsPlusSummary.points_balance}</div>
+                    </div>
+                    <div className="bg-white/10 rounded-xl p-3">
+                      <div className="text-[11px] text-white/70 flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {t("profile.oyuns_verified_out_of_invited")}
+                      </div>
+                      <div className="text-lg font-bold">
+                        {oyunsPlusSummary.invited_verified}/{oyunsPlusSummary.invited_total}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/10 rounded-xl p-3 space-y-2">
+                    <div className="text-[11px] text-white/70">{t("profile.oyuns_referral_code")}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-mono font-bold tracking-wide text-gold-300 text-sm">
+                        {oyunsPlusSummary.referral_code || "-"}
+                      </div>
+                      <button
+                        onClick={handleCopyReferralCode}
+                        disabled={!oyunsPlusSummary.referral_code}
+                        className="px-2.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        {copiedReferral ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        {copiedReferral ? t("profile.oyuns_copied") : t("profile.oyuns_copy")}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-white/70">
+                      {t("profile.oyuns_uses")}: {oyunsPlusSummary.referral_uses}/{oyunsPlusSummary.referral_max_uses} • {t("profile.oyuns_remaining")}: {oyunsPlusSummary.referral_uses_remaining}
+                    </div>
+                    <div className="text-[10px] text-white/60">
+                      {t("profile.oyuns_reward_note")}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Contact Info - grouped list */}
               <div className="bg-white dark:bg-dark-800 rounded-2xl shadow-card-xs border border-silver/60 dark:border-dark-600 overflow-hidden divide-y divide-surface-50 dark:divide-dark-700">
                 {profile.email && (

@@ -142,15 +142,30 @@ export function AdminBankAccounts() {
     return admin?.name || `ID: ${adminId}`;
   };
 
+  const hasSettingsChanges = (next: AppSettings) =>
+    next.min_rub_amount !== exchangeLimits.min_rub_amount ||
+    next.min_rub_buy !== exchangeLimits.min_rub_buy ||
+    next.oyuns_plus_enabled !== exchangeLimits.oyuns_plus_enabled ||
+    next.oyuns_plus_threshold_rub !== exchangeLimits.oyuns_plus_threshold_rub ||
+    next.oyuns_plus_points_per_threshold !== exchangeLimits.oyuns_plus_points_per_threshold ||
+    next.oyuns_plus_referral_reward_points !== exchangeLimits.oyuns_plus_referral_reward_points ||
+    next.oyuns_plus_referral_max_uses !== exchangeLimits.oyuns_plus_referral_max_uses;
+
   const handleLimitsChange = (field: keyof AppSettings, value: string) => {
     const num = parseInt(value, 10);
     if (value !== "" && isNaN(num)) return;
     const updated = { ...editingLimits, [field]: value === "" ? 0 : num };
     setEditingLimits(updated);
-    setLimitsChanged(
-      updated.min_rub_amount !== exchangeLimits.min_rub_amount ||
-      updated.min_rub_buy !== exchangeLimits.min_rub_buy
-    );
+    setLimitsChanged(hasSettingsChanges(updated));
+  };
+
+  const handleOyunsEnabledToggle = (enabled: boolean) => {
+    const updated = {
+      ...editingLimits,
+      oyuns_plus_enabled: enabled ? 1 : 0,
+    };
+    setEditingLimits(updated);
+    setLimitsChanged(hasSettingsChanges(updated));
   };
 
   const handleSaveLimits = async () => {
@@ -210,7 +225,7 @@ export function AdminBankAccounts() {
       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
         <h4 className="font-semibold text-amber-800 flex items-center gap-2">
           <Settings className="w-4 h-4" />
-          Гүйлгээний доод лимит (₽)
+          Гүйлгээ ба Oyuns Plus тохиргоо
         </h4>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -238,6 +253,81 @@ export function AdminBankAccounts() {
             />
           </div>
         </div>
+
+        <div className="pt-3 mt-1 border-t border-amber-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Oyuns Plus идэвхжил</p>
+              <p className="text-xs text-slate-500">Гүйлгээ дуусахад оноо бодох систем</p>
+            </div>
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingLimits.oyuns_plus_enabled > 0}
+                onChange={(e) => handleOyunsEnabledToggle(e.target.checked)}
+                className="sr-only"
+              />
+              <span
+                className={`w-11 h-6 rounded-full transition relative ${
+                  editingLimits.oyuns_plus_enabled > 0 ? "bg-maroon-600" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition ${
+                    editingLimits.oyuns_plus_enabled > 0 ? "left-5" : "left-0.5"
+                  }`}
+                />
+              </span>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-slate-600 font-medium">Оноо тооцох босго (₽)</label>
+              <input
+                type="number"
+                min={1}
+                value={editingLimits.oyuns_plus_threshold_rub}
+                onChange={(e) => handleLimitsChange("oyuns_plus_threshold_rub", e.target.value)}
+                className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-600 font-medium">Босго тутамд өгөх оноо</label>
+              <input
+                type="number"
+                min={1}
+                value={editingLimits.oyuns_plus_points_per_threshold}
+                onChange={(e) => handleLimitsChange("oyuns_plus_points_per_threshold", e.target.value)}
+                className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-600 font-medium">Referral KYC шагнал (оноо)</label>
+              <input
+                type="number"
+                min={0}
+                value={editingLimits.oyuns_plus_referral_reward_points}
+                onChange={(e) => handleLimitsChange("oyuns_plus_referral_reward_points", e.target.value)}
+                className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-600 font-medium">Нэг кодын max ашиглалт</label>
+              <input
+                type="number"
+                min={1}
+                value={editingLimits.oyuns_plus_referral_max_uses}
+                onChange={(e) => handleLimitsChange("oyuns_plus_referral_max_uses", e.target.value)}
+                className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+              />
+            </div>
+          </div>
+        </div>
+
         {limitsChanged && (
           <div className="flex justify-end">
             <button
@@ -250,7 +340,7 @@ export function AdminBankAccounts() {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              Лимит хадгалах
+              Тохиргоо хадгалах
             </button>
           </div>
         )}

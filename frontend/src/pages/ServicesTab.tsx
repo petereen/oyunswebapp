@@ -4,7 +4,7 @@ import { Flame, Gift, Lock, Plane, Smartphone } from "lucide-react";
 import { GiftFlow } from "../components/GiftFlow";
 import { FuelFlow } from "../components/FuelFlow";
 import { TopupFlow } from "../components/TopupFlow";
-import { fetchRates, fetchMe } from "../api";
+import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
 import { useLang } from "../i18n/useLang";
 
 interface Props {
@@ -29,9 +29,19 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
     staleTime: 0,
   });
 
+  const { data: serviceStatus } = useQuery({
+    queryKey: ["service-status"],
+    queryFn: fetchServiceStatus,
+    refetchInterval: 60000,
+  });
+
   const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : 0);
   const isVerified = verificationLevel >= 2;
   const isBasicRegistered = verificationLevel >= 1;
+  const isServiceOpen = serviceStatus?.is_open ?? true;
+  const serviceBlockedMessage = serviceStatus?.message || "Үйлчилгээ түр хаалттай байна";
+  const isGiftDisabled = !isVerified || !isServiceOpen;
+  const isTopupDisabled = !isBasicRegistered || !isServiceOpen;
 
   // Auto-open FuelFlow when navigating from status card
   useEffect(() => {
@@ -94,15 +104,21 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
     <div className="animate-fadeIn">
       <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200 mb-4">{t("services.title")}</h2>
 
+      {!isServiceOpen && (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/20 dark:text-amber-200">
+          {serviceBlockedMessage}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         {/* Gift Flow Card */}
         <button
-          onClick={() => isVerified ? setActiveService("gift") : undefined}
-          className={`relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-purple-200/50 ${!isVerified ? "opacity-60 cursor-not-allowed" : "hover:from-violet-600 hover:to-purple-700"}`}
-          disabled={!isVerified}
+          onClick={() => !isGiftDisabled ? setActiveService("gift") : undefined}
+          className={`relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-purple-200/50 ${isGiftDisabled ? "opacity-60 cursor-not-allowed" : "hover:from-violet-600 hover:to-purple-700"}`}
+          disabled={isGiftDisabled}
         >
           <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
-          {!isVerified && (
+          {isGiftDisabled && (
             <div className="absolute top-2 right-2">
               <Lock className="w-4 h-4 text-white/60" />
             </div>
@@ -110,7 +126,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
           <Gift className="w-8 h-8 mb-3 opacity-90" />
           <div className="font-bold text-sm mb-0.5">{t("services.gift_title")}</div>
           <div className="text-[11px] text-white/60 leading-relaxed">
-            {!isVerified ? t("services.requires_verification") : t("services.gift_desc")}
+            {!isServiceOpen ? serviceBlockedMessage : (!isVerified ? t("services.requires_verification") : t("services.gift_desc"))}
           </div>
         </button>
 
@@ -134,12 +150,12 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
         </button>
 
         <button
-          onClick={() => isBasicRegistered ? setActiveService("topup") : undefined}
-          className={`relative overflow-hidden bg-gradient-to-br from-sky-500 to-cyan-600 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-sky-200/50 ${!isBasicRegistered ? "opacity-60 cursor-not-allowed" : "hover:from-sky-600 hover:to-cyan-700"}`}
-          disabled={!isBasicRegistered}
+          onClick={() => !isTopupDisabled ? setActiveService("topup") : undefined}
+          className={`relative overflow-hidden bg-gradient-to-br from-sky-500 to-cyan-600 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-sky-200/50 ${isTopupDisabled ? "opacity-60 cursor-not-allowed" : "hover:from-sky-600 hover:to-cyan-700"}`}
+          disabled={isTopupDisabled}
         >
           <div className="absolute -top-4 -right-4 w-20 h-20 bg-white/10 rounded-full blur-lg" />
-          {!isBasicRegistered && (
+          {isTopupDisabled && (
             <div className="absolute top-2 right-2">
               <Lock className="w-4 h-4 text-white/60" />
             </div>
@@ -147,7 +163,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
           <Smartphone className="w-8 h-8 mb-3 opacity-90" />
           <div className="font-bold text-sm mb-0.5">{t("services.topup_title")}</div>
           <div className="text-[11px] text-white/60 leading-relaxed">
-            {!isBasicRegistered ? t("services.requires_registration") : t("services.topup_desc")}
+            {!isServiceOpen ? serviceBlockedMessage : (!isBasicRegistered ? t("services.requires_registration") : t("services.topup_desc"))}
           </div>
         </button>
 

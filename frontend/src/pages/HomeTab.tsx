@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import oyunsIcon from "../assets/oyuns-icon.png";
 import { useMemo, useState } from "react";
-import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Languages } from "lucide-react";
+import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Sparkles } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { RateCard } from "../components/RateCard";
 import { RateHistoryChart } from "../components/RateHistoryChart";
@@ -12,7 +12,7 @@ import { FuelStatusTracker } from "../components/FuelStatusTracker";
 import { RegistrationModal } from "../components/RegistrationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { RequiredInfoModal } from "../components/RequiredInfoModal";
-import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
+import { fetchRates, fetchMe, fetchOyunsPlusSummary, fetchServiceStatus } from "../api";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useTheme } from "../hooks/useTheme";
 import { useLang } from "../i18n/useLang";
@@ -50,6 +50,13 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
     queryFn: () => fetchMe(),
     enabled: Boolean(user?.id) && !isAuthenticating,
     staleTime: 0,
+  });
+
+  const { data: oyunsPlusSummary } = useQuery({
+    queryKey: ["oyuns-plus-summary", user?.id],
+    queryFn: () => fetchOyunsPlusSummary(),
+    enabled: Boolean(user?.id) && !isAuthenticating,
+    retry: 1,
   });
 
   const userProfile = profile?.user;
@@ -269,6 +276,35 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
               <div className="text-sm font-bold text-dark-800 dark:text-ivory-200 mb-0.5">{t("home.pending_verification")}</div>
               <div className="text-xs text-dark-600 dark:text-ivory-300">{t("home.pending_desc")}</div>
               <div className="text-[11px] text-dark-600 dark:text-ivory-400 mt-1">{t("home.pending_note")}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBasicRegistered && oyunsPlusSummary && (
+        <div className="bg-gradient-to-br from-maroon-700 via-maroon-800 to-dark-900 dark:from-maroon-900 dark:via-dark-900 dark:to-black p-4 rounded-3xl shadow-card-dark text-white animate-slideUp">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-gold-400" />
+              <div className="text-sm font-bold">{t("home.oyuns_title")}</div>
+            </div>
+            <button
+              onClick={onNavigateToProfile}
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 transition"
+            >
+              {t("home.oyuns_open_profile")}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/10 rounded-xl p-3">
+              <div className="text-[11px] text-white/70">{t("home.oyuns_points")}</div>
+              <div className="text-lg font-bold text-gold-400">{oyunsPlusSummary.points_balance}</div>
+            </div>
+            <div className="bg-white/10 rounded-xl p-3">
+              <div className="text-[11px] text-white/70">{t("home.oyuns_verified_ratio")}</div>
+              <div className="text-lg font-bold">{oyunsPlusSummary.invited_verified}/{oyunsPlusSummary.invited_total}</div>
+              <div className="text-[10px] text-white/60">{t("home.oyuns_referrals")}: {oyunsPlusSummary.referral_uses}/{oyunsPlusSummary.referral_max_uses}</div>
             </div>
           </div>
         </div>

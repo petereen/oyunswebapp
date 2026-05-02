@@ -7,6 +7,11 @@ from pydantic import BaseModel, Field
 
 DEFAULT_MIN_RUB_AMOUNT = 5000
 DEFAULT_MIN_RUB_BUY = 100
+DEFAULT_OYUNS_PLUS_ENABLED = 1
+DEFAULT_OYUNS_PLUS_THRESHOLD_RUB = 10000
+DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD = 10
+DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS = 50
+DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES = 5
 
 
 class AuthenticatedUser(BaseModel):
@@ -34,11 +39,21 @@ class RateResponse(BaseModel):
 class AppSettingsResponse(BaseModel):
     min_rub_amount: int = DEFAULT_MIN_RUB_AMOUNT  # Default minimum RUB for MNT->RUB
     min_rub_buy: int = DEFAULT_MIN_RUB_BUY  # Default minimum RUB for RUB->MNT
+    oyuns_plus_enabled: int = DEFAULT_OYUNS_PLUS_ENABLED
+    oyuns_plus_threshold_rub: int = DEFAULT_OYUNS_PLUS_THRESHOLD_RUB
+    oyuns_plus_points_per_threshold: int = DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD
+    oyuns_plus_referral_reward_points: int = DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS
+    oyuns_plus_referral_max_uses: int = DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES
 
 
 class AppSettingsUpdateRequest(BaseModel):
     min_rub_amount: Optional[int] = None
     min_rub_buy: Optional[int] = None
+    oyuns_plus_enabled: Optional[int] = None
+    oyuns_plus_threshold_rub: Optional[int] = None
+    oyuns_plus_points_per_threshold: Optional[int] = None
+    oyuns_plus_referral_reward_points: Optional[int] = None
+    oyuns_plus_referral_max_uses: Optional[int] = None
 
 
 class ExchangeCreateRequest(BaseModel):
@@ -122,6 +137,9 @@ class UpsertUserPayload(BaseModel):
     lang: Optional[str] = None
     updated_at: Optional[datetime] = None
     verification_level: Optional[int] = 0  # 0=new, 1=basic (unverified), 2=fully verified
+    referral_code: Optional[str] = None
+    referred_by_user_id: Optional[int] = None
+    referred_by_code: Optional[str] = None
 
 
 class HistoryItem(BaseModel):
@@ -203,6 +221,30 @@ class BasicRegistrationRequest(BaseModel):
     first_name: str
     phone_intl: str  # Full international phone e.g. "+97699112233"
     email: Optional[str] = None
+    referral_code: Optional[str] = None
+
+
+class ReferralCodeValidateResponse(BaseModel):
+    valid: bool
+    message: Optional[str] = None
+    inviter_user_id: Optional[int] = None
+    inviter_name: Optional[str] = None
+    remaining_uses: Optional[int] = None
+
+
+class OyunsPlusSummaryResponse(BaseModel):
+    enabled: bool = True
+    points_balance: int = 0
+    point_value_rub: int = 1
+    threshold_rub: int = DEFAULT_OYUNS_PLUS_THRESHOLD_RUB
+    points_per_threshold: int = DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD
+    referral_reward_points: int = DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS
+    referral_max_uses: int = DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES
+    referral_code: Optional[str] = None
+    referral_uses: int = 0
+    referral_uses_remaining: int = DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES
+    invited_total: int = 0
+    invited_verified: int = 0
 
 
 class RegistrationRequest(BaseModel):

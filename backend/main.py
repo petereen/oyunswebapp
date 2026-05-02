@@ -5,6 +5,8 @@ import asyncio
 import logging
 import math
 import json
+import secrets
+import string
 from decimal import Decimal, InvalidOperation
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -28,6 +30,11 @@ from models import (
     AdminUsersResponse,
     DEFAULT_MIN_RUB_AMOUNT,
     DEFAULT_MIN_RUB_BUY,
+    DEFAULT_OYUNS_PLUS_ENABLED,
+    DEFAULT_OYUNS_PLUS_THRESHOLD_RUB,
+    DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD,
+    DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS,
+    DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES,
     AppSettingsResponse,
     AppSettingsUpdateRequest,
     AuthRequest,
@@ -44,12 +51,14 @@ from models import (
     KycItem,
     KycResponse,
     MeResponse,
+    OyunsPlusSummaryResponse,
     PresignRequest,
     PresignResponse,
     PromoCodeValidateRequest,
     PromoCodeValidateResponse,
     RateResponse,
     RegistrationRequest,
+    ReferralCodeValidateResponse,
     ServiceStatusResponse,
     ShiftCloseRequest,
     UpdateBankInfoRequest,
@@ -594,23 +603,209 @@ async def get_rate_history(days: int = 30):
     return {"points": points, "days": days}
 
 
+APP_SETTINGS_KEYS = [
+    "min_rub_amount",
+    "min_rub_buy",
+    "oyuns_plus_enabled",
+    "oyuns_plus_threshold_rub",
+    "oyuns_plus_points_per_threshold",
+    "oyuns_plus_referral_reward_points",
+    "oyuns_plus_referral_max_uses",
+]
+
+
+def _safe_int(value: object, default: int) -> int:
+    try:
+        if value is None:
+            return default
+        return int(str(value).strip())
+    except Exception:
+        return default
+
+
+def _get_app_settings_dict(client, keys: list[str]) -> dict[str, str]:
+    res = client.table("app_settings").select("key,value").in_("key", keys).execute()
+    return {row["key"]: row["value"] for row in (res.data or [])}
+
+
+def _get_oyuns_plus_settings(client) -> dict[str, int]:
+    settings_dict = _get_app_settings_dict(
+        client,
+        [
+            "oyuns_plus_enabled",
+            "oyuns_plus_threshold_rub",
+            "oyuns_plus_points_per_threshold",
+            "oyuns_plus_referral_reward_points",
+            "oyuns_plus_referral_max_uses",
+        ],
+    )
+
+    enabled_raw = _safe_int(settings_dict.get("oyuns_plus_enabled"), DEFAULT_OYUNS_PLUS_ENABLED)
+    threshold_rub = max(1, _safe_int(settings_dict.get("oyuns_plus_threshold_rub"), DEFAULT_OYUNS_PLUS_THRESHOLD_RUB))
+    points_per_threshold = max(1, _safe_int(settings_dict.get("oyuns_plus_points_per_threshold"), DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD))
+    referral_reward_points = max(0, _safe_int(settings_dict.get("oyuns_plus_referral_reward_points"), DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS))
+    referral_max_uses = max(1, _safe_int(settings_dict.get("oyuns_plus_referral_max_uses"), DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES))
+
+    return {
+        "oyuns_plus_enabled": 1 if enabled_raw > 0 else 0,
+        "oyuns_plus_threshold_rub": threshold_rub,
+        "oyuns_plus_points_per_threshold": points_per_threshold,
+        "oyuns_plus_referral_reward_points": referral_reward_points,
+        "oyuns_plus_referral_max_uses": referral_max_uses,
+    }
+
+
+def _calculate_oyuns_plus_points(rub_equivalent: Decimal, oyuns_plus_settings: dict[str, int]) -> int:
+    if oyuns_plus_settings.get("oyuns_plus_enabled", 1) <= 0:
+        return 0
+
+    if rub_equivalent <= 0:
+        return 0
+
+    threshold = Decimal(str(oyuns_plus_settings.get("oyuns_plus_threshold_rub", DEFAULT_OYUNS_PLUS_THRESHOLD_RUB)))
+    points_per_threshold = int(oyuns_plus_settings.get("oyuns_plus_points_per_threshold", DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD))
+    if threshold <= 0 or points_per_threshold <= 0:
+        return 0
+
+    blocks = int(rub_equivalent // threshold)
+    if blocks <= 0:
+        return 0
+
+    return blocks * points_per_threshold
+
+
+def _award_oyuns_plus_points_once(
+    client,
+    *,
+    user_id: int,
+    source_type: str,
+    source_id: str,
+    points: int,
+    rub_equivalent: Decimal | None = None,
+    metadata: dict | None = None,
+) -> bool:
+    if points == 0:
+        return False
+
+    payload = {
+        "user_id": user_id,
+        "source_type": source_type,
+        "source_id": source_id,
+        "points": int(points),
+        "rub_equivalent": float(rub_equivalent) if rub_equivalent is not None else None,
+        "metadata": metadata or {},
+    }
+
+    try:
+        client.table("oyuns_plus_points_ledger").insert(payload).execute()
+        return True
+    except Exception as e:
+        # Idempotency: ignore duplicate source awards.
+        if "duplicate key value" in str(e).lower() or "oyuns_plus_points_ledger_source_unique" in str(e):
+            return False
+        raise
+
+
+def _get_oyuns_plus_balance(client, user_id: int) -> int:
+    res = client.table("oyuns_plus_points_ledger").select("points").eq("user_id", user_id).execute()
+    total = 0
+    for row in res.data or []:
+        total += _safe_int(row.get("points"), 0)
+    return total
+
+
+def _generate_referral_code(length: int = 8) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def _ensure_user_referral_code(client, user_id: int) -> str | None:
+    try:
+        existing = client.table("users").select("referral_code").eq("id", user_id).limit(1).execute()
+        if existing.data:
+            current = (existing.data[0].get("referral_code") or "").strip().upper()
+            if current:
+                return current
+
+        for _ in range(20):
+            candidate = _generate_referral_code(8)
+            dup = client.table("users").select("id").eq("referral_code", candidate).limit(1).execute()
+            if dup.data:
+                continue
+
+            client.table("users").update({"referral_code": candidate}).eq("id", user_id).execute()
+            return candidate
+    except Exception as e:
+        logger.warning(f"Referral code generation skipped for user {user_id}: {e}")
+
+    return None
+
+
+def _validate_referral_code_for_user(client, referral_code: str, user_id: int | None = None) -> ReferralCodeValidateResponse:
+    try:
+        normalized = "".join(ch for ch in (referral_code or "").upper().strip() if ch.isalnum())
+        if not normalized:
+            return ReferralCodeValidateResponse(valid=False, message="Referral code is empty")
+
+        inviter_res = (
+            client.table("users")
+            .select("id,first_name,last_name,referral_code")
+            .eq("referral_code", normalized)
+            .limit(1)
+            .execute()
+        )
+        if not inviter_res.data:
+            return ReferralCodeValidateResponse(valid=False, message="Referral code is invalid")
+
+        inviter = inviter_res.data[0]
+        inviter_id = int(inviter.get("id"))
+        inviter_name = f"{(inviter.get('last_name') or '').strip()} {(inviter.get('first_name') or '').strip()}".strip() or str(inviter_id)
+
+        if user_id is not None and inviter_id == user_id:
+            return ReferralCodeValidateResponse(valid=False, message="You cannot use your own referral code")
+
+        settings = _get_oyuns_plus_settings(client)
+        max_uses = settings["oyuns_plus_referral_max_uses"]
+
+        use_res = client.table("users").select("id", count="exact").eq("referred_by_user_id", inviter_id).execute()
+        use_count = use_res.count if use_res.count is not None else len(use_res.data or [])
+        remaining = max_uses - int(use_count)
+        if remaining <= 0:
+            return ReferralCodeValidateResponse(
+                valid=False,
+                message="Referral code usage limit reached",
+                inviter_user_id=inviter_id,
+                inviter_name=inviter_name,
+                remaining_uses=0,
+            )
+
+        return ReferralCodeValidateResponse(
+            valid=True,
+            message="Referral code is valid",
+            inviter_user_id=inviter_id,
+            inviter_name=inviter_name,
+            remaining_uses=remaining,
+        )
+    except Exception as e:
+        logger.warning(f"Referral validation unavailable: {e}")
+        return ReferralCodeValidateResponse(valid=False, message="Referral system is temporarily unavailable")
+
+
 @app.get("/api/settings", response_model=AppSettingsResponse)
 async def get_app_settings():
     """Public endpoint - fetch configurable app settings"""
     client = get_supabase()
-    res = (
-        client.table("app_settings")
-        .select("key,value")
-        .in_("key", ["min_rub_amount", "min_rub_buy"])
-        .execute()
-    )
-    
-    # Build settings dict from database
-    settings_dict = {row["key"]: row["value"] for row in (res.data or [])}
-    
+    settings_dict = _get_app_settings_dict(client, APP_SETTINGS_KEYS)
+    oyuns_plus = _get_oyuns_plus_settings(client)
+
     return AppSettingsResponse(
-        min_rub_amount=int(settings_dict.get("min_rub_amount", DEFAULT_MIN_RUB_AMOUNT)),
-        min_rub_buy=int(settings_dict.get("min_rub_buy", DEFAULT_MIN_RUB_BUY)),
+        min_rub_amount=max(0, _safe_int(settings_dict.get("min_rub_amount"), DEFAULT_MIN_RUB_AMOUNT)),
+        min_rub_buy=max(0, _safe_int(settings_dict.get("min_rub_buy"), DEFAULT_MIN_RUB_BUY)),
+        oyuns_plus_enabled=oyuns_plus["oyuns_plus_enabled"],
+        oyuns_plus_threshold_rub=oyuns_plus["oyuns_plus_threshold_rub"],
+        oyuns_plus_points_per_threshold=oyuns_plus["oyuns_plus_points_per_threshold"],
+        oyuns_plus_referral_reward_points=oyuns_plus["oyuns_plus_referral_reward_points"],
+        oyuns_plus_referral_max_uses=oyuns_plus["oyuns_plus_referral_max_uses"],
     )
 
 
@@ -621,14 +816,29 @@ async def update_app_settings(
 ):
     """Admin endpoint - update exchange limit settings"""
     client = get_supabase()
-    allowed_keys = {"min_rub_amount", "min_rub_buy"}
+    allowed_keys = {
+        "min_rub_amount",
+        "min_rub_buy",
+        "oyuns_plus_enabled",
+        "oyuns_plus_threshold_rub",
+        "oyuns_plus_points_per_threshold",
+        "oyuns_plus_referral_reward_points",
+        "oyuns_plus_referral_max_uses",
+    }
 
     updates = payload.model_dump(exclude_none=True)
     for key, value in updates.items():
         if key not in allowed_keys:
             continue
-        if value < 0:
+        if key == "oyuns_plus_enabled":
+            if value not in (0, 1):
+                raise HTTPException(status_code=400, detail="oyuns_plus_enabled must be 0 or 1")
+        elif key in {"oyuns_plus_threshold_rub", "oyuns_plus_points_per_threshold", "oyuns_plus_referral_max_uses"}:
+            if value <= 0:
+                raise HTTPException(status_code=400, detail=f"{key} must be > 0")
+        elif value < 0:
             raise HTTPException(status_code=400, detail=f"{key} must be >= 0")
+
         client.table("app_settings").upsert(
             {"key": key, "value": str(value)},
             on_conflict="key",
@@ -649,16 +859,10 @@ def format_working_hours_ub(start_moscow: int, end_moscow: int) -> str:
     return f"{start_ub:02d}:00 - {end_ub:02d}:00 (УБ)"
 
 
-@app.get("/api/service-status", response_model=ServiceStatusResponse)
-async def get_service_status():
-    """Public endpoint - check if service is open (within working hours AND shift is active).
-    Working hours are configured dynamically via admin panel.
-    """
+def _compute_service_status(client) -> dict:
+    """Compute current service status from working-hours and shift settings."""
     from zoneinfo import ZoneInfo
-    
-    client = get_supabase()
-    
-    # Get working hours config from database
+
     hours_res = client.table("working_hours").select("*").eq("id", 1).limit(1).execute()
     if hours_res.data:
         hours_config = hours_res.data[0]
@@ -666,37 +870,28 @@ async def get_service_status():
         end_hour = hours_config.get("end_hour_moscow", 23)
         is_enabled = hours_config.get("is_enabled", True)
     else:
-        # Default working hours
         start_hour = 4
         end_hour = 23
         is_enabled = True
-    
-    # Check working hours (Moscow time)
+
     moscow_tz = ZoneInfo("Europe/Moscow")
     now_moscow = datetime.now(moscow_tz)
     hour_moscow = now_moscow.hour
-    
-    # Handle working hours that might span midnight
+
     if start_hour < end_hour:
         is_within_hours = start_hour <= hour_moscow < end_hour
     else:
-        # Spans midnight (e.g., 22:00 - 06:00)
         is_within_hours = hour_moscow >= start_hour or hour_moscow < end_hour
-    
-    # If working hours are disabled, always treat as outside hours
+
     if not is_enabled:
         is_within_hours = False
-    
-    # Check if shift is active
+
     shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
     is_shift_active = bool(shift_res.data and shift_res.data[0].get("current_admin_id"))
-    
+
     is_open = is_within_hours and is_shift_active
-    
-    # Format working hours display
     working_hours_str = format_working_hours_ub(start_hour, end_hour)
-    
-    # Determine message
+
     if not is_enabled:
         message = "Үйлчилгээ түр хаалттай байна"
     elif not is_within_hours:
@@ -705,14 +900,30 @@ async def get_service_status():
         message = "Одоогоор админ ээлжинд алга байна"
     else:
         message = None
-    
-    return ServiceStatusResponse(
-        is_open=is_open,
-        is_within_hours=is_within_hours,
-        is_shift_active=is_shift_active,
-        working_hours=working_hours_str,
-        message=message,
-    )
+
+    return {
+        "is_open": is_open,
+        "is_within_hours": is_within_hours,
+        "is_shift_active": is_shift_active,
+        "working_hours": working_hours_str,
+        "message": message,
+    }
+
+
+def _require_service_open(client) -> None:
+    status = _compute_service_status(client)
+    if not status["is_open"]:
+        raise HTTPException(status_code=403, detail=status["message"] or "Service is currently closed")
+
+
+@app.get("/api/service-status", response_model=ServiceStatusResponse)
+async def get_service_status():
+    """Public endpoint - check if service is open (within working hours AND shift is active).
+    Working hours are configured dynamically via admin panel.
+    """
+    client = get_supabase()
+    status = _compute_service_status(client)
+    return ServiceStatusResponse(**status)
 
 
 @app.post("/api/storage/presign", response_model=PresignResponse)
@@ -928,6 +1139,9 @@ async def me(user=Depends(get_jwt_authenticated_user)):
             "updated_at": now,
         }
         client.table("users").insert(upsert_payload).execute()
+
+    # Ensure the user always has a personal referral code for web flow.
+    _ensure_user_referral_code(client, user.id)
     
     db_user = client.table("users").select("*").eq("id", user.id).limit(1).execute().data
     record = db_user[0] if db_user else {"id": user.id, "first_name": user.first_name, "last_name": user.last_name}
@@ -951,6 +1165,48 @@ async def me(user=Depends(get_jwt_authenticated_user)):
         )
     
     return MeResponse(user=UpsertUserPayload(**record), is_admin=is_admin)
+
+
+@app.get("/api/referral/validate", response_model=ReferralCodeValidateResponse)
+async def validate_referral_code(code: str, user=Depends(get_jwt_authenticated_user)):
+    client = get_supabase()
+    return _validate_referral_code_for_user(client, code, user.id)
+
+
+@app.get("/api/oyuns-plus/summary", response_model=OyunsPlusSummaryResponse)
+async def oyuns_plus_summary(user=Depends(get_jwt_authenticated_user)):
+    client = get_supabase()
+    settings = _get_oyuns_plus_settings(client)
+
+    referral_code = _ensure_user_referral_code(client, user.id)
+    uses_res = client.table("users").select("id", count="exact").eq("referred_by_user_id", user.id).execute()
+    referral_uses = uses_res.count if uses_res.count is not None else len(uses_res.data or [])
+    verified_res = (
+        client.table("users")
+        .select("id", count="exact")
+        .eq("referred_by_user_id", user.id)
+        .eq("verified", True)
+        .execute()
+    )
+    invited_verified = verified_res.count if verified_res.count is not None else len(verified_res.data or [])
+    referral_max_uses = settings["oyuns_plus_referral_max_uses"]
+
+    points_balance = _get_oyuns_plus_balance(client, user.id)
+
+    return OyunsPlusSummaryResponse(
+        enabled=bool(settings["oyuns_plus_enabled"]),
+        points_balance=points_balance,
+        point_value_rub=1,
+        threshold_rub=settings["oyuns_plus_threshold_rub"],
+        points_per_threshold=settings["oyuns_plus_points_per_threshold"],
+        referral_reward_points=settings["oyuns_plus_referral_reward_points"],
+        referral_max_uses=referral_max_uses,
+        referral_code=referral_code,
+        referral_uses=referral_uses,
+        referral_uses_remaining=max(0, referral_max_uses - int(referral_uses)),
+        invited_total=referral_uses,
+        invited_verified=invited_verified,
+    )
 
 
 @app.post("/api/agree-terms")
@@ -988,6 +1244,38 @@ async def register_basic(
     if existing.data and existing.data[0].get("verification_level", 0) >= 1:
         raise HTTPException(status_code=400, detail="User already registered")
 
+    existing_referred_by_user_id = None
+    existing_referred_by_code = None
+    try:
+        referral_existing = (
+            client.table("users")
+            .select("referred_by_user_id,referred_by_code")
+            .eq("id", user.id)
+            .limit(1)
+            .execute()
+        )
+        if referral_existing.data:
+            existing_referred_by_user_id = referral_existing.data[0].get("referred_by_user_id")
+            existing_referred_by_code = referral_existing.data[0].get("referred_by_code")
+    except Exception:
+        existing_referred_by_user_id = None
+        existing_referred_by_code = None
+
+    normalized_referral_code = "".join(ch for ch in (payload.referral_code or "").upper().strip() if ch.isalnum())
+    referred_by_user_id = existing_referred_by_user_id
+    referred_by_code = existing_referred_by_code
+
+    if normalized_referral_code:
+        validation = _validate_referral_code_for_user(client, normalized_referral_code, user.id)
+        if not validation.valid or not validation.inviter_user_id:
+            raise HTTPException(status_code=400, detail=validation.message or "Invalid referral code")
+
+        if existing_referred_by_user_id and int(existing_referred_by_user_id) != int(validation.inviter_user_id):
+            raise HTTPException(status_code=400, detail="User already has a referral inviter")
+
+        referred_by_user_id = int(validation.inviter_user_id)
+        referred_by_code = normalized_referral_code
+
     update_payload = {
         "first_name": payload.first_name,
         "last_name": payload.last_name,
@@ -1006,10 +1294,16 @@ async def register_basic(
     if payload.email:
         update_payload["email"] = payload.email
 
+    if referred_by_user_id:
+        update_payload["referred_by_user_id"] = referred_by_user_id
+        update_payload["referred_by_code"] = referred_by_code
+
     result = client.table("users").update(update_payload).eq("id", user.id).execute()
 
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to submit basic registration")
+
+    _ensure_user_referral_code(client, user.id)
 
     return {"ok": True, "message": "Basic registration completed", "verification_level": 1}
 
@@ -1201,6 +1495,8 @@ async def create_exchange(
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
 
     client = get_supabase()
+    _require_service_open(client)
+
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz)
     invoice = payload.invoice or generate_invoice(now)
@@ -1822,6 +2118,24 @@ async def admin_action(
             else:
                 rub_equivalent = (trx_amount / trx_rate) if trx_rate > 0 else Decimal("0")
 
+            try:
+                oyuns_plus_settings = _get_oyuns_plus_settings(client)
+                earned_points = _calculate_oyuns_plus_points(rub_equivalent, oyuns_plus_settings)
+                _award_oyuns_plus_points_once(
+                    client,
+                    user_id=int(user_id),
+                    source_type="transaction_completed",
+                    source_id=str(payload.invoice),
+                    points=earned_points,
+                    rub_equivalent=rub_equivalent,
+                    metadata={
+                        "invoice": payload.invoice,
+                        "status": payload.status,
+                    },
+                )
+            except Exception as points_err:
+                logger.error(f"Failed to award Oyuns Plus points for transaction {payload.invoice}: {points_err}")
+
             # If completion took more than 10 minutes for requests under 30k RUB,
             # generate a compensation promo code.
             if duration_minutes and duration_minutes > 10 and rub_equivalent < COMPENSATION_PROMO_MAX_RUB:
@@ -2210,8 +2524,14 @@ async def admin_kyc_action(
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz).isoformat()
     
-    # Fetch user info first (including bank_rub and bank_mnt to check if all bank info is filled)
-    user_res = client.table("users").select("first_name,last_name,bank_rub,bank_mnt").eq("id", payload.user_id).limit(1).execute()
+    # Fetch user info first (including referral and bank fields)
+    user_res = (
+        client.table("users")
+        .select("first_name,last_name,bank_rub,bank_mnt,referred_by_user_id")
+        .eq("id", payload.user_id)
+        .limit(1)
+        .execute()
+    )
     if not user_res.data:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -2223,6 +2543,7 @@ async def admin_kyc_action(
     has_russian_bank = bool(bank_rub_value.strip()) and bank_rub_value.strip() != ',,,'
     has_mongolian_bank = bool(bank_mnt_value.strip()) and bank_mnt_value.strip() != ',,,'
     has_all_bank_info = has_russian_bank and has_mongolian_bank
+    user_lang = _get_user_lang(payload.user_id)
     
     if payload.action == "approve":
         # Update user to verified + Level 2
@@ -2258,7 +2579,6 @@ async def admin_kyc_action(
             promo_code = None
         
         # Notify user via Telegram with webapp button
-        user_lang = _get_user_lang(payload.user_id)
         promo_text = ""
         if promo_code:
             promo_text = tb(user_lang, "notif_kyc_approved_promo", code=promo_code, discount="0.2")
@@ -2281,6 +2601,26 @@ async def admin_kyc_action(
             }
         
         send_user_notification(user_id=payload.user_id, text=notification_text, reply_markup=reply_markup)
+
+        referred_by_user_id = user_info.get("referred_by_user_id")
+        if referred_by_user_id:
+            try:
+                oyuns_plus_settings = _get_oyuns_plus_settings(client)
+                if oyuns_plus_settings.get("oyuns_plus_enabled", 1) > 0:
+                    referral_reward_points = int(oyuns_plus_settings.get("oyuns_plus_referral_reward_points", 0))
+                    _award_oyuns_plus_points_once(
+                        client,
+                        user_id=int(referred_by_user_id),
+                        source_type="referral_kyc_approved",
+                        source_id=str(payload.user_id),
+                        points=referral_reward_points,
+                        metadata={
+                            "referred_user_id": payload.user_id,
+                            "event": "kyc_approved",
+                        },
+                    )
+            except Exception as referral_err:
+                logger.error(f"Failed to award referral reward for user {payload.user_id}: {referral_err}")
         
         # Log admin action
         if admin_user_id:
@@ -3265,6 +3605,8 @@ async def create_gift(
 ):
     """Create a new gift transaction"""
     client = get_supabase()
+    _require_service_open(client)
+
     settings = get_settings()
     
     try:
@@ -3662,6 +4004,31 @@ async def finalize_gift(
         update_data["admin_bill_url"] = json.dumps(all_bills)
     
     client.table("gifts").update(update_data).eq("id", gift_id).execute()
+
+    try:
+        gift_amount = _to_decimal(gift.get("amount"))
+        gift_rate = _to_decimal(gift.get("rate"))
+        if (gift.get("currency_from") or "").upper() == "RUB":
+            gift_rub_equivalent = gift_amount
+        else:
+            gift_rub_equivalent = (gift_amount / gift_rate) if gift_rate > 0 else Decimal("0")
+
+        oyuns_plus_settings = _get_oyuns_plus_settings(client)
+        earned_points = _calculate_oyuns_plus_points(gift_rub_equivalent, oyuns_plus_settings)
+        _award_oyuns_plus_points_once(
+            client,
+            user_id=int(gift.get("sender_user_id")),
+            source_type="gift_completed",
+            source_id=str(gift_id),
+            points=earned_points,
+            rub_equivalent=gift_rub_equivalent,
+            metadata={
+                "invoice": gift.get("invoice"),
+                "status": "completed",
+            },
+        )
+    except Exception as points_err:
+        logger.error(f"Failed to award Oyuns Plus points for gift {gift_id}: {points_err}")
     
     # Get sender and recipient names
     sender_res = client.table("users").select("first_name, last_name").eq("id", gift.get("sender_user_id")).single().execute()
@@ -3741,6 +4108,31 @@ async def approve_gift(
         
         # Update gift status
         client.table("gifts").update(update_data).eq("id", gift_id).execute()
+
+        try:
+            gift_amount = _to_decimal(gift.get("amount"))
+            gift_rate = _to_decimal(gift.get("rate"))
+            if (gift.get("currency_from") or "").upper() == "RUB":
+                gift_rub_equivalent = gift_amount
+            else:
+                gift_rub_equivalent = (gift_amount / gift_rate) if gift_rate > 0 else Decimal("0")
+
+            oyuns_plus_settings = _get_oyuns_plus_settings(client)
+            earned_points = _calculate_oyuns_plus_points(gift_rub_equivalent, oyuns_plus_settings)
+            _award_oyuns_plus_points_once(
+                client,
+                user_id=int(gift.get("sender_user_id")),
+                source_type="gift_completed",
+                source_id=str(gift_id),
+                points=earned_points,
+                rub_equivalent=gift_rub_equivalent,
+                metadata={
+                    "invoice": gift.get("invoice"),
+                    "status": "completed",
+                },
+            )
+        except Exception as points_err:
+            logger.error(f"Failed to award Oyuns Plus points for gift {gift_id}: {points_err}")
         
         # Get recipient name for notification
         try:
@@ -4368,6 +4760,34 @@ async def fuel_admin_action(payload: FuelAdminActionRequest, user=Depends(get_fu
         update_data["admin_comment"] = payload.admin_comment
 
     client.table("fuel_orders").update(update_data).eq("id", payload.order_id).execute()
+
+    if payload.status == "completed" and order.get("user_id"):
+        try:
+            final_amount = _to_decimal(order.get("final_amount"))
+            exchange_rate = _to_decimal(order.get("exchange_rate"))
+            payment_currency = (order.get("payment_currency") or "").upper()
+
+            if payment_currency == "RUB":
+                rub_equivalent = final_amount
+            else:
+                rub_equivalent = (final_amount / exchange_rate) if exchange_rate > 0 else Decimal("0")
+
+            oyuns_plus_settings = _get_oyuns_plus_settings(client)
+            earned_points = _calculate_oyuns_plus_points(rub_equivalent, oyuns_plus_settings)
+            _award_oyuns_plus_points_once(
+                client,
+                user_id=int(order.get("user_id")),
+                source_type="fuel_order_completed",
+                source_id=str(payload.order_id),
+                points=earned_points,
+                rub_equivalent=rub_equivalent,
+                metadata={
+                    "invoice": order.get("invoice"),
+                    "status": "completed",
+                },
+            )
+        except Exception as points_err:
+            logger.error(f"Failed to award Oyuns Plus points for fuel order {payload.order_id}: {points_err}")
 
     # Notify user about status change
     order_user_id = order.get("user_id")

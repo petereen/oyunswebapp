@@ -8,8 +8,9 @@ import {
   ExternalLink,
   Mail,
   Phone,
+  Ticket,
 } from "lucide-react";
-import { submitBasicRegistration, BasicRegistrationInput } from "../api";
+import { submitBasicRegistration, BasicRegistrationInput, validateReferralCode } from "../api";
 import { useLang } from "../i18n/useLang";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
@@ -65,6 +66,10 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
   const [countryCode, setCountryCode] = useState("+976");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [referralValid, setReferralValid] = useState<boolean | null>(null);
+  const [referralMessage, setReferralMessage] = useState("");
+  const [validatingReferral, setValidatingReferral] = useState(false);
   const [agreedTerms, setAgreedTerms] = useState(false);
 
   const phoneDigits = phoneNumber.replace(/\D/g, "");
@@ -77,6 +82,42 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
     if (!lastName.trim() || !firstName.trim()) return false;
     if (!agreedTerms) return false;
     return phoneValid;
+  };
+
+  const normalizeReferralCode = (value: string) =>
+    value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+  const validateReferral = async (): Promise<boolean> => {
+    const normalized = normalizeReferralCode(referralCode);
+    if (!normalized) {
+      setReferralValid(null);
+      setReferralMessage("");
+      return true;
+    }
+
+    try {
+      setValidatingReferral(true);
+      const result = await validateReferralCode(normalized);
+      if (!result.valid) {
+        setReferralValid(false);
+        setReferralMessage(result.message || "Referral code is invalid");
+        return false;
+      }
+
+      setReferralValid(true);
+      if (result.inviter_name) {
+        setReferralMessage(`Уригч: ${result.inviter_name}`);
+      } else {
+        setReferralMessage(result.message || "Referral code is valid");
+      }
+      return true;
+    } catch {
+      setReferralValid(false);
+      setReferralMessage("Referral code check failed");
+      return false;
+    } finally {
+      setValidatingReferral(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -93,19 +134,28 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
       setLoading(true);
       setError("");
 
+      const referralOk = await validateReferral();
+      if (!referralOk) {
+        setLoading(false);
+        return;
+      }
+
       const fullPhone = `${countryCode}${phoneNumber.replace(/\s/g, "")}`;
+      const normalizedReferralCode = normalizeReferralCode(referralCode);
       const payload: BasicRegistrationInput = {
         last_name: lastName.trim(),
         first_name: firstName.trim(),
         phone_intl: fullPhone,
         email: email.trim() || undefined,
+        referral_code: normalizedReferralCode || undefined,
       };
 
       await submitBasicRegistration(payload);
       onRegistered();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Basic registration error:", err);
-      setError(t("reg.submit_error"));
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : t("reg.submit_error"));
     } finally {
       setLoading(false);
     }
@@ -206,6 +256,41 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
                 className="w-full rounded-lg border border-maroon-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-2.5 text-sm"
                 placeholder="example@email.com"
               />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-500 dark:text-ivory-400 flex items-center gap-1">
+                <Ticket className="w-3 h-3" /> Referral code (optional)
+              </label>
+              <input
+                type="text"
+                value={referralCode}
+                onChange={(e) => {
+                  setReferralCode(normalizeReferralCode(e.target.value));
+                  setReferralValid(null);
+                  setReferralMessage("");
+                }}
+                onBlur={() => {
+                  if (referralCode.trim()) {
+                    void validateReferral();
+                  }
+                }}
+                maxLength={16}
+                className="w-full rounded-lg border border-maroon-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-2.5 text-sm"
+                placeholder="ABC12345"
+              />
+              {validatingReferral && (
+                <p className="text-xs text-slate-500 mt-1">Checking referral code...</p>
+              )}
+              {!validatingReferral && referralMessage && (
+                <p
+                  className={`text-xs mt-1 ${
+                    referralValid ? "text-green-600 dark:text-green-400" : "text-red-500"
+                  }`}
+                >
+                  {referralMessage}
+                </p>
+              )}
             </div>
           </div>
 

@@ -247,6 +247,75 @@ def get_state(user_id):
 def clear_state(user_id):
     supabase.table("user_sessions").update({"state": None}).eq("user_id", user_id).execute()
 
+
+def has_active_webapp_requests(user_id: int) -> bool:
+    """Check whether user has active requests in exchange/gift/fuel flows."""
+    tx_statuses = ["pending", "approved", "waiting_edit"]
+    gift_statuses = ["pending_recipient", "pending_admin", "approved", "preapproved"]
+    fuel_statuses = ["pending_payment", "pending", "paid", "approved", "in_progress", "fueling_complete"]
+
+    try:
+        tx_res = (
+            supabase
+            .table("transactions")
+            .select("id")
+            .eq("user_id", user_id)
+            .in_("status", tx_statuses)
+            .limit(1)
+            .execute()
+        )
+        if tx_res.data:
+            return True
+    except Exception as e:
+        print(f"⚠️ Failed to check active transactions for {user_id}: {e}")
+
+    try:
+        sender_gifts = (
+            supabase
+            .table("gifts")
+            .select("id")
+            .eq("sender_user_id", user_id)
+            .in_("status", gift_statuses)
+            .limit(1)
+            .execute()
+        )
+        if sender_gifts.data:
+            return True
+    except Exception as e:
+        print(f"⚠️ Failed to check sender gifts for {user_id}: {e}")
+
+    try:
+        recipient_gifts = (
+            supabase
+            .table("gifts")
+            .select("id")
+            .eq("recipient_user_id", user_id)
+            .in_("status", gift_statuses)
+            .limit(1)
+            .execute()
+        )
+        if recipient_gifts.data:
+            return True
+    except Exception as e:
+        print(f"⚠️ Failed to check recipient gifts for {user_id}: {e}")
+
+    try:
+        fuel_res = (
+            supabase
+            .table("fuel_orders")
+            .select("id")
+            .eq("user_id", user_id)
+            .in_("status", fuel_statuses)
+            .limit(1)
+            .execute()
+        )
+        if fuel_res.data:
+            return True
+    except Exception as e:
+        print(f"⚠️ Failed to check fuel orders for {user_id}: {e}")
+
+    return False
+
 #HEREGLEGCHIIN GEREE
 
 def ask_terms_agreement(chat_id):
@@ -867,11 +936,7 @@ def main_menu(lang=None):
     markup.row_width = 2
     markup.add(
         InlineKeyboardButton(t(lang, "btn_exchange_rate"), callback_data="exchange_rate"),
-        InlineKeyboardButton(t(lang, "btn_exchange"), callback_data="exchange_menu"),
-        InlineKeyboardButton(t(lang, "btn_profile"), callback_data="user_profile"),
-        InlineKeyboardButton(t(lang, "btn_other_services"), callback_data="other_services"),
-        InlineKeyboardButton(t(lang, "btn_register"), callback_data="start_registration"),
-        InlineKeyboardButton(t(lang, "btn_invite_friend"), callback_data="invite_friend")
+        InlineKeyboardButton(t(lang, "btn_instructions"), callback_data="instructions_menu")
     )
     return markup
 
@@ -971,25 +1036,147 @@ def handle_lang_selection(call):
     bot.send_message(call.message.chat.id, t(lang, "welcome"), reply_markup=main_menu(lang))
 
 
+@bot.callback_query_handler(func=lambda call: call.data == "instructions_menu")
+def instructions_menu(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_instruction_register"), callback_data="instruction_register"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_instruction_exchange"), callback_data="instruction_exchange"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_instruction_other_services"), callback_data="instruction_other_services"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instructions_title"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "instruction_register")
+def instruction_register(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="instructions_menu"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instruction_register_text"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "instruction_exchange")
+def instruction_exchange(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="instructions_menu"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instruction_exchange_text"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "instruction_other_services")
+def instruction_other_services(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_instruction_phone"), callback_data="instruction_phone"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_instruction_fuel"), callback_data="instruction_fuel"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_instruction_gift"), callback_data="instruction_gift"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_instruction_flight"), callback_data="instruction_flight"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="instructions_menu"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instruction_other_services_title"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "instruction_phone")
+def instruction_phone(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="instruction_other_services"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instruction_phone_text"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "instruction_fuel")
+def instruction_fuel(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="instruction_other_services"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instruction_fuel_text"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "instruction_gift")
+def instruction_gift(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="instruction_other_services"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instruction_gift_text"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "instruction_flight")
+def instruction_flight(call):
+    lang = get_user_lang(call.from_user.id)
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton(t(lang, "btn_open_operator_chat"), url=f"https://t.me/{FLIGHT_BOOKING_TG}"))
+    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="instruction_other_services"))
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        t(lang, "instruction_flight_text"),
+        parse_mode="Markdown",
+        reply_markup=markup,
+        disable_web_page_preview=True,
+    )
+
+
 #----------------------OTHER SERVICES-----------------------------
 FLIGHT_BOOKING_TG = "OYUNS_Finance"
 
 # Other Services Menu
 @bot.callback_query_handler(func=lambda call: call.data == "other_services")
 def other_services_menu(call):
-    lang = get_user_lang(call.from_user.id)
-    markup = InlineKeyboardMarkup()
-    markup.add(
-        InlineKeyboardButton(t(lang, "btn_flight_booking"), callback_data="flight_booking"),
-        InlineKeyboardButton(t(lang, "btn_phone_topup"), callback_data="phone_topup"),
-        InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main")
-    )
-    bot.send_message(
-        call.message.chat.id,
-        t(lang, "other_services_title"),
-        reply_markup=markup,
-        parse_mode="Markdown"
-    )
+    instruction_other_services(call)
 
 @bot.callback_query_handler(func=lambda call: call.data == "flight_booking")
 def flight_booking_info(call):
@@ -1018,40 +1205,7 @@ TELECOM_COMPANIES = {
 
 @bot.callback_query_handler(func=lambda call: call.data == "phone_topup")
 def phone_topup_start(call):
-    user_id = call.message.chat.id
-    
-    # Check business hours and admin availability
-    if not is_within_ub_business_hours():
-        bot.answer_callback_query(call.id)
-        lang = get_user_lang(user_id)
-        bot.send_message(
-            user_id,
-            t(lang, "business_hours_msg"),
-        )
-        return
-    
-    if not ensure_admin_available(user_id):
-        bot.answer_callback_query(call.id)
-        return
-    
-    config = get_current_shift_config()
-    if config:
-        # Set globals dynamically
-        global OPERATOR_CHAT_ID, BANK_DETAILS_RUB, BANK_DETAILS_MNT
-        OPERATOR_CHAT_ID = config["operator_id"]
-        BANK_DETAILS_RUB = config["bank_rub"]
-        BANK_DETAILS_MNT = config["bank_mnt"]
-
-    # Save the state
-    update_user_session(user_id, {"state": "phone_topup_amount"})
-    
-    bot.answer_callback_query(call.id)
-    lang = get_user_lang(user_id)
-    bot.send_message(
-        user_id,
-        t(lang, "phone_topup_title"),
-        parse_mode="Markdown"
-    )
+    instruction_phone(call)
 
 @bot.message_handler(func=lambda message: get_state(message.chat.id) == "phone_topup_amount")
 def receive_topup_amount(message):
@@ -1381,6 +1535,9 @@ def perform_calculation(message):
 # --------------------------------HEREGLEGCHIIN TOHIRGOO-----------------------
 @bot.callback_query_handler(func=lambda call: call.data == "user_profile")
 def profile_menu(call):
+    instruction_register(call)
+    return
+
     user_id = call.message.chat.id
     lang = get_user_lang(user_id)
     response = supabase.table("users").select("*").eq("id", user_id).execute()
@@ -1653,130 +1810,7 @@ def send_verification_alert_to_operator(user_id, user):
 
 @bot.callback_query_handler(func=lambda call: call.data == "start_registration")
 def start_registration_from_menu(call):
-    lang = get_user_lang(call.from_user.id)
-    bot.answer_callback_query(call.id)
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton(t(lang, "btn_open_app"), web_app=WebAppInfo(url=WEBAPP_URL)))
-    markup.add(InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main"))
-    bot.send_message(
-        call.message.chat.id,
-        t(lang, "register_open_app_prompt"),
-        parse_mode="Markdown",
-        reply_markup=markup
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data == "submit_verification")
-def submit_verification(call):
-    user_id = call.message.chat.id
-
-    # ✅ Fetch user info
-    response = supabase.table("users").select("*").eq("id", user_id).execute()
-    user = response.data[0] if response.data else None
-
-    if not user:
-        bot.send_message(user_id, "❌ Таны бүртгэлийн мэдээлэл олдсонгүй. Та эхлээд бүртгүүлнэ үү.")
-        return
-
-    required_fields = [
-        'first_name', 'last_name', 'phone',
-        'bank_mnt', 'passport_file_id',
-        'registration_number'
-    ]
-
-    missing = [f for f in required_fields if not str(user.get(f)).strip()]
-    if missing:
-        bot.send_message(user_id, (
-            "⚠️ Та мэдээллээ бүрэн оруулаагүй байна.\n\n"
-            "Дараах мэдээлэл дутуу байж болзошгүй:\n" +
-            "\n".join([f"• {field}" for field in missing]) +
-            "\n\n📌 'Хэрэглэгчийн тохиргоо' хэсгээс мэдээллээ бүрэн бөглөнө үү."
-        ))
-        return
-
-    # ✅ Update status in DB
-    supabase.table("users").update({
-        "ready_for_verification": True
-    }).eq("id", user_id).execute()
-
-    bot.send_message(user_id, "✅ Таны мэдээлэл амжилттай илгээгдлээ. Админ баталгаажуулахыг хүлээнэ үү.")
-
-    # 🔔 Alert the operator (or schedule it)
-    send_verification_alert_to_operator(user_id, user)
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("edit_"))
-def edit_profile_field(call):
-    user_id = call.message.chat.id
-    field = call.data.replace("edit_", "")
-
-    # 🛡️ Check if verified
-    response = supabase.table("users").select("verified").eq("id", user_id).execute()
-    user = response.data[0] if response.data else {}
-
-    is_verified = user.get("verified", False)
-
-    # 👮‍♂️ Lock certain fields if verified
-    if is_verified and field in ["passport", "registration_number"]:
-        bot.send_message(user_id, f"⚠️ Энэ мэдээллийг баталгаажсан хэрэглэгч дахин өөрчлөх боломжгүй.\n✉️ Өөрчлөхийг хүсвэл админтай холбогдоно уу: {CONTACT_SUPPORT}")
-        return
-
-    update_user_session(user_id, {"state": f"editing_{field}"})
-
-    field_names = {
-        "first_name": "📝 Та өөрийн нэрээ оруулна уу:",
-        "last_name": "📝 Та өөрийн овгоо оруулна уу:",
-        "phone": "📞 Утасны дугаараа оруулна уу:",
-        "registration_number": "🪪 Та өөрийн паспортын дугаарыг оруулна уу (жишээ нь: E1234560):",
-        "bank_mnt": "🏦 Монгол дахь банкны мэдээлэл (Банк, Дансны IBAN дугаар, Данс зэмшэгчийн нэр):",
-        "bank_rub": "🏦 ОХУ дахь банкны мэдээлэл (Банк, Утасны дугаар, Картын дугаар, Карт эзэмшэгчийн нэр):"
-    }
-
-    bot.send_message(user_id, field_names.get(field, "📝 Мэдээлэл оруулна уу:"))
-@bot.message_handler(func=lambda m: isinstance(get_state(m.chat.id), str) and get_state(m.chat.id).startswith("editing_"))
-
-def save_profile_update(message):
-    user_id = message.chat.id
-    session = get_user_session(user_id)
-    state = session.get("state", "")
-    field = state.replace("editing_", "")
-    value = message.text.strip()
-
-    # Format validation for banking info
-    if field == "bank_mnt":
-        parts = [x.strip() for x in value.split(",")]
-        if len(parts) != 3:
-            bot.send_message(user_id,
-                "❌ Та дараах форматаар монгол дансны мэдээллээ оруулна уу:\n"
-                "`Банк, Дансны IBAN дугаар, Данс зэмшэгчийн нэр`", parse_mode="Markdown")
-            return
-
-    elif field == "registration_number":
-      if not re.match(r'^[A-Za-z0-9]+$', text):
-        bot.send_message(user_id, "❌ Паспортын дугаар буруу байна. Жишээ: `E2853960`", parse_mode="Markdown")
-        return
-
-    elif field == "bank_rub":
-        parts = [x.strip() for x in value.split(",")]
-        if len(parts) != 4:
-            bot.send_message(user_id,
-                "❌ Та дараах форматаар орос дансны мэдээллээ оруулна уу:\n"
-                "`Банк, Утасны дугаар, Картын дугаар, Карт эзэмшэгчийн нэр`", parse_mode="Markdown")
-            return
-
-    try:
-        # Update Supabase
-        supabase.table("users").upsert({
-            "id": user_id,
-            field: value,
-            "updated_at": datetime.now().isoformat()
-        }).execute()
-
-        bot.send_message(user_id, f"✅ Таны *{field.replace('_', ' ')}* шинэчлэгдлээ.", parse_mode="Markdown")
-    except Exception as e:
-        print(f"❌ Supabase error: {e}")
-        bot.send_message(user_id, "❌ Error updating your profile. Please try again later.")
-
-    clear_state(user_id)
+    instruction_register(call)
 
 @bot.message_handler(func=lambda m: get_state(m.chat.id) == "awaiting_bank")
 def get_bank(message):
@@ -1801,27 +1835,8 @@ def how_to_use(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "exchange_menu")
 def exchange_menu(call):
-    user_id = call.message.chat.id
-    update_user_session(user_id, {"state": ""})
-    # Check if user exists and verified
-    response = supabase.table("users").select("verified").eq("id", user_id).execute()
-    user = response.data[0] if response.data else None
-
-    lang = get_user_lang(user_id)
-    if not user or not user.get("verified"):
-        bot.send_message(user_id, t(lang, "exchange_not_verified"))
-        return
-    
-    config = get_current_shift_config()
-
-    markup = InlineKeyboardMarkup()
-    markup.row_width = 2
-    markup.add(
-        InlineKeyboardButton(t(lang, "btn_mnt_to_rub"), callback_data="SELL_RATE"),
-        InlineKeyboardButton(t(lang, "btn_rub_to_mnt"), callback_data="BUY_RATE"),
-        InlineKeyboardButton(t(lang, "btn_back"), callback_data="back_main")
-    )
-    bot.send_message(call.message.chat.id, t(lang, "exchange_choose_direction"), reply_markup=markup)
+    instruction_exchange(call)
+    return
 
 
 
@@ -5290,13 +5305,12 @@ def test_broadcast_rates(message):
 @bot.message_handler(func=lambda m: True, content_types=['text'])
 def handle_unknown_text(message):
     # only fire when we're not in the middle of a flow
-    if not get_state(message.chat.id):
-        lang = get_user_lang(message.chat.id)
-        bot.send_message(
-            message.chat.id,
-            t(lang, "unknown_text"),
-            parse_mode="Markdown"
-        )
+    if get_state(message.chat.id):
+        return
+
+    lang = get_user_lang(message.chat.id)
+    fallback_key = "unknown_pending" if has_active_webapp_requests(message.chat.id) else "unknown_general"
+    bot.send_message(message.chat.id, t(lang, fallback_key))
 
 
 # 🏃 Initialize and Run the Bot
