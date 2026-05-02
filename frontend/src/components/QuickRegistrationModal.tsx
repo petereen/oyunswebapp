@@ -106,7 +106,7 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
 
       setReferralValid(true);
       if (result.inviter_name) {
-        setReferralMessage(`Уригч: ${result.inviter_name}`);
+        setReferralMessage(`Урисан: ${result.inviter_name}`);
       } else {
         setReferralMessage(result.message || "Referral code is valid");
       }
@@ -260,7 +260,7 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
 
             <div>
               <label className="text-xs text-slate-500 dark:text-ivory-400 flex items-center gap-1">
-                <Ticket className="w-3 h-3" /> Referral code (optional)
+                <Ticket className="w-3 h-3" /> Найзын код / Refferal code
               </label>
               <input
                 type="text"

@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trophy, Calendar, MapPin } from "lucide-react";
+import { Trophy, Calendar, MapPin, Settings, Star, Users, Copy, Check, ChevronRight } from "lucide-react";
 import {
+  fetchOyunsPlusSummary,
   fetchTournamentMyVotes,
   fetchTournamentOverview,
+  OYUNS_PLUS_LOGO_DEFAULT_URL,
   submitTournamentVote,
   TournamentCategory,
   TournamentVenue,
@@ -22,6 +24,15 @@ export function OyunsPlusTab({ userId }: Props) {
   const [voteMessage, setVoteMessage] = useState("");
   const [activeTournamentSection, setActiveTournamentSection] = useState<"basketball" | null>(null);
   const [tournamentInnerTab, setTournamentInnerTab] = useState<"schedule" | "leaderboard">("schedule");
+  const [showSettings, setShowSettings] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
+  const { data: summary } = useQuery({
+    queryKey: ["oyuns-plus-summary", userId],
+    queryFn: () => fetchOyunsPlusSummary(),
+    enabled: Boolean(userId),
+    retry: 1,
+  });
 
   const { data: tournamentOverview, isLoading: tournamentLoading } = useQuery({
     queryKey: ["tournament-overview"],
@@ -159,9 +170,109 @@ export function OyunsPlusTab({ userId }: Props) {
     );
   };
 
+  const handleCopyCode = () => {
+    if (!summary?.referral_code) return;
+    navigator.clipboard.writeText(summary.referral_code).then(() => {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    });
+  };
+
+  if (showSettings) {
+    const logoUrl = tournamentOverview?.logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL;
+    return (
+      <div className="animate-fadeIn space-y-4">
+        {/* Header */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings(false)}
+            className="text-xs text-maroon-600 dark:text-gold-400 font-semibold hover:underline flex items-center gap-1"
+          >
+            ← {t("common.back")}
+          </button>
+          <span className="text-dark-400 dark:text-ivory-500">/</span>
+          <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.settings_title")}</div>
+        </div>
+
+        {/* Identity card */}
+        <div className="bg-gradient-to-br from-maroon-700 via-maroon-800 to-dark-900 rounded-3xl p-5 text-white shadow-card-dark">
+          <div className="flex items-center gap-2 mb-4">
+            <img src={logoUrl} alt="OYUNS Plus" className="w-6 h-6 object-contain" />
+            <div className="font-bold text-base">{t("profile.oyuns_title")}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/10 rounded-2xl p-3">
+              <div className="text-[11px] text-white/60 mb-0.5">{t("profile.oyuns_points")}</div>
+              <div className="text-2xl font-black text-gold-400">{summary?.points_balance ?? "—"}</div>
+            </div>
+            <div className="bg-white/10 rounded-2xl p-3">
+              <div className="text-[11px] text-white/60 mb-0.5 flex items-center gap-1"><Users className="w-3 h-3" />{t("oyuns_plus.settings_invited")}</div>
+              <div className="text-2xl font-black">{summary?.invited_verified ?? "—"}<span className="text-sm font-normal text-white/50">/{summary?.invited_total ?? "—"}</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Referral code */}
+        {summary?.referral_code && (
+          <div className="bg-white dark:bg-dark-800 rounded-2xl p-4 border border-silver/60 dark:border-dark-600 shadow-card">
+            <div className="text-xs font-bold text-dark-700 dark:text-ivory-300 mb-2">{t("oyuns_plus.settings_referral_code")}</div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 font-mono text-base font-bold tracking-widest text-dark-900 dark:text-ivory-100 bg-surface-100 dark:bg-dark-700 rounded-xl px-3 py-2">
+                {summary.referral_code}
+              </div>
+              <button
+                onClick={handleCopyCode}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-maroon-600 text-white text-xs font-semibold hover:bg-maroon-500 transition active:scale-95"
+              >
+                {codeCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {codeCopied ? t("oyuns_plus.settings_copied") : t("oyuns_plus.settings_copy")}
+              </button>
+            </div>
+            <div className="mt-2 text-[11px] text-dark-500 dark:text-ivory-400">
+              {t("oyuns_plus.settings_referral_remaining")}: <span className="font-semibold text-maroon-600 dark:text-gold-400">{summary.referral_uses_remaining}</span>
+            </div>
+          </div>
+        )}
+
+        {/* How points are earned */}
+        <div className="bg-white dark:bg-dark-800 rounded-2xl p-4 border border-silver/60 dark:border-dark-600 shadow-card space-y-3">
+          <div className="flex items-center gap-2">
+            <Star className="w-4 h-4 text-gold-500" />
+            <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.settings_how_to_earn")}</div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between rounded-xl bg-surface-50 dark:bg-dark-700 px-3 py-2.5">
+              <div className="text-xs text-dark-700 dark:text-ivory-300">{t("oyuns_plus.settings_earn_exchange")}</div>
+              <div className="text-xs font-bold text-maroon-600 dark:text-gold-400">
+                {summary ? `${summary.points_per_threshold} pts / ${summary.threshold_rub.toLocaleString()} ₽` : "—"}
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-surface-50 dark:bg-dark-700 px-3 py-2.5">
+              <div className="text-xs text-dark-700 dark:text-ivory-300">{t("oyuns_plus.settings_earn_referral")}</div>
+              <div className="text-xs font-bold text-maroon-600 dark:text-gold-400">
+                {summary ? `+${summary.referral_reward_points} pts` : "—"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fadeIn space-y-4">
-      <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("profile.oyuns_title")}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("profile.oyuns_title")}</h2>
+        <button
+          onClick={() => setShowSettings(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-400 hover:bg-surface-200 dark:hover:bg-dark-600 transition active:scale-95"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          <span className="text-[11px] font-semibold">{t("oyuns_plus.settings_btn")}</span>
+          <ChevronRight className="w-3 h-3 opacity-50" />
+        </button>
+      </div>
 
       {activeTournamentSection === null ? (
         /* Outer selector — Services-style */
