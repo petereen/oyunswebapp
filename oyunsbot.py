@@ -248,6 +248,60 @@ def clear_state(user_id):
     supabase.table("user_sessions").update({"state": None}).eq("user_id", user_id).execute()
 
 
+EXCHANGE_FLOW_TOKEN_LENGTH = 8
+
+
+def _generate_exchange_flow_token() -> str:
+    chars = string.ascii_lowercase + string.digits
+    return "".join(random.choices(chars, k=EXCHANGE_FLOW_TOKEN_LENGTH))
+
+
+def _begin_exchange_amount_selection(user_id: int, currency: str) -> str:
+    flow_token = _generate_exchange_flow_token()
+    update_user_session(user_id, {
+        "state": f"awaiting_exchange_amount_{currency}",
+        "exchange_flow_token": flow_token,
+    })
+    return flow_token
+
+
+def _answer_stale_exchange_button(call) -> None:
+    lang = get_user_lang(call.message.chat.id)
+    bot.answer_callback_query(call.id, t(lang, "exchange_button_expired"), show_alert=True)
+
+
+def _validate_exchange_button(call, expected_states, flow_token):
+    if isinstance(expected_states, str):
+        expected_states = {expected_states}
+    else:
+        expected_states = set(expected_states)
+
+    session = get_user_session(call.message.chat.id)
+    current_state = session.get("state")
+    current_token = session.get("exchange_flow_token")
+    if current_state not in expected_states or not flow_token or current_token != flow_token:
+        _answer_stale_exchange_button(call)
+        return None
+    return session
+
+
+def _build_rub_bank_markup(user_id: int, flow_token: str):
+    config = get_current_shift_config() or {}
+    rub_bank_options = config.get("rub_bank_options", {})
+    if not rub_bank_options:
+        return None
+
+    markup = InlineKeyboardMarkup()
+    bank_map = {}
+    for idx, (bank_label, bank_details) in enumerate(rub_bank_options.items()):
+        key = f"b{idx}"
+        bank_map[key] = bank_details
+        markup.add(InlineKeyboardButton(bank_label, callback_data=f"rubmnt_bank_{key}_{flow_token}"))
+
+    update_user_session(user_id, {"rub_bank_map": bank_map})
+    return markup
+
+
 def has_active_webapp_requests(user_id: int) -> bool:
     """Check whether user has active requests in exchange/gift/fuel flows."""
     tx_statuses = ["pending", "approved", "waiting_edit"]
@@ -1844,21 +1898,22 @@ def exchange_menu(call):
 def show_common_rub_amounts(user_id):
     try:
         lang = get_user_lang(user_id)
+        flow_token = _begin_exchange_amount_selection(user_id, "rub")
         markup = InlineKeyboardMarkup()
         # Add buttons in rows of 2 or 3 for better UX and to avoid Telegram issues
         markup.row(
-            InlineKeyboardButton("1,000 РУБ", callback_data="amount_rub_1000"),
-            InlineKeyboardButton("5,000 РУБ", callback_data="amount_rub_5000"),
+            InlineKeyboardButton("1,000 РУБ", callback_data=f"amount_rub_1000_{flow_token}"),
+            InlineKeyboardButton("5,000 РУБ", callback_data=f"amount_rub_5000_{flow_token}"),
         )
         markup.row(
-            InlineKeyboardButton("10,000 РУБ", callback_data="amount_rub_10000"),
-            InlineKeyboardButton("20,000 РУБ", callback_data="amount_rub_20000"),
+            InlineKeyboardButton("10,000 РУБ", callback_data=f"amount_rub_10000_{flow_token}"),
+            InlineKeyboardButton("20,000 РУБ", callback_data=f"amount_rub_20000_{flow_token}"),
         )
         markup.row(
-            InlineKeyboardButton("30,000 РУБ", callback_data="amount_rub_30000"),
+            InlineKeyboardButton("30,000 РУБ", callback_data=f"amount_rub_30000_{flow_token}"),
         )
         markup.row(
-            InlineKeyboardButton(t(lang, "btn_custom_amount"), callback_data="custom_rub"),
+            InlineKeyboardButton(t(lang, "btn_custom_amount"), callback_data=f"custom_rub_{flow_token}"),
             InlineKeyboardButton(t(lang, "btn_back"), callback_data="exchange_menu"),
         )
         bot.send_message(user_id, t(lang, "exchange_choose_rub_amount"), reply_markup=markup)
@@ -1871,14 +1926,15 @@ def show_common_rub_amounts(user_id):
 
 def show_common_mnt_amounts(user_id):
     lang = get_user_lang(user_id)
+    flow_token = _begin_exchange_amount_selection(user_id, "mnt")
     markup = InlineKeyboardMarkup()
     markup.add(
-        InlineKeyboardButton("250,000 MNT", callback_data="amount_mnt_250000"),
-        InlineKeyboardButton("500,000 MNT", callback_data="amount_mnt_500000"),
-        InlineKeyboardButton("1,000,000 MNT", callback_data="amount_mnt_1000000"),
-        InlineKeyboardButton("3,000,000 MNT", callback_data="amount_mnt_3000000"),
-        InlineKeyboardButton("5,000,000 MNT", callback_data="amount_mnt_5000000"),
-        InlineKeyboardButton(t(lang, "btn_custom_amount"), callback_data="custom_mnt"),
+        InlineKeyboardButton("250,000 MNT", callback_data=f"amount_mnt_250000_{flow_token}"),
+        InlineKeyboardButton("500,000 MNT", callback_data=f"amount_mnt_500000_{flow_token}"),
+        InlineKeyboardButton("1,000,000 MNT", callback_data=f"amount_mnt_1000000_{flow_token}"),
+        InlineKeyboardButton("3,000,000 MNT", callback_data=f"amount_mnt_3000000_{flow_token}"),
+        InlineKeyboardButton("5,000,000 MNT", callback_data=f"amount_mnt_5000000_{flow_token}"),
+        InlineKeyboardButton(t(lang, "btn_custom_amount"), callback_data=f"custom_mnt_{flow_token}"),
         InlineKeyboardButton(t(lang, "btn_back"), callback_data="exchange_menu")
     )
     bot.send_message(user_id, t(lang, "exchange_choose_mnt_amount"), reply_markup=markup)
@@ -2234,17 +2290,24 @@ def selected_common_amount(call):
         bot.answer_callback_query(call.id)
         return
     try:
-        parts = call.data.split("_")
+        callback_payload, flow_token = call.data.rsplit("_", 1)
+        parts = callback_payload.split("_")
         currency, amount = parts[1], int(parts[2])
     except Exception as e:
         print(f"[ERROR] Invalid callback_data for selected_common_amount: {call.data} ({e})")
         bot.answer_callback_query(call.id, "❌ Invalid button data.", show_alert=True)
         return
+
+    session = _validate_exchange_button(call, f"awaiting_exchange_amount_{currency}", flow_token)
+    if not session:
+        return
+
+    bot.answer_callback_query(call.id)
+
     invoice = generate_invoice()
     # Get base rate and promo discount
     base_rate = exchange_rates["BUY_RATE"] if currency == "rub" else exchange_rates["SELL_RATE"]
-    session = get_user_session(user_id)
-    promo     = session.get("promo_discount", 0.0)
+    promo = session.get("promo_discount", 0.0)
 
     # compute volume discount
     vol_disc = 0.0
@@ -2290,40 +2353,34 @@ def selected_common_amount(call):
                 parse_mode="Markdown"
             )
 
-    # save to db
+    lang = get_user_lang(user_id)
+    bank_markup = None
+    next_state = "waiting_for_receipt"
+    if currency == "rub":
+        bank_markup = _build_rub_bank_markup(user_id, flow_token)
+        if not bank_markup:
+            bot.send_message(user_id, t(lang, "exchange_no_banks"))
+            return
+        next_state = "awaiting_rub_bank_selection"
+
+    # save to session
     update_user_session(user_id, {
         "amount":        amount,
         "currency_from": currency,
         "currency_to":   "mnt" if currency=="rub" else "rub",
         "invoice":       invoice,
         "rate":          final_rate,
-        "state":         "waiting_for_receipt"
+        "state":         next_state,
     })
 
     if currency == "rub":
-        # Show RUB bank options
-        markup = InlineKeyboardMarkup()
-        rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
-        lang = get_user_lang(user_id)
-        if not rub_bank_options:
-            bot.send_message(user_id, t(lang, "exchange_no_banks"))
-            return
-        bank_map = {}
-        for idx, bank in enumerate(rub_bank_options):
-            key = f"b{idx}"
-            bank_map[key] = bank
-            markup.add(InlineKeyboardButton(bank, callback_data=f"rubmnt_bank_{key}"))
-
-        # Save mapping in session
-        update_user_session(user_id, {"rub_bank_map": bank_map})
         bot.send_message(
             user_id,
             t(lang, "exchange_choose_rub_bank"),
-            reply_markup=markup
+            reply_markup=bank_markup
         )
     else:
         # MNT → RUB flow
-        lang = get_user_lang(user_id)
         exchanged = amount / final_rate
         message_text = f"💱 {amount:,} MNT → {round(exchanged, 2):,} RUB"
 
@@ -2345,11 +2402,19 @@ def custom_amount(call):
         bot.answer_callback_query(call.id)
         return
     try:
-        currency = call.data.split("_")[1]
+        callback_payload, flow_token = call.data.rsplit("_", 1)
+        currency = callback_payload.split("_")[1]
     except Exception as e:
         print(f"[ERROR] Invalid callback_data for custom_amount: {call.data} ({e})")
         bot.answer_callback_query(call.id, "❌ Invalid button data.", show_alert=True)
         return
+
+    session = _validate_exchange_button(call, f"awaiting_exchange_amount_{currency}", flow_token)
+    if not session:
+        return
+
+    bot.answer_callback_query(call.id)
+
     update_user_session(call.message.chat.id, {"state": f"custom_amount_{currency}"})
 
     lang = get_user_lang(call.from_user.id)
@@ -2360,7 +2425,6 @@ def custom_amount(call):
 def receive_custom_amount(message):
     user_id = message.chat.id
     if not ensure_exchange_available(user_id):
-        bot.answer_callback_query(call.id)
         return    
     session = get_user_session(user_id)
     state = session.get("state", "")
@@ -2435,9 +2499,22 @@ def receive_custom_amount(message):
                     parse_mode="Markdown"
                 )
 
+        flow_token = session.get("exchange_flow_token") or _generate_exchange_flow_token()
+        if not session.get("exchange_flow_token"):
+            update_user_session(user_id, {"exchange_flow_token": flow_token})
+
+        bank_markup = None
+        next_state = "waiting_for_receipt"
+        if currency == "rub":
+            bank_markup = _build_rub_bank_markup(user_id, flow_token)
+            if not bank_markup:
+                bot.send_message(user_id, t(lang, "exchange_no_banks"))
+                return
+            next_state = "awaiting_rub_bank_selection"
+
         # Save session
         update_user_session(user_id, {
-            "state": "waiting_for_receipt",
+            "state": next_state,
             "amount": amount,
             "currency_from": currency_from,
             "currency_to": currency_to,
@@ -2452,19 +2529,11 @@ def receive_custom_amount(message):
             exchanged = amount * final_rate
             message_text = f"💱 {amount:,} RUB → {int(exchanged):,} MNT"
 
-            markup = InlineKeyboardMarkup()
-            rub_bank_options = get_current_shift_config().get("rub_bank_options", {})
-            if not rub_bank_options:
-                bot.send_message(user_id, t(lang, "exchange_no_banks"))
-                return
-            for bank_key in rub_bank_options:
-                markup.add(InlineKeyboardButton(bank_key, callback_data=f"rubmnt_bank_{bank_key}"))
-
             bot.send_message(
                 user_id,
                 t(lang, "exchange_choose_rub_bank_custom", msg=message_text),
                 parse_mode="Markdown",
-                reply_markup=markup
+                reply_markup=bank_markup
             )
         else:
             exchanged = amount / final_rate
@@ -2492,17 +2561,24 @@ def handle_rub_mnt_bank_selection(call):
         return
     lang = get_user_lang(user_id)
 
-    # Place the following lines here:
-    key = call.data.replace("rubmnt_bank_", "")
-    session = get_user_session(user_id)
-    bank_map = session.get("rub_bank_map", {})
-    selected_bank = bank_map.get(key)
-    if not selected_bank:
-        bot.send_message(user_id, t(lang, "exchange_bank_not_found"))
+    try:
+        callback_payload, flow_token = call.data.rsplit("_", 1)
+        key = callback_payload.replace("rubmnt_bank_", "")
+    except Exception as e:
+        print(f"[ERROR] Invalid callback_data for RUB bank selection: {call.data} ({e})")
+        bot.answer_callback_query(call.id, "❌ Invalid button data.", show_alert=True)
         return
-    session = get_user_session(user_id)
+
+    session = _validate_exchange_button(call, "awaiting_rub_bank_selection", flow_token)
     if not session:
-        bot.send_message(user_id, t(lang, "error_session_not_found"))
+        return
+
+    bot.answer_callback_query(call.id)
+
+    bank_map = session.get("rub_bank_map", {})
+    bank_details = bank_map.get(key)
+    if not bank_details:
+        bot.send_message(user_id, t(lang, "exchange_bank_not_found"))
         return
     
     amount = session.get("amount")
@@ -2622,7 +2698,6 @@ def handle_preview_decision(call):
 def receive_bank_details(message):
     user_id = message.chat.id
     if not ensure_exchange_available(user_id):
-        bot.answer_callback_query(call.id)
         return
     lang = get_user_lang(user_id)
     bank_details = message.text.strip()
