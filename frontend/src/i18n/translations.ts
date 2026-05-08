@@ -300,6 +300,12 @@ const translations: Record<string, Record<Lang, string>> = {
   "oyuns_plus.tab_schedule": { ru: "Расписание", mn: "Тоглолтын хуваарь" },
   "oyuns_plus.tab_stages": { ru: "Группы и плей-офф", mn: "Хэсгийн ба хасагдах шат" },
   "oyuns_plus.tab_leaderboard": { ru: "Leaderboard команд", mn: "Санал хураалт" },
+  "oyuns_plus.tournament_gate_title": { ru: "Нужна регистрация", mn: "Хялбаршуулсан бүртгэл шаардлагатай" },
+  "oyuns_plus.tournament_gate_desc": {
+    ru: "Чтобы увидеть расписание, группы и голосование, сначала пройдите регистрацию.",
+    mn: "Тоглолтын хуваарь, хэсэг болон санал хураалтыг харахын тулд та эхлээд хялбаршуулсан бүртгүүлнэ үү."
+  },
+  "oyuns_plus.tournament_gate_action": { ru: "Зарегистрироваться", mn: "Бүртгүүлэх" },
   "oyuns_plus.tournament_desc": { ru: "Раздел турнира в OYUNS Plus: расписание матчей, счёт и текущие игры.", mn: "ОХУ дахь Монгол Оюутны Холбооны Сагсан Бөмбөгийн аварга шалгаруулах тэмцээний хэсэг: тоглолтын хуваарь, оноо, явагдаж буй тоглолтуудыг харах боломжтой." },
   "oyuns_plus.tournament_categories": { ru: "Мужской / Женский", mn: "Эрэгтэй / Эмэгтэй" },
   "oyuns_plus.tournament_venues": { ru: "А заал / Б заал", mn: "А заал / Б заал" },

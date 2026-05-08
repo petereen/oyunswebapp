@@ -64,7 +64,7 @@ export default function App() {
   }, [refreshAuth]);
 
   // Fetch profile at App level to determine admin status immediately
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: isProfileLoading } = useQuery({
     queryKey: ["me", user?.id],
     queryFn: () => fetchMe(),
     enabled: Boolean(user?.id) && !isAuthenticating,
@@ -72,6 +72,7 @@ export default function App() {
   });
 
   const isAdmin = profile?.is_admin || false;
+  const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : profile?.user?.ready_for_verification ? 1 : 0);
 
   const handleNavigateToTransaction = (direction?: "buy" | "sell", editInvoice?: string) => {
     if (editInvoice) {
@@ -197,6 +198,8 @@ export default function App() {
             {activeTab === 3 && (
               <OyunsPlusTab
                 userId={user?.id}
+                verificationLevel={verificationLevel}
+                isProfileLoading={Boolean(user?.id) && isProfileLoading}
                 initialTournamentSection={urlTournamentSection}
                 initialTournamentInnerTab={urlTournamentInnerTab}
               />

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trophy, Calendar, MapPin, Settings, Star, Users, Copy, Check, ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
+import { Trophy, Calendar, MapPin, Settings, Star, Users, Copy, Check, ChevronRight, TrendingUp, TrendingDown, UserPlus } from "lucide-react";
 import {
   fetchOyunsPlusSummary,
   fetchOyunsPlusHistory,
@@ -12,6 +12,7 @@ import {
   TournamentKnockoutPhase,
   TournamentVenue,
 } from "../api";
+import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { useLang } from "../i18n/useLang";
 
 const KNOCKOUT_ROUND_ORDER: Record<string, number> = {
@@ -22,11 +23,13 @@ const KNOCKOUT_ROUND_ORDER: Record<string, number> = {
 
 interface Props {
   userId?: number;
+  verificationLevel?: number;
+  isProfileLoading?: boolean;
   initialTournamentSection?: "basketball" | null;
   initialTournamentInnerTab?: "schedule" | "stages" | "leaderboard";
 }
 
-export function OyunsPlusTab({ userId, initialTournamentSection = null, initialTournamentInnerTab = "schedule" }: Props) {
+export function OyunsPlusTab({ userId, verificationLevel = 0, isProfileLoading = false, initialTournamentSection = null, initialTournamentInnerTab = "schedule" }: Props) {
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [gameCategoryFilter, setGameCategoryFilter] = useState<"all" | TournamentCategory>("all");
@@ -35,6 +38,7 @@ export function OyunsPlusTab({ userId, initialTournamentSection = null, initialT
   const [activeTournamentSection, setActiveTournamentSection] = useState<"basketball" | null>(initialTournamentSection);
   const [tournamentInnerTab, setTournamentInnerTab] = useState<"schedule" | "stages" | "leaderboard">(initialTournamentInnerTab);
   const [showSettings, setShowSettings] = useState(false);
+  const [showQuickRegistration, setShowQuickRegistration] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
   const { data: summary } = useQuery({
@@ -111,6 +115,8 @@ export function OyunsPlusTab({ userId, initialTournamentSection = null, initialT
   );
 
   const hasScheduleContent = filteredGames.length > 0;
+  const holdTournamentContent = Boolean(userId) && isProfileLoading;
+  const needsLevelOneRegistration = Boolean(userId) && !isProfileLoading && verificationLevel < 1;
 
   const voteMutation = useMutation({
     mutationFn: submitTournamentVote,
@@ -287,6 +293,32 @@ export function OyunsPlusTab({ userId, initialTournamentSection = null, initialT
       setTimeout(() => setCodeCopied(false), 2000);
     });
   };
+
+  const handleRegistered = () => {
+    queryClient.invalidateQueries({ queryKey: ["me", userId] });
+    setShowQuickRegistration(false);
+  };
+
+  const renderTournamentRegistrationBlocker = () => (
+    <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card space-y-4">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-maroon-50 dark:bg-maroon-900/30 flex items-center justify-center shrink-0">
+          <UserPlus className="w-6 h-6 text-maroon-600 dark:text-maroon-300" />
+        </div>
+        <div className="space-y-1">
+          <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.tournament_gate_title")}</div>
+          <div className="text-xs leading-relaxed text-dark-600 dark:text-ivory-300">{t("oyuns_plus.tournament_gate_desc")}</div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setShowQuickRegistration(true)}
+        className="w-full bg-maroon-600 text-white py-3 rounded-2xl font-bold text-sm shadow-btn hover:bg-maroon-500 active:scale-[0.98] transition-all"
+      >
+        {t("oyuns_plus.tournament_gate_action")}
+      </button>
+    </div>
+  );
 
   if (showSettings) {
     const logoUrl = tournamentOverview?.logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL;
@@ -485,7 +517,13 @@ export function OyunsPlusTab({ userId, initialTournamentSection = null, initialT
             </button>
           </div>
 
-          {tournamentInnerTab === "schedule" ? (
+          {holdTournamentContent ? (
+            <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card text-xs text-dark-600 dark:text-ivory-400">
+              {t("profile.loading")}
+            </div>
+          ) : needsLevelOneRegistration ? (
+            renderTournamentRegistrationBlocker()
+          ) : tournamentInnerTab === "schedule" ? (
             /* Schedule and Scores tab */
             <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card space-y-3">
               <div className="flex gap-2 flex-wrap">
@@ -724,6 +762,10 @@ export function OyunsPlusTab({ userId, initialTournamentSection = null, initialT
             </div>
           )}
         </div>
+      )}
+
+      {showQuickRegistration && needsLevelOneRegistration && (
+        <QuickRegistrationModal onRegistered={handleRegistered} onClose={() => setShowQuickRegistration(false)} />
       )}
     </div>
   );
