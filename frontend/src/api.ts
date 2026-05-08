@@ -541,6 +541,65 @@ export interface TournamentGame {
   away_team_logo_url?: string;
 }
 
+export interface TournamentGroup {
+  id: string;
+  category: TournamentCategory;
+  name: string;
+  team_ids: string[];
+  display_order: number;
+  teams: TournamentTeam[];
+}
+
+export interface TournamentKnockoutMatch {
+  id: string;
+  round_key: string;
+  title: string;
+  home_team_id?: string | null;
+  away_team_id?: string | null;
+  home_label?: string | null;
+  away_label?: string | null;
+  home_score: number;
+  away_score: number;
+  status: TournamentGameStatus;
+  home_team_name?: string | null;
+  away_team_name?: string | null;
+  home_team_logo_url?: string | null;
+  away_team_logo_url?: string | null;
+}
+
+export interface TournamentKnockoutPhase {
+  category: TournamentCategory;
+  team_count: 4 | 8;
+  matches: TournamentKnockoutMatch[];
+}
+
+export interface TournamentGroupInput {
+  id?: string;
+  category: TournamentCategory;
+  name: string;
+  team_ids: string[];
+  display_order: number;
+}
+
+export interface TournamentKnockoutMatchInput {
+  id: string;
+  round_key: string;
+  title: string;
+  home_team_id?: string | null;
+  away_team_id?: string | null;
+  home_label?: string | null;
+  away_label?: string | null;
+  home_score: number;
+  away_score: number;
+  status: TournamentGameStatus;
+}
+
+export interface TournamentKnockoutPhaseInput {
+  category: TournamentCategory;
+  team_count: 4 | 8;
+  matches: TournamentKnockoutMatchInput[];
+}
+
 export interface TournamentVoteStatus {
   category: TournamentCategory;
   team_id?: string | null;
@@ -552,6 +611,8 @@ export interface TournamentOverview {
   logo_url?: string;
   teams: TournamentTeam[];
   games: TournamentGame[];
+  groups: TournamentGroup[];
+  knockout: TournamentKnockoutPhase[];
   votes: TournamentVoteStatus[];
 }
 
@@ -578,6 +639,8 @@ export async function fetchTournamentOverview(params?: {
     logo_url: data.logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL,
     teams: Array.isArray(data.teams) ? data.teams : [],
     games: Array.isArray(data.games) ? data.games : [],
+    groups: Array.isArray(data.groups) ? data.groups : [],
+    knockout: Array.isArray(data.knockout) ? data.knockout : [],
     votes: Array.isArray(data.votes) ? data.votes : [],
   };
 }
@@ -682,6 +745,32 @@ export async function updateOyunsSagsAdminGame(gameId: string, payload: Partial<
 export async function deleteOyunsSagsAdminGame(gameId: string): Promise<{ ok: boolean }> {
   const res = await oyunsSagsAdminApi.delete(`/oyuns-sags/admin/games/${gameId}`);
   return res.data as { ok: boolean };
+}
+
+export interface OyunsSagsAdminStages {
+  groups: TournamentGroup[];
+  knockout: TournamentKnockoutPhase[];
+}
+
+export async function fetchOyunsSagsAdminStages(): Promise<OyunsSagsAdminStages> {
+  const res = await oyunsSagsAdminApi.get('/oyuns-sags/admin/stages');
+  const data = res.data as OyunsSagsAdminStages;
+  return {
+    groups: Array.isArray(data.groups) ? data.groups : [],
+    knockout: Array.isArray(data.knockout) ? data.knockout : [],
+  };
+}
+
+export async function updateOyunsSagsAdminStages(payload: Partial<{
+  groups: TournamentGroupInput[];
+  knockout: TournamentKnockoutPhaseInput[];
+}>): Promise<OyunsSagsAdminStages> {
+  const res = await oyunsSagsAdminApi.put('/oyuns-sags/admin/stages', payload);
+  const data = res.data as OyunsSagsAdminStages;
+  return {
+    groups: Array.isArray(data.groups) ? data.groups : [],
+    knockout: Array.isArray(data.knockout) ? data.knockout : [],
+  };
 }
 
 export async function fetchOyunsSagsAdminVotes(): Promise<{ items: TournamentTeam[]; total_votes: number }> {

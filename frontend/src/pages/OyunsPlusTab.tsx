@@ -9,9 +9,16 @@ import {
   OYUNS_PLUS_LOGO_DEFAULT_URL,
   submitTournamentVote,
   TournamentCategory,
+  TournamentKnockoutPhase,
   TournamentVenue,
 } from "../api";
 import { useLang } from "../i18n/useLang";
+
+const KNOCKOUT_ROUND_ORDER: Record<string, number> = {
+  quarterfinals: 1,
+  semifinals: 2,
+  final: 3,
+};
 
 interface Props {
   userId?: number;
@@ -68,6 +75,10 @@ export function OyunsPlusTab({ userId }: Props) {
 
   const teams = tournamentOverview?.teams || [];
   const games = tournamentOverview?.games || [];
+  const groups = tournamentOverview?.groups || [];
+  const knockoutPhases = tournamentOverview?.knockout || [];
+
+  const getCategoryLabel = (category: TournamentCategory) => (category === "men" ? t("oyuns_plus.vote_men") : t("oyuns_plus.vote_women"));
 
   const menTeams = useMemo(
     () => teams.filter((team) => team.category === "men").sort((a, b) => b.votes_count - a.votes_count || a.display_order - b.display_order),
@@ -86,6 +97,18 @@ export function OyunsPlusTab({ userId }: Props) {
     }),
     [games, gameCategoryFilter, gameVenueFilter],
   );
+
+  const filteredGroups = useMemo(
+    () => groups.filter((group) => gameCategoryFilter === "all" || group.category === gameCategoryFilter),
+    [groups, gameCategoryFilter],
+  );
+
+  const filteredKnockoutPhases = useMemo(
+    () => knockoutPhases.filter((phase) => gameCategoryFilter === "all" || phase.category === gameCategoryFilter),
+    [knockoutPhases, gameCategoryFilter],
+  );
+
+  const hasScheduleContent = filteredGroups.length > 0 || filteredKnockoutPhases.length > 0 || filteredGames.length > 0;
 
   const voteMutation = useMutation({
     mutationFn: submitTournamentVote,
@@ -116,6 +139,83 @@ export function OyunsPlusTab({ userId }: Props) {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const getKnockoutRoundLabel = (roundKey: string) => {
+    if (roundKey === "quarterfinals") return t("oyuns_plus.knockout_round_quarterfinals");
+    if (roundKey === "semifinals") return t("oyuns_plus.knockout_round_semifinals");
+    return t("oyuns_plus.knockout_round_final");
+  };
+
+  const renderKnockoutPhase = (phase: TournamentKnockoutPhase) => {
+    const rounds = Array.from(
+      phase.matches.reduce((map, match) => {
+        const bucket = map.get(match.round_key) || [];
+        bucket.push(match);
+        map.set(match.round_key, bucket);
+        return map;
+      }, new Map<string, typeof phase.matches>()),
+    ).sort((a, b) => (KNOCKOUT_ROUND_ORDER[a[0]] || 99) - (KNOCKOUT_ROUND_ORDER[b[0]] || 99));
+
+    return (
+      <div key={phase.category} className="rounded-2xl border border-silver/60 dark:border-dark-600 bg-surface-50 dark:bg-dark-700 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{getCategoryLabel(phase.category)}</div>
+            <div className="text-[11px] text-dark-500 dark:text-ivory-400">{phase.team_count} {t("oyuns_plus.knockout_teams_count")}</div>
+          </div>
+          <div className="rounded-full bg-maroon-100 dark:bg-maroon-900/30 px-3 py-1 text-[11px] font-semibold text-maroon-700 dark:text-maroon-300">
+            {t("oyuns_plus.knockout_title")}
+          </div>
+        </div>
+
+        <div className={`grid gap-3 ${rounds.length >= 3 ? "xl:grid-cols-3" : rounds.length === 2 ? "md:grid-cols-2" : "grid-cols-1"}`}>
+          {rounds.map(([roundKey, matches]) => (
+            <div key={roundKey} className="rounded-2xl border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 p-3 space-y-2">
+              <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-dark-500 dark:text-ivory-400">
+                {getKnockoutRoundLabel(roundKey)}
+              </div>
+
+              {matches.map((match) => {
+                const isCompleted = match.status === "completed";
+                const homeWins = isCompleted && match.home_score > match.away_score;
+                const awayWins = isCompleted && match.away_score > match.home_score;
+                const homeName = match.home_team_name || match.home_label || t("oyuns_plus.team_unknown");
+                const awayName = match.away_team_name || match.away_label || t("oyuns_plus.team_unknown");
+
+                return (
+                  <div key={match.id} className="rounded-xl border border-silver/50 dark:border-dark-600 bg-surface-50 dark:bg-dark-700 px-3 py-2.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold text-dark-700 dark:text-ivory-200">{match.title}</div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                        match.status === "live"
+                          ? "bg-rose-500 text-white"
+                          : match.status === "completed"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                          : "bg-slate-100 text-slate-600 dark:bg-dark-600 dark:text-ivory-400"
+                      }`}>
+                        {t(`oyuns_plus.status_${match.status}`)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={`text-xs truncate ${homeWins ? "font-bold text-blue-600 dark:text-blue-400" : "text-dark-700 dark:text-ivory-200"}`}>{homeName}</div>
+                        <div className="text-xs font-black tabular-nums text-dark-800 dark:text-ivory-100">{match.home_score}</div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className={`text-xs truncate ${awayWins ? "font-bold text-blue-600 dark:text-blue-400" : "text-dark-700 dark:text-ivory-200"}`}>{awayName}</div>
+                        <div className="text-xs font-black tabular-nums text-dark-800 dark:text-ivory-100">{match.away_score}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const renderLeaderboard = (category: TournamentCategory, teamsList: typeof teams) => {
@@ -416,11 +516,76 @@ export function OyunsPlusTab({ userId }: Props) {
 
               {tournamentLoading ? (
                 <div className="text-xs text-dark-600 dark:text-ivory-400">{t("profile.loading")}</div>
-              ) : filteredGames.length === 0 ? (
+              ) : !hasScheduleContent ? (
                 <div className="text-xs text-dark-600 dark:text-ivory-400">{t("oyuns_plus.no_games")}</div>
               ) : (
-                <div className="space-y-2">
-                  {filteredGames.slice(0, 12).map((game) => {
+                <div className="space-y-4">
+                  {filteredGroups.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.groups_title")}</div>
+                        <div className="text-[11px] text-dark-500 dark:text-ivory-400">
+                          {filteredGroups.reduce((sum, group) => sum + group.teams.length, 0)} {t("oyuns_plus.group_teams_count")}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {filteredGroups.map((group) => (
+                          <div key={group.id} className="rounded-2xl border border-silver/60 dark:border-dark-600 bg-surface-50 dark:bg-dark-700 p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{group.name}</div>
+                                <div className="text-[11px] text-dark-500 dark:text-ivory-400">{group.teams.length} {t("oyuns_plus.group_teams_count")}</div>
+                              </div>
+                              <div className="rounded-full bg-slate-100 dark:bg-dark-600 px-3 py-1 text-[11px] font-semibold text-dark-600 dark:text-ivory-300">
+                                {getCategoryLabel(group.category)}
+                              </div>
+                            </div>
+
+                            {group.teams.length === 0 ? (
+                              <div className="text-xs text-dark-500 dark:text-ivory-400">{t("oyuns_plus.groups_empty")}</div>
+                            ) : (
+                              <div className="space-y-2">
+                                {group.teams.map((team) => (
+                                  <div key={team.id} className="flex items-center gap-2 rounded-xl bg-white dark:bg-dark-800 px-3 py-2 border border-silver/50 dark:border-dark-600">
+                                    {team.logo_url ? (
+                                      <img src={team.logo_url} alt={team.name} className="w-8 h-8 rounded-full object-cover border border-silver/50 dark:border-dark-600" />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-maroon-100 dark:bg-maroon-900/30 flex items-center justify-center text-[11px] font-bold text-maroon-700 dark:text-maroon-300">
+                                        {(team.short_name || team.name || "?").slice(0, 1).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-semibold text-dark-800 dark:text-ivory-200 truncate">{team.name}</div>
+                                      {team.short_name && <div className="text-[11px] text-dark-500 dark:text-ivory-400">{team.short_name}</div>}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {filteredKnockoutPhases.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.knockout_title")}</div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {filteredKnockoutPhases.map((phase) => renderKnockoutPhase(phase))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{t("oyuns_plus.schedule_title")}</div>
+
+                    {filteredGames.length === 0 ? (
+                      <div className="text-xs text-dark-600 dark:text-ivory-400">{t("oyuns_plus.no_games")}</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredGames.slice(0, 12).map((game) => {
                     const isLive = game.status === "live";
                     const isCompleted = game.status === "completed";
                     const homeWins = isCompleted && game.home_score > game.away_score;
@@ -520,7 +685,10 @@ export function OyunsPlusTab({ userId }: Props) {
                         </div>
                       </div>
                     );
-                  })}
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

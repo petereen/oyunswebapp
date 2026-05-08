@@ -118,7 +118,14 @@ from models import (
     TournamentGameCreateRequest,
     TournamentGameUpdateRequest,
     TournamentGamesResponse,
+    TournamentGroup,
+    TournamentGroupInput,
+    TournamentKnockoutMatch,
+    TournamentKnockoutPhase,
+    TournamentKnockoutPhaseInput,
     TournamentOverviewResponse,
+    TournamentStagesResponse,
+    TournamentStagesUpdateRequest,
     TournamentTeam,
     TournamentTeamCreateRequest,
     TournamentTeamUpdateRequest,
@@ -156,7 +163,87 @@ COMPENSATION_PROMO_MAX_RUB = Decimal("30000")
 TOURNAMENT_CATEGORIES = {"men", "women"}
 TOURNAMENT_VENUES = {"a_hall", "b_hall"}
 TOURNAMENT_GAME_STATUSES = {"scheduled", "live", "completed", "cancelled"}
+TOURNAMENT_KNOCKOUT_TEAM_COUNTS = {4, 8}
+TOURNAMENT_GROUPS_SETTING_KEY = "oyuns_tournament_groups_json"
+TOURNAMENT_KNOCKOUT_SETTING_KEY = "oyuns_tournament_knockout_json"
 OYUNS_PLUS_LOGO_DEFAULT = "https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/OYUNS%20Plus.png"
+
+TOURNAMENT_KNOCKOUT_TEMPLATES: dict[int, list[dict[str, str]]] = {
+    4: [
+        {
+            "id": "semifinal-1",
+            "round_key": "semifinals",
+            "title": "Semifinal 1",
+            "home_label": "Seed 1",
+            "away_label": "Seed 4",
+        },
+        {
+            "id": "semifinal-2",
+            "round_key": "semifinals",
+            "title": "Semifinal 2",
+            "home_label": "Seed 2",
+            "away_label": "Seed 3",
+        },
+        {
+            "id": "final",
+            "round_key": "final",
+            "title": "Final",
+            "home_label": "Winner SF1",
+            "away_label": "Winner SF2",
+        },
+    ],
+    8: [
+        {
+            "id": "quarterfinal-1",
+            "round_key": "quarterfinals",
+            "title": "Quarterfinal 1",
+            "home_label": "Seed 1",
+            "away_label": "Seed 8",
+        },
+        {
+            "id": "quarterfinal-2",
+            "round_key": "quarterfinals",
+            "title": "Quarterfinal 2",
+            "home_label": "Seed 4",
+            "away_label": "Seed 5",
+        },
+        {
+            "id": "quarterfinal-3",
+            "round_key": "quarterfinals",
+            "title": "Quarterfinal 3",
+            "home_label": "Seed 2",
+            "away_label": "Seed 7",
+        },
+        {
+            "id": "quarterfinal-4",
+            "round_key": "quarterfinals",
+            "title": "Quarterfinal 4",
+            "home_label": "Seed 3",
+            "away_label": "Seed 6",
+        },
+        {
+            "id": "semifinal-1",
+            "round_key": "semifinals",
+            "title": "Semifinal 1",
+            "home_label": "Winner QF1",
+            "away_label": "Winner QF2",
+        },
+        {
+            "id": "semifinal-2",
+            "round_key": "semifinals",
+            "title": "Semifinal 2",
+            "home_label": "Winner QF3",
+            "away_label": "Winner QF4",
+        },
+        {
+            "id": "final",
+            "round_key": "final",
+            "title": "Final",
+            "home_label": "Winner SF1",
+            "away_label": "Winner SF2",
+        },
+    ],
+}
 
 
 def _to_decimal(value: object, default: Decimal = Decimal("0")) -> Decimal:
@@ -867,6 +954,21 @@ def _get_oyuns_plus_logo_url(client) -> str:
     return logo_url or OYUNS_PLUS_LOGO_DEFAULT
 
 
+def _load_json_setting(client, key: str, fallback: object) -> object:
+    settings_dict = _get_app_settings_dict(client, [key])
+    raw = settings_dict.get(key)
+    if raw is None:
+        return fallback
+    try:
+        return json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return fallback
+
+
+def _dump_json_setting(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
 def _is_tournament_enabled(client) -> bool:
     settings_dict = _get_app_settings_dict(client, ["oyuns_tournament_enabled"])
     enabled_raw = _safe_int(settings_dict.get("oyuns_tournament_enabled"), 1)
@@ -981,6 +1083,271 @@ def _list_tournament_games(
     return items
 
 
+def _build_tournament_team_map(client, *, include_inactive: bool) -> dict[str, TournamentTeam]:
+    return {
+        team.id: team
+        for team in _list_tournament_teams(client, include_inactive=include_inactive)
+    }
+
+
+def _default_tournament_knockout_phase(category: str, *, team_count: int = 4) -> dict:
+    return {
+        "category": category,
+        "team_count": team_count,
+        "matches": [
+            {
+                "id": template["id"],
+                "round_key": template["round_key"],
+                "title": template["title"],
+                "home_team_id": None,
+                "away_team_id": None,
+                "home_label": template["home_label"],
+                "away_label": template["away_label"],
+                "home_score": 0,
+                "away_score": 0,
+                "status": "scheduled",
+            }
+            for template in TOURNAMENT_KNOCKOUT_TEMPLATES[team_count]
+        ],
+    }
+
+
+def _serialize_tournament_group(item: TournamentGroupInput, *, team_map: dict[str, TournamentTeam]) -> dict:
+    category = _normalize_tournament_category(item.category)
+    name = item.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Tournament group name is required")
+
+    normalized_team_ids: list[str] = []
+    seen_team_ids: set[str] = set()
+    for raw_team_id in item.team_ids:
+        team_id = str(raw_team_id or "").strip()
+        if not team_id or team_id in seen_team_ids:
+            continue
+        team = team_map.get(team_id)
+        if not team:
+            raise HTTPException(status_code=400, detail="Tournament group contains an unknown team")
+        if team.category != category:
+            raise HTTPException(status_code=400, detail="Tournament group team category mismatch")
+        normalized_team_ids.append(team_id)
+        seen_team_ids.add(team_id)
+
+    return {
+        "id": (item.id or secrets.token_hex(8)).strip(),
+        "category": category,
+        "name": name,
+        "team_ids": normalized_team_ids,
+        "display_order": int(item.display_order),
+    }
+
+
+def _serialize_tournament_knockout_phase(item: TournamentKnockoutPhaseInput, *, team_map: dict[str, TournamentTeam]) -> dict:
+    category = _normalize_tournament_category(item.category)
+    team_count = int(item.team_count)
+    if team_count not in TOURNAMENT_KNOCKOUT_TEAM_COUNTS:
+        raise HTTPException(status_code=400, detail="Knockout team count must be 4 or 8")
+
+    input_matches = {str(match.id): match for match in item.matches}
+    matches: list[dict] = []
+
+    for template in TOURNAMENT_KNOCKOUT_TEMPLATES[team_count]:
+        match_input = input_matches.get(template["id"])
+        home_team_id = (str(match_input.home_team_id).strip() if match_input and match_input.home_team_id else "") or None
+        away_team_id = (str(match_input.away_team_id).strip() if match_input and match_input.away_team_id else "") or None
+
+        if home_team_id:
+            home_team = team_map.get(home_team_id)
+            if not home_team:
+                raise HTTPException(status_code=400, detail="Knockout phase contains an unknown home team")
+            if home_team.category != category:
+                raise HTTPException(status_code=400, detail="Knockout home team category mismatch")
+
+        if away_team_id:
+            away_team = team_map.get(away_team_id)
+            if not away_team:
+                raise HTTPException(status_code=400, detail="Knockout phase contains an unknown away team")
+            if away_team.category != category:
+                raise HTTPException(status_code=400, detail="Knockout away team category mismatch")
+
+        if home_team_id and away_team_id and home_team_id == away_team_id:
+            raise HTTPException(status_code=400, detail="Knockout home and away teams must be different")
+
+        status = _normalize_tournament_game_status(match_input.status if match_input else None) or "scheduled"
+        matches.append(
+            {
+                "id": template["id"],
+                "round_key": template["round_key"],
+                "title": (match_input.title.strip() if match_input and match_input.title.strip() else template["title"]),
+                "home_team_id": home_team_id,
+                "away_team_id": away_team_id,
+                "home_label": (match_input.home_label.strip() if match_input and match_input.home_label and match_input.home_label.strip() else template["home_label"]),
+                "away_label": (match_input.away_label.strip() if match_input and match_input.away_label and match_input.away_label.strip() else template["away_label"]),
+                "home_score": max(0, int(match_input.home_score if match_input else 0)),
+                "away_score": max(0, int(match_input.away_score if match_input else 0)),
+                "status": status,
+            }
+        )
+
+    return {
+        "category": category,
+        "team_count": team_count,
+        "matches": matches,
+    }
+
+
+def _list_tournament_groups(
+    client,
+    *,
+    category: str | None = None,
+    include_inactive: bool = False,
+) -> list[TournamentGroup]:
+    raw_groups = _load_json_setting(client, TOURNAMENT_GROUPS_SETTING_KEY, [])
+    if not isinstance(raw_groups, list):
+        raw_groups = []
+
+    team_map = _build_tournament_team_map(client, include_inactive=include_inactive)
+    items: list[TournamentGroup] = []
+    for index, raw_item in enumerate(raw_groups):
+        if not isinstance(raw_item, dict):
+            continue
+        item_category = str(raw_item.get("category") or "").strip().lower()
+        if item_category not in TOURNAMENT_CATEGORIES:
+            continue
+        if category and item_category != category:
+            continue
+
+        team_ids: list[str] = []
+        teams: list[TournamentTeam] = []
+        for raw_team_id in raw_item.get("team_ids") or []:
+            team_id = str(raw_team_id or "").strip()
+            if not team_id:
+                continue
+            team = team_map.get(team_id)
+            if not team or team.category != item_category:
+                continue
+            team_ids.append(team_id)
+            teams.append(team)
+
+        items.append(
+            TournamentGroup(
+                id=str(raw_item.get("id") or f"{item_category}-group-{index + 1}"),
+                category=item_category,
+                name=str(raw_item.get("name") or "").strip() or f"Group {index + 1}",
+                team_ids=team_ids,
+                display_order=_safe_int(raw_item.get("display_order"), index),
+                teams=teams,
+            )
+        )
+
+    return sorted(items, key=lambda item: (item.category, item.display_order, item.name.lower()))
+
+
+def _list_tournament_knockout(
+    client,
+    *,
+    category: str | None = None,
+    include_inactive: bool = False,
+    include_defaults: bool = False,
+) -> list[TournamentKnockoutPhase]:
+    raw_phases = _load_json_setting(client, TOURNAMENT_KNOCKOUT_SETTING_KEY, [])
+    if not isinstance(raw_phases, list):
+        raw_phases = []
+
+    team_map = _build_tournament_team_map(client, include_inactive=include_inactive)
+    phase_rows: list[dict] = []
+    seen_categories: set[str] = set()
+
+    for raw_item in raw_phases:
+        if not isinstance(raw_item, dict):
+            continue
+        item_category = str(raw_item.get("category") or "").strip().lower()
+        if item_category not in TOURNAMENT_CATEGORIES:
+            continue
+        if category and item_category != category:
+            continue
+        team_count = _safe_int(raw_item.get("team_count"), 4)
+        if team_count not in TOURNAMENT_KNOCKOUT_TEAM_COUNTS:
+            continue
+        matches = raw_item.get("matches") if isinstance(raw_item.get("matches"), list) else []
+        phase_rows.append({
+            "category": item_category,
+            "team_count": team_count,
+            "matches": matches,
+        })
+        seen_categories.add(item_category)
+
+    if include_defaults:
+        categories_to_add = [category] if category else sorted(TOURNAMENT_CATEGORIES)
+        for item_category in categories_to_add:
+            if item_category and item_category not in seen_categories:
+                phase_rows.append(_default_tournament_knockout_phase(item_category))
+
+    items: list[TournamentKnockoutPhase] = []
+    for raw_item in sorted(phase_rows, key=lambda item: item["category"]):
+        team_count = _safe_int(raw_item.get("team_count"), 4)
+        template_map = {template["id"]: template for template in TOURNAMENT_KNOCKOUT_TEMPLATES[team_count]}
+        raw_matches = raw_item.get("matches") if isinstance(raw_item.get("matches"), list) else []
+        stored_match_map = {
+            str(match.get("id") or ""): match
+            for match in raw_matches
+            if isinstance(match, dict) and str(match.get("id") or "")
+        }
+
+        matches: list[TournamentKnockoutMatch] = []
+        for template in TOURNAMENT_KNOCKOUT_TEMPLATES[team_count]:
+            stored_match = stored_match_map.get(template["id"], {})
+            home_team_id = str(stored_match.get("home_team_id") or "").strip() or None
+            away_team_id = str(stored_match.get("away_team_id") or "").strip() or None
+            home_team = team_map.get(home_team_id or "") if home_team_id else None
+            away_team = team_map.get(away_team_id or "") if away_team_id else None
+            matches.append(
+                TournamentKnockoutMatch(
+                    id=template["id"],
+                    round_key=template["round_key"],
+                    title=str(stored_match.get("title") or template["title"]),
+                    home_team_id=home_team_id,
+                    away_team_id=away_team_id,
+                    home_label=str(stored_match.get("home_label") or template["home_label"]),
+                    away_label=str(stored_match.get("away_label") or template["away_label"]),
+                    home_score=max(0, _safe_int(stored_match.get("home_score"), 0)),
+                    away_score=max(0, _safe_int(stored_match.get("away_score"), 0)),
+                    status=str(stored_match.get("status") or "scheduled"),
+                    home_team_name=home_team.name if home_team else None,
+                    away_team_name=away_team.name if away_team else None,
+                    home_team_logo_url=home_team.logo_url if home_team else None,
+                    away_team_logo_url=away_team.logo_url if away_team else None,
+                )
+            )
+
+        items.append(
+            TournamentKnockoutPhase(
+                category=raw_item["category"],
+                team_count=team_count,
+                matches=matches,
+            )
+        )
+
+    return items
+
+
+def _get_tournament_stages_response(
+    client,
+    *,
+    category: str | None = None,
+    include_inactive: bool = False,
+    include_defaults: bool = False,
+) -> TournamentStagesResponse:
+    return TournamentStagesResponse(
+        groups=_list_tournament_groups(client, category=category, include_inactive=include_inactive),
+        knockout=_list_tournament_knockout(
+            client,
+            category=category,
+            include_inactive=include_inactive,
+            include_defaults=include_defaults,
+        ),
+    )
+
+
 def _list_user_tournament_votes(client, user_id: int) -> list[TournamentVoteStatus]:
     votes_rows = (
         client
@@ -1025,6 +1392,41 @@ def _get_tournament_game_or_404(client, game_id: str) -> dict:
     if not game_res.data:
         raise HTTPException(status_code=404, detail="Tournament game not found")
     return game_res.data[0]
+
+
+def _update_tournament_stage_settings(client, payload: TournamentStagesUpdateRequest) -> TournamentStagesResponse:
+    team_map = _build_tournament_team_map(client, include_inactive=True)
+    updates: dict[str, str] = {}
+
+    if payload.groups is not None:
+        serialized_groups = [_serialize_tournament_group(item, team_map=team_map) for item in payload.groups]
+        seen_team_ids_by_category: dict[str, set[str]] = {"men": set(), "women": set()}
+        for item in serialized_groups:
+            assigned = seen_team_ids_by_category[item["category"]]
+            overlapping = assigned.intersection(item["team_ids"])
+            if overlapping:
+                raise HTTPException(status_code=400, detail="A tournament team can only belong to one group per category")
+            assigned.update(item["team_ids"])
+        updates[TOURNAMENT_GROUPS_SETTING_KEY] = _dump_json_setting(serialized_groups)
+
+    if payload.knockout is not None:
+        seen_categories: set[str] = set()
+        serialized_phases: list[dict] = []
+        for item in payload.knockout:
+            serialized = _serialize_tournament_knockout_phase(item, team_map=team_map)
+            if serialized["category"] in seen_categories:
+                raise HTTPException(status_code=400, detail="Only one knockout phase per category is supported")
+            seen_categories.add(serialized["category"])
+            serialized_phases.append(serialized)
+        updates[TOURNAMENT_KNOCKOUT_SETTING_KEY] = _dump_json_setting(serialized_phases)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No stage data to update")
+
+    for key, value in updates.items():
+        client.table("app_settings").upsert({"key": key, "value": value}, on_conflict="key").execute()
+
+    return _get_tournament_stages_response(client, include_inactive=True, include_defaults=True)
 
 
 @app.get("/api/settings", response_model=AppSettingsResponse)
@@ -1482,7 +1884,7 @@ async def tournament_overview(
     normalized_status = _normalize_tournament_game_status(status)
 
     if not _is_tournament_enabled(client):
-        return TournamentOverviewResponse(enabled=False, logo_url=_get_oyuns_plus_logo_url(client), teams=[], games=[], votes=[])
+        return TournamentOverviewResponse(enabled=False, logo_url=_get_oyuns_plus_logo_url(client), teams=[], games=[], groups=[], knockout=[], votes=[])
 
     try:
         teams = _list_tournament_teams(client, category=normalized_category, include_inactive=False)
@@ -1493,16 +1895,19 @@ async def tournament_overview(
             status=normalized_status,
             limit=200,
         )
+        stages = _get_tournament_stages_response(client, category=normalized_category, include_inactive=False, include_defaults=False)
         return TournamentOverviewResponse(
             enabled=True,
             logo_url=_get_oyuns_plus_logo_url(client),
             teams=teams,
             games=games,
+            groups=stages.groups,
+            knockout=stages.knockout,
             votes=[],
         )
     except Exception as e:
         logger.error(f"Failed to build tournament overview: {e}")
-        return TournamentOverviewResponse(enabled=False, logo_url=_get_oyuns_plus_logo_url(client), teams=[], games=[], votes=[])
+        return TournamentOverviewResponse(enabled=False, logo_url=_get_oyuns_plus_logo_url(client), teams=[], games=[], groups=[], knockout=[], votes=[])
 
 
 @app.get("/api/tournament/my-votes", response_model=list[TournamentVoteStatus])
@@ -1791,6 +2196,21 @@ async def oyuns_sags_admin_delete_game(
     _get_tournament_game_or_404(client, game_id)
     client.table("oyuns_tournament_games").delete().eq("id", game_id).execute()
     return {"ok": True}
+
+
+@app.get("/api/oyuns-sags/admin/stages", response_model=TournamentStagesResponse)
+async def oyuns_sags_admin_stages(admin=Depends(get_oyuns_sags_admin_auth)):
+    client = get_supabase()
+    return _get_tournament_stages_response(client, include_inactive=True, include_defaults=True)
+
+
+@app.put("/api/oyuns-sags/admin/stages", response_model=TournamentStagesResponse)
+async def oyuns_sags_admin_update_stages(
+    payload: TournamentStagesUpdateRequest,
+    admin=Depends(get_oyuns_sags_admin_auth),
+):
+    client = get_supabase()
+    return _update_tournament_stage_settings(client, payload)
 
 
 @app.get("/api/oyuns-sags/admin/votes")

@@ -8,16 +8,20 @@ import {
   deleteOyunsSagsAdminTeam,
   fetchOyunsSagsAdminGames,
   fetchOyunsSagsAdminSettings,
+  fetchOyunsSagsAdminStages,
   fetchOyunsSagsAdminTeams,
   fetchOyunsSagsAdminVotes,
   OYUNS_PLUS_LOGO_DEFAULT_URL,
   TournamentCategory,
   TournamentGame,
   TournamentGameStatus,
+  TournamentGroup,
+  TournamentKnockoutPhase,
   TournamentTeam,
   TournamentVenue,
   updateOyunsSagsAdminGame,
   updateOyunsSagsAdminSettings,
+  updateOyunsSagsAdminStages,
   updateOyunsSagsAdminTeam,
 } from "../api";
 
@@ -47,6 +51,33 @@ type GameFormState = {
   is_featured: boolean;
 };
 
+type GroupFormState = {
+  id?: string;
+  category: TournamentCategory;
+  name: string;
+  team_ids: string[];
+  display_order: number;
+};
+
+type KnockoutMatchFormState = {
+  id: string;
+  round_key: string;
+  title: string;
+  home_team_id: string;
+  away_team_id: string;
+  home_label: string;
+  away_label: string;
+  home_score: number;
+  away_score: number;
+  status: TournamentGameStatus;
+};
+
+type KnockoutPhaseFormState = {
+  category: TournamentCategory;
+  team_count: 4 | 8;
+  matches: KnockoutMatchFormState[];
+};
+
 const TEAM_FORM_DEFAULT: TeamFormState = {
   name: "",
   short_name: "",
@@ -68,6 +99,76 @@ const GAME_FORM_DEFAULT: GameFormState = {
   is_featured: false,
 };
 
+const GROUP_FORM_DEFAULT: GroupFormState = {
+  category: "men",
+  name: "",
+  team_ids: [],
+  display_order: 0,
+};
+
+const TOURNAMENT_CATEGORY_OPTIONS: TournamentCategory[] = ["men", "women"];
+
+const KNOCKOUT_ROUND_ORDER: Record<string, number> = {
+  quarterfinals: 1,
+  semifinals: 2,
+  final: 3,
+};
+
+const KNOCKOUT_TEMPLATES: Record<4 | 8, Array<{ id: string; round_key: string; title: string; home_label: string; away_label: string }>> = {
+  4: [
+    { id: "semifinal-1", round_key: "semifinals", title: "Semifinal 1", home_label: "Seed 1", away_label: "Seed 4" },
+    { id: "semifinal-2", round_key: "semifinals", title: "Semifinal 2", home_label: "Seed 2", away_label: "Seed 3" },
+    { id: "final", round_key: "final", title: "Final", home_label: "Winner SF1", away_label: "Winner SF2" },
+  ],
+  8: [
+    { id: "quarterfinal-1", round_key: "quarterfinals", title: "Quarterfinal 1", home_label: "Seed 1", away_label: "Seed 8" },
+    { id: "quarterfinal-2", round_key: "quarterfinals", title: "Quarterfinal 2", home_label: "Seed 4", away_label: "Seed 5" },
+    { id: "quarterfinal-3", round_key: "quarterfinals", title: "Quarterfinal 3", home_label: "Seed 2", away_label: "Seed 7" },
+    { id: "quarterfinal-4", round_key: "quarterfinals", title: "Quarterfinal 4", home_label: "Seed 3", away_label: "Seed 6" },
+    { id: "semifinal-1", round_key: "semifinals", title: "Semifinal 1", home_label: "Winner QF1", away_label: "Winner QF2" },
+    { id: "semifinal-2", round_key: "semifinals", title: "Semifinal 2", home_label: "Winner QF3", away_label: "Winner QF4" },
+    { id: "final", round_key: "final", title: "Final", home_label: "Winner SF1", away_label: "Winner SF2" },
+  ],
+};
+
+function createGroupDraftId() {
+  return `group-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getAdminRoundLabel(roundKey: string) {
+  if (roundKey === "quarterfinals") return "Quarterfinals";
+  if (roundKey === "semifinals") return "Semifinals";
+  return "Final";
+}
+
+function buildKnockoutPhaseForm(
+  category: TournamentCategory,
+  teamCount: 4 | 8,
+  source?: TournamentKnockoutPhase | KnockoutPhaseFormState,
+): KnockoutPhaseFormState {
+  const matchMap = new Map((source?.matches || []).map((match) => [match.id, match]));
+
+  return {
+    category,
+    team_count: teamCount,
+    matches: KNOCKOUT_TEMPLATES[teamCount].map((template) => {
+      const current = matchMap.get(template.id);
+      return {
+        id: template.id,
+        round_key: template.round_key,
+        title: current?.title || template.title,
+        home_team_id: current?.home_team_id || "",
+        away_team_id: current?.away_team_id || "",
+        home_label: current?.home_label || template.home_label,
+        away_label: current?.away_label || template.away_label,
+        home_score: current?.home_score || 0,
+        away_score: current?.away_score || 0,
+        status: current?.status || "scheduled",
+      };
+    }),
+  };
+}
+
 export function OyunsSagsAdminPanel() {
   const queryClient = useQueryClient();
 
@@ -85,6 +186,15 @@ export function OyunsSagsAdminPanel() {
   const [newGame, setNewGame] = useState<GameFormState>(GAME_FORM_DEFAULT);
   const [editingGameId, setEditingGameId] = useState<string | null>(null);
   const [editingGame, setEditingGame] = useState<GameFormState>(GAME_FORM_DEFAULT);
+  const [groupDrafts, setGroupDrafts] = useState<GroupFormState[]>([]);
+  const [newGroup, setNewGroup] = useState<GroupFormState>(GROUP_FORM_DEFAULT);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroup, setEditingGroup] = useState<GroupFormState>(GROUP_FORM_DEFAULT);
+  const [knockoutDrafts, setKnockoutDrafts] = useState<Record<TournamentCategory, KnockoutPhaseFormState>>({
+    men: buildKnockoutPhaseForm("men", 4),
+    women: buildKnockoutPhaseForm("women", 4),
+  });
+  const [stageFeedback, setStageFeedback] = useState("");
 
   const [settingsForm, setSettingsForm] = useState({
     oyuns_tournament_enabled: 1,
@@ -100,6 +210,12 @@ export function OyunsSagsAdminPanel() {
   const gamesQuery = useQuery({
     queryKey: ["oyuns-sags-admin-games"],
     queryFn: () => fetchOyunsSagsAdminGames(),
+    enabled: isAuthenticated,
+  });
+
+  const stagesQuery = useQuery({
+    queryKey: ["oyuns-sags-admin-stages"],
+    queryFn: fetchOyunsSagsAdminStages,
     enabled: isAuthenticated,
   });
 
@@ -120,6 +236,30 @@ export function OyunsSagsAdminPanel() {
       setSettingsForm(settingsQuery.data);
     }
   }, [settingsQuery.data]);
+
+  useEffect(() => {
+    if (!stagesQuery.data) return;
+
+    setGroupDrafts(
+      stagesQuery.data.groups.map((group) => ({
+        id: group.id,
+        category: group.category,
+        name: group.name,
+        team_ids: [...group.team_ids],
+        display_order: group.display_order,
+      })),
+    );
+
+    const stageKnockoutMap = stagesQuery.data.knockout.reduce<Partial<Record<TournamentCategory, KnockoutPhaseFormState>>>((acc, phase) => {
+      acc[phase.category] = buildKnockoutPhaseForm(phase.category, phase.team_count, phase);
+      return acc;
+    }, {});
+
+    setKnockoutDrafts({
+      men: stageKnockoutMap.men || buildKnockoutPhaseForm("men", 4),
+      women: stageKnockoutMap.women || buildKnockoutPhaseForm("women", 4),
+    });
+  }, [stagesQuery.data]);
 
   const verifySession = async () => {
     try {
@@ -210,6 +350,19 @@ export function OyunsSagsAdminPanel() {
     },
   });
 
+  const updateStagesMutation = useMutation({
+    mutationFn: updateOyunsSagsAdminStages,
+    onSuccess: async () => {
+      setStageFeedback("Tournament stage setup saved");
+      setEditingGroupId(null);
+      await queryClient.invalidateQueries({ queryKey: ["oyuns-sags-admin-stages"] });
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      setStageFeedback(typeof detail === "string" ? detail : "Failed to save tournament stage setup");
+    },
+  });
+
   const teams = teamsQuery.data?.items || [];
   const games = gamesQuery.data?.items || [];
   const voteTeams = votesQuery.data?.items || [];
@@ -218,6 +371,16 @@ export function OyunsSagsAdminPanel() {
     men: teams.filter((team) => team.category === "men"),
     women: teams.filter((team) => team.category === "women"),
   }), [teams]);
+
+  const activeTeamsByCategory = useMemo(() => ({
+    men: teams.filter((team) => team.category === "men" && team.is_active),
+    women: teams.filter((team) => team.category === "women" && team.is_active),
+  }), [teams]);
+
+  const sortedGroupDrafts = useMemo(
+    () => [...groupDrafts].sort((a, b) => a.category.localeCompare(b.category) || a.display_order - b.display_order || a.name.localeCompare(b.name)),
+    [groupDrafts],
+  );
 
   const availableTeamsForNewGame = teams.filter((team) => team.category === newGame.category && team.is_active);
   const availableTeamsForEditingGame = teams.filter((team) => team.category === editingGame.category && team.is_active);
@@ -282,6 +445,152 @@ export function OyunsSagsAdminPanel() {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
     return date.toISOString();
+  };
+
+  const renderGroupTeamSelector = (
+    category: TournamentCategory,
+    selectedTeamIds: string[],
+    onToggle: (teamId: string) => void,
+  ) => {
+    const categoryTeams = teamsByCategory[category];
+    if (categoryTeams.length === 0) {
+      return <div className="text-xs text-dark-500 dark:text-ivory-400">No teams available in this category yet.</div>;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {categoryTeams.map((team) => {
+          const selected = selectedTeamIds.includes(team.id);
+          return (
+            <button
+              key={team.id}
+              type="button"
+              onClick={() => onToggle(team.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+                selected
+                  ? "bg-sky-600 text-white"
+                  : "bg-white dark:bg-dark-800 text-slate-700 dark:text-ivory-300 border border-silver/60 dark:border-dark-600"
+              }`}
+            >
+              {team.name}
+              {!team.is_active ? " (inactive)" : ""}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const toggleGroupTeam = (teamIds: string[], teamId: string) => (
+    teamIds.includes(teamId)
+      ? teamIds.filter((currentId) => currentId !== teamId)
+      : [...teamIds, teamId]
+  );
+
+  const startEditGroup = (group: GroupFormState | TournamentGroup) => {
+    setEditingGroupId(group.id);
+    setEditingGroup({
+      id: group.id,
+      category: group.category,
+      name: group.name,
+      team_ids: [...group.team_ids],
+      display_order: group.display_order,
+    });
+  };
+
+  const addGroupDraft = () => {
+    if (!newGroup.name.trim()) return;
+    setGroupDrafts((current) => [
+      ...current,
+      {
+        id: createGroupDraftId(),
+        category: newGroup.category,
+        name: newGroup.name.trim(),
+        team_ids: Array.from(new Set(newGroup.team_ids)),
+        display_order: newGroup.display_order,
+      },
+    ]);
+    setNewGroup(GROUP_FORM_DEFAULT);
+    setStageFeedback("");
+  };
+
+  const saveEditedGroup = () => {
+    if (!editingGroupId || !editingGroup.name.trim()) return;
+    setGroupDrafts((current) => current.map((group) => (
+      group.id === editingGroupId
+        ? {
+            id: editingGroupId,
+            category: editingGroup.category,
+            name: editingGroup.name.trim(),
+            team_ids: Array.from(new Set(editingGroup.team_ids)),
+            display_order: editingGroup.display_order,
+          }
+        : group
+    )));
+    setEditingGroupId(null);
+    setEditingGroup(GROUP_FORM_DEFAULT);
+    setStageFeedback("");
+  };
+
+  const buildStagePayload = () => ({
+    groups: [...groupDrafts]
+      .sort((a, b) => a.category.localeCompare(b.category) || a.display_order - b.display_order || a.name.localeCompare(b.name))
+      .map((group) => ({
+        id: group.id,
+        category: group.category,
+        name: group.name.trim(),
+        team_ids: Array.from(new Set(group.team_ids)),
+        display_order: group.display_order,
+      })),
+    knockout: TOURNAMENT_CATEGORY_OPTIONS.map((category) => {
+      const phase = knockoutDrafts[category];
+      return {
+        category,
+        team_count: phase.team_count,
+        matches: phase.matches.map((match) => ({
+          id: match.id,
+          round_key: match.round_key,
+          title: match.title.trim() || match.title,
+          home_team_id: match.home_team_id || null,
+          away_team_id: match.away_team_id || null,
+          home_label: match.home_label.trim() || null,
+          away_label: match.away_label.trim() || null,
+          home_score: match.home_score,
+          away_score: match.away_score,
+          status: match.status,
+        })),
+      };
+    }),
+  });
+
+  const saveStageSetup = () => {
+    setStageFeedback("");
+    updateStagesMutation.mutate(buildStagePayload());
+  };
+
+  const setKnockoutTeamCount = (category: TournamentCategory, teamCount: 4 | 8) => {
+    setKnockoutDrafts((current) => ({
+      ...current,
+      [category]: buildKnockoutPhaseForm(category, teamCount, current[category]),
+    }));
+    setStageFeedback("");
+  };
+
+  const updateKnockoutMatch = (
+    category: TournamentCategory,
+    matchId: string,
+    patch: Partial<KnockoutMatchFormState>,
+  ) => {
+    setKnockoutDrafts((current) => ({
+      ...current,
+      [category]: {
+        ...current[category],
+        matches: current[category].matches.map((match) => (
+          match.id === matchId ? { ...match, ...patch } : match
+        )),
+      },
+    }));
+    setStageFeedback("");
   };
 
   if (checkingSession) {
@@ -443,7 +752,268 @@ export function OyunsSagsAdminPanel() {
 
         {activeTab === "games" && (
           <div className="bg-white dark:bg-dark-800 rounded-2xl p-5 border border-silver/60 dark:border-dark-600 shadow-card-xs space-y-4">
-            <div className="text-base font-bold text-dark-800 dark:text-ivory-200">Game Schedule & Scores</div>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-base font-bold text-dark-800 dark:text-ivory-200">Game Schedule & Scores</div>
+                <div className="text-sm text-dark-600 dark:text-ivory-400">Manage groups, knockout brackets, and the match list shown in the mini app Games tab.</div>
+              </div>
+
+              <button
+                onClick={saveStageSetup}
+                disabled={updateStagesMutation.isPending || stagesQuery.isLoading}
+                className="rounded-lg bg-sky-600 text-white px-4 py-2 text-sm font-semibold hover:bg-sky-700 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4 inline mr-1" /> Save stage setup
+              </button>
+            </div>
+
+            {stageFeedback && (
+              <div className={`text-sm rounded-xl px-3 py-2 border ${
+                updateStagesMutation.isError
+                  ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/40"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/40"
+              }`}>
+                {stageFeedback}
+              </div>
+            )}
+
+            {stagesQuery.isLoading ? (
+              <div className="text-sm text-dark-600 dark:text-ivory-400">Loading stage configuration...</div>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-silver/60 dark:border-dark-600 p-4 bg-surface-50 dark:bg-dark-700 space-y-4">
+                  <div>
+                    <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">Group Stage</div>
+                    <div className="text-xs text-dark-500 dark:text-ivory-400">Assign teams to groups that appear above the schedule in the mini app.</div>
+                  </div>
+
+                  <div className="rounded-xl border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 p-3 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                      <input
+                        className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                        placeholder="Group name"
+                        value={newGroup.name}
+                        onChange={(e) => setNewGroup((current) => ({ ...current, name: e.target.value }))}
+                      />
+                      <select
+                        className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                        value={newGroup.category}
+                        onChange={(e) => setNewGroup((current) => ({ ...current, category: e.target.value as TournamentCategory, team_ids: [] }))}
+                      >
+                        <option value="men">Men</option>
+                        <option value="women">Women</option>
+                      </select>
+                      <input
+                        type="number"
+                        className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                        placeholder="Order"
+                        value={newGroup.display_order}
+                        onChange={(e) => setNewGroup((current) => ({ ...current, display_order: Number(e.target.value || 0) }))}
+                      />
+                      <button
+                        onClick={addGroupDraft}
+                        disabled={!newGroup.name.trim()}
+                        className="rounded-lg bg-sky-600 text-white px-3 py-2 text-sm font-semibold hover:bg-sky-700 disabled:opacity-50"
+                      >
+                        <Plus className="w-4 h-4 inline mr-1" /> Add group
+                      </button>
+                    </div>
+
+                    {renderGroupTeamSelector(
+                      newGroup.category,
+                      newGroup.team_ids,
+                      (teamId) => setNewGroup((current) => ({ ...current, team_ids: toggleGroupTeam(current.team_ids, teamId) })),
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {sortedGroupDrafts.length === 0 ? (
+                      <div className="text-sm text-dark-600 dark:text-ivory-400">No groups configured yet.</div>
+                    ) : (
+                      sortedGroupDrafts.map((group) => (
+                        <div key={group.id} className="rounded-xl border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 p-3">
+                          {editingGroupId === group.id ? (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                <input
+                                  className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                  value={editingGroup.name}
+                                  onChange={(e) => setEditingGroup((current) => ({ ...current, name: e.target.value }))}
+                                />
+                                <select
+                                  className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                  value={editingGroup.category}
+                                  onChange={(e) => setEditingGroup((current) => ({ ...current, category: e.target.value as TournamentCategory, team_ids: [] }))}
+                                >
+                                  <option value="men">Men</option>
+                                  <option value="women">Women</option>
+                                </select>
+                                <input
+                                  type="number"
+                                  className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                  value={editingGroup.display_order}
+                                  onChange={(e) => setEditingGroup((current) => ({ ...current, display_order: Number(e.target.value || 0) }))}
+                                />
+                                <div className="flex gap-2">
+                                  <button onClick={saveEditedGroup} className="flex-1 rounded-lg bg-emerald-600 text-white px-3 py-2 text-sm font-semibold hover:bg-emerald-700"><Save className="w-4 h-4 inline mr-1" />Apply</button>
+                                  <button onClick={() => setEditingGroupId(null)} className="flex-1 rounded-lg bg-slate-200 text-slate-800 px-3 py-2 text-sm font-semibold hover:bg-slate-300"><X className="w-4 h-4 inline mr-1" />Cancel</button>
+                                </div>
+                              </div>
+
+                              {renderGroupTeamSelector(
+                                editingGroup.category,
+                                editingGroup.team_ids,
+                                (teamId) => setEditingGroup((current) => ({ ...current, team_ids: toggleGroupTeam(current.team_ids, teamId) })),
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                              <div className="min-w-0">
+                                <div className="font-semibold text-sm text-dark-800 dark:text-ivory-200 truncate">{group.name}</div>
+                                <div className="text-xs text-dark-600 dark:text-ivory-400">{group.category} • order: {group.display_order} • teams: {group.team_ids.length}</div>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <button onClick={() => startEditGroup(group)} className="px-2.5 py-1.5 rounded-lg bg-sky-100 text-sky-700 text-xs font-semibold hover:bg-sky-200"><Edit2 className="w-3.5 h-3.5 inline mr-1" />Edit</button>
+                                <button
+                                  onClick={() => {
+                                    setGroupDrafts((current) => current.filter((item) => item.id !== group.id));
+                                    setStageFeedback("");
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-rose-100 text-rose-700 text-xs font-semibold hover:bg-rose-200"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 inline mr-1" />Remove
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-silver/60 dark:border-dark-600 p-4 bg-surface-50 dark:bg-dark-700 space-y-4">
+                  <div>
+                    <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">Knockout Phase</div>
+                    <div className="text-xs text-dark-500 dark:text-ivory-400">Choose a 4-team or 8-team bracket for each category and edit the matches below.</div>
+                  </div>
+
+                  {TOURNAMENT_CATEGORY_OPTIONS.map((category) => {
+                    const phase = knockoutDrafts[category];
+                    const rounds = Array.from(
+                      phase.matches.reduce((map, match) => {
+                        const bucket = map.get(match.round_key) || [];
+                        bucket.push(match);
+                        map.set(match.round_key, bucket);
+                        return map;
+                      }, new Map<string, KnockoutMatchFormState[]>()),
+                    ).sort((a, b) => (KNOCKOUT_ROUND_ORDER[a[0]] || 99) - (KNOCKOUT_ROUND_ORDER[b[0]] || 99));
+
+                    return (
+                      <div key={category} className="rounded-xl border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div>
+                            <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">{category === "men" ? "Men" : "Women"}</div>
+                            <div className="text-xs text-dark-500 dark:text-ivory-400">{phase.team_count} teams in bracket</div>
+                          </div>
+
+                          <select
+                            className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                            value={phase.team_count}
+                            onChange={(e) => setKnockoutTeamCount(category, Number(e.target.value) as 4 | 8)}
+                          >
+                            <option value={4}>4 teams</option>
+                            <option value={8}>8 teams</option>
+                          </select>
+                        </div>
+
+                        <div className={`grid gap-3 ${rounds.length >= 3 ? "xl:grid-cols-3" : rounds.length === 2 ? "md:grid-cols-2" : "grid-cols-1"}`}>
+                          {rounds.map(([roundKey, matches]) => (
+                            <div key={roundKey} className="rounded-xl border border-silver/60 dark:border-dark-600 bg-surface-50 dark:bg-dark-700 p-3 space-y-3">
+                              <div className="text-xs font-bold uppercase tracking-[0.14em] text-dark-500 dark:text-ivory-400">{getAdminRoundLabel(roundKey)}</div>
+
+                              {matches.map((match) => (
+                                <div key={match.id} className="rounded-xl border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 p-3 space-y-2">
+                                  <input
+                                    className="w-full rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                    value={match.title}
+                                    onChange={(e) => updateKnockoutMatch(category, match.id, { title: e.target.value })}
+                                  />
+
+                                  <div className="grid grid-cols-1 gap-2">
+                                    <select
+                                      className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                      value={match.home_team_id}
+                                      onChange={(e) => updateKnockoutMatch(category, match.id, { home_team_id: e.target.value })}
+                                    >
+                                      <option value="">Home team</option>
+                                      {activeTeamsByCategory[category].map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                                    </select>
+                                    <select
+                                      className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                      value={match.away_team_id}
+                                      onChange={(e) => updateKnockoutMatch(category, match.id, { away_team_id: e.target.value })}
+                                    >
+                                      <option value="">Away team</option>
+                                      {activeTeamsByCategory[category].map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                                    </select>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <input
+                                      className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                      placeholder="Home label"
+                                      value={match.home_label}
+                                      onChange={(e) => updateKnockoutMatch(category, match.id, { home_label: e.target.value })}
+                                    />
+                                    <input
+                                      className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                      placeholder="Away label"
+                                      value={match.away_label}
+                                      onChange={(e) => updateKnockoutMatch(category, match.id, { away_label: e.target.value })}
+                                    />
+                                  </div>
+
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                      value={match.home_score}
+                                      onChange={(e) => updateKnockoutMatch(category, match.id, { home_score: Number(e.target.value || 0) })}
+                                    />
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                      value={match.away_score}
+                                      onChange={(e) => updateKnockoutMatch(category, match.id, { away_score: Number(e.target.value || 0) })}
+                                    />
+                                    <select
+                                      className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm"
+                                      value={match.status}
+                                      onChange={(e) => updateKnockoutMatch(category, match.id, { status: e.target.value as TournamentGameStatus })}
+                                    >
+                                      <option value="scheduled">Scheduled</option>
+                                      <option value="live">Live</option>
+                                      <option value="completed">Completed</option>
+                                      <option value="cancelled">Cancelled</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">Match Schedule</div>
 
             <div className="grid grid-cols-1 md:grid-cols-7 gap-2 p-3 rounded-xl bg-surface-50 dark:bg-dark-700">
               <select className="rounded-lg border border-silver/60 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm" value={newGame.category} onChange={(e) => setNewGame((s) => ({ ...s, category: e.target.value as TournamentCategory, home_team_id: "", away_team_id: "" }))}>

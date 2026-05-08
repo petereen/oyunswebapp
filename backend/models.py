@@ -844,6 +844,38 @@ class TournamentGame(BaseModel):
     away_team_logo_url: Optional[str] = None
 
 
+class TournamentGroup(BaseModel):
+    id: str
+    category: str
+    name: str
+    team_ids: list[str] = Field(default_factory=list)
+    display_order: int = 0
+    teams: list[TournamentTeam] = Field(default_factory=list)
+
+
+class TournamentKnockoutMatch(BaseModel):
+    id: str
+    round_key: str
+    title: str
+    home_team_id: Optional[str] = None
+    away_team_id: Optional[str] = None
+    home_label: Optional[str] = None
+    away_label: Optional[str] = None
+    home_score: int = 0
+    away_score: int = 0
+    status: str = "scheduled"
+    home_team_name: Optional[str] = None
+    away_team_name: Optional[str] = None
+    home_team_logo_url: Optional[str] = None
+    away_team_logo_url: Optional[str] = None
+
+
+class TournamentKnockoutPhase(BaseModel):
+    category: str
+    team_count: int = 4
+    matches: list[TournamentKnockoutMatch] = Field(default_factory=list)
+
+
 class TournamentVoteRequest(BaseModel):
     category: str  # "men" | "women"
     team_id: str
@@ -866,6 +898,8 @@ class TournamentOverviewResponse(BaseModel):
     logo_url: Optional[str] = None
     teams: list[TournamentTeam] = []
     games: list[TournamentGame] = []
+    groups: list[TournamentGroup] = Field(default_factory=list)
+    knockout: list[TournamentKnockoutPhase] = Field(default_factory=list)
     votes: list[TournamentVoteStatus] = []
 
 
@@ -917,4 +951,41 @@ class TournamentGameUpdateRequest(BaseModel):
 
 class TournamentGamesResponse(BaseModel):
     items: list[TournamentGame] = []
+
+
+class TournamentGroupInput(BaseModel):
+    id: Optional[str] = None
+    category: str
+    name: str
+    team_ids: list[str] = Field(default_factory=list)
+    display_order: int = 0
+
+
+class TournamentKnockoutMatchInput(BaseModel):
+    id: str
+    round_key: str
+    title: str
+    home_team_id: Optional[str] = None
+    away_team_id: Optional[str] = None
+    home_label: Optional[str] = None
+    away_label: Optional[str] = None
+    home_score: int = 0
+    away_score: int = 0
+    status: str = "scheduled"
+
+
+class TournamentKnockoutPhaseInput(BaseModel):
+    category: str
+    team_count: int = 4
+    matches: list[TournamentKnockoutMatchInput] = Field(default_factory=list)
+
+
+class TournamentStagesResponse(BaseModel):
+    groups: list[TournamentGroup] = Field(default_factory=list)
+    knockout: list[TournamentKnockoutPhase] = Field(default_factory=list)
+
+
+class TournamentStagesUpdateRequest(BaseModel):
+    groups: Optional[list[TournamentGroupInput]] = None
+    knockout: Optional[list[TournamentKnockoutPhaseInput]] = None
 

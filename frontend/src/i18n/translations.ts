@@ -165,7 +165,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "status.edit_request": { ru: "Исправить заявку", mn: "Хүсэлт засах" },
   "status.unknown": { ru: "Неизвестно", mn: "Тодорхойгүй" },
   "status.close": { ru: "Закрыть", mn: "Хаах" },
-  "status.support_contact": { ru: "При проблемах — обратитесь @oyuns_finance", mn: "Асуудал гарсан гэж үзвэл @oyuns_finance хаягаар холбогдоорой" },
+  "status.support_contact": { ru: "При проблемах — обратитесь в support", mn: "Асуудал гарсан гэж үзвэл support хаягтай холбогдоорой" },
 
   // ─── GiftStatusTracker ───
   "gift_status.pending_recipient": { ru: "Ожидание получателя", mn: "Хүлээн авагч хүлээгдэж байна" },
@@ -183,7 +183,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "gift_status.step_received": { ru: "Получен", mn: "Хүлээн авсан" },
   "gift_status.step_confirmed": { ru: "Одобрен", mn: "Баталгаажсан" },
   "gift_status.step_done": { ru: "Успешно", mn: "Амжилттай" },
-  "gift_status.support": { ru: "При проблемах — обратитесь в поддержку", mn: "Асуудалтай гэж бодвол @oyuns_finance хаягаар холбогдоорой" },
+  "gift_status.support": { ru: "При проблемах — обратитесь в поддержку", mn: "Асуудалтай гэж бодвол тусламжтай холбогдоорой" },
 
   // ─── FuelStatusTracker ───
   "fuel_status.pending": { ru: "В ожидании", mn: "Хүлээгдэж байна" },
@@ -286,14 +286,10 @@ const translations: Record<string, Record<Lang, string>> = {
   "oyuns_plus.settings_copied": { ru: "Скопировано!", mn: "Хуулагдлаа!" },
   "oyuns_plus.settings_referral_remaining": { ru: "Осталось приглашений", mn: "Үлдсэн урилга" },
   "oyuns_plus.settings_how_to_earn": { ru: "Как зарабатывать баллы", mn: "Хэрхэн оноо цуглуулах вэ?" },
-  "oyuns_plus.settings_earn_disclaimer": {
-    ru: "Чтобы накапливать баллы OYUNS Plus, совершайте транзакции на сумму от 10 000 рублей (обмен валюты, покупка топлива, пополнение телефона) — вы получите 0.1% в виде бонусных баллов. Также приглашайте до 5 друзей и получайте 50 баллов OYUNS Plus за каждого подтверждённого реферала.\n\nНакопленные баллы можно использовать на скидки и купоны в разделе OYUNS Plus.",
-    mn: "OYUNS Plus оноо цуглуулахын тулд та 10,000 рублиэс дээш гүйлгээндээ (валют солих, шатахуун худалдаж авах, утасны дугаар цэнэглэх) 0.1%-ийн бонус оноо цуглуулна. Мөн 5 хүртэлх найзаа уриад, бүртгэлээ баталгаажуулсан найз бүртээ 50 OYUNS Plus оноо аваарай.\n\nТа цуглуулсан оноогоо OYUNS Plus хэсэгт нэмэгдэх үйлчилгээ, купонуудад ашиглах боломжтой."
-  },
   "oyuns_plus.settings_earn_exchange": { ru: "За обмен валюты", mn: "Валют солих бүрт" },
   "oyuns_plus.settings_earn_referral": { ru: "За верифицированного реферала", mn: "Баталгаажсан уригдсан хэрэглэгч тус бүрт" },
-  "oyuns_plus.history_title": { ru: "История очков", mn: "Онооны түүх" },
-  "oyuns_plus.history_empty": { ru: "Нет истории начислений", mn: "Онооны түүх байхгүй байна" },
+  "oyuns_plus.history_title": { ru: "История очков", mn: "Оноогийн түүх" },
+  "oyuns_plus.history_empty": { ru: "Нет истории начислений", mn: "Оноогийн түүх байхгүй байна" },
   "oyuns_plus.history_source_exchange": { ru: "Обмен валюты", mn: "Валют солилцоо" },
   "oyuns_plus.history_source_referral": { ru: "Реферал", mn: "Урилга" },
   "oyuns_plus.tournament_section_title": { ru: "ОМОХ Сагсан бөмбөгийн тэмцээн", mn: "ОМОХ Сагсан бөмбөгийн тэмцээн" },
@@ -305,6 +301,14 @@ const translations: Record<string, Record<Lang, string>> = {
   "oyuns_plus.tournament_schedule": { ru: "Расписание и live", mn: "Тоглолтын хуваарь" },
   "oyuns_plus.tournament_note": { ru: "Реферальный блок находится в Профиле. Здесь отображается только раздел турнира и баланс баллов.", mn: "Рефералын хэсэг Профайлд үлдэнэ. Энд зөвхөн тэмцээний хэсэг болон онооны үлдэгдэл харагдана." },
   "oyuns_plus.schedule_title": { ru: "Расписание матчей", mn: "Тоглолтын хуваарь" },
+  "oyuns_plus.groups_title": { ru: "Группы", mn: "Группүүд" },
+  "oyuns_plus.groups_empty": { ru: "Группы пока не настроены", mn: "Групп хараахан тохируулаагүй байна" },
+  "oyuns_plus.group_teams_count": { ru: "команд", mn: "баг" },
+  "oyuns_plus.knockout_title": { ru: "Плей-офф", mn: "Хасагдах шат" },
+  "oyuns_plus.knockout_teams_count": { ru: "команды", mn: "баг" },
+  "oyuns_plus.knockout_round_quarterfinals": { ru: "Четвертьфинал", mn: "Шөвгийн 8" },
+  "oyuns_plus.knockout_round_semifinals": { ru: "Полуфинал", mn: "Хагас шигшээ" },
+  "oyuns_plus.knockout_round_final": { ru: "Финал", mn: "Шигшээ" },
   "oyuns_plus.filter_all": { ru: "Все категории", mn: "Бүх ангилал" },
   "oyuns_plus.filter_all_venue": { ru: "Все заалы", mn: "Бүх заал" },
   "oyuns_plus.hall_a": { ru: "А заал", mn: "А заал" },
