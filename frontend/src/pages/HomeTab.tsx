@@ -125,9 +125,25 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
   const homeBannerLinkUrl = useMemo(() => {
     const rawValue = appSettings?.home_banner_link_url?.trim() || "";
     if (!rawValue) return "";
+    if (/^(\/|\?|#)/.test(rawValue)) return rawValue;
     return /^https?:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`;
   }, [appSettings?.home_banner_link_url]);
   const showHomeBanner = (appSettings?.home_banner_enabled ?? 0) > 0 && Boolean(homeBannerImageUrl);
+
+  const handleHomeBannerClick = () => {
+    if (!homeBannerLinkUrl) return;
+    try {
+      const resolvedUrl = new URL(homeBannerLinkUrl, window.location.origin);
+      if (resolvedUrl.origin === window.location.origin) {
+        window.location.assign(`${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`);
+        return;
+      }
+    } catch {
+      // Fall through to external open.
+    }
+
+    window.open(homeBannerLinkUrl, "_blank", "noopener,noreferrer");
+  };
 
   const homeBannerCard = showHomeBanner ? (
     <div className="overflow-hidden rounded-3xl border border-maroon-200/60 dark:border-maroon-800/40 shadow-card bg-white dark:bg-dark-800">
@@ -231,7 +247,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
         homeBannerLinkUrl ? (
           <button
             type="button"
-            onClick={() => window.open(homeBannerLinkUrl, "_blank", "noopener,noreferrer")}
+            onClick={handleHomeBannerClick}
             className="block w-full text-left rounded-3xl transition-transform hover:scale-[1.01] active:scale-[0.99]"
             aria-label="Open announcement"
           >

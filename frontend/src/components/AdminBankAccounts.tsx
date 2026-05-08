@@ -498,10 +498,10 @@ export function AdminBankAccounts() {
                 type="text"
                 value={editingLimits.home_banner_link_url}
                 onChange={(e) => handleBannerTextChange("home_banner_link_url", e.target.value)}
-                placeholder="https://example.com"
+                placeholder="/?tab=oyuns-plus&tournament=basketball&section=stages"
                 className="w-full p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
               />
-              <div className="text-xs text-slate-500">`https://` оруулахгүй орхисон ч banner дарахад автоматаар веб холбоос болгон нээнэ.</div>
+              <div className="text-xs text-slate-500">App дотор tournament руу оруулах бол `/?tab=oyuns-plus&tournament=basketball` эсвэл stage руу шууд оруулах бол `/?tab=oyuns-plus&tournament=basketball&section=stages` гэж оруулж болно.</div>
             </div>
           </div>
         </div>

@@ -22,6 +22,9 @@ export default function App() {
   const queryParams = new URLSearchParams(window.location.search);
   const rawPath = window.location.pathname;
   const normalizedPath = rawPath === "/" ? "/" : rawPath.replace(/\/+$/, "");
+  const requestedTab = queryParams.get("tab");
+  const requestedTournament = queryParams.get("tournament");
+  const requestedTournamentSection = queryParams.get("section");
 
   // Standalone tournament admin panel without Telegram auth
   const isOyunsSagsAdmin = normalizedPath === "/oyuns-sags" || normalizedPath === "/omoh-sags";
@@ -34,11 +37,16 @@ export default function App() {
   // Check URL for fuel order deep link
   const urlFuelOrderId = queryParams.get("fuel-order");
   const urlEditInvoice = queryParams.get("edit-invoice");
+  const urlOyunsPlusTab = requestedTab === "oyuns-plus";
+  const urlTournamentSection = requestedTournament === "basketball" ? "basketball" : null;
+  const urlTournamentInnerTab = requestedTournamentSection === "schedule" || requestedTournamentSection === "leaderboard" || requestedTournamentSection === "stages"
+    ? requestedTournamentSection
+    : "schedule";
 
   const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
   const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
-  const [activeTab, setActiveTab] = useState(urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0);
+  const [activeTab, setActiveTab] = useState(urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0);
   const [showProfile, setShowProfile] = useState(false);
   const [transactionDirection, setTransactionDirection] = useState<"buy" | "sell" | null>(null);
   const [fuelOrderId, setFuelOrderId] = useState<string | null>(urlFuelOrderId);
@@ -186,7 +194,13 @@ export default function App() {
               />
             )}
             {activeTab === 2 && <ServicesTab initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />}
-            {activeTab === 3 && <OyunsPlusTab userId={user?.id} />}
+            {activeTab === 3 && (
+              <OyunsPlusTab
+                userId={user?.id}
+                initialTournamentSection={urlTournamentSection}
+                initialTournamentInnerTab={urlTournamentInnerTab}
+              />
+            )}
             {activeTab === 4 && <StatsTab userId={user?.id} />}
           </>
         )}
