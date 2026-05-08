@@ -44,6 +44,9 @@ class AppSettingsResponse(BaseModel):
     oyuns_plus_points_per_threshold: int = DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD
     oyuns_plus_referral_reward_points: int = DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS
     oyuns_plus_referral_max_uses: int = DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES
+    home_banner_enabled: int = 0
+    home_banner_image_url: str = ""
+    home_banner_link_url: str = ""
 
 
 class AppSettingsUpdateRequest(BaseModel):
@@ -54,6 +57,9 @@ class AppSettingsUpdateRequest(BaseModel):
     oyuns_plus_points_per_threshold: Optional[int] = None
     oyuns_plus_referral_reward_points: Optional[int] = None
     oyuns_plus_referral_max_uses: Optional[int] = None
+    home_banner_enabled: Optional[int] = None
+    home_banner_image_url: Optional[str] = None
+    home_banner_link_url: Optional[str] = None
 
 
 class ExchangeCreateRequest(BaseModel):

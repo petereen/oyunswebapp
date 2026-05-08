@@ -12,7 +12,7 @@ import { FuelStatusTracker } from "../components/FuelStatusTracker";
 import { RegistrationModal } from "../components/RegistrationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { RequiredInfoModal } from "../components/RequiredInfoModal";
-import { fetchRates, fetchMe, fetchOyunsPlusSummary, fetchServiceStatus } from "../api";
+import { fetchAppSettings, fetchRates, fetchMe, fetchOyunsPlusSummary, fetchServiceStatus } from "../api";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useTheme } from "../hooks/useTheme";
 import { useLang } from "../i18n/useLang";
@@ -43,6 +43,12 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
     queryFn: () => fetchServiceStatus(),
     retry: 2,
     refetchInterval: 60000,
+  });
+
+  const { data: appSettings } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: () => fetchAppSettings(),
+    retry: 1,
   });
 
   const { data: profile, error: profileError } = useQuery({
@@ -115,6 +121,25 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
   };
 
   const isServiceOpen = serviceStatus?.is_open !== false;
+  const homeBannerImageUrl = appSettings?.home_banner_image_url?.trim() || "";
+  const homeBannerLinkUrl = useMemo(() => {
+    const rawValue = appSettings?.home_banner_link_url?.trim() || "";
+    if (!rawValue) return "";
+    return /^https?:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`;
+  }, [appSettings?.home_banner_link_url]);
+  const showHomeBanner = (appSettings?.home_banner_enabled ?? 0) > 0 && Boolean(homeBannerImageUrl);
+
+  const homeBannerCard = showHomeBanner ? (
+    <div className="overflow-hidden rounded-3xl border border-maroon-200/60 dark:border-maroon-800/40 shadow-card bg-white dark:bg-dark-800">
+      <div className="aspect-[3/1] bg-surface-100 dark:bg-dark-700">
+        <img
+          src={homeBannerImageUrl}
+          alt="Announcement banner"
+          className="w-full h-full object-cover"
+        />
+      </div>
+    </div>
+  ) : null;
 
   if (isAuthenticating) {
     return (
@@ -201,6 +226,19 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
           )}
         </div>
       </div>
+
+      {showHomeBanner && (
+        homeBannerLinkUrl ? (
+          <button
+            type="button"
+            onClick={() => window.open(homeBannerLinkUrl, "_blank", "noopener,noreferrer")}
+            className="block w-full text-left rounded-3xl transition-transform hover:scale-[1.01] active:scale-[0.99]"
+            aria-label="Open announcement"
+          >
+            {homeBannerCard}
+          </button>
+        ) : homeBannerCard
+      )}
 
       {/* Auth Debug Info */}
       {!initData || !user ? (

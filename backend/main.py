@@ -733,6 +733,9 @@ APP_SETTINGS_KEYS = [
     "oyuns_plus_points_per_threshold",
     "oyuns_plus_referral_reward_points",
     "oyuns_plus_referral_max_uses",
+    "home_banner_enabled",
+    "home_banner_image_url",
+    "home_banner_link_url",
 ]
 
 
@@ -1444,6 +1447,9 @@ async def get_app_settings():
         oyuns_plus_points_per_threshold=oyuns_plus["oyuns_plus_points_per_threshold"],
         oyuns_plus_referral_reward_points=oyuns_plus["oyuns_plus_referral_reward_points"],
         oyuns_plus_referral_max_uses=oyuns_plus["oyuns_plus_referral_max_uses"],
+        home_banner_enabled=1 if _safe_int(settings_dict.get("home_banner_enabled"), 0) > 0 else 0,
+        home_banner_image_url=(settings_dict.get("home_banner_image_url") or "").strip(),
+        home_banner_link_url=(settings_dict.get("home_banner_link_url") or "").strip(),
     )
 
 
@@ -1462,18 +1468,23 @@ async def update_app_settings(
         "oyuns_plus_points_per_threshold",
         "oyuns_plus_referral_reward_points",
         "oyuns_plus_referral_max_uses",
+        "home_banner_enabled",
+        "home_banner_image_url",
+        "home_banner_link_url",
     }
 
     updates = payload.model_dump(exclude_none=True)
     for key, value in updates.items():
         if key not in allowed_keys:
             continue
-        if key == "oyuns_plus_enabled":
+        if key in {"oyuns_plus_enabled", "home_banner_enabled"}:
             if value not in (0, 1):
-                raise HTTPException(status_code=400, detail="oyuns_plus_enabled must be 0 or 1")
+                raise HTTPException(status_code=400, detail=f"{key} must be 0 or 1")
         elif key in {"oyuns_plus_threshold_rub", "oyuns_plus_points_per_threshold", "oyuns_plus_referral_max_uses"}:
             if value <= 0:
                 raise HTTPException(status_code=400, detail=f"{key} must be > 0")
+        elif key in {"home_banner_image_url", "home_banner_link_url"}:
+            value = str(value or "").strip()
         elif value < 0:
             raise HTTPException(status_code=400, detail=f"{key} must be >= 0")
 

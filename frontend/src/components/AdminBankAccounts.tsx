@@ -26,10 +26,22 @@ import {
   fetchAdminUsers,
   AdminUser,
   requestPresignAdmin,
+  requestPresign,
   fetchAppSettings,
   updateAppSettings,
   AppSettings,
 } from "../api";
+
+type NumericAppSettingsField =
+  | "min_rub_amount"
+  | "min_rub_buy"
+  | "oyuns_plus_enabled"
+  | "oyuns_plus_threshold_rub"
+  | "oyuns_plus_points_per_threshold"
+  | "oyuns_plus_referral_reward_points"
+  | "oyuns_plus_referral_max_uses";
+
+const HOME_BANNER_TARGET_RATIO = 3;
 
 interface EditingAccount extends Partial<AdminBankAccountFull> {
   isNew?: boolean;
@@ -49,6 +61,8 @@ export function AdminBankAccounts() {
   const [editingLimits, setEditingLimits] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [limitsChanged, setLimitsChanged] = useState(false);
   const [savingLimits, setSavingLimits] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerUploadError, setBannerUploadError] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -149,9 +163,12 @@ export function AdminBankAccounts() {
     next.oyuns_plus_threshold_rub !== exchangeLimits.oyuns_plus_threshold_rub ||
     next.oyuns_plus_points_per_threshold !== exchangeLimits.oyuns_plus_points_per_threshold ||
     next.oyuns_plus_referral_reward_points !== exchangeLimits.oyuns_plus_referral_reward_points ||
-    next.oyuns_plus_referral_max_uses !== exchangeLimits.oyuns_plus_referral_max_uses;
+    next.oyuns_plus_referral_max_uses !== exchangeLimits.oyuns_plus_referral_max_uses ||
+    next.home_banner_enabled !== exchangeLimits.home_banner_enabled ||
+    next.home_banner_image_url.trim() !== exchangeLimits.home_banner_image_url.trim() ||
+    next.home_banner_link_url.trim() !== exchangeLimits.home_banner_link_url.trim();
 
-  const handleLimitsChange = (field: keyof AppSettings, value: string) => {
+  const handleLimitsChange = (field: NumericAppSettingsField, value: string) => {
     const num = parseInt(value, 10);
     if (value !== "" && isNaN(num)) return;
     const updated = { ...editingLimits, [field]: value === "" ? 0 : num };
@@ -166,6 +183,61 @@ export function AdminBankAccounts() {
     };
     setEditingLimits(updated);
     setLimitsChanged(hasSettingsChanges(updated));
+  };
+
+  const handleHomeBannerToggle = (enabled: boolean) => {
+    const updated = {
+      ...editingLimits,
+      home_banner_enabled: enabled ? 1 : 0,
+    };
+    setEditingLimits(updated);
+    setLimitsChanged(hasSettingsChanges(updated));
+  };
+
+  const handleBannerTextChange = (field: "home_banner_image_url" | "home_banner_link_url", value: string) => {
+    const updated = { ...editingLimits, [field]: value };
+    setEditingLimits(updated);
+    setLimitsChanged(hasSettingsChanges(updated));
+  };
+
+  const handleBannerImageUpload = async (file: File) => {
+    setBannerUploadError("");
+    const img = new window.Image();
+
+    img.onload = async () => {
+      URL.revokeObjectURL(img.src);
+      if (Math.abs(img.width / img.height - HOME_BANNER_TARGET_RATIO) > 0.12) {
+        setBannerUploadError("Banner зураг 3:1 харьцаатай байх ёстой. Жишээ нь 1200x400.");
+        return;
+      }
+
+      setBannerUploading(true);
+      try {
+        const ext = file.name.split(".").pop() || "jpg";
+        const path = `home-banners/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const presigned = await requestPresign({ bucket: "bills", path });
+        await fetch(presigned.upload_url, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type },
+        });
+
+        const updated = { ...editingLimits, home_banner_image_url: presigned.public_url };
+        setEditingLimits(updated);
+        setLimitsChanged(hasSettingsChanges(updated));
+      } catch {
+        setBannerUploadError("Banner зураг оруулахад алдаа гарлаа");
+      } finally {
+        setBannerUploading(false);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      setBannerUploadError("Зургийг уншихад алдаа гарлаа");
+    };
+
+    img.src = URL.createObjectURL(file);
   };
 
   const handleSaveLimits = async () => {
@@ -324,6 +396,112 @@ export function AdminBankAccounts() {
                 onChange={(e) => handleLimitsChange("oyuns_plus_referral_max_uses", e.target.value)}
                 className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 mt-1 border-t border-amber-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Home дээрх түр banner</p>
+              <p className="text-xs text-slate-500">Зарлал эсвэл сурталчилгааны зураг. Home tab-ын дээд хэсэгт харагдана.</p>
+            </div>
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingLimits.home_banner_enabled > 0}
+                onChange={(e) => handleHomeBannerToggle(e.target.checked)}
+                className="sr-only"
+              />
+              <span
+                className={`w-11 h-6 rounded-full transition relative ${
+                  editingLimits.home_banner_enabled > 0 ? "bg-maroon-600" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition ${
+                    editingLimits.home_banner_enabled > 0 ? "left-5" : "left-0.5"
+                  }`}
+                />
+              </span>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="text-xs text-slate-600 font-medium flex items-center gap-1">
+                <Image className="w-3 h-3" /> Banner зураг (3:1, санал болгох хэмжээ 1200x400)
+              </div>
+
+              {editingLimits.home_banner_image_url ? (
+                <div className="space-y-2">
+                  <div className="overflow-hidden rounded-xl border border-amber-200 bg-white aspect-[3/1]">
+                    <img
+                      src={editingLimits.home_banner_image_url}
+                      alt="Home banner preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 bg-white border border-amber-300 rounded-lg text-sm text-slate-700 hover:bg-amber-50 transition">
+                      {bannerUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      Зураг солих
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleBannerImageUpload(file);
+                        }}
+                        disabled={bannerUploading}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleBannerTextChange("home_banner_image_url", "")}
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-red-200 rounded-lg text-sm text-red-600 hover:bg-red-50 transition"
+                    >
+                      <X className="w-4 h-4" /> Зураг устгах
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleBannerImageUpload(file);
+                    }}
+                    disabled={bannerUploading}
+                  />
+                  <div className="border-2 border-dashed border-amber-300 rounded-xl p-4 text-center hover:border-amber-400 transition bg-white">
+                    {bannerUploading ? (
+                      <RefreshCw className="w-5 h-5 text-amber-500 mx-auto animate-spin" />
+                    ) : (
+                      <Upload className="w-5 h-5 text-amber-500 mx-auto mb-2" />
+                    )}
+                    <div className="text-xs text-slate-500">PNG/JPG/WEBP, 3:1 banner</div>
+                  </div>
+                </label>
+              )}
+
+              {bannerUploadError && <div className="text-xs text-red-500">{bannerUploadError}</div>}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-slate-600 font-medium">Banner дарахад нээгдэх холбоос</label>
+              <input
+                type="text"
+                value={editingLimits.home_banner_link_url}
+                onChange={(e) => handleBannerTextChange("home_banner_link_url", e.target.value)}
+                placeholder="https://example.com"
+                className="w-full p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+              />
+              <div className="text-xs text-slate-500">`https://` оруулахгүй орхисон ч banner дарахад автоматаар веб холбоос болгон нээнэ.</div>
             </div>
           </div>
         </div>

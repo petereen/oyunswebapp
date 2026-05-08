@@ -233,6 +233,9 @@ export type AppSettings = {
   oyuns_plus_points_per_threshold: number;
   oyuns_plus_referral_reward_points: number;
   oyuns_plus_referral_max_uses: number;
+  home_banner_enabled: number;
+  home_banner_image_url: string;
+  home_banner_link_url: string;
 };
 
 export const DEFAULT_MIN_RUB_AMOUNT = 2000;
@@ -242,6 +245,9 @@ export const DEFAULT_OYUNS_PLUS_THRESHOLD_RUB = 10000;
 export const DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD = 10;
 export const DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS = 50;
 export const DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES = 5;
+export const DEFAULT_HOME_BANNER_ENABLED = 0;
+export const DEFAULT_HOME_BANNER_IMAGE_URL = '';
+export const DEFAULT_HOME_BANNER_LINK_URL = '';
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   min_rub_amount: DEFAULT_MIN_RUB_AMOUNT,
@@ -251,6 +257,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   oyuns_plus_points_per_threshold: DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD,
   oyuns_plus_referral_reward_points: DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS,
   oyuns_plus_referral_max_uses: DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES,
+  home_banner_enabled: DEFAULT_HOME_BANNER_ENABLED,
+  home_banner_image_url: DEFAULT_HOME_BANNER_IMAGE_URL,
+  home_banner_link_url: DEFAULT_HOME_BANNER_LINK_URL,
 };
 
 export function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
@@ -262,6 +271,9 @@ export function normalizeAppSettings(settings?: Partial<AppSettings> | null): Ap
     oyuns_plus_points_per_threshold: Math.max(1, toSafeNumber(settings?.oyuns_plus_points_per_threshold, DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD)),
     oyuns_plus_referral_reward_points: Math.max(0, toSafeNumber(settings?.oyuns_plus_referral_reward_points, DEFAULT_OYUNS_PLUS_REFERRAL_REWARD_POINTS)),
     oyuns_plus_referral_max_uses: Math.max(1, toSafeNumber(settings?.oyuns_plus_referral_max_uses, DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES)),
+    home_banner_enabled: toSafeNumber(settings?.home_banner_enabled, DEFAULT_HOME_BANNER_ENABLED) > 0 ? 1 : 0,
+    home_banner_image_url: typeof settings?.home_banner_image_url === 'string' ? settings.home_banner_image_url.trim() : DEFAULT_HOME_BANNER_IMAGE_URL,
+    home_banner_link_url: typeof settings?.home_banner_link_url === 'string' ? settings.home_banner_link_url.trim() : DEFAULT_HOME_BANNER_LINK_URL,
   };
 }
 
