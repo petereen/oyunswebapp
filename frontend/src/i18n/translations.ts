@@ -294,7 +294,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "oyuns_plus.history_source_referral": { ru: "Реферал", mn: "Урилга" },
   "oyuns_plus.tournament_section_title": { ru: "ОМОХ Сагсан бөмбөгийн тэмцээн", mn: "ОМОХ Сагсан бөмбөгийн тэмцээн" },
   "oyuns_plus.tab_schedule": { ru: "Расписание", mn: "Тоглолтын хуваарь" },
-  "oyuns_plus.tab_stages": { ru: "Группы и плей-офф", mn: "Хэсэг ба хасагдах шат" },
+  "oyuns_plus.tab_stages": { ru: "Группы и плей-офф", mn: "Хэсгийн ба хасагдах шат" },
   "oyuns_plus.tab_leaderboard": { ru: "Leaderboard команд", mn: "Санал хураалт" },
   "oyuns_plus.tournament_desc": { ru: "Раздел турнира в OYUNS Plus: расписание матчей, счёт и текущие игры.", mn: "ОХУ дахь Монгол Оюутны Холбооны Сагсан Бөмбөгийн аварга шалгаруулах тэмцээний хэсэг: тоглолтын хуваарь, оноо, явагдаж буй тоглолтуудыг харах боломжтой." },
   "oyuns_plus.tournament_categories": { ru: "Мужской / Женский", mn: "Эрэгтэй / Эмэгтэй" },
