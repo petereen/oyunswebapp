@@ -575,7 +575,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, isProfileLoading =
                       <div className="text-xs text-dark-600 dark:text-ivory-400">{t("oyuns_plus.no_games")}</div>
                     ) : (
                       <div className="space-y-2">
-                        {filteredGames.slice(0, 12).map((game) => {
+                        {filteredGames.map((game) => {
                     const isLive = game.status === "live";
                     const isCompleted = game.status === "completed";
                     const homeWins = isCompleted && game.home_score > game.away_score;
