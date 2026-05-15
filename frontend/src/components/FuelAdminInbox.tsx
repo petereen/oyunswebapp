@@ -391,7 +391,7 @@ export function FuelAdminInbox() {
                   <div className="flex flex-wrap gap-2 pt-2">
                     <button
                       onClick={() => handleAction(order.id, "approved")}
-                      disabled={actionLoading === order.id || (!order.dispenser_number && !approvalImageUrl[order.id])}
+                      disabled={actionLoading === order.id || approvalUploading === order.id}
                       className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-500 text-white text-xs font-semibold rounded-xl hover:bg-green-600 transition disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-3 h-3" /> {t("inbox.approve")}

@@ -348,48 +348,114 @@ def _get_user_lang(user_id: int) -> str:
     return "mn"
 
 
+def _classify_transaction_service(direction: str, bank_details: str | None) -> tuple[str, str | None, str | None]:
+    if direction != "sell" or not bank_details:
+        return "exchange", None, None
+
+    parts = [part.strip() for part in bank_details.split(",") if part.strip()]
+    if len(parts) != 2:
+        return "exchange", None, None
+
+    phone_candidate, telecom = parts
+    normalized_phone = phone_candidate.replace(" ", "").replace("-", "")
+    if normalized_phone.startswith("+"):
+        normalized_phone = normalized_phone[1:]
+
+    if normalized_phone.isdigit() and 7 <= len(normalized_phone) <= 15:
+        return "phone_topup", phone_candidate, telecom
+
+    return "exchange", None, None
+
+
 # Background task for stale transaction reminders
 async def stale_transaction_reminder():
-    """Send reminder notifications for transactions pending/approved longer than 30 minutes"""
+    """Notify other admins when exchange requests remain pending too long."""
     settings = get_settings()
     client = get_supabase()
+    sent_reminders: set[str] = set()
     
     while True:
         try:
-            await asyncio.sleep(30 * 60)  # Wait 30 minutes
-            
-            # Calculate threshold time (30 minutes ago) - use Moscow time
-            msk_tz = timezone(timedelta(hours=3))
-            threshold = datetime.now(msk_tz) - timedelta(minutes=30)
+            now_utc = datetime.now(timezone.utc)
+            threshold = now_utc - timedelta(minutes=30)
             threshold_str = threshold.isoformat()
             
-            # Get stale transactions (pending or approved, not completed/cancelled)
+            # Only alert for exchange requests based on the latest request timestamp.
             stale_res = client.table("transactions").select(
-                "id, invoice, amount, currency_from, currency_to, status, created_at, user_id"
-            ).in_("status", ["pending", "approved"]).lt("created_at", threshold_str).execute()
+                "id, invoice, amount, currency_from, currency_to, status, timestamp, bank_details, user_id"
+            ).in_("status", ["pending", "approved"]).lt("timestamp", threshold_str).execute()
             
             if not stale_res.data:
+                sent_reminders.clear()
                 logger.info("No stale transactions found")
+                await asyncio.sleep(5 * 60)
                 continue
             
-            logger.info(f"Found {len(stale_res.data)} stale transactions")
-            
-            # Get current shift admin
-            shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
-            if not shift_res.data or not shift_res.data[0].get("current_admin_id"):
-                logger.warning("No shift admin found for stale transaction reminder")
-                continue
-            
-            shift_admin_id = shift_res.data[0].get("current_admin_id")
-            
-            # Build reminder message
+            stale_transactions = []
+            active_reminder_keys: set[str] = set()
             for tx in stale_res.data:
+                direction = "buy" if (tx.get("currency_from") or "").upper() == "RUB" else "sell"
+                service_kind, _, _ = _classify_transaction_service(direction, tx.get("bank_details"))
+                if service_kind != "exchange":
+                    continue
+
+                reminder_key = f"{tx.get('invoice')}:{tx.get('status')}:{tx.get('timestamp')}"
+                active_reminder_keys.add(reminder_key)
+                stale_transactions.append((tx, reminder_key))
+
+            sent_reminders.intersection_update(active_reminder_keys)
+
+            if not stale_transactions:
+                logger.info("No stale exchange transactions found")
+                await asyncio.sleep(5 * 60)
+                continue
+
+            logger.info(f"Found {len(stale_transactions)} stale exchange transactions")
+            
+            shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
+            shift_admin_id = None
+            if shift_res.data and shift_res.data[0].get("current_admin_id"):
+                try:
+                    shift_admin_id = int(shift_res.data[0].get("current_admin_id"))
+                except (TypeError, ValueError):
+                    shift_admin_id = None
+
+            admin_res = client.table("admin_users").select("id").eq("is_active", True).execute()
+            recipient_ids: list[int] = []
+            for admin_row in admin_res.data or []:
+                admin_id = admin_row.get("id")
+                try:
+                    normalized_admin_id = int(admin_id)
+                except (TypeError, ValueError):
+                    continue
+                if shift_admin_id is not None and normalized_admin_id == shift_admin_id:
+                    continue
+                recipient_ids.append(normalized_admin_id)
+
+            if not recipient_ids:
+                logger.warning("No other active admins found for stale transaction reminder")
+                await asyncio.sleep(5 * 60)
+                continue
+
+            for tx, reminder_key in stale_transactions:
+                if reminder_key in sent_reminders:
+                    continue
+
                 invoice = tx.get("invoice", "N/A")
                 status = tx.get("status", "unknown")
                 amount = tx.get("amount", 0)
                 currency_from = tx.get("currency_from", "")
                 currency_to = tx.get("currency_to", "")
-                created_at = tx.get("created_at", "")
+                request_timestamp = tx.get("timestamp", "")
+                waited_minutes = None
+                if request_timestamp:
+                    try:
+                        request_time = datetime.fromisoformat(str(request_timestamp).replace("Z", "+00:00"))
+                        if request_time.tzinfo is None:
+                            request_time = request_time.replace(tzinfo=timezone.utc)
+                        waited_minutes = max(0, int((now_utc - request_time).total_seconds() // 60))
+                    except Exception:
+                        waited_minutes = None
                 
                 status_emoji = "⏳" if status == "pending" else "✅"
                 reminder_text = (
@@ -397,11 +463,10 @@ async def stale_transaction_reminder():
                     f"📋 Invoice: <code>{invoice}</code>\n"
                     f"💰 Дүн: <b>{amount}</b> {currency_from} → {currency_to}\n"
                     f"{status_emoji} Төлөв: {status.upper()}\n"
-                    f"🕐 Үүсгэсэн: {created_at}\n\n"
-                    f"⚠️ Энэ хүсэлт 30 минутаас илүү хугацаанд хүлээгдэж байна!"
+                    f"⏱️ Хүлээлт: <b>{waited_minutes if waited_minutes is not None else '30+'}</b> минут\n\n"
+                    f"⚠️ Тус гүйлгээний хүсэлт 30 минутаас илүү хугацаанд хүлээгдэж байна."
                 )
                 
-                # Add reply markup with admin panel link (only for valid public HTTPS URLs)
                 reply_markup = None
                 if settings.admin_panel_url and "localhost" not in settings.admin_panel_url and settings.admin_panel_url.startswith("https://"):
                     separator = "&" if "?" in settings.admin_panel_url else "?"
@@ -416,15 +481,21 @@ async def stale_transaction_reminder():
                         ]
                     }
                 
-                send_user_notification(shift_admin_id, reminder_text, reply_markup=reply_markup)
-                logger.info(f"Sent stale transaction reminder for invoice {invoice} to admin {shift_admin_id}")
-                
-                # Small delay between messages to avoid rate limiting
-                await asyncio.sleep(0.5)
+                delivered = False
+                for admin_id in recipient_ids:
+                    send_user_notification(admin_id, reminder_text, reply_markup=reply_markup)
+                    logger.info(f"Sent stale transaction reminder for invoice {invoice} to admin {admin_id}")
+                    delivered = True
+                    await asyncio.sleep(0.5)
+
+                if delivered:
+                    sent_reminders.add(reminder_key)
                 
         except Exception as e:
             logger.error(f"Error in stale transaction reminder: {e}")
             await asyncio.sleep(60)  # Wait 1 minute before retrying on error
+
+        await asyncio.sleep(5 * 60)
 
 
 @asynccontextmanager
@@ -3305,24 +3376,6 @@ async def admin_action(
 
 @app.get("/api/admin/inbox", response_model=AdminInboxResponse)
 async def admin_inbox(admin=Depends(require_admin)):
-    def classify_service(direction: str, bank_details: str) -> tuple[str, str | None, str | None]:
-        if direction != "sell" or not bank_details:
-            return "exchange", None, None
-
-        parts = [part.strip() for part in bank_details.split(",") if part.strip()]
-        if len(parts) != 2:
-            return "exchange", None, None
-
-        phone_candidate, telecom = parts
-        normalized_phone = phone_candidate.replace(" ", "").replace("-", "")
-        if normalized_phone.startswith("+"):
-            normalized_phone = normalized_phone[1:]
-
-        if normalized_phone.isdigit() and 7 <= len(normalized_phone) <= 15:
-            return "phone_topup", phone_candidate, telecom
-
-        return "exchange", None, None
-
     client = get_supabase()
     res = (
         client.table("transactions")
@@ -3353,7 +3406,7 @@ async def admin_inbox(admin=Depends(require_admin)):
         # Determine direction from currency pair (case-insensitive)
         direction = "buy" if (row.get("currency_from") or "").upper() == "RUB" else "sell"
         bank_details = row.get("bank_details") or ""
-        service_kind, topup_phone, topup_telecom = classify_service(direction, bank_details)
+        service_kind, topup_phone, topup_telecom = _classify_transaction_service(direction, bank_details)
         
         # Check for bank mismatch
         user_id = row.get("user_id")

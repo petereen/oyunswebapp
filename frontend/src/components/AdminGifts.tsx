@@ -91,12 +91,8 @@ export function AdminGifts() {
     }
   };
 
-  // Handle approve with mandatory bill
+  // Handle approve with optional bill
   const handleApprove = async (giftId: string) => {
-    if (billUrls.length === 0) {
-      setError("Гүйлгээний баримт оруулах шаардлагатай!");
-      return;
-    }
     try {
       setActionLoading(giftId);
       await approveGift(giftId, billUrls);
@@ -415,11 +411,11 @@ export function AdminGifts() {
                     </div>
                   )}
 
-                  {/* Bill upload section for pending_admin - MANDATORY */}
+                  {/* Bill upload section for pending_admin */}
                   {gift.status === "pending_admin" && (
                     <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="text-xs text-yellow-700 font-medium mb-2 flex items-center gap-1">
-                        <Upload className="w-3 h-3" /> Гүйлгээний баримт оруулах (заавал)
+                        <Upload className="w-3 h-3" /> Гүйлгээний баримт оруулах (заавал биш)
                       </div>
                       
                       {/* Uploaded bills preview */}
@@ -461,9 +457,6 @@ export function AdminGifts() {
                         />
                       </label>
                       
-                      {billUrls.length === 0 && (
-                        <div className="text-xs text-red-500 mt-1">* Баримт оруулах шаардлагатай</div>
-                      )}
                     </div>
                   )}
 
@@ -472,7 +465,7 @@ export function AdminGifts() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleApprove(gift.id)}
-                        disabled={actionLoading === gift.id || billUrls.length === 0}
+                        disabled={actionLoading === gift.id || uploading}
                         className="flex-1 py-3 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {actionLoading === gift.id ? (

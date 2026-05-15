@@ -1741,7 +1741,7 @@ export function AdminInbox() {
 
             {/* Upload Admin's Bills - Multiple photos support */}
             <div className="mb-4">
-              <div className="text-sm text-slate-600 mb-2">Админы гүйлгээний баримтыг оруулна уу (олон зураг):</div>
+              <div className="text-sm text-slate-600 mb-2">Админы гүйлгээний баримтыг оруулна уу (заавал биш, олон зураг):</div>
               
               {/* Show uploaded photos */}
               {adminBillUrls.length > 0 && (
@@ -1796,7 +1796,7 @@ export function AdminInbox() {
               </button>
               <button
                 onClick={handleConfirmTransaction}
-                disabled={adminBillUrls.length === 0}
+                disabled={uploading}
                 className="flex-1 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
               >
                 Дуусгах
