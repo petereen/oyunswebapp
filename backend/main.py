@@ -3103,6 +3103,30 @@ async def admin_action(
             if phone_candidate.isdigit() and 7 <= len(phone_candidate) <= 15:
                 raise HTTPException(status_code=400, detail="waiting_edit is only supported for exchange requests")
 
+    selected_completed_by_admin = payload.completed_by_admin
+    if payload.status in ["completed", "successful"] and selected_completed_by_admin is None:
+        shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
+        if shift_res.data and shift_res.data[0].get("current_admin_id") is not None:
+            try:
+                selected_completed_by_admin = int(shift_res.data[0].get("current_admin_id"))
+            except (TypeError, ValueError):
+                selected_completed_by_admin = None
+
+    if payload.status in ["completed", "successful"]:
+        if selected_completed_by_admin is None:
+            raise HTTPException(status_code=400, detail="Completing admin is required when finalizing a transaction")
+
+        admin_res = (
+            client.table("admin_users")
+            .select("id")
+            .eq("id", selected_completed_by_admin)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if not admin_res.data:
+            raise HTTPException(status_code=400, detail="Selected completing admin must be an active admin")
+
     # Build update payload - only include non-None values
     update_payload = {"status": payload.status}
     
@@ -3110,8 +3134,8 @@ async def admin_action(
         update_payload["rejection_comment"] = payload.rejection_comment
     if payload.admin_comment is not None:
         update_payload["admin_comment"] = payload.admin_comment
-    if payload.completed_by_admin is not None:
-        update_payload["completed_by_admin"] = payload.completed_by_admin
+    if selected_completed_by_admin is not None:
+        update_payload["completed_by_admin"] = selected_completed_by_admin
 
     total_paused_seconds = _to_decimal(trx.get("total_paused_seconds"), Decimal("0"))
     paused_at_raw = trx.get("timer_paused_at")
@@ -3365,6 +3389,7 @@ async def admin_action(
             details={
                 "previous_status": trx.get("status"),
                 "new_status": payload.status,
+                "completed_by_admin": selected_completed_by_admin,
                 "rejection_comment": payload.rejection_comment,
                 "admin_comment": payload.admin_comment,
                 "has_admin_bill": bool(payload.admin_bill_url),

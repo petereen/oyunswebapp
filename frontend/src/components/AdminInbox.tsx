@@ -113,6 +113,7 @@ export function AdminInbox() {
   const [rejectUploading, setRejectUploading] = useState(false);
   const [confirmModal, setConfirmModal] = useState<InboxItem | null>(null);
   const [adminBillUrls, setAdminBillUrls] = useState<string[]>([]); // Changed to array for multiple photos
+  const [confirmCompletedByAdminId, setConfirmCompletedByAdminId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
 
   // Label editing state
@@ -285,6 +286,17 @@ export function AdminInbox() {
       window.clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    if (!confirmModal) {
+      setConfirmCompletedByAdminId(null);
+      return;
+    }
+    if (confirmCompletedByAdminId !== null) return;
+    if (currentShift?.current_admin_id) {
+      setConfirmCompletedByAdminId(currentShift.current_admin_id);
+    }
+  }, [confirmModal, confirmCompletedByAdminId, currentShift?.current_admin_id]);
 
   // Sort and filter items
   const displayItems = useMemo(() => {
@@ -549,16 +561,29 @@ export function AdminInbox() {
     setAdminBillUrls(prev => prev.filter((_, i) => i !== index));
   };
 
+  const openConfirmModal = (item: InboxItem) => {
+    setConfirmModal(item);
+    setDetailModal(null);
+    setAdminBillUrls(parseBillUrls(item.admin_bill_url));
+    setConfirmCompletedByAdminId(currentShift?.current_admin_id ?? null);
+  };
+
   const handleConfirmTransaction = async () => {
     if (!confirmModal) return;
+    const completingAdminId = confirmCompletedByAdminId ?? currentShift?.current_admin_id ?? null;
+    if (!completingAdminId) {
+      alert("Гүйлгээг дуусгасан админыг сонгоно уу");
+      return;
+    }
     await adminAction({
       invoice: confirmModal.invoice,
       status: "successful",
       admin_bill_url: adminBillUrls.length > 0 ? JSON.stringify(adminBillUrls) : undefined,
-      completed_by_admin: currentShift?.current_admin_id ?? undefined,
+      completed_by_admin: completingAdminId,
     });
     setConfirmModal(null);
     setAdminBillUrls([]);
+    setConfirmCompletedByAdminId(null);
     await load();
   };
 
@@ -829,10 +854,7 @@ export function AdminInbox() {
             return (
               <div
                 key={item.invoice}
-                onClick={() => {
-                  setConfirmModal(item);
-                  setAdminBillUrls(parseBillUrls(item.admin_bill_url));
-                }}
+                onClick={() => openConfirmModal(item)}
                 className={`border rounded-xl bg-white p-3 cursor-pointer transition ${topupRequest ? "border-sky-200 hover:bg-sky-50/70" : "border-green-200 hover:bg-green-50"}`}
               >
                 <div className="flex items-center gap-3">
@@ -1292,11 +1314,7 @@ export function AdminInbox() {
                 {item.status === "approved" && (
                   <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
                     <button
-                      onClick={() => {
-                        setConfirmModal(item);
-                        setDetailModal(null);
-                        setAdminBillUrls([]);
-                      }}
+                      onClick={() => openConfirmModal(item)}
                       className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"
                     >
                       <Upload className="w-5 h-5" /> Гүйлгээ дуусгах
@@ -1784,11 +1802,33 @@ export function AdminInbox() {
               </label>
             </div>
 
+            <div className="mb-4">
+              <div className="text-sm text-slate-600 mb-2">Гүйлгээг дуусгасан админ:</div>
+              <select
+                value={confirmCompletedByAdminId ?? ""}
+                onChange={(e) => setConfirmCompletedByAdminId(e.target.value ? parseInt(e.target.value) : null)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-maroon-300"
+              >
+                <option value="">Админ сонгоно уу</option>
+                {adminUsers.map((admin) => (
+                  <option key={admin.id} value={admin.id}>
+                    {admin.name}{admin.id === currentShift?.current_admin_id ? " (Ээлж дээр)" : ""}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-1 text-xs text-slate-500">
+                {currentShift?.current_admin_id
+                  ? "Анхдагчаар ээлжийн админ сонгогдоно."
+                  : "Ээлж идэвхгүй бол гүйлгээг дуусгасан админыг гараар сонгоно."}
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={() => {
                   setConfirmModal(null);
                   setAdminBillUrls([]);
+                  setConfirmCompletedByAdminId(null);
                 }}
                 className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
               >
@@ -1796,7 +1836,7 @@ export function AdminInbox() {
               </button>
               <button
                 onClick={handleConfirmTransaction}
-                disabled={uploading}
+                disabled={uploading || !(confirmCompletedByAdminId ?? currentShift?.current_admin_id)}
                 className="flex-1 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
               >
                 Дуусгах
