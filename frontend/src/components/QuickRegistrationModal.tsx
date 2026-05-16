@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { submitBasicRegistration, BasicRegistrationInput, validateReferralCode } from "../api";
 import { useLang } from "../i18n/useLang";
+import { PhoneVerificationModal } from "./PhoneVerificationModal";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
 
@@ -60,6 +61,7 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
   const { t } = useLang();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [verificationPhone, setVerificationPhone] = useState<string | null>(null);
 
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -150,8 +152,8 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
         referral_code: normalizedReferralCode || undefined,
       };
 
-      await submitBasicRegistration(payload);
-      onRegistered();
+      const result = await submitBasicRegistration(payload);
+      setVerificationPhone(result.phone_intl || fullPhone);
     } catch (err: any) {
       console.error("Basic registration error:", err);
       const detail = err?.response?.data?.detail;
@@ -160,6 +162,17 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
       setLoading(false);
     }
   };
+
+  if (verificationPhone) {
+    return (
+      <PhoneVerificationModal
+        phoneNumber={verificationPhone}
+        autoSend
+        onVerified={onRegistered}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 overflow-auto">

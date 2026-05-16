@@ -7,6 +7,7 @@ import math
 import json
 import secrets
 import string
+import requests
 from decimal import Decimal, InvalidOperation
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -40,6 +41,8 @@ from models import (
     AuthRequest,
     AuthResponse,
     BasicRegistrationRequest,
+    PhoneVerificationCompleteRequest,
+    PhoneVerificationCompleteResponse,
     ExchangeEditableResponse,
     ExchangeCreateRequest,
     ExchangeCreateResponse,
@@ -2363,7 +2366,7 @@ async def register_basic(
     payload: BasicRegistrationRequest,
     user=Depends(get_jwt_authenticated_user),
 ):
-    """Level 1 registration - minimal info, immediate account creation without admin approval."""
+    """Collect Level 1 registration data and require phone verification before activation."""
     import re
     from zoneinfo import ZoneInfo
 
@@ -2372,7 +2375,7 @@ async def register_basic(
     now = datetime.now(moscow_tz).isoformat()
 
     # Check if user already has a higher verification level
-    existing = client.table("users").select("verification_level").eq("id", user.id).limit(1).execute()
+    existing = client.table("users").select("verification_level,phone_verification_pending,phone_verified_at").eq("id", user.id).limit(1).execute()
     if existing.data and existing.data[0].get("verification_level", 0) >= 1:
         raise HTTPException(status_code=400, detail="User already registered")
 
@@ -2412,8 +2415,11 @@ async def register_basic(
         "first_name": payload.first_name,
         "last_name": payload.last_name,
         "phone_intl": payload.phone_intl,
-        "verification_level": 1,
+        "verification_level": 0,
         "agreed_terms": True,
+        "phone_verification_pending": True,
+        "phone_verified_at": None,
+        "phone_auth_user_id": None,
         "updated_at": now,
     }
 
@@ -2437,7 +2443,108 @@ async def register_basic(
 
     _ensure_user_referral_code(client, user.id)
 
-    return {"ok": True, "message": "Basic registration completed", "verification_level": 1}
+    return {
+        "ok": True,
+        "message": "Basic registration saved. Verify phone number to continue.",
+        "verification_level": 0,
+        "phone_verification_pending": True,
+        "phone_intl": payload.phone_intl,
+    }
+
+
+@app.post("/api/phone-verification/complete", response_model=PhoneVerificationCompleteResponse)
+async def complete_phone_verification(
+    payload: PhoneVerificationCompleteRequest,
+    user=Depends(get_jwt_authenticated_user),
+):
+    """Promote a user to Level 1 after a successful Supabase phone OTP verification."""
+    import re
+    from zoneinfo import ZoneInfo
+
+    settings = get_settings()
+    client = get_supabase()
+    moscow_tz = ZoneInfo("Europe/Moscow")
+    now = datetime.now(moscow_tz)
+
+    current_user_res = (
+        client.table("users")
+        .select("id,phone_intl,verification_level,phone_verification_pending,phone_verified_at")
+        .eq("id", user.id)
+        .limit(1)
+        .execute()
+    )
+    current_user = current_user_res.data[0] if current_user_res.data else None
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User record not found")
+
+    if current_user.get("verification_level", 0) >= 1:
+        raise HTTPException(status_code=400, detail="Phone is already verified")
+
+    if not current_user.get("phone_verification_pending"):
+        raise HTTPException(status_code=400, detail="Phone verification is not pending")
+
+    if not current_user.get("phone_intl"):
+        raise HTTPException(status_code=400, detail="Phone number is missing for verification")
+
+    try:
+        auth_response = requests.get(
+            f"{settings.supabase_url.rstrip('/')}/auth/v1/user",
+            headers={
+                "apikey": settings.supabase_key,
+                "Authorization": f"Bearer {payload.access_token}",
+            },
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        logger.exception("Failed to validate Supabase phone verification token")
+        raise HTTPException(status_code=502, detail="Phone verification service unavailable") from exc
+
+    if auth_response.status_code != 200:
+        raise HTTPException(status_code=400, detail="Invalid phone verification session")
+
+    auth_user = auth_response.json() or {}
+    verified_phone = (auth_user.get("phone") or "").strip()
+    phone_confirmed_at = auth_user.get("phone_confirmed_at") or auth_user.get("confirmed_at")
+    auth_user_id = auth_user.get("id")
+
+    if not verified_phone or not phone_confirmed_at or not auth_user_id:
+        raise HTTPException(status_code=400, detail="Phone verification is incomplete")
+
+    if verified_phone != current_user.get("phone_intl"):
+        raise HTTPException(status_code=400, detail="Verified phone number does not match registration")
+
+    existing_phone_link = (
+        client.table("users")
+        .select("id")
+        .eq("phone_auth_user_id", auth_user_id)
+        .neq("id", user.id)
+        .limit(1)
+        .execute()
+    )
+    if existing_phone_link.data:
+        raise HTTPException(status_code=400, detail="This phone number is already linked to another user")
+
+    update_payload = {
+        "verification_level": 1,
+        "phone_verification_pending": False,
+        "phone_verified_at": now.isoformat(),
+        "phone_auth_user_id": auth_user_id,
+        "updated_at": now.isoformat(),
+    }
+
+    if verified_phone.startswith("+976"):
+        digits_only = re.sub(r"\D", "", verified_phone.replace("+976", ""))
+        if len(digits_only) >= 8:
+            update_payload["phone_mnt"] = digits_only[-8:]
+
+    result = client.table("users").update(update_payload).eq("id", user.id).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to save verified phone number")
+
+    return PhoneVerificationCompleteResponse(
+        message="Phone number verified successfully",
+        phone_verified_at=now,
+    )
 
 
 @app.post("/api/register")

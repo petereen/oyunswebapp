@@ -199,6 +199,8 @@ export default function App() {
               <OyunsPlusTab
                 userId={user?.id}
                 verificationLevel={verificationLevel}
+                phoneVerificationPending={Boolean(profile?.user?.phone_verification_pending)}
+                phoneIntl={profile?.user?.phone_intl}
                 isProfileLoading={Boolean(user?.id) && isProfileLoading}
                 initialTournamentSection={urlTournamentSection}
                 initialTournamentInnerTab={urlTournamentInnerTab}

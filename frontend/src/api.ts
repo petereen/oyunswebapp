@@ -132,6 +132,9 @@ export type UserProfile = {
   verified?: boolean;
   ready_for_verification?: boolean;
   agreed_terms?: boolean;
+  phone_verification_pending?: boolean;
+  phone_verified_at?: string;
+  phone_auth_user_id?: string;
   passport_storage_url?: string;
   verification_level?: number; // 0=new, 1=basic (unverified), 2=fully verified
   referral_code?: string;
@@ -170,6 +173,25 @@ export type BasicRegistrationInput = {
   phone_intl: string;  // Full international phone e.g. "+97699112233"
   email?: string;
   referral_code?: string;
+};
+
+export type BasicRegistrationResponse = {
+  ok: boolean;
+  message: string;
+  verification_level: number;
+  phone_verification_pending: boolean;
+  phone_intl: string;
+};
+
+export type PhoneVerificationCompleteInput = {
+  access_token: string;
+};
+
+export type PhoneVerificationCompleteResponse = {
+  ok: boolean;
+  message: string;
+  verification_level: number;
+  phone_verified_at: string;
 };
 
 export type KycItem = {
@@ -465,7 +487,12 @@ export async function submitRegistration(payload: RegistrationInput) {
 
 export async function submitBasicRegistration(payload: BasicRegistrationInput) {
   const res = await api.post('/register-basic', payload);
-  return res.data as { ok: boolean; message: string; verification_level: number };
+  return res.data as BasicRegistrationResponse;
+}
+
+export async function completePhoneVerification(payload: PhoneVerificationCompleteInput) {
+  const res = await api.post('/phone-verification/complete', payload);
+  return res.data as PhoneVerificationCompleteResponse;
 }
 
 export interface ReferralCodeValidation {
