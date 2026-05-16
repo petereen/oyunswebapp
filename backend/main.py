@@ -41,8 +41,8 @@ from models import (
     AuthRequest,
     AuthResponse,
     BasicRegistrationRequest,
-    PhoneVerificationCompleteRequest,
-    PhoneVerificationCompleteResponse,
+    EmailVerificationCompleteRequest,
+    EmailVerificationCompleteResponse,
     ExchangeEditableResponse,
     ExchangeCreateRequest,
     ExchangeCreateResponse,
@@ -2366,16 +2366,19 @@ async def register_basic(
     payload: BasicRegistrationRequest,
     user=Depends(get_jwt_authenticated_user),
 ):
-    """Collect Level 1 registration data and require phone verification before activation."""
+    """Collect Level 1 registration data and require email verification before activation."""
     import re
     from zoneinfo import ZoneInfo
 
     client = get_supabase()
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz).isoformat()
+    normalized_email = payload.email.strip().lower()
+    if not normalized_email:
+        raise HTTPException(status_code=400, detail="Email is required for verification")
 
     # Check if user already has a higher verification level
-    existing = client.table("users").select("verification_level,phone_verification_pending,phone_verified_at").eq("id", user.id).limit(1).execute()
+    existing = client.table("users").select("verification_level,email_verification_pending,email_verified_at").eq("id", user.id).limit(1).execute()
     if existing.data and existing.data[0].get("verification_level", 0) >= 1:
         raise HTTPException(status_code=400, detail="User already registered")
 
@@ -2415,11 +2418,12 @@ async def register_basic(
         "first_name": payload.first_name,
         "last_name": payload.last_name,
         "phone_intl": payload.phone_intl,
+        "email": normalized_email,
         "verification_level": 0,
         "agreed_terms": True,
-        "phone_verification_pending": True,
-        "phone_verified_at": None,
-        "phone_auth_user_id": None,
+        "email_verification_pending": True,
+        "email_verified_at": None,
+        "email_auth_user_id": None,
         "updated_at": now,
     }
 
@@ -2428,9 +2432,6 @@ async def register_basic(
         digits_only = re.sub(r"\D", "", payload.phone_intl.replace("+976", ""))
         if len(digits_only) >= 8:
             update_payload["phone_mnt"] = digits_only[-8:]
-
-    if payload.email:
-        update_payload["email"] = payload.email
 
     if referred_by_user_id:
         update_payload["referred_by_user_id"] = referred_by_user_id
@@ -2445,20 +2446,19 @@ async def register_basic(
 
     return {
         "ok": True,
-        "message": "Basic registration saved. Verify phone number to continue.",
+        "message": "Basic registration saved. Verify email to continue.",
         "verification_level": 0,
-        "phone_verification_pending": True,
-        "phone_intl": payload.phone_intl,
+        "email_verification_pending": True,
+        "email": normalized_email,
     }
 
 
-@app.post("/api/phone-verification/complete", response_model=PhoneVerificationCompleteResponse)
-async def complete_phone_verification(
-    payload: PhoneVerificationCompleteRequest,
+@app.post("/api/email-verification/complete", response_model=EmailVerificationCompleteResponse)
+async def complete_email_verification(
+    payload: EmailVerificationCompleteRequest,
     user=Depends(get_jwt_authenticated_user),
 ):
-    """Promote a user to Level 1 after a successful Supabase phone OTP verification."""
-    import re
+    """Promote a user to Level 1 after a successful Supabase email OTP verification."""
     from zoneinfo import ZoneInfo
 
     settings = get_settings()
@@ -2468,7 +2468,7 @@ async def complete_phone_verification(
 
     current_user_res = (
         client.table("users")
-        .select("id,phone_intl,verification_level,phone_verification_pending,phone_verified_at")
+        .select("id,email,verification_level,email_verification_pending,email_verified_at")
         .eq("id", user.id)
         .limit(1)
         .execute()
@@ -2478,13 +2478,13 @@ async def complete_phone_verification(
         raise HTTPException(status_code=404, detail="User record not found")
 
     if current_user.get("verification_level", 0) >= 1:
-        raise HTTPException(status_code=400, detail="Phone is already verified")
+        raise HTTPException(status_code=400, detail="Email is already verified")
 
-    if not current_user.get("phone_verification_pending"):
-        raise HTTPException(status_code=400, detail="Phone verification is not pending")
+    if not current_user.get("email_verification_pending"):
+        raise HTTPException(status_code=400, detail="Email verification is not pending")
 
-    if not current_user.get("phone_intl"):
-        raise HTTPException(status_code=400, detail="Phone number is missing for verification")
+    if not current_user.get("email"):
+        raise HTTPException(status_code=400, detail="Email is missing for verification")
 
     try:
         auth_response = requests.get(
@@ -2496,54 +2496,49 @@ async def complete_phone_verification(
             timeout=10,
         )
     except requests.RequestException as exc:
-        logger.exception("Failed to validate Supabase phone verification token")
-        raise HTTPException(status_code=502, detail="Phone verification service unavailable") from exc
+        logger.exception("Failed to validate Supabase email verification token")
+        raise HTTPException(status_code=502, detail="Email verification service unavailable") from exc
 
     if auth_response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Invalid phone verification session")
+        raise HTTPException(status_code=400, detail="Invalid email verification session")
 
     auth_user = auth_response.json() or {}
-    verified_phone = (auth_user.get("phone") or "").strip()
-    phone_confirmed_at = auth_user.get("phone_confirmed_at") or auth_user.get("confirmed_at")
+    verified_email = (auth_user.get("email") or "").strip().lower()
+    email_confirmed_at = auth_user.get("email_confirmed_at") or auth_user.get("confirmed_at")
     auth_user_id = auth_user.get("id")
 
-    if not verified_phone or not phone_confirmed_at or not auth_user_id:
-        raise HTTPException(status_code=400, detail="Phone verification is incomplete")
+    if not verified_email or not email_confirmed_at or not auth_user_id:
+        raise HTTPException(status_code=400, detail="Email verification is incomplete")
 
-    if verified_phone != current_user.get("phone_intl"):
-        raise HTTPException(status_code=400, detail="Verified phone number does not match registration")
+    if verified_email != (current_user.get("email") or "").strip().lower():
+        raise HTTPException(status_code=400, detail="Verified email does not match registration")
 
-    existing_phone_link = (
+    existing_email_link = (
         client.table("users")
         .select("id")
-        .eq("phone_auth_user_id", auth_user_id)
+        .eq("email_auth_user_id", auth_user_id)
         .neq("id", user.id)
         .limit(1)
         .execute()
     )
-    if existing_phone_link.data:
-        raise HTTPException(status_code=400, detail="This phone number is already linked to another user")
+    if existing_email_link.data:
+        raise HTTPException(status_code=400, detail="This email is already linked to another user")
 
     update_payload = {
         "verification_level": 1,
-        "phone_verification_pending": False,
-        "phone_verified_at": now.isoformat(),
-        "phone_auth_user_id": auth_user_id,
+        "email_verification_pending": False,
+        "email_verified_at": now.isoformat(),
+        "email_auth_user_id": auth_user_id,
         "updated_at": now.isoformat(),
     }
 
-    if verified_phone.startswith("+976"):
-        digits_only = re.sub(r"\D", "", verified_phone.replace("+976", ""))
-        if len(digits_only) >= 8:
-            update_payload["phone_mnt"] = digits_only[-8:]
-
     result = client.table("users").update(update_payload).eq("id", user.id).execute()
     if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to save verified phone number")
+        raise HTTPException(status_code=500, detail="Failed to save verified email")
 
-    return PhoneVerificationCompleteResponse(
-        message="Phone number verified successfully",
-        phone_verified_at=now,
+    return EmailVerificationCompleteResponse(
+        message="Email verified successfully",
+        email_verified_at=now,
     )
 
 

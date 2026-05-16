@@ -12,7 +12,7 @@ import {
   TournamentKnockoutPhase,
   TournamentVenue,
 } from "../api";
-import { PhoneVerificationModal } from "../components/PhoneVerificationModal";
+import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { useLang } from "../i18n/useLang";
 
@@ -25,14 +25,14 @@ const KNOCKOUT_ROUND_ORDER: Record<string, number> = {
 interface Props {
   userId?: number;
   verificationLevel?: number;
-  phoneVerificationPending?: boolean;
-  phoneIntl?: string;
+  emailVerificationPending?: boolean;
+  emailAddress?: string;
   isProfileLoading?: boolean;
   initialTournamentSection?: "basketball" | null;
   initialTournamentInnerTab?: "schedule" | "stages" | "leaderboard";
 }
 
-export function OyunsPlusTab({ userId, verificationLevel = 0, phoneVerificationPending = false, phoneIntl, isProfileLoading = false, initialTournamentSection = null, initialTournamentInnerTab = "schedule" }: Props) {
+export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationPending = false, emailAddress, isProfileLoading = false, initialTournamentSection = null, initialTournamentInnerTab = "schedule" }: Props) {
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [gameCategoryFilter, setGameCategoryFilter] = useState<"all" | TournamentCategory>("all");
@@ -42,7 +42,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, phoneVerificationP
   const [tournamentInnerTab, setTournamentInnerTab] = useState<"schedule" | "stages" | "leaderboard">(initialTournamentInnerTab);
   const [showSettings, setShowSettings] = useState(false);
   const [showQuickRegistration, setShowQuickRegistration] = useState(false);
-  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
   const { data: summary } = useQuery({
@@ -120,7 +120,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, phoneVerificationP
 
   const hasScheduleContent = filteredGames.length > 0;
   const holdTournamentContent = Boolean(userId) && isProfileLoading;
-  const needsLevelOneRegistration = Boolean(userId) && !isProfileLoading && verificationLevel < 1 && !phoneVerificationPending;
+  const needsLevelOneRegistration = Boolean(userId) && !isProfileLoading && verificationLevel < 1 && !emailVerificationPending;
 
   const voteMutation = useMutation({
     mutationFn: submitTournamentVote,
@@ -301,7 +301,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, phoneVerificationP
   const handleRegistered = () => {
     queryClient.invalidateQueries({ queryKey: ["me", userId] });
     setShowQuickRegistration(false);
-    setShowPhoneVerification(false);
+    setShowEmailVerification(false);
   };
 
   const renderTournamentRegistrationBlocker = () => (
@@ -312,19 +312,19 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, phoneVerificationP
         </div>
         <div className="space-y-1">
           <div className="text-sm font-bold text-dark-800 dark:text-ivory-200">
-            {phoneVerificationPending ? t("phonev.pending_title") : t("oyuns_plus.tournament_gate_title")}
+            {emailVerificationPending ? t("emailv.pending_title") : t("oyuns_plus.tournament_gate_title")}
           </div>
           <div className="text-xs leading-relaxed text-dark-600 dark:text-ivory-300">
-            {phoneVerificationPending ? t("phonev.pending_desc") : t("oyuns_plus.tournament_gate_desc")}
+            {emailVerificationPending ? t("emailv.pending_desc") : t("oyuns_plus.tournament_gate_desc")}
           </div>
         </div>
       </div>
 
       <button
-        onClick={() => phoneVerificationPending ? setShowPhoneVerification(true) : setShowQuickRegistration(true)}
+        onClick={() => emailVerificationPending ? setShowEmailVerification(true) : setShowQuickRegistration(true)}
         className="w-full bg-maroon-600 text-white py-3 rounded-2xl font-bold text-sm shadow-btn hover:bg-maroon-500 active:scale-[0.98] transition-all"
       >
-        {phoneVerificationPending ? t("phonev.verify") : t("oyuns_plus.tournament_gate_action")}
+        {emailVerificationPending ? t("emailv.verify") : t("oyuns_plus.tournament_gate_action")}
       </button>
     </div>
   );
@@ -530,7 +530,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, phoneVerificationP
             <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card text-xs text-dark-600 dark:text-ivory-400">
               {t("profile.loading")}
             </div>
-          ) : needsLevelOneRegistration || phoneVerificationPending ? (
+          ) : needsLevelOneRegistration || emailVerificationPending ? (
             renderTournamentRegistrationBlocker()
           ) : tournamentInnerTab === "schedule" ? (
             /* Schedule and Scores tab */
@@ -777,10 +777,10 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, phoneVerificationP
         <QuickRegistrationModal onRegistered={handleRegistered} onClose={() => setShowQuickRegistration(false)} />
       )}
 
-      {showPhoneVerification && phoneVerificationPending && phoneIntl && (
-        <PhoneVerificationModal
-          phoneNumber={phoneIntl}
-          onClose={() => setShowPhoneVerification(false)}
+      {showEmailVerification && emailVerificationPending && emailAddress && (
+        <EmailVerificationModal
+          emailAddress={emailAddress}
+          onClose={() => setShowEmailVerification(false)}
           onVerified={handleRegistered}
         />
       )}

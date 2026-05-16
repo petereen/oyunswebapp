@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { submitBasicRegistration, BasicRegistrationInput, validateReferralCode } from "../api";
 import { useLang } from "../i18n/useLang";
-import { PhoneVerificationModal } from "./PhoneVerificationModal";
+import { EmailVerificationModal } from "./EmailVerificationModal";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
 
@@ -61,7 +61,7 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
   const { t } = useLang();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [verificationPhone, setVerificationPhone] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
 
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -75,6 +75,8 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
   const [agreedTerms, setAgreedTerms] = useState(false);
 
   const phoneDigits = phoneNumber.replace(/\D/g, "");
+  const normalizedEmail = email.trim().toLowerCase();
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
   const phoneValid =
     countryCode === "+976"
       ? phoneDigits.length === 8
@@ -82,6 +84,7 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
 
   const isFormValid = () => {
     if (!lastName.trim() || !firstName.trim()) return false;
+    if (!emailValid) return false;
     if (!agreedTerms) return false;
     return phoneValid;
   };
@@ -126,6 +129,8 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
     if (!isFormValid()) {
       if (!agreedTerms) {
         setError(t("reg.terms_required"));
+      } else if (!emailValid) {
+        setError(t("reg.email_required"));
       } else {
         setError(t("reg.fill_all"));
       }
@@ -148,12 +153,12 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
         last_name: lastName.trim(),
         first_name: firstName.trim(),
         phone_intl: fullPhone,
-        email: email.trim() || undefined,
+        email: normalizedEmail,
         referral_code: normalizedReferralCode || undefined,
       };
 
       const result = await submitBasicRegistration(payload);
-      setVerificationPhone(result.phone_intl || fullPhone);
+      setVerificationEmail(result.email || normalizedEmail);
     } catch (err: any) {
       console.error("Basic registration error:", err);
       const detail = err?.response?.data?.detail;
@@ -163,10 +168,10 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
     }
   };
 
-  if (verificationPhone) {
+  if (verificationEmail) {
     return (
-      <PhoneVerificationModal
-        phoneNumber={verificationPhone}
+      <EmailVerificationModal
+        emailAddress={verificationEmail}
         autoSend
         onVerified={onRegistered}
         onClose={onClose}
@@ -260,7 +265,7 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
 
             <div>
               <label className="text-xs text-slate-500 dark:text-ivory-400 flex items-center gap-1">
-                <Mail className="w-3 h-3" /> {t("reg.email_label")}
+                <Mail className="w-3 h-3" /> {t("reg.email_label")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
@@ -269,6 +274,9 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
                 className="w-full rounded-lg border border-maroon-200 dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-2.5 text-sm"
                 placeholder="example@email.com"
               />
+              {email.trim().length > 0 && !emailValid && (
+                <p className="text-xs text-red-500 mt-1">{t("reg.email_required")}</p>
+              )}
             </div>
 
             <div>

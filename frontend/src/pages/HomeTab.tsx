@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import oyunsIcon from "../assets/oyuns-icon.png";
 import { useMemo, useState } from "react";
-import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Phone } from "lucide-react";
+import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Mail } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { RateCard } from "../components/RateCard";
 import { RateHistoryChart } from "../components/RateHistoryChart";
@@ -11,7 +11,7 @@ import { GiftStatusTracker } from "../components/GiftStatusTracker";
 import { FuelStatusTracker } from "../components/FuelStatusTracker";
 import { RegistrationModal } from "../components/RegistrationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
-import { PhoneVerificationModal } from "../components/PhoneVerificationModal";
+import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { RequiredInfoModal } from "../components/RequiredInfoModal";
 import { fetchAppSettings, fetchRates, fetchMe, fetchOyunsPlusSummary, fetchServiceStatus } from "../api";
 import { TelegramUser } from "../hooks/useTelegramAuth";
@@ -67,11 +67,11 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
   });
 
   const userProfile = profile?.user;
-  const phoneVerificationPending = Boolean(userProfile?.phone_verification_pending);
+  const emailVerificationPending = Boolean(userProfile?.email_verification_pending);
   const verificationLevel = userProfile?.verification_level ?? (userProfile?.verified ? 2 : userProfile?.ready_for_verification ? 1 : 0);
   const isVerified = verificationLevel >= 2;
   const isBasicRegistered = verificationLevel >= 1;
-  const needsRegistration = verificationLevel === 0 && !phoneVerificationPending;
+  const needsRegistration = verificationLevel === 0 && !emailVerificationPending;
   const pendingVerification = userProfile && userProfile.verified === false && userProfile.ready_for_verification === true;
 
   const missingEmail = isVerified && !userProfile?.email?.trim();
@@ -86,7 +86,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
 
   const [showRegistration, setShowRegistration] = useState(false);
   const [showQuickRegistration, setShowQuickRegistration] = useState(false);
-  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
   const [showKycRegistration, setShowKycRegistration] = useState(false);
   const [showRequiredInfo, setShowRequiredInfo] = useState(false);
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
@@ -95,7 +95,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
     queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
     setShowRegistration(false);
     setShowQuickRegistration(false);
-    setShowPhoneVerification(false);
+    setShowEmailVerification(false);
     setShowKycRegistration(false);
   };
 
@@ -227,13 +227,13 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
             >
               <User className="w-5 h-5" />
             </button>
-          ) : phoneVerificationPending ? (
+          ) : emailVerificationPending ? (
             <button
-              onClick={() => setShowPhoneVerification(true)}
+              onClick={() => setShowEmailVerification(true)}
               className="w-11 h-11 rounded-2xl bg-gold-500 text-dark-900 flex items-center justify-center hover:bg-gold-400 shadow-btn transition-all"
-              aria-label={t("phonev.open")}
+              aria-label={t("emailv.open")}
             >
-              <Phone className="w-5 h-5" />
+              <Mail className="w-5 h-5" />
             </button>
           ) : isBasicRegistered ? (
             <button
@@ -316,22 +316,22 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
         </div>
       )}
 
-      {phoneVerificationPending && !isBasicRegistered && (
+      {emailVerificationPending && !isBasicRegistered && (
         <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-gold-200 dark:border-gold-800 animate-slideUp">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-14 h-14 bg-gold-50 dark:bg-gold-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
-              <Phone className="w-7 h-7 text-gold-600 dark:text-gold-400" />
+              <Mail className="w-7 h-7 text-gold-600 dark:text-gold-400" />
             </div>
             <div>
-              <div className="text-base font-bold text-dark-800 dark:text-ivory-200 mb-0.5">{t("phonev.pending_title")}</div>
-              <div className="text-sm text-dark-600 dark:text-ivory-300">{t("phonev.pending_desc")}</div>
+              <div className="text-base font-bold text-dark-800 dark:text-ivory-200 mb-0.5">{t("emailv.pending_title")}</div>
+              <div className="text-sm text-dark-600 dark:text-ivory-300">{t("emailv.pending_desc")}</div>
             </div>
           </div>
           <button
-            onClick={() => setShowPhoneVerification(true)}
+            onClick={() => setShowEmailVerification(true)}
             className="w-full bg-gold-500 text-dark-900 py-3.5 rounded-2xl font-bold text-base shadow-btn hover:bg-gold-400 active:scale-[0.98] transition-all"
           >
-            {t("phonev.verify")}
+            {t("emailv.verify")}
           </button>
         </div>
       )}
@@ -438,11 +438,11 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
         <QuickRegistrationModal onRegistered={handleRegistered} onClose={() => setShowQuickRegistration(false)} />
       )}
 
-      {showPhoneVerification && phoneVerificationPending && userProfile?.phone_intl && (
-        <PhoneVerificationModal
-          phoneNumber={userProfile.phone_intl}
+      {showEmailVerification && emailVerificationPending && userProfile?.email && (
+        <EmailVerificationModal
+          emailAddress={userProfile.email}
           onVerified={handleRegistered}
-          onClose={() => setShowPhoneVerification(false)}
+          onClose={() => setShowEmailVerification(false)}
         />
       )}
 

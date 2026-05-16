@@ -5,13 +5,13 @@ let browserClient: SupabaseClient | null = null;
 export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || "";
 export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || "";
 
-export function isSupabasePhoneAuthConfigured() {
+export function isSupabaseAuthConfigured() {
   return Boolean(supabaseUrl && supabaseAnonKey);
 }
 
 export function getSupabaseBrowserClient() {
-  if (!isSupabasePhoneAuthConfigured()) {
-    throw new Error("Supabase phone authentication is not configured.");
+  if (!isSupabaseAuthConfigured()) {
+    throw new Error("Supabase authentication is not configured.");
   }
 
   if (!browserClient) {

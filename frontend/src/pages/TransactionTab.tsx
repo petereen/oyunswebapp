@@ -8,7 +8,7 @@ import {
   UserPromoCode, fetchServiceStatus, fetchEditableExchange, resubmitExchange,
 } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, RegistrationModal } from "../components/RegistrationModal";
-import { PhoneVerificationModal } from "../components/PhoneVerificationModal";
+import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useLang } from "../i18n/useLang";
@@ -62,7 +62,7 @@ export function TransactionTab({
   });
 
   const userProfile = profile?.user;
-  const phoneVerificationPending = Boolean(userProfile?.phone_verification_pending);
+  const emailVerificationPending = Boolean(userProfile?.email_verification_pending);
   const verificationLevel = userProfile?.verification_level ?? (userProfile?.verified ? 2 : userProfile?.ready_for_verification ? 1 : 0);
   const isVerified = verificationLevel >= 2;
   const isBasicRegistered = verificationLevel >= 1;
@@ -465,14 +465,14 @@ export function TransactionTab({
   // Registration modal state
   const [showRegistration, setShowRegistration] = useState(false);
   const [showQuickRegistration, setShowQuickRegistration] = useState(false);
-  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
   const queryClient = useQueryClient();
 
   const handleRegistered = () => {
     queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
     setShowRegistration(false);
     setShowQuickRegistration(false);
-    setShowPhoneVerification(false);
+    setShowEmailVerification(false);
   };
 
   // Not verified: show message + register button
@@ -485,18 +485,18 @@ export function TransactionTab({
           </div>
           <div className="text-center space-y-2">
             <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">
-              {phoneVerificationPending ? t("phonev.pending_title") : isBasicRegistered ? t("txn.complete_kyc_required") : t("txn.register_required")}
+              {emailVerificationPending ? t("emailv.pending_title") : isBasicRegistered ? t("txn.complete_kyc_required") : t("txn.register_required")}
             </div>
             <div className="text-sm text-dark-600 dark:text-ivory-300">
-              {phoneVerificationPending ? t("phonev.pending_desc") : isBasicRegistered ? t("txn.complete_kyc_desc") : t("txn.register_desc")}
+              {emailVerificationPending ? t("emailv.pending_desc") : isBasicRegistered ? t("txn.complete_kyc_desc") : t("txn.register_desc")}
             </div>
           </div>
           <button
-            onClick={() => phoneVerificationPending ? setShowPhoneVerification(true) : isBasicRegistered ? setShowRegistration(true) : setShowQuickRegistration(true)}
+            onClick={() => emailVerificationPending ? setShowEmailVerification(true) : isBasicRegistered ? setShowRegistration(true) : setShowQuickRegistration(true)}
             className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-maroon-600 hover:bg-maroon-700 text-white font-semibold shadow-card transition-all"
           >
             <UserPlus className="w-5 h-5" />
-            {phoneVerificationPending ? t("phonev.verify") : isBasicRegistered ? t("txn.complete_kyc") : t("txn.register")}
+            {emailVerificationPending ? t("emailv.verify") : isBasicRegistered ? t("txn.complete_kyc") : t("txn.register")}
           </button>
         </div>
         {showQuickRegistration && (
@@ -511,10 +511,10 @@ export function TransactionTab({
             onRegistered={handleRegistered}
           />
         )}
-        {showPhoneVerification && phoneVerificationPending && userProfile?.phone_intl && (
-          <PhoneVerificationModal
-            phoneNumber={userProfile.phone_intl}
-            onClose={() => setShowPhoneVerification(false)}
+        {showEmailVerification && emailVerificationPending && userProfile?.email && (
+          <EmailVerificationModal
+            emailAddress={userProfile.email}
+            onClose={() => setShowEmailVerification(false)}
             onVerified={handleRegistered}
           />
         )}

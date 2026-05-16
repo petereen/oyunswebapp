@@ -140,9 +140,9 @@ class UpsertUserPayload(BaseModel):
     ready_for_verification: Optional[bool] = None
     verified: Optional[bool] = None
     agreed_terms: Optional[bool] = None
-    phone_verification_pending: Optional[bool] = None
-    phone_verified_at: Optional[datetime] = None
-    phone_auth_user_id: Optional[str] = None
+    email_verification_pending: Optional[bool] = None
+    email_verified_at: Optional[datetime] = None
+    email_auth_user_id: Optional[str] = None
     lang: Optional[str] = None
     updated_at: Optional[datetime] = None
     verification_level: Optional[int] = 0  # 0=new, 1=basic (unverified), 2=fully verified
@@ -229,19 +229,19 @@ class BasicRegistrationRequest(BaseModel):
     last_name: str
     first_name: str
     phone_intl: str  # Full international phone e.g. "+97699112233"
-    email: Optional[str] = None
+    email: str
     referral_code: Optional[str] = None
 
 
-class PhoneVerificationCompleteRequest(BaseModel):
+class EmailVerificationCompleteRequest(BaseModel):
     access_token: str
 
 
-class PhoneVerificationCompleteResponse(BaseModel):
+class EmailVerificationCompleteResponse(BaseModel):
     ok: bool = True
     message: str
     verification_level: int = 1
-    phone_verified_at: datetime
+    email_verified_at: datetime
 
 
 class ReferralCodeValidateResponse(BaseModel):

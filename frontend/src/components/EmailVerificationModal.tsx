@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, MessageSquareText, Phone, ShieldCheck, X } from "lucide-react";
-import { completePhoneVerification } from "../api";
+import { AlertCircle, CheckCircle2, Loader2, Mail, MessageSquareText, ShieldCheck, X } from "lucide-react";
+import { completeEmailVerification } from "../api";
 import { useLang } from "../i18n/useLang";
-import { getSupabaseBrowserClient, isSupabasePhoneAuthConfigured } from "../supabase";
+import { getSupabaseBrowserClient, isSupabaseAuthConfigured } from "../supabase";
 
 interface Props {
-  phoneNumber: string;
+  emailAddress: string;
   onVerified: () => void;
   onClose?: () => void;
   autoSend?: boolean;
 }
 
-export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoSend = false }: Props) {
+export function EmailVerificationModal({ emailAddress, onVerified, onClose, autoSend = false }: Props) {
   const { t } = useLang();
   const [otpCode, setOtpCode] = useState("");
   const [requestingCode, setRequestingCode] = useState(false);
@@ -21,7 +21,7 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
   const [info, setInfo] = useState("");
   const autoSendTriggeredRef = useRef(false);
 
-  const isConfigured = isSupabasePhoneAuthConfigured();
+  const isConfigured = isSupabaseAuthConfigured();
 
   const handleRequestCode = async () => {
     if (!isConfigured || requestingCode) return;
@@ -32,16 +32,20 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
       setInfo("");
 
       const supabase = getSupabaseBrowserClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: phoneNumber });
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: emailAddress,
+        options: { shouldCreateUser: true },
+      });
+
       if (otpError) {
         throw otpError;
       }
 
       setCodeRequested(true);
-      setInfo(t("phonev.code_sent"));
+      setInfo(t("emailv.code_sent"));
     } catch (err: any) {
-      console.error("Phone OTP request error:", err);
-      setError(err?.message || t("phonev.request_error"));
+      console.error("Email OTP request error:", err);
+      setError(err?.message || t("emailv.request_error"));
     } finally {
       setRequestingCode(false);
     }
@@ -57,9 +61,9 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
 
       const supabase = getSupabaseBrowserClient();
       const { data, error: otpError } = await supabase.auth.verifyOtp({
-        phone: phoneNumber,
+        email: emailAddress,
         token: otpCode.trim(),
-        type: "sms",
+        type: "email",
       });
 
       if (otpError) {
@@ -68,15 +72,15 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
 
       const accessToken = data.session?.access_token;
       if (!accessToken) {
-        throw new Error(t("phonev.session_error"));
+        throw new Error(t("emailv.session_error"));
       }
 
-      await completePhoneVerification({ access_token: accessToken });
+      await completeEmailVerification({ access_token: accessToken });
       await supabase.auth.signOut().catch(() => undefined);
       onVerified();
     } catch (err: any) {
-      console.error("Phone OTP verify error:", err);
-      setError(err?.message || t("phonev.verify_error"));
+      console.error("Email OTP verify error:", err);
+      setError(err?.message || t("emailv.verify_error"));
     } finally {
       setVerifyingCode(false);
     }
@@ -90,7 +94,7 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
 
   useEffect(() => {
     if (!isConfigured) {
-      setError(t("phonev.not_configured"));
+      setError(t("emailv.not_configured"));
     }
   }, [isConfigured, t]);
 
@@ -104,8 +108,8 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold">{t("phonev.title")}</h2>
-                <p className="text-sm text-white/80">{t("phonev.subtitle")}</p>
+                <h2 className="text-xl font-bold">{t("emailv.title")}</h2>
+                <p className="text-sm text-white/80">{t("emailv.subtitle")}</p>
               </div>
             </div>
             {onClose && (
@@ -119,12 +123,12 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
         <div className="p-5 space-y-4">
           <div className="rounded-2xl border border-maroon-100 dark:border-dark-600 bg-maroon-50/70 dark:bg-dark-700 p-4 flex items-start gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white dark:bg-dark-800 flex items-center justify-center shadow-sm shrink-0">
-              <Phone className="w-5 h-5 text-maroon-600 dark:text-maroon-300" />
+              <Mail className="w-5 h-5 text-maroon-600 dark:text-maroon-300" />
             </div>
             <div>
-              <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">{t("phonev.phone_label")}</div>
-              <div className="text-base font-bold text-maroon-700 dark:text-maroon-300">{phoneNumber}</div>
-              <div className="text-xs text-dark-600 dark:text-ivory-400 mt-1">{t("phonev.instructions")}</div>
+              <div className="text-sm font-semibold text-dark-800 dark:text-ivory-200">{t("emailv.email_label")}</div>
+              <div className="text-base font-bold text-maroon-700 dark:text-maroon-300 break-all">{emailAddress}</div>
+              <div className="text-xs text-dark-600 dark:text-ivory-400 mt-1">{t("emailv.instructions")}</div>
             </div>
           </div>
 
@@ -136,18 +140,18 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
             {requestingCode ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {t("phonev.sending")}
+                {t("emailv.sending")}
               </>
             ) : (
               <>
                 <MessageSquareText className="w-4 h-4" />
-                {codeRequested ? t("phonev.resend") : t("phonev.send_code")}
+                {codeRequested ? t("emailv.resend") : t("emailv.send_code")}
               </>
             )}
           </button>
 
           <div>
-            <label className="text-xs text-slate-500 dark:text-ivory-400">{t("phonev.code_label")}</label>
+            <label className="text-xs text-slate-500 dark:text-ivory-400">{t("emailv.code_label")}</label>
             <input
               type="text"
               inputMode="numeric"
@@ -181,12 +185,12 @@ export function PhoneVerificationModal({ phoneNumber, onVerified, onClose, autoS
             {verifyingCode ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                {t("phonev.verifying")}
+                {t("emailv.verifying")}
               </>
             ) : (
               <>
                 <ShieldCheck className="w-5 h-5" />
-                {t("phonev.verify")}
+                {t("emailv.verify")}
               </>
             )}
           </button>

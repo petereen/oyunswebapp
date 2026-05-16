@@ -1,16 +1,23 @@
--- Track Supabase phone OTP verification separately from KYC approval.
-ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verification_pending boolean DEFAULT false;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified_at timestamptz;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_auth_user_id uuid;
+-- Replace the abandoned phone-verification state with Supabase email verification.
+DROP INDEX IF EXISTS idx_users_phone_verification_pending;
+DROP INDEX IF EXISTS idx_users_phone_auth_user_id;
+
+ALTER TABLE users DROP COLUMN IF EXISTS phone_verification_pending;
+ALTER TABLE users DROP COLUMN IF EXISTS phone_verified_at;
+ALTER TABLE users DROP COLUMN IF EXISTS phone_auth_user_id;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_pending boolean DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at timestamptz;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_auth_user_id uuid;
 
 UPDATE users
-SET phone_verification_pending = false
-WHERE phone_verification_pending IS NULL;
+SET email_verification_pending = false
+WHERE email_verification_pending IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_users_phone_verification_pending
-ON users (phone_verification_pending)
-WHERE phone_verification_pending = true;
+CREATE INDEX IF NOT EXISTS idx_users_email_verification_pending
+ON users (email_verification_pending)
+WHERE email_verification_pending = true;
 
-CREATE INDEX IF NOT EXISTS idx_users_phone_auth_user_id
-ON users (phone_auth_user_id)
-WHERE phone_auth_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_users_email_auth_user_id
+ON users (email_auth_user_id)
+WHERE email_auth_user_id IS NOT NULL;
