@@ -199,17 +199,14 @@ export function TransactionTab({
         }
 
         const dir = editable.direction;
-        const fallbackRate = dir === "buy"
-          ? Number(rate?.buy_rate || editable.rate || 0)
-          : Number(rate?.sell_rate || editable.rate || 0);
 
         setDirection(dir);
         setAmount(Number(editable.amount) || 0);
-        setBaseRate(fallbackRate);
+        setBaseRate(Number(editable.base_rate) || 0);
         setInvoiceId(editable.invoice);
         setReceiptUrls(editable.receipt_urls || []);
         setPromoCode("");
-        setPromoDiscount(0);
+        setPromoDiscount(Number(editable.promo_discount) || 0);
         setPromoValid(false);
         setPromoMessage("");
         setPromoError("");

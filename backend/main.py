@@ -340,6 +340,30 @@ def _compute_effective_rate(
     return effective.quantize(Decimal("0.01")), source, adjustment, rub_equivalent
 
 
+def _resolve_stored_promo(
+    client,
+    promo_code: str | None,
+) -> tuple[Decimal, str | None, str | None]:
+    normalized_code = str(promo_code or "").strip().upper()
+    if not normalized_code:
+        return Decimal("0"), None, None
+
+    promo_res = (
+        client.table("promo_codes")
+        .select("code,discount,source,aliases")
+        .execute()
+    )
+
+    for promo in promo_res.data or []:
+        code_value = str(promo.get("code") or "").strip().upper()
+        aliases = promo.get("aliases") or []
+        alias_match = any(str(alias).strip().upper() == normalized_code for alias in aliases)
+        if code_value == normalized_code or alias_match:
+            return _to_decimal(promo.get("discount")), promo.get("code"), promo.get("source")
+
+    return Decimal("0"), (str(promo_code).strip() or None), None
+
+
 def _get_user_lang(user_id: int) -> str:
     """Get user's language preference from DB. Returns 'mn' by default."""
     try:
@@ -3254,7 +3278,7 @@ async def get_editable_exchange(
     client = get_supabase()
     res = (
         client.table("transactions")
-        .select("id,invoice,user_id,amount,currency_from,currency_to,rate,bank_details,bill_url,receipt_id,status")
+        .select("id,invoice,user_id,amount,currency_from,currency_to,rate,promo_code,bank_details,bill_url,receipt_id,status")
         .eq("invoice", invoice)
         .eq("user_id", user.id)
         .limit(1)
@@ -3269,6 +3293,11 @@ async def get_editable_exchange(
 
     direction = "buy" if (trx.get("currency_from") or "").upper() == "RUB" else "sell"
     receipt_urls = _parse_receipt_urls(trx.get("bill_url"), trx.get("receipt_id"))
+    buy_rate, sell_rate = _load_latest_rates(client)
+    base_rate = buy_rate if direction == "buy" else sell_rate
+    if base_rate <= 0:
+        base_rate = _to_decimal(trx.get("rate"))
+    promo_discount, _, _ = _resolve_stored_promo(client, trx.get("promo_code"))
 
     return ExchangeEditableResponse(
         invoice=trx.get("invoice"),
@@ -3277,6 +3306,8 @@ async def get_editable_exchange(
         currency_from=trx.get("currency_from"),
         currency_to=trx.get("currency_to"),
         rate=_to_decimal(trx.get("rate")),
+        base_rate=base_rate,
+        promo_discount=promo_discount,
         bank_details=trx.get("bank_details") or "",
         receipt_urls=receipt_urls,
         can_edit=True,
@@ -3318,7 +3349,7 @@ async def resubmit_exchange(
 
     existing_promo_code = trx.get("promo_code")
     promo_discount = Decimal("0")
-    resolved_promo_code: str | None = None
+    resolved_promo_code: str | None = (str(existing_promo_code).strip() or None) if existing_promo_code else None
     resolved_promo_source: str | None = None
 
     _, preview_source, _, _ = _compute_effective_rate(
@@ -3329,33 +3360,10 @@ async def resubmit_exchange(
     )
 
     if existing_promo_code and preview_source != "volume":
-        promo_res = (
-            client.table("promo_codes")
-            .select("code,discount,active,user_id,source,expires_at")
-            .eq("active", True)
-            .eq("code", existing_promo_code)
-            .limit(1)
-            .execute()
+        promo_discount, resolved_promo_code, resolved_promo_source = _resolve_stored_promo(
+            client,
+            existing_promo_code,
         )
-        if promo_res.data:
-            promo_row = promo_res.data[0]
-            promo_user_id = promo_row.get("user_id")
-            valid_for_user = not promo_user_id or int(promo_user_id) == user.id
-            not_expired = True
-            expires_at = promo_row.get("expires_at")
-            if expires_at:
-                try:
-                    expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
-                    if expiry.tzinfo is None:
-                        expiry = expiry.replace(tzinfo=timezone.utc)
-                    not_expired = datetime.now(timezone.utc) <= expiry
-                except Exception:
-                    not_expired = False
-
-            if valid_for_user and not_expired:
-                promo_discount = _to_decimal(promo_row.get("discount"))
-                resolved_promo_code = promo_row.get("code")
-                resolved_promo_source = promo_row.get("source")
 
     effective_rate, rate_source, _, _ = _compute_effective_rate(
         direction=direction,

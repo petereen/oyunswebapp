@@ -456,6 +456,8 @@ export interface ExchangeEditableResponse {
   currency_from: string;
   currency_to: string;
   rate: number;
+  base_rate: number;
+  promo_discount: number;
   bank_details: string;
   receipt_urls: string[];
   can_edit: boolean;
@@ -469,6 +471,8 @@ export async function fetchEditableExchange(invoice: string): Promise<ExchangeEd
     ...data,
     amount: toSafeNumber(data.amount, 0),
     rate: toSafeNumber(data.rate, 0),
+    base_rate: toSafeNumber(data.base_rate, toSafeNumber(data.rate, 0)),
+    promo_discount: toSafeNumber(data.promo_discount, 0),
     receipt_urls: Array.isArray(data.receipt_urls) ? data.receipt_urls : [],
     can_edit: Boolean(data.can_edit),
   };

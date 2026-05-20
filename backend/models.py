@@ -101,6 +101,8 @@ class ExchangeEditableResponse(BaseModel):
     currency_from: str
     currency_to: str
     rate: Decimal
+    base_rate: Decimal
+    promo_discount: Decimal = Decimal("0")
     bank_details: str
     receipt_urls: list[str] = Field(default_factory=list)
     can_edit: bool = False
