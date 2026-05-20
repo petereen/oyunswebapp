@@ -233,6 +233,10 @@ class BasicRegistrationRequest(BaseModel):
     referral_code: Optional[str] = None
 
 
+class EmailVerificationStartRequest(BaseModel):
+    email: str
+
+
 class EmailVerificationCompleteRequest(BaseModel):
     access_token: str
 

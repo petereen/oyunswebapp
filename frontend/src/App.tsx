@@ -37,6 +37,7 @@ export default function App() {
   // Check URL for fuel order deep link
   const urlFuelOrderId = queryParams.get("fuel-order");
   const urlEditInvoice = queryParams.get("edit-invoice");
+  const urlVerifyEmail = queryParams.has("verify-email");
   const urlOyunsPlusTab = requestedTab === "oyuns-plus";
   const urlTournamentSection = requestedTournament === "basketball" ? "basketball" : null;
   const urlTournamentInnerTab = requestedTournamentSection === "schedule" || requestedTournamentSection === "leaderboard" || requestedTournamentSection === "stages"
@@ -182,6 +183,7 @@ export default function App() {
                 onNavigateToTransaction={handleNavigateToTransaction}
                 onNavigateToProfile={handleNavigateToProfile}
                 onNavigateToFuelOrder={handleNavigateToFuelOrder}
+                openEmailVerify={urlVerifyEmail}
               />
             )}
             {activeTab === 1 && (
