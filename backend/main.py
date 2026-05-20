@@ -631,6 +631,22 @@ async def get_oyuns_sags_admin_auth(
     return {"ok": True}
 
 
+async def get_dashboard_auth(
+    x_dashboard_key: str = Header(None, alias="X-Dashboard-Key"),
+):
+    """Standalone analytics dashboard auth via API key only (no Telegram auth)."""
+    settings = get_settings()
+    expected = (settings.dashboard_api_key or "").strip()
+
+    if not expected:
+        raise HTTPException(status_code=500, detail="Dashboard API key is not configured")
+
+    if not x_dashboard_key or x_dashboard_key.strip() != expected:
+        raise HTTPException(status_code=401, detail="Invalid dashboard API key")
+
+    return {"ok": True}
+
+
 async def get_jwt_authenticated_user(
     authorization: str = Header(None, alias="Authorization")
 ):
@@ -1841,6 +1857,204 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
             "total_sell_rub": 0,
             "total_transactions": 0,
         }
+
+
+@app.get("/api/dashboard/verify")
+async def dashboard_verify(auth=Depends(get_dashboard_auth)):
+    """Validate the dashboard API key (used by the standalone dashboard login)."""
+    return {"ok": True}
+
+
+def _txn_rub_equivalent(amount: float, currency_from: str, rate: float) -> float:
+    """Convert a transaction amount to its RUB equivalent.
+
+    Buy (RUB->MNT): amount is already in RUB.
+    Sell (MNT->RUB): amount is in MNT, divide by rate (MNT per 1 RUB).
+    """
+    cf = (currency_from or "").upper()
+    if cf == "RUB":
+        return amount
+    if cf == "MNT":
+        return amount / rate if rate else 0.0
+    return amount
+
+
+@app.get("/api/dashboard/transactions")
+async def dashboard_transactions(
+    start: str = None,
+    end: str = None,
+    granularity: str = "day",
+    auth=Depends(get_dashboard_auth),
+):
+    """Aggregated + raw transaction data for the standalone analytics dashboard.
+
+    Mirrors the "Гүйлгээ Oyuns AIO Bot" sheet, sourced from the transactions table.
+    Optional ISO `start`/`end` bound the time window; `granularity` is day|month.
+    """
+    from collections import defaultdict
+
+    client = get_supabase()
+    MAX_ROWS = 20000
+    PAGE = 1000
+
+    # Fetch all matching transactions with pagination (Supabase caps at 1000/req).
+    rows: list[dict] = []
+    offset = 0
+    while offset < MAX_ROWS:
+        query = client.table("transactions").select(
+            "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,promo_code,bank_details"
+        )
+        if start:
+            query = query.gte("timestamp", start)
+        if end:
+            query = query.lte("timestamp", end)
+        res = query.order("timestamp", desc=True).range(offset, offset + PAGE - 1).execute()
+        batch = res.data or []
+        rows.extend(batch)
+        if len(batch) < PAGE:
+            break
+        offset += PAGE
+
+    truncated = len(rows) >= MAX_ROWS
+
+    # Resolve user names.
+    user_ids = list({r.get("user_id") for r in rows if r.get("user_id")})
+    user_names: dict = {}
+    for i in range(0, len(user_ids), 200):
+        chunk = user_ids[i:i + 200]
+        if not chunk:
+            continue
+        users_res = client.table("users").select("id,first_name,last_name").in_("id", chunk).execute()
+        for u in users_res.data or []:
+            name = f"{u.get('last_name', '') or ''} {u.get('first_name', '') or ''}".strip()
+            user_names[u.get("id")] = name or None
+
+    status_count: dict = defaultdict(int)
+    status_volume: dict = defaultdict(float)
+    dir_count = {"buy": 0, "sell": 0}
+    dir_volume = {"buy": 0.0, "sell": 0.0}
+    ts_buckets: dict = defaultdict(lambda: {"buy_volume_rub": 0.0, "sell_volume_rub": 0.0, "count": 0})
+    user_stats: dict = defaultdict(lambda: {"count": 0, "volume_rub": 0.0})
+
+    total_volume_rub = 0.0
+    completed_volume_rub = 0.0
+    completed_count = 0
+    transactions_out = []
+
+    for r in rows:
+        amount = float(r.get("amount", 0) or 0)
+        rate = float(r.get("rate", 0) or 0)
+        currency_from = (r.get("currency_from") or "").upper()
+        status = (r.get("status") or "unknown").lower()
+        direction = "buy" if currency_from == "RUB" else "sell"
+        rub = _txn_rub_equivalent(amount, currency_from, rate)
+        ts = r.get("timestamp") or ""
+
+        status_count[status] += 1
+        status_volume[status] += rub
+
+        # Headline metrics use settled (completed) volume; everything except
+        # rejected counts toward the "active" flow shown in the time series.
+        is_settled = status == "completed"
+        is_valid = status != "rejected"
+
+        if is_valid:
+            dir_count[direction] += 1
+            dir_volume[direction] += rub
+            total_volume_rub += rub
+
+            user_id = r.get("user_id")
+            if user_id:
+                user_stats[user_id]["count"] += 1
+                user_stats[user_id]["volume_rub"] += rub
+
+            # Bucket the time series by day or month.
+            bucket = ts[:7] if granularity == "month" else ts[:10]
+            if bucket:
+                ts_buckets[bucket]["count"] += 1
+                ts_buckets[bucket][f"{direction}_volume_rub"] += rub
+
+        if is_settled:
+            completed_volume_rub += rub
+            completed_count += 1
+
+        transactions_out.append({
+            "invoice": r.get("invoice"),
+            "timestamp": ts,
+            "user_id": r.get("user_id"),
+            "user_name": user_names.get(r.get("user_id")),
+            "direction": direction,
+            "amount": amount,
+            "currency_from": r.get("currency_from"),
+            "currency_to": r.get("currency_to"),
+            "rate": rate,
+            "rub_equivalent": round(rub, 2),
+            "status": r.get("status"),
+            "promo_code": r.get("promo_code"),
+            "bank_details": r.get("bank_details"),
+        })
+
+    time_series = [
+        {
+            "period": k,
+            "buy_volume_rub": round(v["buy_volume_rub"], 2),
+            "sell_volume_rub": round(v["sell_volume_rub"], 2),
+            "count": v["count"],
+        }
+        for k, v in sorted(ts_buckets.items())
+    ]
+
+    status_breakdown = [
+        {"status": s, "count": status_count[s], "volume_rub": round(status_volume[s], 2)}
+        for s in sorted(status_count, key=lambda x: status_count[x], reverse=True)
+    ]
+
+    direction_breakdown = [
+        {"direction": d, "count": dir_count[d], "volume_rub": round(dir_volume[d], 2)}
+        for d in ("buy", "sell")
+    ]
+
+    top_users = sorted(
+        (
+            {
+                "user_id": uid,
+                "user_name": user_names.get(uid),
+                "count": s["count"],
+                "volume_rub": round(s["volume_rub"], 2),
+            }
+            for uid, s in user_stats.items()
+        ),
+        key=lambda x: x["volume_rub"],
+        reverse=True,
+    )[:10]
+
+    valid_count = dir_count["buy"] + dir_count["sell"]
+
+    return {
+        "summary": {
+            "total_count": len(rows),
+            "valid_count": valid_count,
+            "completed_count": completed_count,
+            "pending_count": status_count.get("pending", 0),
+            "rejected_count": status_count.get("rejected", 0),
+            "waiting_edit_count": status_count.get("waiting_edit", 0),
+            "total_volume_rub": round(total_volume_rub, 2),
+            "completed_volume_rub": round(completed_volume_rub, 2),
+            "buy_count": dir_count["buy"],
+            "sell_count": dir_count["sell"],
+            "buy_volume_rub": round(dir_volume["buy"], 2),
+            "sell_volume_rub": round(dir_volume["sell"], 2),
+            "unique_users": len(user_stats),
+            "avg_transaction_rub": round(total_volume_rub / valid_count, 2) if valid_count else 0.0,
+        },
+        "status_breakdown": status_breakdown,
+        "direction_breakdown": direction_breakdown,
+        "time_series": time_series,
+        "top_users": top_users,
+        "transactions": transactions_out,
+        "row_count": len(rows),
+        "truncated": truncated,
+    }
 
 
 @app.get("/api/me", response_model=MeResponse)

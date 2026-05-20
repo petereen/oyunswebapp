@@ -10,6 +10,7 @@ const api = axios.create({
 const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
 const FUEL_ADMIN_KEY_STORAGE = 'fuel_admin_key';
 const OYUNS_SAGS_ADMIN_KEY_STORAGE = 'oyuns_sags_admin_key';
+export const DASHBOARD_KEY_STORAGE = 'oyuns_dashboard_key';
 
 // Fuel admin axios instance - sends API key header for browser-based admin access
 const fuelAdminApi = axios.create({
@@ -18,6 +19,18 @@ const fuelAdminApi = axios.create({
 
 const oyunsSagsAdminApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
+});
+
+const dashboardApi = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE || "/api",
+});
+
+dashboardApi.interceptors.request.use(config => {
+  const apiKey = localStorage.getItem(DASHBOARD_KEY_STORAGE);
+  if (apiKey) {
+    config.headers['X-Dashboard-Key'] = apiKey;
+  }
+  return config;
 });
 
 fuelAdminApi.interceptors.request.use(config => {
@@ -1564,4 +1577,73 @@ export async function fetchFuelAdminShift(): Promise<FuelShiftStatus> {
 export async function updateFuelAdminShift(params: { is_active: boolean; admin_id?: number; always_notify_admin_id?: number }) {
   const res = await fuelAdminApi.put('/fuel-admin/shift', params);
   return res.data;
+}
+
+// --- Standalone Analytics Dashboard (no Telegram auth) ---
+
+export type DashboardTransaction = {
+  invoice: string | null;
+  timestamp: string;
+  user_id: number | null;
+  user_name: string | null;
+  direction: "buy" | "sell";
+  amount: number;
+  currency_from: string | null;
+  currency_to: string | null;
+  rate: number;
+  rub_equivalent: number;
+  status: string | null;
+  promo_code: string | null;
+  bank_details: string | null;
+};
+
+export type DashboardSummary = {
+  total_count: number;
+  valid_count: number;
+  completed_count: number;
+  pending_count: number;
+  rejected_count: number;
+  waiting_edit_count: number;
+  total_volume_rub: number;
+  completed_volume_rub: number;
+  buy_count: number;
+  sell_count: number;
+  buy_volume_rub: number;
+  sell_volume_rub: number;
+  unique_users: number;
+  avg_transaction_rub: number;
+};
+
+export type DashboardData = {
+  summary: DashboardSummary;
+  status_breakdown: { status: string; count: number; volume_rub: number }[];
+  direction_breakdown: { direction: "buy" | "sell"; count: number; volume_rub: number }[];
+  time_series: { period: string; buy_volume_rub: number; sell_volume_rub: number; count: number }[];
+  top_users: { user_id: number; user_name: string | null; count: number; volume_rub: number }[];
+  transactions: DashboardTransaction[];
+  row_count: number;
+  truncated: boolean;
+};
+
+export async function verifyDashboardKey(): Promise<boolean> {
+  try {
+    const res = await dashboardApi.get('/dashboard/verify');
+    return Boolean(res.data?.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchDashboardData(params: {
+  start?: string;
+  end?: string;
+  granularity?: "day" | "month";
+}): Promise<DashboardData> {
+  const search = new URLSearchParams();
+  if (params.start) search.set("start", params.start);
+  if (params.end) search.set("end", params.end);
+  if (params.granularity) search.set("granularity", params.granularity);
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/transactions${query ? `?${query}` : ""}`);
+  return res.data as DashboardData;
 }

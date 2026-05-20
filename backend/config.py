@@ -34,6 +34,8 @@ class Settings:
     fuel_admin_chat_ids: List[int] | None = None
     # Standalone Oyuns Sags admin settings
     oyuns_sags_admin_api_key: str | None = None
+    # Standalone analytics dashboard (no Telegram auth)
+    dashboard_api_key: str | None = None
     
     @property
     def admin_ids(self) -> List[int]:
@@ -63,6 +65,7 @@ def get_settings() -> Settings:
     fuel_admin_user_ids_env = os.getenv("FUEL_ADMIN_USER_IDS", "").strip().strip('"').strip("'")
     fuel_admin_chat_ids_env = os.getenv("FUEL_ADMIN_CHAT_IDS", "").strip().strip('"').strip("'")
     oyuns_sags_admin_api_key = os.getenv("OYUNS_SAGS_ADMIN_API_KEY", "oyuns-sags-admin-key-2026")
+    dashboard_api_key = os.getenv("DASHBOARD_API_KEY", "oyuns-dashboard-2026")
 
     if not supabase_url or not supabase_key or not bot_token:
         raise RuntimeError("SUPABASE_URL, SUPABASE_KEY, and BOT_TOKEN must be set")
@@ -129,4 +132,5 @@ def get_settings() -> Settings:
         fuel_admin_user_ids=fuel_admin_user_ids,
         fuel_admin_chat_ids=fuel_admin_chat_ids,
         oyuns_sags_admin_api_key=oyuns_sags_admin_api_key,
+        dashboard_api_key=dashboard_api_key,
     )
