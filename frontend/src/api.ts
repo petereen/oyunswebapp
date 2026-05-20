@@ -264,6 +264,7 @@ export type AppSettings = {
   home_banner_enabled: number;
   home_banner_image_url: string;
   home_banner_link_url: string;
+  email_verification_enabled: number;
 };
 
 export const DEFAULT_MIN_RUB_AMOUNT = 2000;
@@ -276,6 +277,7 @@ export const DEFAULT_OYUNS_PLUS_REFERRAL_MAX_USES = 5;
 export const DEFAULT_HOME_BANNER_ENABLED = 0;
 export const DEFAULT_HOME_BANNER_IMAGE_URL = '';
 export const DEFAULT_HOME_BANNER_LINK_URL = '';
+export const DEFAULT_EMAIL_VERIFICATION_ENABLED = 1;
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   min_rub_amount: DEFAULT_MIN_RUB_AMOUNT,
@@ -288,6 +290,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   home_banner_enabled: DEFAULT_HOME_BANNER_ENABLED,
   home_banner_image_url: DEFAULT_HOME_BANNER_IMAGE_URL,
   home_banner_link_url: DEFAULT_HOME_BANNER_LINK_URL,
+  email_verification_enabled: DEFAULT_EMAIL_VERIFICATION_ENABLED,
 };
 
 export function normalizeAppSettings(settings?: Partial<AppSettings> | null): AppSettings {
@@ -302,6 +305,7 @@ export function normalizeAppSettings(settings?: Partial<AppSettings> | null): Ap
     home_banner_enabled: toSafeNumber(settings?.home_banner_enabled, DEFAULT_HOME_BANNER_ENABLED) > 0 ? 1 : 0,
     home_banner_image_url: typeof settings?.home_banner_image_url === 'string' ? settings.home_banner_image_url.trim() : DEFAULT_HOME_BANNER_IMAGE_URL,
     home_banner_link_url: typeof settings?.home_banner_link_url === 'string' ? settings.home_banner_link_url.trim() : DEFAULT_HOME_BANNER_LINK_URL,
+    email_verification_enabled: toSafeNumber(settings?.email_verification_enabled, DEFAULT_EMAIL_VERIFICATION_ENABLED) > 0 ? 1 : 0,
   };
 }
 

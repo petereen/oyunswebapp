@@ -166,7 +166,8 @@ export function AdminBankAccounts() {
     next.oyuns_plus_referral_max_uses !== exchangeLimits.oyuns_plus_referral_max_uses ||
     next.home_banner_enabled !== exchangeLimits.home_banner_enabled ||
     next.home_banner_image_url.trim() !== exchangeLimits.home_banner_image_url.trim() ||
-    next.home_banner_link_url.trim() !== exchangeLimits.home_banner_link_url.trim();
+    next.home_banner_link_url.trim() !== exchangeLimits.home_banner_link_url.trim() ||
+    next.email_verification_enabled !== exchangeLimits.email_verification_enabled;
 
   const handleLimitsChange = (field: NumericAppSettingsField, value: string) => {
     const num = parseInt(value, 10);
@@ -189,6 +190,15 @@ export function AdminBankAccounts() {
     const updated = {
       ...editingLimits,
       home_banner_enabled: enabled ? 1 : 0,
+    };
+    setEditingLimits(updated);
+    setLimitsChanged(hasSettingsChanges(updated));
+  };
+
+  const handleEmailVerificationToggle = (enabled: boolean) => {
+    const updated = {
+      ...editingLimits,
+      email_verification_enabled: enabled ? 1 : 0,
     };
     setEditingLimits(updated);
     setLimitsChanged(hasSettingsChanges(updated));
@@ -323,6 +333,34 @@ export function AdminBankAccounts() {
               onChange={(e) => handleLimitsChange("min_rub_amount", e.target.value)}
               className="w-full mt-1 p-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
             />
+          </div>
+        </div>
+
+        <div className="pt-3 mt-1 border-t border-amber-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Имэйл баталгаажуулалт (бүртгэл)</p>
+              <p className="text-xs text-slate-500">Унтраавал бүртгүүлэхэд имэйл код шаардахгүй, шууд идэвхжинэ.</p>
+            </div>
+            <label className="inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editingLimits.email_verification_enabled > 0}
+                onChange={(e) => handleEmailVerificationToggle(e.target.checked)}
+                className="sr-only"
+              />
+              <span
+                className={`w-11 h-6 rounded-full transition relative ${
+                  editingLimits.email_verification_enabled > 0 ? "bg-maroon-600" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition ${
+                    editingLimits.email_verification_enabled > 0 ? "left-5" : "left-0.5"
+                  }`}
+                />
+              </span>
+            </label>
           </div>
         </div>
 

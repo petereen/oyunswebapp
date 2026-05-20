@@ -47,6 +47,7 @@ class AppSettingsResponse(BaseModel):
     home_banner_enabled: int = 0
     home_banner_image_url: str = ""
     home_banner_link_url: str = ""
+    email_verification_enabled: int = 1
 
 
 class AppSettingsUpdateRequest(BaseModel):
@@ -60,6 +61,7 @@ class AppSettingsUpdateRequest(BaseModel):
     home_banner_enabled: Optional[int] = None
     home_banner_image_url: Optional[str] = None
     home_banner_link_url: Optional[str] = None
+    email_verification_enabled: Optional[int] = None
 
 
 class ExchangeCreateRequest(BaseModel):

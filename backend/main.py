@@ -811,6 +811,7 @@ APP_SETTINGS_KEYS = [
     "home_banner_enabled",
     "home_banner_image_url",
     "home_banner_link_url",
+    "email_verification_enabled",
 ]
 
 
@@ -1525,6 +1526,7 @@ async def get_app_settings():
         home_banner_enabled=1 if _safe_int(settings_dict.get("home_banner_enabled"), 0) > 0 else 0,
         home_banner_image_url=(settings_dict.get("home_banner_image_url") or "").strip(),
         home_banner_link_url=(settings_dict.get("home_banner_link_url") or "").strip(),
+        email_verification_enabled=1 if _safe_int(settings_dict.get("email_verification_enabled"), 1) > 0 else 0,
     )
 
 
@@ -1546,13 +1548,14 @@ async def update_app_settings(
         "home_banner_enabled",
         "home_banner_image_url",
         "home_banner_link_url",
+        "email_verification_enabled",
     }
 
     updates = payload.model_dump(exclude_none=True)
     for key, value in updates.items():
         if key not in allowed_keys:
             continue
-        if key in {"oyuns_plus_enabled", "home_banner_enabled"}:
+        if key in {"oyuns_plus_enabled", "home_banner_enabled", "email_verification_enabled"}:
             if value not in (0, 1):
                 raise HTTPException(status_code=400, detail=f"{key} must be 0 or 1")
         elif key in {"oyuns_plus_threshold_rub", "oyuns_plus_points_per_threshold", "oyuns_plus_referral_max_uses"}:
@@ -2415,14 +2418,21 @@ async def register_basic(
         referred_by_user_id = int(validation.inviter_user_id)
         referred_by_code = normalized_referral_code
 
+    # When email verification is turned off in admin settings, activate the user
+    # at Level 1 immediately instead of requiring an OTP step.
+    email_verification_enabled = _safe_int(
+        _get_app_settings_dict(client, ["email_verification_enabled"]).get("email_verification_enabled"),
+        1,
+    ) > 0
+
     update_payload = {
         "first_name": payload.first_name,
         "last_name": payload.last_name,
         "phone_intl": payload.phone_intl,
         "email": normalized_email,
-        "verification_level": 0,
+        "verification_level": 0 if email_verification_enabled else 1,
         "agreed_terms": True,
-        "email_verification_pending": True,
+        "email_verification_pending": email_verification_enabled,
         "email_verified_at": None,
         "email_auth_user_id": None,
         "updated_at": now,
@@ -2444,6 +2454,15 @@ async def register_basic(
         raise HTTPException(status_code=500, detail="Failed to submit basic registration")
 
     _ensure_user_referral_code(client, user.id)
+
+    if not email_verification_enabled:
+        return {
+            "ok": True,
+            "message": "Registration complete.",
+            "verification_level": 1,
+            "email_verification_pending": False,
+            "email": normalized_email,
+        }
 
     return {
         "ok": True,

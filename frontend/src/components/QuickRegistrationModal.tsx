@@ -158,7 +158,12 @@ export function QuickRegistrationModal({ onRegistered, onClose }: Props) {
       };
 
       const result = await submitBasicRegistration(payload);
-      setVerificationEmail(result.email || normalizedEmail);
+      if (result.email_verification_pending) {
+        setVerificationEmail(result.email || normalizedEmail);
+      } else {
+        // Email verification is disabled in admin settings — user is active immediately.
+        onRegistered();
+      }
     } catch (err: any) {
       console.error("Basic registration error:", err);
       const detail = err?.response?.data?.detail;
