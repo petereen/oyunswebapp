@@ -1903,17 +1903,50 @@ def _txn_rub_equivalent(amount: float, currency_from: str, rate: float) -> float
     return amount
 
 
+def _is_successful_status(status: str) -> bool:
+    return (status or "").lower() in ("completed", "successful")
+
+
+def _completion_duration_minutes(row: dict):
+    """Minutes from receipt submission to completion, minus paused (waiting-edit) time.
+
+    Prefers the stored completion_duration_minutes (already pause-adjusted);
+    otherwise derives it from completed_at and the start timestamp.
+    """
+    stored = row.get("completion_duration_minutes")
+    if stored is not None:
+        try:
+            return max(0.0, float(stored))
+        except (TypeError, ValueError):
+            pass
+    completed_at = row.get("completed_at")
+    start = row.get("receipt_submitted_at") or row.get("timestamp")
+    if completed_at and start:
+        try:
+            c = datetime.fromisoformat(str(completed_at).replace("Z", "+00:00"))
+            s = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+            paused = float(row.get("total_paused_seconds") or 0)
+            return max(0.0, (c - s).total_seconds() / 60.0 - paused / 60.0)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 @app.get("/api/dashboard/transactions")
 async def dashboard_transactions(
     start: str = None,
     end: str = None,
     granularity: str = "day",
+    status: str = "all",
+    admin_id: int = None,
     auth=Depends(get_dashboard_auth),
 ):
     """Aggregated + raw transaction data for the standalone analytics dashboard.
 
     Mirrors the "Гүйлгээ Oyuns AIO Bot" sheet, sourced from the transactions table.
     Optional ISO `start`/`end` bound the time window; `granularity` is day|month.
+    `status` filters (all|successful|pending|waiting_edit|rejected); `admin_id`
+    scopes to transactions completed by a specific admin.
     """
     from collections import defaultdict
 
@@ -1926,7 +1959,8 @@ async def dashboard_transactions(
     offset = 0
     while offset < MAX_ROWS:
         query = client.table("transactions").select(
-            "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,promo_code,bank_details"
+            "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,promo_code,bank_details,"
+            "completed_at,completed_by_admin,completion_duration_minutes,total_paused_seconds,receipt_submitted_at"
         )
         if start:
             query = query.gte("timestamp", start)
@@ -1941,46 +1975,121 @@ async def dashboard_transactions(
 
     truncated = len(rows) >= MAX_ROWS
 
-    # Resolve user names.
-    user_ids = list({r.get("user_id") for r in rows if r.get("user_id")})
-    user_names: dict = {}
-    for i in range(0, len(user_ids), 200):
-        chunk = user_ids[i:i + 200]
+    status_filter = (status or "all").lower()
+
+    def _status_matches(row_status: str) -> bool:
+        rs = (row_status or "").lower()
+        if status_filter in ("all", ""):
+            return True
+        if status_filter in ("successful", "completed"):
+            return _is_successful_status(rs)
+        return rs == status_filter
+
+    # Resolve display names for transaction users and completing admins together.
+    id_set = set()
+    for r in rows:
+        if r.get("user_id"):
+            id_set.add(r["user_id"])
+        if r.get("completed_by_admin"):
+            id_set.add(r["completed_by_admin"])
+    all_ids = list(id_set)
+    names: dict = {}
+    for i in range(0, len(all_ids), 200):
+        chunk = all_ids[i:i + 200]
         if not chunk:
             continue
         users_res = client.table("users").select("id,first_name,last_name").in_("id", chunk).execute()
         for u in users_res.data or []:
             name = f"{u.get('last_name', '') or ''} {u.get('first_name', '') or ''}".strip()
-            user_names[u.get("id")] = name or None
+            names[u.get("id")] = name or None
 
+    # Admins present in this window (for the admin filter dropdown).
+    admins_present: dict = {}
+    for r in rows:
+        aid = r.get("completed_by_admin")
+        if aid:
+            admins_present[aid] = names.get(aid)
+    admins = sorted(
+        ({"admin_id": aid, "name": nm} for aid, nm in admins_present.items()),
+        key=lambda a: (a["name"] or str(a["admin_id"])),
+    )
+
+    # Admin filter scopes everything to that admin's completed transactions.
+    base_rows = rows if admin_id is None else [r for r in rows if r.get("completed_by_admin") == admin_id]
+
+    # Per-admin statistics over completed transactions (independent of status filter).
+    admin_stats_map = defaultdict(lambda: {"count": 0, "volume_rub": 0.0, "duration_sum": 0.0, "duration_n": 0})
+    for r in base_rows:
+        if not _is_successful_status(r.get("status")):
+            continue
+        aid = r.get("completed_by_admin")
+        if not aid:
+            continue
+        rub = _txn_rub_equivalent(float(r.get("amount", 0) or 0), (r.get("currency_from") or ""), float(r.get("rate", 0) or 0))
+        st = admin_stats_map[aid]
+        st["count"] += 1
+        st["volume_rub"] += rub
+        dur = _completion_duration_minutes(r)
+        if dur is not None:
+            st["duration_sum"] += dur
+            st["duration_n"] += 1
+    admin_stats = sorted(
+        (
+            {
+                "admin_id": aid,
+                "admin_name": names.get(aid),
+                "count": v["count"],
+                "volume_rub": round(v["volume_rub"], 2),
+                "avg_duration_minutes": round(v["duration_sum"] / v["duration_n"], 2) if v["duration_n"] else None,
+            }
+            for aid, v in admin_stats_map.items()
+        ),
+        key=lambda x: x["count"],
+        reverse=True,
+    )
+
+    # Status breakdown reflects the period+admin scope (not the status filter).
     status_count: dict = defaultdict(int)
     status_volume: dict = defaultdict(float)
+    for r in base_rows:
+        st = (r.get("status") or "unknown").lower()
+        rub = _txn_rub_equivalent(float(r.get("amount", 0) or 0), (r.get("currency_from") or ""), float(r.get("rate", 0) or 0))
+        status_count[st] += 1
+        status_volume[st] += rub
+    status_breakdown = [
+        {"status": s, "count": status_count[s], "volume_rub": round(status_volume[s], 2)}
+        for s in sorted(status_count, key=lambda x: status_count[x], reverse=True)
+    ]
+
+    # Status filter drives the summary, charts and table.
+    filtered_rows = [r for r in base_rows if _status_matches(r.get("status"))]
+
     dir_count = {"buy": 0, "sell": 0}
     dir_volume = {"buy": 0.0, "sell": 0.0}
     ts_buckets: dict = defaultdict(lambda: {"buy_volume_rub": 0.0, "sell_volume_rub": 0.0, "count": 0})
     user_stats: dict = defaultdict(lambda: {"count": 0, "volume_rub": 0.0})
+    filtered_status_count: dict = defaultdict(int)
 
     total_volume_rub = 0.0
     completed_volume_rub = 0.0
     completed_count = 0
+    duration_sum = 0.0
+    duration_n = 0
     transactions_out = []
 
-    for r in rows:
+    for r in filtered_rows:
         amount = float(r.get("amount", 0) or 0)
         rate = float(r.get("rate", 0) or 0)
         currency_from = (r.get("currency_from") or "").upper()
-        status = (r.get("status") or "unknown").lower()
+        st = (r.get("status") or "unknown").lower()
         direction = "buy" if currency_from == "RUB" else "sell"
         rub = _txn_rub_equivalent(amount, currency_from, rate)
         ts = r.get("timestamp") or ""
 
-        status_count[status] += 1
-        status_volume[status] += rub
-
-        # Headline metrics use settled (completed) volume; everything except
-        # rejected counts toward the "active" flow shown in the time series.
-        is_settled = status == "completed"
-        is_valid = status != "rejected"
+        is_settled = _is_successful_status(st)
+        is_valid = st != "rejected"
+        dur = _completion_duration_minutes(r) if is_settled else None
+        filtered_status_count[st] += 1
 
         if is_valid:
             dir_count[direction] += 1
@@ -1992,7 +2101,6 @@ async def dashboard_transactions(
                 user_stats[user_id]["count"] += 1
                 user_stats[user_id]["volume_rub"] += rub
 
-            # Bucket the time series by day or month.
             bucket = ts[:7] if granularity == "month" else ts[:10]
             if bucket:
                 ts_buckets[bucket]["count"] += 1
@@ -2001,12 +2109,15 @@ async def dashboard_transactions(
         if is_settled:
             completed_volume_rub += rub
             completed_count += 1
+            if dur is not None:
+                duration_sum += dur
+                duration_n += 1
 
         transactions_out.append({
             "invoice": r.get("invoice"),
             "timestamp": ts,
             "user_id": r.get("user_id"),
-            "user_name": user_names.get(r.get("user_id")),
+            "user_name": names.get(r.get("user_id")),
             "direction": direction,
             "amount": amount,
             "currency_from": r.get("currency_from"),
@@ -2016,6 +2127,9 @@ async def dashboard_transactions(
             "status": r.get("status"),
             "promo_code": r.get("promo_code"),
             "bank_details": r.get("bank_details"),
+            "completed_by_admin": r.get("completed_by_admin"),
+            "admin_name": names.get(r.get("completed_by_admin")),
+            "duration_minutes": round(dur, 2) if dur is not None else None,
         })
 
     time_series = [
@@ -2028,11 +2142,6 @@ async def dashboard_transactions(
         for k, v in sorted(ts_buckets.items())
     ]
 
-    status_breakdown = [
-        {"status": s, "count": status_count[s], "volume_rub": round(status_volume[s], 2)}
-        for s in sorted(status_count, key=lambda x: status_count[x], reverse=True)
-    ]
-
     direction_breakdown = [
         {"direction": d, "count": dir_count[d], "volume_rub": round(dir_volume[d], 2)}
         for d in ("buy", "sell")
@@ -2042,7 +2151,7 @@ async def dashboard_transactions(
         (
             {
                 "user_id": uid,
-                "user_name": user_names.get(uid),
+                "user_name": names.get(uid),
                 "count": s["count"],
                 "volume_rub": round(s["volume_rub"], 2),
             }
@@ -2053,15 +2162,16 @@ async def dashboard_transactions(
     )[:10]
 
     valid_count = dir_count["buy"] + dir_count["sell"]
+    avg_duration_minutes = round(duration_sum / duration_n, 2) if duration_n else None
 
     return {
         "summary": {
-            "total_count": len(rows),
+            "total_count": len(filtered_rows),
             "valid_count": valid_count,
             "completed_count": completed_count,
-            "pending_count": status_count.get("pending", 0),
-            "rejected_count": status_count.get("rejected", 0),
-            "waiting_edit_count": status_count.get("waiting_edit", 0),
+            "pending_count": filtered_status_count.get("pending", 0),
+            "rejected_count": filtered_status_count.get("rejected", 0),
+            "waiting_edit_count": filtered_status_count.get("waiting_edit", 0),
             "total_volume_rub": round(total_volume_rub, 2),
             "completed_volume_rub": round(completed_volume_rub, 2),
             "buy_count": dir_count["buy"],
@@ -2070,13 +2180,17 @@ async def dashboard_transactions(
             "sell_volume_rub": round(dir_volume["sell"], 2),
             "unique_users": len(user_stats),
             "avg_transaction_rub": round(total_volume_rub / valid_count, 2) if valid_count else 0.0,
+            "avg_duration_minutes": avg_duration_minutes,
         },
         "status_breakdown": status_breakdown,
         "direction_breakdown": direction_breakdown,
         "time_series": time_series,
         "top_users": top_users,
+        "admin_stats": admin_stats,
+        "admins": admins,
         "transactions": transactions_out,
-        "row_count": len(rows),
+        "row_count": len(filtered_rows),
+        "window_count": len(rows),
         "truncated": truncated,
     }
 
