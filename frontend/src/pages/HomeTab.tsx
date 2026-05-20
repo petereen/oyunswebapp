@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import oyunsIcon from "../assets/oyuns-icon.png";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Mail } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { RateCard } from "../components/RateCard";
@@ -26,9 +26,10 @@ interface Props {
   onNavigateToTransaction: (direction?: "buy" | "sell", editInvoice?: string) => void;
   onNavigateToProfile: () => void;
   onNavigateToFuelOrder?: (orderId: string) => void;
+  openEmailVerify?: boolean;
 }
 
-export function HomeTab({ initData, user, isAuthenticating, authError, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder }: Props) {
+export function HomeTab({ initData, user, isAuthenticating, authError, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder, openEmailVerify = false }: Props) {
   const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
   const { lang, setLang, t } = useLang();
@@ -103,6 +104,23 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
     queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
     setShowRequiredInfo(false);
   };
+
+  // Open the email verification form when arriving via the banner deep link
+  // (e.g. "?verify-email=1"). Wait for the profile to settle so the form is
+  // prefilled with the user's current email, then strip the query param.
+  const emailVerifyOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!openEmailVerify || emailVerifyOpenedRef.current) return;
+    if (profile === undefined && !profileError) return;
+    emailVerifyOpenedRef.current = true;
+    setShowEmailVerification(true);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("verify-email")) {
+      params.delete("verify-email");
+      const nextQuery = params.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`);
+    }
+  }, [openEmailVerify, profile, profileError]);
 
   const handleBuySell = (dir: "buy" | "sell") => {
     if (missingRequiredInfo) {
@@ -438,9 +456,10 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
         <QuickRegistrationModal onRegistered={handleRegistered} onClose={() => setShowQuickRegistration(false)} />
       )}
 
-      {showEmailVerification && emailVerificationPending && userProfile?.email && (
+      {showEmailVerification && (
         <EmailVerificationModal
-          emailAddress={userProfile.email}
+          emailAddress={userProfile?.email || ""}
+          allowEditEmail
           onVerified={handleRegistered}
           onClose={() => setShowEmailVerification(false)}
         />

@@ -41,6 +41,7 @@ from models import (
     AuthRequest,
     AuthResponse,
     BasicRegistrationRequest,
+    EmailVerificationStartRequest,
     EmailVerificationCompleteRequest,
     EmailVerificationCompleteResponse,
     ExchangeEditableResponse,
@@ -2453,6 +2454,69 @@ async def register_basic(
     }
 
 
+@app.post("/api/email-verification/start")
+async def start_email_verification(
+    payload: EmailVerificationStartRequest,
+    user=Depends(get_jwt_authenticated_user),
+):
+    """Save (or update) an email for an existing user and mark it pending verification.
+
+    Used by the standalone email verification form so already-registered users can
+    add or change their email before requesting an OTP code.
+    """
+    import re
+    from zoneinfo import ZoneInfo
+
+    client = get_supabase()
+    moscow_tz = ZoneInfo("Europe/Moscow")
+    now = datetime.now(moscow_tz).isoformat()
+
+    normalized_email = payload.email.strip().lower()
+    if not normalized_email or not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", normalized_email):
+        raise HTTPException(status_code=400, detail="A valid email is required")
+
+    current_res = (
+        client.table("users")
+        .select("id,email,email_verified_at")
+        .eq("id", user.id)
+        .limit(1)
+        .execute()
+    )
+    if not current_res.data:
+        raise HTTPException(status_code=404, detail="User record not found")
+
+    # Block reusing an email already verified by a different user.
+    conflict = (
+        client.table("users")
+        .select("id")
+        .eq("email", normalized_email)
+        .neq("id", user.id)
+        .not_.is_("email_verified_at", "null")
+        .limit(1)
+        .execute()
+    )
+    if conflict.data:
+        raise HTTPException(status_code=400, detail="This email is already used by another account")
+
+    update_payload = {
+        "email": normalized_email,
+        "email_verification_pending": True,
+        "email_verified_at": None,
+        "email_auth_user_id": None,
+        "updated_at": now,
+    }
+
+    result = client.table("users").update(update_payload).eq("id", user.id).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to start email verification")
+
+    return {
+        "ok": True,
+        "email": normalized_email,
+        "email_verification_pending": True,
+    }
+
+
 @app.post("/api/email-verification/complete", response_model=EmailVerificationCompleteResponse)
 async def complete_email_verification(
     payload: EmailVerificationCompleteRequest,
@@ -2476,9 +2540,6 @@ async def complete_email_verification(
     current_user = current_user_res.data[0] if current_user_res.data else None
     if not current_user:
         raise HTTPException(status_code=404, detail="User record not found")
-
-    if current_user.get("verification_level", 0) >= 1:
-        raise HTTPException(status_code=400, detail="Email is already verified")
 
     if not current_user.get("email_verification_pending"):
         raise HTTPException(status_code=400, detail="Email verification is not pending")
@@ -2524,8 +2585,11 @@ async def complete_email_verification(
     if existing_email_link.data:
         raise HTTPException(status_code=400, detail="This email is already linked to another user")
 
+    # Promote brand-new users to Level 1, but never demote already-verified users.
+    new_level = max(int(current_user.get("verification_level", 0) or 0), 1)
+
     update_payload = {
-        "verification_level": 1,
+        "verification_level": new_level,
         "email_verification_pending": False,
         "email_verified_at": now.isoformat(),
         "email_auth_user_id": auth_user_id,
@@ -2538,6 +2602,7 @@ async def complete_email_verification(
 
     return EmailVerificationCompleteResponse(
         message="Email verified successfully",
+        verification_level=new_level,
         email_verified_at=now,
     )
 

@@ -183,6 +183,12 @@ export type BasicRegistrationResponse = {
   email: string;
 };
 
+export type EmailVerificationStartResponse = {
+  ok: boolean;
+  email: string;
+  email_verification_pending: boolean;
+};
+
 export type EmailVerificationCompleteInput = {
   access_token: string;
 };
@@ -488,6 +494,11 @@ export async function submitRegistration(payload: RegistrationInput) {
 export async function submitBasicRegistration(payload: BasicRegistrationInput) {
   const res = await api.post('/register-basic', payload);
   return res.data as BasicRegistrationResponse;
+}
+
+export async function startEmailVerification(email: string) {
+  const res = await api.post('/email-verification/start', { email });
+  return res.data as EmailVerificationStartResponse;
 }
 
 export async function completeEmailVerification(payload: EmailVerificationCompleteInput) {
