@@ -364,6 +364,31 @@ def _resolve_stored_promo(
     return Decimal("0"), (str(promo_code).strip() or None), None
 
 
+def _derive_waiting_edit_base_rate(
+    *,
+    direction: str,
+    stored_rate: Decimal,
+    promo_discount: Decimal = Decimal("0"),
+) -> Decimal:
+    effective_rate = _to_decimal(stored_rate)
+    if effective_rate <= 0:
+        return Decimal("0")
+
+    adjustment = _to_decimal(promo_discount)
+    if adjustment <= 0:
+        return effective_rate.quantize(Decimal("0.01"))
+
+    if direction.lower() == "buy":
+        base_rate = effective_rate - adjustment
+    else:
+        base_rate = effective_rate + adjustment
+
+    if base_rate <= 0:
+        return effective_rate.quantize(Decimal("0.01"))
+
+    return base_rate.quantize(Decimal("0.01"))
+
+
 def _get_user_lang(user_id: int) -> str:
     """Get user's language preference from DB. Returns 'mn' by default."""
     try:
@@ -3293,11 +3318,15 @@ async def get_editable_exchange(
 
     direction = "buy" if (trx.get("currency_from") or "").upper() == "RUB" else "sell"
     receipt_urls = _parse_receipt_urls(trx.get("bill_url"), trx.get("receipt_id"))
-    buy_rate, sell_rate = _load_latest_rates(client)
-    base_rate = buy_rate if direction == "buy" else sell_rate
-    if base_rate <= 0:
-        base_rate = _to_decimal(trx.get("rate"))
+    stored_rate = _to_decimal(trx.get("rate"))
     promo_discount, _, _ = _resolve_stored_promo(client, trx.get("promo_code"))
+    base_rate = _derive_waiting_edit_base_rate(
+        direction=direction,
+        stored_rate=stored_rate,
+        promo_discount=promo_discount,
+    )
+    if base_rate <= 0:
+        base_rate = stored_rate
 
     return ExchangeEditableResponse(
         invoice=trx.get("invoice"),
@@ -3305,7 +3334,7 @@ async def get_editable_exchange(
         amount=_to_decimal(trx.get("amount")),
         currency_from=trx.get("currency_from"),
         currency_to=trx.get("currency_to"),
-        rate=_to_decimal(trx.get("rate")),
+        rate=stored_rate,
         base_rate=base_rate,
         promo_discount=promo_discount,
         bank_details=trx.get("bank_details") or "",
@@ -3340,17 +3369,27 @@ async def resubmit_exchange(
         raise HTTPException(status_code=400, detail="Transaction cannot be resubmitted")
 
     direction = "buy" if (trx.get("currency_from") or "").upper() == "RUB" else "sell"
-    buy_rate, sell_rate = _load_latest_rates(client)
-    base_rate = buy_rate if direction == "buy" else sell_rate
-    if base_rate <= 0:
-        base_rate = _to_decimal(payload.rate)
-    if base_rate <= 0:
-        raise HTTPException(status_code=400, detail="Rate unavailable")
-
+    stored_rate = _to_decimal(trx.get("rate"))
     existing_promo_code = trx.get("promo_code")
     promo_discount = Decimal("0")
     resolved_promo_code: str | None = (str(existing_promo_code).strip() or None) if existing_promo_code else None
     resolved_promo_source: str | None = None
+
+    if existing_promo_code:
+        promo_discount, resolved_promo_code, resolved_promo_source = _resolve_stored_promo(
+            client,
+            existing_promo_code,
+        )
+
+    base_rate = _derive_waiting_edit_base_rate(
+        direction=direction,
+        stored_rate=stored_rate,
+        promo_discount=promo_discount,
+    )
+    if base_rate <= 0:
+        base_rate = _to_decimal(payload.rate)
+    if base_rate <= 0:
+        raise HTTPException(status_code=400, detail="Rate unavailable")
 
     _, preview_source, _, _ = _compute_effective_rate(
         direction=direction,
@@ -3359,11 +3398,10 @@ async def resubmit_exchange(
         promo_discount=Decimal("0"),
     )
 
-    if existing_promo_code and preview_source != "volume":
-        promo_discount, resolved_promo_code, resolved_promo_source = _resolve_stored_promo(
-            client,
-            existing_promo_code,
-        )
+    if preview_source == "volume":
+        promo_discount = Decimal("0")
+        resolved_promo_code = None
+        resolved_promo_source = None
 
     effective_rate, rate_source, _, _ = _compute_effective_rate(
         direction=direction,
