@@ -23,6 +23,8 @@ class Settings:
     admin_panel_url: str | None = None
     user_panel_url: str | None = None
     webapp_url: str | None = None  # Telegram Mini App URL
+    telegram_login_client_id: str | None = None
+    telegram_login_nonce_ttl_seconds: int = 300
     admin_api_key: str | None = None
     storage_bucket_passports: str = "passports"
     storage_bucket_receipts: str = "bills"
@@ -55,6 +57,8 @@ def get_settings() -> Settings:
     admin_panel_url = os.getenv("ADMIN_PANEL_URL")
     user_panel_url = os.getenv("USER_PANEL_URL")
     webapp_url = os.getenv("WEBAPP_URL")  # Telegram Mini App URL
+    telegram_login_client_id = os.getenv("TELEGRAM_LOGIN_CLIENT_ID", "").strip().strip('"').strip("'") or None
+    telegram_login_nonce_ttl_raw = os.getenv("TELEGRAM_LOGIN_NONCE_TTL_SECONDS", "300").strip().strip('"').strip("'")
     admin_api_key = os.getenv("ADMIN_API_KEY")
     jwt_secret = os.getenv("JWT_SECRET", "").strip().strip('"').strip("'")
     # DEV MODE: Telegram auth bypass - defaults to FALSE for production safety
@@ -72,6 +76,14 @@ def get_settings() -> Settings:
     
     if not jwt_secret:
         raise RuntimeError("JWT_SECRET must be set for secure authentication")
+
+    try:
+        telegram_login_nonce_ttl_seconds = int(telegram_login_nonce_ttl_raw)
+    except ValueError as exc:
+        raise RuntimeError("TELEGRAM_LOGIN_NONCE_TTL_SECONDS must be an integer") from exc
+
+    if telegram_login_nonce_ttl_seconds <= 0:
+        raise RuntimeError("TELEGRAM_LOGIN_NONCE_TTL_SECONDS must be greater than 0")
 
     # Parse admin chat IDs (support multiple IDs)
     admin_chat_ids: List[int] = []
@@ -126,6 +138,8 @@ def get_settings() -> Settings:
         admin_panel_url=admin_panel_url,
         user_panel_url=user_panel_url,
         webapp_url=webapp_url,
+        telegram_login_client_id=telegram_login_client_id,
+        telegram_login_nonce_ttl_seconds=telegram_login_nonce_ttl_seconds,
         admin_api_key=admin_api_key,
         dev_mode=dev_mode,
         fuel_admin_api_key=fuel_admin_api_key,

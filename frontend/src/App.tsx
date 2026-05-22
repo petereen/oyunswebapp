@@ -48,7 +48,7 @@ export default function App() {
     ? requestedTournamentSection
     : "schedule";
 
-  const { initData, user, isAuthenticating, authError, refreshAuth } = useTelegramAuth();
+  const { initData, user, isAuthenticating, authError, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
   const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
   const [activeTab, setActiveTab] = useState(urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0);
@@ -78,6 +78,7 @@ export default function App() {
 
   const isAdmin = profile?.is_admin || false;
   const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : profile?.user?.ready_for_verification ? 1 : 0);
+  const effectiveActiveTab = user ? activeTab : 0;
 
   const handleNavigateToTransaction = (direction?: "buy" | "sell", editInvoice?: string) => {
     if (editInvoice) {
@@ -178,19 +179,21 @@ export default function App() {
           <ProfilePage userId={user?.id} onBack={handleBackFromProfile} />
         ) : (
           <>
-            {activeTab === 0 && (
+            {effectiveActiveTab === 0 && (
               <HomeTab
                 initData={initData}
                 user={user}
                 isAuthenticating={isAuthenticating}
                 authError={authError}
+                needsBrowserLogin={needsBrowserLogin}
+                onStartBrowserLogin={startBrowserLogin}
                 onNavigateToTransaction={handleNavigateToTransaction}
                 onNavigateToProfile={handleNavigateToProfile}
                 onNavigateToFuelOrder={handleNavigateToFuelOrder}
                 openEmailVerify={urlVerifyEmail}
               />
             )}
-            {activeTab === 1 && (
+            {user && effectiveActiveTab === 1 && (
               <TransactionTab
                 initData={initData}
                 user={user}
@@ -200,8 +203,8 @@ export default function App() {
                 onEditInvoiceHandled={handleEditInvoiceConsumed}
               />
             )}
-            {activeTab === 2 && <ServicesTab initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />}
-            {activeTab === 3 && (
+            {user && effectiveActiveTab === 2 && <ServicesTab initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />}
+            {user && effectiveActiveTab === 3 && (
               <OyunsPlusTab
                 userId={user?.id}
                 verificationLevel={verificationLevel}
@@ -212,13 +215,13 @@ export default function App() {
                 initialTournamentInnerTab={urlTournamentInnerTab}
               />
             )}
-            {activeTab === 4 && <StatsTab userId={user?.id} />}
+            {user && effectiveActiveTab === 4 && <StatsTab userId={user?.id} />}
           </>
         )}
       </div>
 
       {/* Bottom Nav */}
-      <BottomNavBar activeTab={activeTab} onTabChange={handleTabChange} />
+      {user && <BottomNavBar activeTab={activeTab} onTabChange={handleTabChange} />}
 
       {/* Diagnostic Helper */}
       <DevToolbar />

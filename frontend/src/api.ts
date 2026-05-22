@@ -12,6 +12,89 @@ const FUEL_ADMIN_KEY_STORAGE = 'fuel_admin_key';
 const OYUNS_SAGS_ADMIN_KEY_STORAGE = 'oyuns_sags_admin_key';
 export const DASHBOARD_KEY_STORAGE = 'oyuns_dashboard_key';
 
+export type AuthenticatedUser = {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+};
+
+export type AuthSession = {
+  token: string;
+  user: AuthenticatedUser;
+};
+
+export type TelegramBrowserAuthChallenge = {
+  client_id: string;
+  nonce: string;
+  expires_in: number;
+};
+
+async function parseFetchError(response: Response): Promise<string> {
+  try {
+    const data = await response.json();
+    if (typeof data?.detail === "string" && data.detail.trim()) {
+      return data.detail;
+    }
+  } catch {
+    // Ignore JSON parse failures and fall back to the status text.
+  }
+
+  return response.statusText || `Request failed: ${response.status}`;
+}
+
+export async function authenticateWithTelegramInitData(initData: string): Promise<AuthSession> {
+  const response = await fetch(
+    (import.meta.env.VITE_API_BASE || '/api') + '/auth',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ init_data: initData }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseFetchError(response));
+  }
+
+  return response.json();
+}
+
+export async function fetchTelegramBrowserAuthChallenge(): Promise<TelegramBrowserAuthChallenge> {
+  const response = await fetch(
+    (import.meta.env.VITE_API_BASE || '/api') + '/auth/browser/challenge',
+    {
+      method: 'GET',
+      credentials: 'same-origin',
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseFetchError(response));
+  }
+
+  return response.json();
+}
+
+export async function authenticateWithTelegramBrowserIdToken(idToken: string): Promise<AuthSession> {
+  const response = await fetch(
+    (import.meta.env.VITE_API_BASE || '/api') + '/auth/browser',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ id_token: idToken }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseFetchError(response));
+  }
+
+  return response.json();
+}
+
 // Fuel admin axios instance - sends API key header for browser-based admin access
 const fuelAdminApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
@@ -87,25 +170,14 @@ api.interceptors.response.use(
       if (tg?.initData && tg.initData.length > 0) {
         try {
           console.log('🔄 Re-authenticating with Telegram initData...');
-          const authResponse = await fetch(
-            (import.meta.env.VITE_API_BASE || '/api') + '/auth',
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ init_data: tg.initData }),
-            }
-          );
-          
-          if (authResponse.ok) {
-            const authData = await authResponse.json();
-            localStorage.setItem(JWT_STORAGE_KEY, authData.token);
-            localStorage.setItem('oyuns_user_v2', JSON.stringify(authData.user));
-            console.log('✅ Re-authentication successful, retrying original request');
-            
-            // Retry the original request with new token
-            error.config.headers.Authorization = `Bearer ${authData.token}`;
-            return api.request(error.config);
-          }
+          const authData = await authenticateWithTelegramInitData(tg.initData);
+          localStorage.setItem(JWT_STORAGE_KEY, authData.token);
+          localStorage.setItem('oyuns_user_v2', JSON.stringify(authData.user));
+          console.log('✅ Re-authentication successful, retrying original request');
+
+          // Retry the original request with new token
+          error.config.headers.Authorization = `Bearer ${authData.token}`;
+          return api.request(error.config);
         } catch (authError) {
           console.error('❌ Re-authentication failed:', authError);
         }

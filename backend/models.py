@@ -30,6 +30,16 @@ class AuthResponse(BaseModel):
     user: AuthenticatedUser
 
 
+class TelegramBrowserAuthChallengeResponse(BaseModel):
+    client_id: str
+    nonce: str
+    expires_in: int
+
+
+class TelegramBrowserAuthRequest(BaseModel):
+    id_token: str = Field(..., description="Telegram Login id_token")
+
+
 class RateResponse(BaseModel):
     buy_rate: Decimal
     sell_rate: Decimal

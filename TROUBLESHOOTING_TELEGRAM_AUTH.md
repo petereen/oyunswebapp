@@ -7,7 +7,10 @@
 3. ❌ **Статистик татахад алдаа гарлаа** (Error fetching analytics)
 4. ❌ **Admin panel button not visible**
 
-**Root Cause:** User ID not being fetched from Telegram
+**Root Cause:** The app now has two Telegram auth paths, and each fails differently:
+
+- Telegram Mini App path: Telegram `initData` is missing, stale, or invalid.
+- Normal browser path: Telegram Login is not configured, the popup was cancelled, or the returned `id_token` / nonce exchange failed.
 
 ---
 
@@ -32,6 +35,24 @@
 
 - **Green ✅:** Everything working
 - **Red ❌:** Click to see what's wrong
+
+---
+
+## 🌐 Browser Login vs Mini App Login
+
+### Inside Telegram Mini App
+
+- The app expects `window.Telegram.WebApp.initData`
+- Backend endpoint: `/api/auth`
+- Validation method: bot-token-based `WebAppData` signature check
+
+### Outside Telegram in a Normal Browser
+
+- The app shows a "Sign in with Telegram" button
+- Backend endpoints: `/api/auth/browser/challenge` and `/api/auth/browser`
+- Validation method: Telegram Login `id_token` + backend nonce cookie + Telegram JWKS
+
+**Important:** normal browsers do **not** receive Mini App `initData`. If browser login fails, do not debug it as an `initData` problem.
 
 ---
 
@@ -79,15 +100,20 @@
 
 **Causes:**
 - Not opening in Telegram Mini App
-- Testing in browser instead of Telegram
+- Testing the Mini App path in a normal browser instead of using the browser login path
 
 **Solutions:**
 1. Open via Telegram:
    - Find your bot
    - Click "Web App" button
    - OR use `/start` command
-   
-2. Don't use browser DevTools:
+
+2. If you intentionally opened the site in Chrome / Safari / Firefox:
+   - Use the standalone Telegram Login button on the home screen
+   - Confirm BotFather `Web Login` Allowed URLs include your site origin
+   - Confirm `TELEGRAM_LOGIN_CLIENT_ID` is configured on the backend
+
+3. Don't use browser DevTools:
    - Use Telegram's built-in DevTools instead
    - Desktop Telegram: Right-click → Inspect Element
 
@@ -102,6 +128,7 @@
 - Mini App not properly initialized
 - Telegram SDK not loaded
 - Session expired
+- Or you are outside Telegram, where `initData` is not expected at all
 
 **Solutions:**
 1. **Check HTML file:**
@@ -119,6 +146,10 @@
 3. **Restart App:**
    - Close Telegram Mini App
    - Open again via bot
+
+4. **If you are outside Telegram:**
+   - Ignore `initData` debugging and use the browser login button instead
+   - If the browser button fails immediately, check `TELEGRAM_LOGIN_CLIENT_ID` and BotFather `Web Login` Allowed URLs
 
 ### Issue 3: "User data: Missing"
 
@@ -151,7 +182,16 @@
 
 ## 🧪 Testing Authentication
 
-### Test 1: Local Browser (for development only)
+### Test 1: Local Browser (browser login path)
+
+1. Configure BotFather `Web Login` Allowed URLs for your local dev origin
+2. Set `TELEGRAM_LOGIN_CLIENT_ID` in the backend environment
+3. Open the app in a normal browser
+4. Click the Telegram login button on the home screen
+5. Confirm `/api/auth/browser/challenge` succeeds before the popup opens
+6. Confirm `/api/auth/browser` returns the same app JWT shape as `/api/auth`
+
+### Test 2: Local Browser (development bypass only)
 
 ```typescript
 // In browser console, manually test:
@@ -160,14 +200,14 @@ const mockInitData = "user=%7B%22id%22%3A1932946217%2C%22first_name%22%3A%22Test
 // Then restart app - it should use mock data
 ```
 
-### Test 2: Real Telegram Mini App
+### Test 3: Real Telegram Mini App
 
 1. **Deploy to server with HTTPS**
 2. **Configure bot URL in BotFather**
 3. **Open via Telegram Mini App**
 4. **Check console - should show all ✅**
 
-### Test 3: Admin Access
+### Test 4: Admin Access
 
 1. **Login with admin user ID (from ADMIN_USER_IDS)**
 2. **Should see admin panel toggle**
@@ -195,8 +235,8 @@ Open Console and look for API requests:
 
 | Status | Problem | Solution |
 |--------|---------|----------|
-| 401 | No initData header | Check useTelegramAuth() returns initData |
-| 401 | Invalid initData | Bot token changed, invalidating old data |
+| 401 | Missing / invalid Mini App auth | Check `useTelegramAuth()` is sending valid `initData` inside Telegram |
+| 401 | Invalid browser login nonce or `id_token` | Refresh the page, start a new browser login, and confirm BotFather Web Login setup |
 | 400 | Bad request | Check request format, API expects correct headers |
 | 500 | Server error | Check backend logs with `docker logs oyunsbot-api` |
 
@@ -206,12 +246,14 @@ Open Console and look for API requests:
 
 - [ ] Bot token rotated (NEW token in .env)
 - [ ] Telegram SDK loads (`<script src="...telegram-web-app.js">`)
-- [ ] Opening in Telegram Mini App (not browser)
+- [ ] Telegram Mini App opens inside Telegram and browser login opens in a normal browser
 - [ ] Console shows "=== Telegram Auth Debug ===" with ✅ values
 - [ ] User ID visible in console (e.g., `1932946217`)
 - [ ] initData present and >100 characters
+- [ ] BotFather `Web Login` Allowed URLs include the current origin
+- [ ] `TELEGRAM_LOGIN_CLIENT_ID` is set on the backend
 - [ ] Admin panel button visible for admin users
-- [ ] API requests include "X-Telegram-Init-Data" header
+- [ ] `/api/auth/browser/challenge` succeeds in normal browsers
 - [ ] API responses return 200 (not 401)
 - [ ] Profile loads without errors
 - [ ] History shows transactions

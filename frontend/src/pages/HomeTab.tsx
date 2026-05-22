@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import oyunsIcon from "../assets/oyuns-icon.png";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Mail } from "lucide-react";
+import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Mail, LogIn } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { RateCard } from "../components/RateCard";
 import { RateHistoryChart } from "../components/RateHistoryChart";
@@ -23,13 +23,15 @@ interface Props {
   user: TelegramUser | null;
   isAuthenticating?: boolean;
   authError?: string | null;
+  needsBrowserLogin?: boolean;
+  onStartBrowserLogin?: () => void;
   onNavigateToTransaction: (direction?: "buy" | "sell", editInvoice?: string) => void;
   onNavigateToProfile: () => void;
   onNavigateToFuelOrder?: (orderId: string) => void;
   openEmailVerify?: boolean;
 }
 
-export function HomeTab({ initData, user, isAuthenticating, authError, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder, openEmailVerify = false }: Props) {
+export function HomeTab({ initData, user, isAuthenticating, authError, needsBrowserLogin = false, onStartBrowserLogin, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder, openEmailVerify = false }: Props) {
   const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
   const { lang, setLang, t } = useLang();
@@ -185,6 +187,43 @@ export function HomeTab({ initData, user, isAuthenticating, authError, onNavigat
         <Loader2 className="w-12 h-12 text-maroon-600 animate-spin" />
         <div className="text-lg font-medium text-dark-800 dark:text-ivory-200">{t("home.logging_in")}</div>
         <div className="text-sm text-dark-600 dark:text-ivory-300">{t("home.please_wait")}</div>
+      </div>
+    );
+  }
+
+  if (needsBrowserLogin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-5 px-4 text-center">
+        <div className="w-20 h-20 rounded-3xl bg-maroon-100 dark:bg-maroon-900/30 flex items-center justify-center shadow-card">
+          <img
+            src={oyunsIcon}
+            alt="OYUNS ALL-IN-ONE"
+            className="h-12 w-12 object-contain"
+          />
+        </div>
+
+        <div className="space-y-2 max-w-md">
+          <div className="text-2xl font-bold text-dark-800 dark:text-ivory-100">{t("home.browser_login_title")}</div>
+          <div className="text-sm text-dark-600 dark:text-ivory-300">{t("home.browser_login_desc")}</div>
+        </div>
+
+        <button
+          onClick={onStartBrowserLogin}
+          className="inline-flex items-center gap-2 rounded-2xl bg-maroon-700 px-5 py-3 text-sm font-semibold text-white shadow-card transition hover:bg-maroon-600 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={!onStartBrowserLogin}
+        >
+          <LogIn className="w-4 h-4" />
+          {t(authError ? "home.browser_login_retry" : "home.browser_login_button")}
+        </button>
+
+        {authError && (
+          <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+            <div className="font-semibold mb-1">{t("home.browser_login_error")}</div>
+            <div>{authError}</div>
+          </div>
+        )}
+
+        <div className="text-xs text-dark-500 dark:text-ivory-400 max-w-sm">{t("home.browser_login_hint")}</div>
       </div>
     );
   }

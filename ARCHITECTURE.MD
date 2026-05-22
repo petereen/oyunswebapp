@@ -53,6 +53,10 @@ Name: Oyunsbot WebApp
 
 Description: Single-page React application used as the Telegram Mini App and as a browser-facing admin UI. `App.tsx` switches between client, admin, and fuel-admin views, supports deep links such as `?fuel-admin` and `?fuel-order=...`, supports standalone `/oyuns-sags` tournament admin route with API-key auth, and overlays the profile page on top of the tab shell. `api.ts` attaches JWTs, retries 401s by re-authenticating with Telegram `initData`, and exposes typed wrappers for the backend routes.
 
+Authentication modes:
+- Inside Telegram: the app reads `window.Telegram.WebApp.initData`, sends it to `/api/auth`, and the backend validates the Telegram-signed Mini App payload with the bot token.
+- Outside Telegram: the app shows a standalone Telegram Login button, requests `/api/auth/browser/challenge`, receives a backend-issued nonce, completes the Telegram browser login popup, then exchanges the returned `id_token` at `/api/auth/browser` for the same app JWT used everywhere else.
+
 Technologies: React 18, TypeScript, Vite, Tailwind CSS, React Query, Axios, Recharts, Headless UI, lucide-react.
 
 Deployment: Built by `frontend/Dockerfile` into static assets and served by Nginx; in local development Vite runs on port 5173 and proxies `/api` to the backend.
@@ -63,7 +67,7 @@ Deployment: Built by `frontend/Dockerfile` into static assets and served by Ngin
 
 Name: Backend API
 
-Description: A single FastAPI monolith that handles Telegram auth, JWT issuance, rates, app settings, service status, signed storage uploads, user profile data, exchange creation, history, analytics, admin inbox/KYC/shift/bank management, gift flows, fuel flows, Oyuns Plus referral/points, tournament public endpoints, standalone `/oyuns-sags` admin CRUD APIs, and the `stale_transaction_reminder` background task.
+Description: A single FastAPI monolith that handles Telegram auth, browser Telegram Login auth, JWT issuance, rates, app settings, service status, signed storage uploads, user profile data, exchange creation, history, analytics, admin inbox/KYC/shift/bank management, gift flows, fuel flows, Oyuns Plus referral/points, tournament public endpoints, standalone `/oyuns-sags` admin CRUD APIs, and the `stale_transaction_reminder` background task.
 
 Technologies: Python 3.11, FastAPI, Uvicorn, Pydantic, Supabase Python SDK, python-jose, python-dotenv, requests.
 
@@ -106,6 +110,7 @@ Key buckets: `passports`, `bills`.
 ## 5. External Integrations / APIs
 
 - Telegram Bot API - sends admin/user notifications, photos, and media groups; Mini App auth is based on Telegram-signed `initData`.
+- Telegram Login / OIDC - normal-browser login uses Telegram's browser login popup, Telegram-issued `id_token`, and Telegram JWKS validation.
 - Supabase - managed Postgres and Storage access through the Python SDK and signed upload URLs.
 - Nginx - reverse proxy and static frontend hosting.
 - Certbot / Let's Encrypt - production TLS certificates and renewal.
@@ -116,15 +121,17 @@ Key buckets: `passports`, `bills`.
 - Key services: Docker Compose, Nginx, Certbot, backend container on 8000, frontend container on 80, and the bot container for legacy Telegram flows.
 - Compose ports: Nginx publishes 8080 and 8443 in the default file.
 - Local development: backend starts with Uvicorn, frontend runs with Vite on 5173, and the frontend dev server proxies `/api` to `http://localhost:8000`.
+- Browser login setup: Telegram browser login also requires BotFather Web Login Allowed URLs for every deployed origin that will host the app, plus `TELEGRAM_LOGIN_CLIENT_ID` in the backend environment.
 - CI/CD: no formal pipeline is defined in the repo; deployment is script-driven with `deploy.sh`, `init-letsencrypt.sh`, and the `VPS_*.md` runbooks.
 - Monitoring and logging: FastAPI/Uvicorn logs and Telegram API request logs; there is no dedicated metrics stack in the repo.
 
 ## 7. Security Considerations
 
-- Authentication: Telegram Mini App `initData` verification lives in `backend/utils.py` and supports HMAC-SHA256 plus Ed25519 fallback. Successful auth issues a JWT signed with HS256 and a 7-day lifetime.
+- Authentication: Telegram Mini App `initData` verification lives in `backend/utils.py` and supports HMAC-SHA256 plus Ed25519 fallback. Normal-browser login also lives in `backend/utils.py`, where Telegram browser `id_token` values are validated against Telegram's JWKS plus a short-lived backend-issued nonce challenge. Successful auth from either path issues the same HS256 JWT with a 7-day lifetime.
 - Authorization: Most request handlers depend on a JWT-authenticated user context plus configured admin IDs or the fuel admin API key. Some admin helpers are intentionally permissive, so admin security is not centralized in a single RBAC layer.
 - Transport and storage: Production traffic is expected to run over TLS via Nginx and Let's Encrypt. Supabase Storage uploads use signed URLs rather than direct public writes.
 - Environment safety: `DEV_MODE=true` enables a local/dev auth fallback. That is useful for development, but it should never be assumed safe for production.
+- Cookie safety: the browser login challenge is stored in an HttpOnly cookie with `SameSite=Lax`; production deployments should keep the app behind HTTPS so the cookie stays `Secure` outside dev mode.
 - Additional note: backend CORS currently allows all origins, which is convenient for development but should be tightened if the service is exposed broadly.
 - Additional note: `/api/oyuns-sags/admin/*` endpoints are intentionally API-key-based and independent from Telegram auth for standalone route use.
 

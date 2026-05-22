@@ -10,7 +10,7 @@ import string
 import requests
 from decimal import Decimal, InvalidOperation
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -40,6 +40,8 @@ from models import (
     AppSettingsUpdateRequest,
     AuthRequest,
     AuthResponse,
+    TelegramBrowserAuthChallengeResponse,
+    TelegramBrowserAuthRequest,
     BasicRegistrationRequest,
     EmailVerificationStartRequest,
     EmailVerificationCompleteRequest,
@@ -146,16 +148,22 @@ sys.path.insert(0, "/shared")
 from bot_translations import tb
 from utils import (
     TelegramAuthError,
+    TelegramLoginError,
     JWTAuthError,
     generate_invoice,
     verify_telegram_init_data,
+    create_telegram_login_challenge,
     create_jwt_token,
     verify_jwt_token,
+    verify_telegram_login_id_token,
+    verify_telegram_login_challenge,
     log_admin_action,
     debug_telegram_validation,
 )
 
 logger = logging.getLogger("uvicorn.error")
+
+TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE = "oyuns_tg_browser_login_challenge_v1"
 
 
 VOLUME_DISCOUNT_TIERS: list[tuple[Decimal, Decimal]] = [
@@ -716,6 +724,34 @@ async def require_admin_user(user=Depends(get_jwt_authenticated_user)):
     return user
 
 
+def _upsert_authenticated_user(user) -> None:
+    """Ensure the user exists in the database without overwriting registered names."""
+    try:
+        client = get_supabase()
+        existing = client.table("users").select("id,first_name").eq("id", user.id).limit(1).execute()
+        if existing.data:
+            client.table("users").update({
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", user.id).execute()
+        else:
+            client.table("users").insert({
+                "id": user.id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        logger.info(f"User {user.id} upserted in database")
+    except Exception as exc:
+        logger.warning(f"Failed to upsert user {user.id} in database: {exc}")
+
+
+def _issue_auth_response(user, settings) -> AuthResponse:
+    _upsert_authenticated_user(user)
+    token = create_jwt_token(user, settings.jwt_secret)
+    logger.info(f"User {user.id} authenticated successfully, JWT token issued")
+    return AuthResponse(token=token, user=user)
+
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse()
@@ -760,43 +796,83 @@ async def authenticate(payload: AuthRequest):
         else:
             # Verify Telegram initData
             user = verify_telegram_init_data(payload.init_data, settings.bot_token)
-        
-        # Upsert user in database (create if new, update if exists)
-        # Only set first_name/last_name for NEW users, don't overwrite registered names
-        try:
-            client = get_supabase()
-            # Check if user already exists
-            existing = client.table("users").select("id,first_name").eq("id", user.id).limit(1).execute()
-            if existing.data:
-                # User exists - only update timestamp
-                client.table("users").update({
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }).eq("id", user.id).execute()
-            else:
-                # New user - create with Telegram names
-                user_data = {
-                    "id": user.id,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }
-                client.table("users").insert(user_data).execute()
-            logger.info(f"User {user.id} upserted in database")
-        except Exception as e:
-            # Don't fail auth if DB upsert fails - user can still use the app
-            logger.warning(f"Failed to upsert user {user.id} in database: {e}")
-        
-        # Create JWT token
-        token = create_jwt_token(user, settings.jwt_secret)
-        
-        logger.info(f"User {user.id} authenticated successfully, JWT token issued")
-        
-        return AuthResponse(
-            token=token,
-            user=user,
-        )
+        return _issue_auth_response(user, settings)
     except TelegramAuthError as exc:
         logger.warning(f"Authentication failed for initData: {exc}")
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@app.get("/api/auth/browser/challenge", response_model=TelegramBrowserAuthChallengeResponse)
+async def browser_auth_challenge(request: Request, response: Response):
+    settings = get_settings()
+    client_id = (settings.telegram_login_client_id or "").strip()
+
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Telegram browser login is not configured")
+
+    nonce = secrets.token_urlsafe(32)
+    challenge = create_telegram_login_challenge(
+        nonce=nonce,
+        secret=settings.jwt_secret,
+        ttl_seconds=settings.telegram_login_nonce_ttl_seconds,
+    )
+
+    response.set_cookie(
+        key=TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE,
+        value=challenge,
+        max_age=settings.telegram_login_nonce_ttl_seconds,
+        httponly=True,
+        samesite="lax",
+        secure=not settings.dev_mode,
+        path="/",
+    )
+
+    logger.info("Issued Telegram browser login challenge for %s from %s", request.client.host if request.client else "unknown", request.url.path)
+
+    return TelegramBrowserAuthChallengeResponse(
+        client_id=client_id,
+        nonce=nonce,
+        expires_in=settings.telegram_login_nonce_ttl_seconds,
+    )
+
+
+@app.post("/api/auth/browser", response_model=AuthResponse)
+async def authenticate_browser(payload: TelegramBrowserAuthRequest, request: Request, response: Response):
+    settings = get_settings()
+    client_id = (settings.telegram_login_client_id or "").strip()
+
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Telegram browser login is not configured")
+
+    challenge_cookie = request.cookies.get(TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE)
+    if not challenge_cookie:
+        raise HTTPException(status_code=401, detail="Missing Telegram login challenge")
+
+    try:
+        expected_nonce = verify_telegram_login_challenge(challenge_cookie, settings.jwt_secret)
+        user, received_nonce = verify_telegram_login_id_token(payload.id_token, client_id)
+
+        if not received_nonce or received_nonce != expected_nonce:
+            raise TelegramLoginError("Telegram login nonce mismatch")
+
+        auth_response = _issue_auth_response(user, settings)
+        response.delete_cookie(
+            key=TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE,
+            httponly=True,
+            samesite="lax",
+            secure=not settings.dev_mode,
+            path="/",
+        )
+        return auth_response
+    except TelegramLoginError as exc:
+        response.delete_cookie(
+            key=TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE,
+            httponly=True,
+            samesite="lax",
+            secure=not settings.dev_mode,
+            path="/",
+        )
+        logger.warning(f"Telegram browser authentication failed: {exc}")
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 

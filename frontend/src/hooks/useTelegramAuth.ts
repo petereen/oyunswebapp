@@ -1,4 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+  authenticateWithTelegramBrowserIdToken,
+  authenticateWithTelegramInitData,
+  fetchTelegramBrowserAuthChallenge,
+  type AuthSession,
+  type TelegramBrowserAuthChallenge,
+} from '../api';
 
 export interface TelegramUser {
   id: number;
@@ -13,6 +20,23 @@ interface AuthState {
   isAuthenticating: boolean;
   authError: string | null;
   token: string | null;
+  needsBrowserLogin: boolean;
+}
+
+interface TelegramLoginCallbackData {
+  id_token?: string;
+  error?: string;
+}
+
+interface TelegramLoginApi {
+  auth: (
+    options: {
+      client_id: string;
+      nonce: string;
+      lang?: 'mn' | 'ru';
+    },
+    callback: (result: TelegramLoginCallbackData) => void,
+  ) => void;
 }
 
 // Extend Window interface for Telegram WebApp
@@ -38,6 +62,7 @@ declare global {
           onClick: (callback: () => void) => void;
         };
       };
+      Login?: TelegramLoginApi;
     };
   }
 }
@@ -46,6 +71,10 @@ const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
 const USER_STORAGE_KEY = 'oyuns_user_v2';
 const INIT_DATA_STORAGE_KEY = 'oyuns_init_data_v2'; // cached for menu-button / refresh reopens
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
+const LANG_STORAGE_KEY = 'oyuns_lang';
+const TELEGRAM_LOGIN_SCRIPT_SRC = 'https://oauth.telegram.org/js/telegram-login.js?5';
+
+let telegramLoginScriptPromise: Promise<void> | null = null;
 
 // When telegram-web-app.js fails to load (ERR_CONNECTION_CLOSED), the SDK never parses
 // the URL hash. Extract initData from the hash directly as a fallback.
@@ -60,6 +89,117 @@ function getInitDataFromHash(): string {
   }
 }
 
+function getStoredLang(): 'mn' | 'ru' | undefined {
+  const stored = localStorage.getItem(LANG_STORAGE_KEY);
+  if (stored === 'mn' || stored === 'ru') {
+    return stored;
+  }
+  return undefined;
+}
+
+function createSignedOutState(overrides: Partial<AuthState> = {}): AuthState {
+  return {
+    initData: '',
+    user: null,
+    isAuthenticating: false,
+    authError: null,
+    token: null,
+    needsBrowserLogin: false,
+    ...overrides,
+  };
+}
+
+function normalizeBrowserLoginError(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Telegram browser login failed';
+  if (message === 'access_denied') {
+    return 'Telegram login was cancelled';
+  }
+  return message;
+}
+
+function loadTelegramLoginScript(): Promise<void> {
+  if (window.Telegram?.Login?.auth) {
+    return Promise.resolve();
+  }
+
+  if (telegramLoginScriptPromise) {
+    return telegramLoginScriptPromise;
+  }
+
+  telegramLoginScriptPromise = new Promise((resolve, reject) => {
+    const finishLoad = () => {
+      if (window.Telegram?.Login?.auth) {
+        resolve();
+      } else {
+        telegramLoginScriptPromise = null;
+        reject(new Error('Telegram login SDK did not initialize'));
+      }
+    };
+
+    const handleError = () => {
+      telegramLoginScriptPromise = null;
+      reject(new Error('Failed to load Telegram login SDK'));
+    };
+
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-telegram-login-sdk="true"]');
+    if (existingScript) {
+      if (existingScript.dataset.loaded === 'true') {
+        finishLoad();
+        return;
+      }
+      existingScript.addEventListener('load', finishLoad, { once: true });
+      existingScript.addEventListener('error', handleError, { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = TELEGRAM_LOGIN_SCRIPT_SRC;
+    script.async = true;
+    script.dataset.telegramLoginSdk = 'true';
+    script.addEventListener('load', () => {
+      script.dataset.loaded = 'true';
+      finishLoad();
+    }, { once: true });
+    script.addEventListener('error', handleError, { once: true });
+    document.head.appendChild(script);
+  });
+
+  return telegramLoginScriptPromise;
+}
+
+function openTelegramLoginPopup(challenge: TelegramBrowserAuthChallenge): Promise<TelegramLoginCallbackData> {
+  return new Promise((resolve, reject) => {
+    const loginApi = window.Telegram?.Login;
+    if (!loginApi?.auth) {
+      reject(new Error('Telegram browser login is unavailable'));
+      return;
+    }
+
+    loginApi.auth(
+      {
+        client_id: challenge.client_id,
+        nonce: challenge.nonce,
+        lang: getStoredLang(),
+      },
+      result => {
+        if (!result) {
+          reject(new Error('Telegram login did not return a response'));
+          return;
+        }
+        if (result.error) {
+          reject(new Error(result.error));
+          return;
+        }
+        if (!result.id_token) {
+          reject(new Error('Telegram login did not return an id_token'));
+          return;
+        }
+        resolve(result);
+      },
+    );
+  });
+}
+
 // Default dev user for local testing without Telegram
 const DEV_USER: TelegramUser = {
   id: 1932946217,
@@ -70,12 +210,37 @@ const DEV_USER: TelegramUser = {
 
 export function useTelegramAuth() {
   const [state, setState] = useState<AuthState>({
-    initData: '',
-    user: null,
+    ...createSignedOutState(),
     isAuthenticating: true,
-    authError: null,
-    token: null,
   });
+
+  const clearStoredAuth = useCallback(() => {
+    localStorage.removeItem(JWT_STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(INIT_DATA_STORAGE_KEY);
+  }, []);
+
+  const applyAuthenticatedState = useCallback((authData: AuthSession, initData = '') => {
+    localStorage.setItem(JWT_STORAGE_KEY, authData.token);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authData.user));
+    if (initData && !initData.startsWith('dev_mode_bypass')) {
+      localStorage.setItem(INIT_DATA_STORAGE_KEY, initData);
+    }
+
+    setState(createSignedOutState({
+      initData,
+      user: authData.user,
+      token: authData.token,
+    }));
+  }, []);
+
+  const requireBrowserLogin = useCallback((authError: string | null = null) => {
+    clearStoredAuth();
+    setState(createSignedOutState({
+      authError,
+      needsBrowserLogin: true,
+    }));
+  }, [clearStoredAuth]);
 
   const authenticate = useCallback(async (initData: string) => {
     try {
@@ -97,38 +262,9 @@ export function useTelegramAuth() {
       } catch (e) {
         console.warn('Debug endpoint failed:', e);
       }
-      
-      const response = await fetch(
-        (import.meta.env.VITE_API_BASE || '/api') + '/auth',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ init_data: initData }),
-        }
-      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Auth failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      // Store JWT and user in localStorage
-      localStorage.setItem(JWT_STORAGE_KEY, data.token);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
-      // Cache initData so menu-button / refresh reopens can replay it when Telegram sends empty initData
-      if (!initData.startsWith('dev_mode_bypass')) {
-        localStorage.setItem(INIT_DATA_STORAGE_KEY, initData);
-      }
-
-      setState({
-        initData,
-        user: data.user,
-        isAuthenticating: false,
-        authError: null,
-        token: data.token,
-      });
+      const data = await authenticateWithTelegramInitData(initData);
+      applyAuthenticatedState(data, initData);
 
       console.log('✅ Telegram auth successful:', data.user);
       return data;
@@ -144,7 +280,32 @@ export function useTelegramAuth() {
       
       throw error;
     }
-  }, []);
+  }, [applyAuthenticatedState]);
+
+  const startBrowserLogin = useCallback(async () => {
+    setState(prev => ({
+      ...prev,
+      isAuthenticating: true,
+      authError: null,
+      needsBrowserLogin: true,
+    }));
+
+    try {
+      const challenge = await fetchTelegramBrowserAuthChallenge();
+      await loadTelegramLoginScript();
+      const loginResult = await openTelegramLoginPopup(challenge);
+      const authData = await authenticateWithTelegramBrowserIdToken(loginResult.id_token || '');
+
+      applyAuthenticatedState(authData);
+      console.log('✅ Telegram browser login successful:', authData.user);
+      return authData;
+    } catch (error) {
+      const errorMessage = normalizeBrowserLoginError(error);
+      console.error('❌ Telegram browser login failed:', errorMessage);
+      requireBrowserLogin(errorMessage);
+      throw error;
+    }
+  }, [applyAuthenticatedState, requireBrowserLogin]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -225,11 +386,10 @@ export function useTelegramAuth() {
             localStorage.removeItem(USER_STORAGE_KEY);
           } else {
             setState({
-              initData: '',
-              user,
-              isAuthenticating: false,
-              authError: null,
-              token: storedToken,
+              ...createSignedOutState({
+                user,
+                token: storedToken,
+              }),
             });
             console.log('✅ Restored auth from localStorage:', user);
             return;
@@ -255,25 +415,15 @@ export function useTelegramAuth() {
         } catch {
           // Fallback to mock user without server auth
           setState({
-            initData: '',
-            user: devUser,
-            isAuthenticating: false,
-            authError: null,
-            token: null,
+            ...createSignedOutState({ user: devUser }),
           });
         }
         return;
       }
 
-      // PRIORITY 5: Production without Telegram context - show error
-      console.error('❌ No Telegram context and not in dev mode');
-      setState({
-        initData: '',
-        user: null,
-        isAuthenticating: false,
-        authError: 'Telegram-ээс нээнэ үү / Please open from Telegram',
-        token: null,
-      });
+      // PRIORITY 5: Production without Telegram context - show Telegram browser login
+      console.log('🌐 No Telegram initData available. Waiting for browser login...');
+      setState(createSignedOutState({ needsBrowserLogin: true }));
     };
 
     initAuth();
@@ -281,32 +431,26 @@ export function useTelegramAuth() {
 
   // Function to clear auth (logout)
   const clearAuth = useCallback(() => {
-    localStorage.removeItem(JWT_STORAGE_KEY);
-    localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem(INIT_DATA_STORAGE_KEY);
-    setState({
-      initData: '',
-      user: null,
-      isAuthenticating: false,
-      authError: null,
-      token: null,
-    });
-  }, []);
+    clearStoredAuth();
+    setState(createSignedOutState());
+  }, [clearStoredAuth]);
 
   // Function to re-authenticate (e.g., on 401 error)
   const refreshAuth = useCallback(async () => {
     const tg = window.Telegram?.WebApp;
-    if (tg?.initData) {
+    if (tg?.initData && tg.initData.length > 0) {
       setState(prev => ({ ...prev, isAuthenticating: true }));
       try {
         await authenticate(tg.initData);
       } catch {
         clearAuth();
       }
+    } else if (!DEV_MODE) {
+      requireBrowserLogin('Session expired. Sign in with Telegram again.');
     } else {
       clearAuth();
     }
-  }, [authenticate, clearAuth]);
+  }, [authenticate, clearAuth, requireBrowserLogin]);
 
   return {
     initData: state.initData,
@@ -314,7 +458,9 @@ export function useTelegramAuth() {
     isAuthenticating: state.isAuthenticating,
     authError: state.authError,
     token: state.token,
+    needsBrowserLogin: state.needsBrowserLogin,
     clearAuth,
     refreshAuth,
+    startBrowserLogin,
   };
 }

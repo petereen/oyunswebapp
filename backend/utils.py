@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, unquote
 import logging
 
+import requests
+
 try:
     from cryptography.hazmat.primitives.asymmetric import ed25519
     CRYPTO_AVAILABLE = True
@@ -25,10 +27,16 @@ logger = logging.getLogger("uvicorn.error")
 
 # Telegram's Ed25519 public key for production (from docs)
 TELEGRAM_PUBLIC_KEY_HEX = "e7bf03a2fa4602af4580703d88dda5bb59f32ed8b02a56c187fe7d34caed242d"
+TELEGRAM_LOGIN_ISSUER = "https://oauth.telegram.org"
+TELEGRAM_LOGIN_JWKS_URL = f"{TELEGRAM_LOGIN_ISSUER}/.well-known/jwks.json"
+TELEGRAM_LOGIN_JWKS_CACHE_SECONDS = 3600
 
 # JWT configuration
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+
+_telegram_login_jwks_cache: Optional[dict[str, Any]] = None
+_telegram_login_jwks_cache_expires_at: Optional[datetime] = None
 
 
 class TelegramAuthError(Exception):
@@ -36,6 +44,10 @@ class TelegramAuthError(Exception):
 
 
 class JWTAuthError(Exception):
+    pass
+
+
+class TelegramLoginError(Exception):
     pass
 
 
@@ -111,6 +123,158 @@ def verify_jwt_token(token: str, secret: str) -> AuthenticatedUser:
     except (KeyError, ValueError) as e:
         logger.warning(f"JWT payload parsing failed: {e}")
         raise JWTAuthError(f"Invalid token payload: {e}")
+
+
+def create_telegram_login_challenge(nonce: str, secret: str, ttl_seconds: int) -> str:
+    """Create a short-lived signed challenge bound to a browser login nonce."""
+    if not JWT_AVAILABLE:
+        raise TelegramLoginError("JWT library not available")
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "purpose": "telegram_browser_login",
+        "nonce": nonce,
+        "iat": now,
+        "exp": now + timedelta(seconds=ttl_seconds),
+    }
+    return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
+
+
+def verify_telegram_login_challenge(token: str, secret: str) -> str:
+    """Verify a short-lived signed challenge and return the expected nonce."""
+    if not token:
+        raise TelegramLoginError("Missing Telegram login challenge")
+
+    try:
+        payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
+    except JWTError as exc:
+        raise TelegramLoginError(f"Invalid or expired Telegram login challenge: {exc}") from exc
+
+    if payload.get("purpose") != "telegram_browser_login":
+        raise TelegramLoginError("Invalid Telegram login challenge purpose")
+
+    nonce = payload.get("nonce")
+    if not nonce or not isinstance(nonce, str):
+        raise TelegramLoginError("Telegram login challenge is missing a nonce")
+
+    return nonce
+
+
+def verify_telegram_login_id_token(id_token: str, client_id: str) -> tuple[AuthenticatedUser, Optional[str]]:
+    """Validate Telegram Login/OIDC id_token using Telegram's JWKS endpoint."""
+    if not JWT_AVAILABLE:
+        raise TelegramLoginError("JWT library not available")
+    if not id_token:
+        raise TelegramLoginError("Telegram id_token is required")
+    if not client_id:
+        raise TelegramLoginError("Telegram browser login is not configured")
+
+    try:
+        header = jwt.get_unverified_header(id_token)
+    except JWTError as exc:
+        raise TelegramLoginError(f"Invalid Telegram id_token header: {exc}") from exc
+
+    key_id = header.get("kid")
+    algorithm = header.get("alg")
+    if not key_id or not algorithm:
+        raise TelegramLoginError("Telegram id_token is missing kid or alg")
+
+    jwk_key = _find_telegram_login_jwk(key_id)
+
+    try:
+        claims = jwt.decode(
+            id_token,
+            jwk_key,
+            algorithms=[algorithm],
+            audience=client_id,
+            issuer=TELEGRAM_LOGIN_ISSUER,
+            options={
+                "require_aud": True,
+                "require_exp": True,
+                "require_iat": True,
+                "require_iss": True,
+                "leeway": 30,
+            },
+        )
+    except JWTError as exc:
+        raise TelegramLoginError(f"Invalid Telegram id_token: {exc}") from exc
+
+    raw_user_id = claims.get("id")
+    if raw_user_id is None:
+        raise TelegramLoginError("Telegram id_token is missing the user id")
+
+    try:
+        user_id = int(raw_user_id)
+    except (TypeError, ValueError) as exc:
+        raise TelegramLoginError("Telegram id_token contains an invalid user id") from exc
+
+    display_name = claims.get("given_name") or claims.get("name")
+    username = claims.get("preferred_username") or claims.get("username")
+
+    return (
+        AuthenticatedUser(
+            id=user_id,
+            first_name=display_name,
+            last_name=claims.get("family_name"),
+            username=username,
+        ),
+        claims.get("nonce"),
+    )
+
+
+def _find_telegram_login_jwk(key_id: str) -> dict[str, Any]:
+    jwks = _get_telegram_login_jwks()
+    key = _find_jwk_in_set(jwks, key_id)
+    if key:
+        return key
+
+    jwks = _get_telegram_login_jwks(force_refresh=True)
+    key = _find_jwk_in_set(jwks, key_id)
+    if key:
+        return key
+
+    raise TelegramLoginError("Telegram login signing key was not found")
+
+
+def _find_jwk_in_set(jwks: dict[str, Any], key_id: str) -> Optional[dict[str, Any]]:
+    keys = jwks.get("keys")
+    if not isinstance(keys, list):
+        return None
+
+    for key in keys:
+        if isinstance(key, dict) and key.get("kid") == key_id:
+            return key
+    return None
+
+
+def _get_telegram_login_jwks(force_refresh: bool = False) -> dict[str, Any]:
+    global _telegram_login_jwks_cache
+    global _telegram_login_jwks_cache_expires_at
+
+    now = datetime.now(timezone.utc)
+    if (
+        not force_refresh
+        and _telegram_login_jwks_cache is not None
+        and _telegram_login_jwks_cache_expires_at is not None
+        and now < _telegram_login_jwks_cache_expires_at
+    ):
+        return _telegram_login_jwks_cache
+
+    try:
+        response = requests.get(TELEGRAM_LOGIN_JWKS_URL, timeout=5)
+        response.raise_for_status()
+        jwks = response.json()
+    except requests.RequestException as exc:
+        raise TelegramLoginError(f"Unable to fetch Telegram login keys: {exc}") from exc
+    except ValueError as exc:
+        raise TelegramLoginError(f"Telegram login keys response is not valid JSON: {exc}") from exc
+
+    if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list):
+        raise TelegramLoginError("Telegram login keys response is invalid")
+
+    _telegram_login_jwks_cache = jwks
+    _telegram_login_jwks_cache_expires_at = now + timedelta(seconds=TELEGRAM_LOGIN_JWKS_CACHE_SECONDS)
+    return jwks
 
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> AuthenticatedUser:
