@@ -1671,6 +1671,9 @@ export type DashboardTransaction = {
   status: string | null;
   promo_code: string | null;
   bank_details: string | null;
+  completed_by_admin: number | null;
+  admin_name: string | null;
+  duration_minutes: number | null;
 };
 
 export type DashboardSummary = {
@@ -1688,6 +1691,15 @@ export type DashboardSummary = {
   sell_volume_rub: number;
   unique_users: number;
   avg_transaction_rub: number;
+  avg_duration_minutes: number | null;
+};
+
+export type DashboardAdminStat = {
+  admin_id: number;
+  admin_name: string | null;
+  count: number;
+  volume_rub: number;
+  avg_duration_minutes: number | null;
 };
 
 export type DashboardData = {
@@ -1696,10 +1708,15 @@ export type DashboardData = {
   direction_breakdown: { direction: "buy" | "sell"; count: number; volume_rub: number }[];
   time_series: { period: string; buy_volume_rub: number; sell_volume_rub: number; count: number }[];
   top_users: { user_id: number; user_name: string | null; count: number; volume_rub: number }[];
+  admin_stats: DashboardAdminStat[];
+  admins: { admin_id: number; name: string | null }[];
   transactions: DashboardTransaction[];
   row_count: number;
+  window_count: number;
   truncated: boolean;
 };
+
+export type DashboardStatusFilter = "all" | "successful" | "pending" | "waiting_edit" | "rejected";
 
 export async function verifyDashboardKey(): Promise<boolean> {
   try {
@@ -1714,11 +1731,15 @@ export async function fetchDashboardData(params: {
   start?: string;
   end?: string;
   granularity?: "day" | "month";
+  status?: DashboardStatusFilter;
+  admin_id?: number;
 }): Promise<DashboardData> {
   const search = new URLSearchParams();
   if (params.start) search.set("start", params.start);
   if (params.end) search.set("end", params.end);
   if (params.granularity) search.set("granularity", params.granularity);
+  if (params.status && params.status !== "all") search.set("status", params.status);
+  if (params.admin_id != null) search.set("admin_id", String(params.admin_id));
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/transactions${query ? `?${query}` : ""}`);
   return res.data as DashboardData;
