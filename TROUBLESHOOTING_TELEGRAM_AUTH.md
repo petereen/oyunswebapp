@@ -110,8 +110,9 @@
 
 2. If you intentionally opened the site in Chrome / Safari / Firefox:
    - Use the standalone Telegram Login button on the home screen
-   - Confirm BotFather `Web Login` Allowed URLs include your site origin
+   - Confirm BotFather `Web Login` Allowed URLs include your site origin and the exact redirect URI used by the popup
    - Confirm `TELEGRAM_LOGIN_CLIENT_ID` is configured on the backend
+   - If `VITE_TELEGRAM_LOGIN_REDIRECT_URI` is set, confirm it exactly matches the BotFather entry
 
 3. Don't use browser DevTools:
    - Use Telegram's built-in DevTools instead
@@ -149,7 +150,7 @@
 
 4. **If you are outside Telegram:**
    - Ignore `initData` debugging and use the browser login button instead
-   - If the browser button fails immediately, check `TELEGRAM_LOGIN_CLIENT_ID` and BotFather `Web Login` Allowed URLs
+   - If the browser button fails immediately, check `TELEGRAM_LOGIN_CLIENT_ID`, BotFather `Web Login` Allowed URLs, and the exact redirect URI/trailing slash used by the frontend
 
 ### Issue 3: "User data: Missing"
 
@@ -184,10 +185,11 @@
 
 ### Test 1: Local Browser (browser login path)
 
-1. Configure BotFather `Web Login` Allowed URLs for your local dev origin
+1. Configure BotFather `Web Login` Allowed URLs for your local dev origin and exact popup redirect URI
 2. Set `TELEGRAM_LOGIN_CLIENT_ID` in the backend environment
-3. Open the app in a normal browser
-4. Click the Telegram login button on the home screen
+3. If needed, set `VITE_TELEGRAM_LOGIN_REDIRECT_URI` in the frontend environment to that exact BotFather callback URL
+4. Open the app in a normal browser
+5. Click the Telegram login button on the home screen
 5. Confirm `/api/auth/browser/challenge` succeeds before the popup opens
 6. Confirm `/api/auth/browser` returns the same app JWT shape as `/api/auth`
 
@@ -236,7 +238,7 @@ Open Console and look for API requests:
 | Status | Problem | Solution |
 |--------|---------|----------|
 | 401 | Missing / invalid Mini App auth | Check `useTelegramAuth()` is sending valid `initData` inside Telegram |
-| 401 | Invalid browser login nonce or `id_token` | Refresh the page, start a new browser login, and confirm BotFather Web Login setup |
+| 401 | Invalid browser login nonce or `id_token` | Refresh the page, start a new browser login, and confirm BotFather Web Login setup, including the exact redirect URI |
 | 400 | Bad request | Check request format, API expects correct headers |
 | 500 | Server error | Check backend logs with `docker logs oyunsbot-api` |
 
@@ -250,8 +252,9 @@ Open Console and look for API requests:
 - [ ] Console shows "=== Telegram Auth Debug ===" with ✅ values
 - [ ] User ID visible in console (e.g., `1932946217`)
 - [ ] initData present and >100 characters
-- [ ] BotFather `Web Login` Allowed URLs include the current origin
+- [ ] BotFather `Web Login` Allowed URLs include the current origin and exact redirect URI used by the frontend popup
 - [ ] `TELEGRAM_LOGIN_CLIENT_ID` is set on the backend
+- [ ] `VITE_TELEGRAM_LOGIN_REDIRECT_URI` matches the BotFather redirect entry when it is set
 - [ ] Admin panel button visible for admin users
 - [ ] `/api/auth/browser/challenge` succeeds in normal browsers
 - [ ] API responses return 200 (not 401)

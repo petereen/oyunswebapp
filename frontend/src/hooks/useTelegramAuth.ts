@@ -28,15 +28,10 @@ interface TelegramLoginCallbackData {
   error?: string;
 }
 
-interface TelegramLoginApi {
-  auth: (
-    options: {
-      client_id: string;
-      nonce: string;
-      lang?: 'mn' | 'ru';
-    },
-    callback: (result: TelegramLoginCallbackData) => void,
-  ) => void;
+interface TelegramLoginPopupMessage {
+  event?: string;
+  result?: string;
+  error?: string;
 }
 
 // Extend Window interface for Telegram WebApp
@@ -62,7 +57,6 @@ declare global {
           onClick: (callback: () => void) => void;
         };
       };
-      Login?: TelegramLoginApi;
     };
   }
 }
@@ -72,9 +66,9 @@ const USER_STORAGE_KEY = 'oyuns_user_v2';
 const INIT_DATA_STORAGE_KEY = 'oyuns_init_data_v2'; // cached for menu-button / refresh reopens
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 const LANG_STORAGE_KEY = 'oyuns_lang';
-const TELEGRAM_LOGIN_SCRIPT_SRC = 'https://oauth.telegram.org/js/telegram-login.js?5';
-
-let telegramLoginScriptPromise: Promise<void> | null = null;
+const TELEGRAM_LOGIN_ORIGIN = 'https://oauth.telegram.org';
+const TELEGRAM_LOGIN_URL = `${TELEGRAM_LOGIN_ORIGIN}/auth`;
+const TELEGRAM_LOGIN_REDIRECT_URI = import.meta.env.VITE_TELEGRAM_LOGIN_REDIRECT_URI?.trim();
 
 // When telegram-web-app.js fails to load (ERR_CONNECTION_CLOSED), the SDK never parses
 // the URL hash. Extract initData from the hash directly as a fallback.
@@ -111,92 +105,162 @@ function createSignedOutState(overrides: Partial<AuthState> = {}): AuthState {
 
 function normalizeBrowserLoginError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Telegram browser login failed';
-  if (message === 'access_denied') {
+  if (message === 'access_denied' || message === 'popup_closed') {
     return 'Telegram login was cancelled';
+  }
+  if (message === 'popup_blocked') {
+    return 'Allow popups and try Telegram login again';
   }
   return message;
 }
 
-function loadTelegramLoginScript(): Promise<void> {
-  if (window.Telegram?.Login?.auth) {
-    return Promise.resolve();
+function getTelegramLoginRedirectUri(): string {
+  if (TELEGRAM_LOGIN_REDIRECT_URI) {
+    return TELEGRAM_LOGIN_REDIRECT_URI;
   }
+  return new URL(import.meta.env.BASE_URL || '/', window.location.origin).toString();
+}
 
-  if (telegramLoginScriptPromise) {
-    return telegramLoginScriptPromise;
-  }
-
-  telegramLoginScriptPromise = new Promise((resolve, reject) => {
-    const finishLoad = () => {
-      if (window.Telegram?.Login?.auth) {
-        resolve();
-      } else {
-        telegramLoginScriptPromise = null;
-        reject(new Error('Telegram login SDK did not initialize'));
-      }
-    };
-
-    const handleError = () => {
-      telegramLoginScriptPromise = null;
-      reject(new Error('Failed to load Telegram login SDK'));
-    };
-
-    const existingScript = document.querySelector<HTMLScriptElement>('script[data-telegram-login-sdk="true"]');
-    if (existingScript) {
-      if (existingScript.dataset.loaded === 'true') {
-        finishLoad();
-        return;
-      }
-      existingScript.addEventListener('load', finishLoad, { once: true });
-      existingScript.addEventListener('error', handleError, { once: true });
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = TELEGRAM_LOGIN_SCRIPT_SRC;
-    script.async = true;
-    script.dataset.telegramLoginSdk = 'true';
-    script.addEventListener('load', () => {
-      script.dataset.loaded = 'true';
-      finishLoad();
-    }, { once: true });
-    script.addEventListener('error', handleError, { once: true });
-    document.head.appendChild(script);
+function buildTelegramLoginUrl(challenge: TelegramBrowserAuthChallenge): string {
+  const params = new URLSearchParams({
+    response_type: 'post_message',
+    client_id: challenge.client_id,
+    redirect_uri: getTelegramLoginRedirectUri(),
+    scope: 'openid profile',
   });
+  params.set('nonce', challenge.nonce);
 
-  return telegramLoginScriptPromise;
+  const lang = getStoredLang();
+  if (lang) {
+    params.set('lang', lang);
+  }
+
+  return `${TELEGRAM_LOGIN_URL}?${params.toString()}`;
+}
+
+function parseTelegramLoginMessage(data: unknown): TelegramLoginCallbackData | null {
+  let parsed = data;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed) as TelegramLoginPopupMessage;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
+  const message = parsed as TelegramLoginPopupMessage;
+  if (message.event !== 'auth_result') {
+    return null;
+  }
+  if (message.error) {
+    return { error: message.error };
+  }
+  if (!message.result || typeof message.result !== 'string') {
+    return { error: 'missing id_token' };
+  }
+
+  return { id_token: message.result };
+}
+
+function getTelegramLoginPopupFeatures(): string {
+  const width = 550;
+  const height = 650;
+  const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+  const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+
+  return [
+    `width=${width}`,
+    `height=${height}`,
+    `left=${left}`,
+    `top=${top}`,
+    'status=0',
+    'location=0',
+    'menubar=0',
+    'toolbar=0',
+  ].join(',');
 }
 
 function openTelegramLoginPopup(challenge: TelegramBrowserAuthChallenge): Promise<TelegramLoginCallbackData> {
   return new Promise((resolve, reject) => {
-    const loginApi = window.Telegram?.Login;
-    if (!loginApi?.auth) {
-      reject(new Error('Telegram browser login is unavailable'));
+    let popup: Window | null = null;
+    let settled = false;
+    let closeCheck: number | null = null;
+
+    const cleanup = () => {
+      window.removeEventListener('message', handleMessage);
+      if (closeCheck !== null) {
+        window.clearInterval(closeCheck);
+      }
+    };
+
+    const finish = (result?: TelegramLoginCallbackData, error?: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+
+      if (popup && !popup.closed) {
+        popup.close();
+      }
+
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      if (!result?.id_token) {
+        reject(new Error('Telegram login did not return an id_token'));
+        return;
+      }
+
+      resolve(result);
+    };
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== TELEGRAM_LOGIN_ORIGIN) {
+        return;
+      }
+      if (popup && event.source !== popup) {
+        return;
+      }
+
+      const result = parseTelegramLoginMessage(event.data);
+      if (!result) {
+        return;
+      }
+      if (result.error) {
+        finish(undefined, new Error(result.error));
+        return;
+      }
+
+      finish(result);
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    popup = window.open(
+      buildTelegramLoginUrl(challenge),
+      'telegram_oidc_login',
+      getTelegramLoginPopupFeatures(),
+    );
+
+    if (!popup) {
+      cleanup();
+      reject(new Error('popup_blocked'));
       return;
     }
 
-    loginApi.auth(
-      {
-        client_id: challenge.client_id,
-        nonce: challenge.nonce,
-        lang: getStoredLang(),
-      },
-      result => {
-        if (!result) {
-          reject(new Error('Telegram login did not return a response'));
-          return;
-        }
-        if (result.error) {
-          reject(new Error(result.error));
-          return;
-        }
-        if (!result.id_token) {
-          reject(new Error('Telegram login did not return an id_token'));
-          return;
-        }
-        resolve(result);
-      },
-    );
+    popup.focus();
+    closeCheck = window.setInterval(() => {
+      if (popup?.closed) {
+        finish(undefined, new Error('popup_closed'));
+      }
+    }, 200);
   });
 }
 
@@ -292,7 +356,6 @@ export function useTelegramAuth() {
 
     try {
       const challenge = await fetchTelegramBrowserAuthChallenge();
-      await loadTelegramLoginScript();
       const loginResult = await openTelegramLoginPopup(challenge);
       const authData = await authenticateWithTelegramBrowserIdToken(loginResult.id_token || '');
 

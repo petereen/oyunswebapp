@@ -121,7 +121,7 @@ Key buckets: `passports`, `bills`.
 - Key services: Docker Compose, Nginx, Certbot, backend container on 8000, frontend container on 80, and the bot container for legacy Telegram flows.
 - Compose ports: Nginx publishes 8080 and 8443 in the default file.
 - Local development: backend starts with Uvicorn, frontend runs with Vite on 5173, and the frontend dev server proxies `/api` to `http://localhost:8000`.
-- Browser login setup: Telegram browser login also requires BotFather Web Login Allowed URLs for every deployed origin that will host the app, plus `TELEGRAM_LOGIN_CLIENT_ID` in the backend environment.
+- Browser login setup: Telegram browser login also requires BotFather Web Login Allowed URLs for every deployed origin and exact redirect URI that will be used by the popup, plus `TELEGRAM_LOGIN_CLIENT_ID` in the backend environment. If you need to pin the popup to one canonical callback URL, set `VITE_TELEGRAM_LOGIN_REDIRECT_URI` in the frontend environment so it matches BotFather exactly, including path and trailing slash.
 - CI/CD: no formal pipeline is defined in the repo; deployment is script-driven with `deploy.sh`, `init-letsencrypt.sh`, and the `VPS_*.md` runbooks.
 - Monitoring and logging: FastAPI/Uvicorn logs and Telegram API request logs; there is no dedicated metrics stack in the repo.
 
