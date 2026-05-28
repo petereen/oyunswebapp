@@ -1,9 +1,9 @@
 # Connecting a Google Sheets cell (black rate / а ханш)
 
 The profit calculator reads the daily **black rate (а ханш)** from a Google
-Sheet. You chose the **API-key (public sheet)** method. This is the simplest
-robust option: the sheet is readable by anyone with the link, and the backend
-reads it with a restricted Google Sheets API key.
+Sheet. This project now uses a **Google service account JSON key file** for
+authentication. The sheet can stay private; the backend signs requests with
+that service account and reads the configured columns through the Sheets API.
 
 The sheet is read as a **date column + a rate column**, and optionally a
 **status column** that marks which rows are rate rows. For each matching row
@@ -37,17 +37,21 @@ Notes:
 - A plain date+rate sheet with no status column? Set
   `BLACK_RATE_STATUS_COLUMN=` (empty) to disable the filter.
 
-## 2. Make the sheet readable
-
-`Share` → **General access** → "Anyone with the link" → **Viewer**.
-
-## 3. Create an API key
+## 2. Create a service account and JSON key
 
 1. Go to <https://console.cloud.google.com/> → create / pick a project.
 2. **APIs & Services → Library →** enable **Google Sheets API**.
-3. **APIs & Services → Credentials → Create credentials → API key**.
-4. (Recommended) **Restrict key** → API restrictions → allow only
-   **Google Sheets API**.
+3. **IAM & Admin → Service Accounts → Create service account**.
+4. Give it any name you want, then open that service account.
+5. **Keys → Add key → Create new key → JSON**.
+6. Download the JSON file and store it somewhere outside version control.
+
+## 3. Share the sheet with that service account
+
+Open the sheet, press **Share**, and add the service account email from the
+downloaded JSON file (`client_email`) as a **Viewer**.
+
+The sheet does **not** need to be public anymore.
 
 ## 4. Find the spreadsheet id
 
@@ -61,7 +65,7 @@ https://docs.google.com/spreadsheets/d/1AbCDeFGhIJkLmNoPQRstUVwxyz0123456789/edi
 ## 5. Set environment variables (backend `.env`)
 
 ```env
-GOOGLE_SHEETS_API_KEY=AIza...your_key...
+GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE=./secrets/oyuns-finance-f04dd10e19d5.json
 BLACK_RATE_SPREADSHEET_ID=1AbCDeFGhIJkLmNoPQRstUVwxyz0123456789
 BLACK_RATE_SHEET_NAME=Sheet1     # the tab name
 BLACK_RATE_DATE_COLUMN=B
@@ -70,6 +74,16 @@ BLACK_RATE_HEADER_ROWS=1
 BLACK_RATE_STATUS_COLUMN=E       # column E "Төлөв"
 BLACK_RATE_STATUS_VALUE=Ханш     # rows where Төлөв == "Ханш"
 ```
+
+Notes:
+- `GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE` may be absolute or relative.
+- Relative paths are resolved against the current working directory first, then
+  near the backend source.
+- If you use Docker Compose in this repo, put the JSON file under the repo-root
+  `secrets/` folder. `docker-compose.yml` mounts that folder into `/app/secrets`
+  inside the `api` container, so a value like
+  `./secrets/oyuns-finance-f04dd10e19d5.json` works in both local and Compose
+  runs.
 
 Restart the backend after changing these.
 
@@ -86,7 +100,8 @@ Restart the backend after changing these.
 
 ## Under the hood
 
-The backend calls the public Sheets REST endpoint:
+The backend calls the Sheets REST endpoint with a bearer token minted from the
+service-account JSON key:
 
 ```
 GET https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values:batchGet
@@ -95,18 +110,9 @@ GET https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values:batchG
     &ranges=Sheet1!E:E          # status (Төлөв), used to keep only "Ханш" rows
     &majorDimension=COLUMNS
     &valueRenderOption=FORMATTED_VALUE
-    &key={API_KEY}
+Authorization: Bearer {SERVICE_ACCOUNT_ACCESS_TOKEN}
 ```
 
 To read a single fixed cell instead of a column you would request a range
 like `Sheet1!B2` — but for per-date history the date+rate columns are read so
 any date can be looked up. See `backend/google_sheets.py`.
-
-## Switching to a fully private sheet later
-
-If you'd rather not make the sheet public, swap the API key for a Google
-**service account**: create one, download its JSON key, share the sheet with
-the service account's email, and have the backend sign requests with that key
-(via `google-api-python-client` / `gspread`). The reading logic in
-`backend/google_sheets.py` stays the same — only the auth on the request
-changes.

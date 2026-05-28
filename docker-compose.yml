@@ -5,6 +5,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     env_file: .env
+    volumes:
+      - ./secrets:/app/secrets:ro
     restart: unless-stopped
 
   bot:

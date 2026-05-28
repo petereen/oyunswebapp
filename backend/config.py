@@ -39,7 +39,7 @@ class Settings:
     # Standalone analytics dashboard (no Telegram auth)
     dashboard_api_key: str | None = None
     # Google Sheets black-rate (а ханш) integration for the profit calculator
-    google_sheets_api_key: str | None = None
+    google_sheets_service_account_file: str | None = None
     black_rate_spreadsheet_id: str | None = None
     black_rate_sheet_name: str = "Sheet1"
     black_rate_date_column: str = "B"
@@ -83,7 +83,11 @@ def get_settings() -> Settings:
     dashboard_api_key = os.getenv("DASHBOARD_API_KEY", "oyuns-dashboard-2026")
 
     # Google Sheets black-rate integration (profit calculator)
-    google_sheets_api_key = os.getenv("GOOGLE_SHEETS_API_KEY", "").strip().strip('"').strip("'") or None
+    google_sheets_service_account_file = (
+        os.getenv("GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE", "").strip().strip('"').strip("'")
+        or os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip().strip('"').strip("'")
+        or None
+    )
     black_rate_spreadsheet_id = os.getenv("BLACK_RATE_SPREADSHEET_ID", "").strip().strip('"').strip("'") or None
     black_rate_sheet_name = os.getenv("BLACK_RATE_SHEET_NAME", "Sheet1").strip().strip('"').strip("'") or "Sheet1"
     black_rate_date_column = os.getenv("BLACK_RATE_DATE_COLUMN", "B").strip().strip('"').strip("'") or "B"
@@ -171,7 +175,7 @@ def get_settings() -> Settings:
         fuel_admin_chat_ids=fuel_admin_chat_ids,
         oyuns_sags_admin_api_key=oyuns_sags_admin_api_key,
         dashboard_api_key=dashboard_api_key,
-        google_sheets_api_key=google_sheets_api_key,
+        google_sheets_service_account_file=google_sheets_service_account_file,
         black_rate_spreadsheet_id=black_rate_spreadsheet_id,
         black_rate_sheet_name=black_rate_sheet_name,
         black_rate_date_column=black_rate_date_column,

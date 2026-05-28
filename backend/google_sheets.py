@@ -1,12 +1,14 @@
-"""Read the daily "black rate" (а ханш) from a public Google Sheet.
+"""Read the daily "black rate" (а ханш) from a Google Sheet.
 
 The sheet is expected to be laid out as a date column + a rate column
 (for example column A = date, column B = black rate). The sheet must be
-shared as "Anyone with the link can view" and a Google Sheets API key must
-be configured. See GOOGLE_SHEETS_SETUP.md for the full walkthrough.
+shared with a Google service account that has at least Viewer access, and the
+downloaded service-account JSON key file must be configured. See
+GOOGLE_SHEETS_SETUP.md for the full walkthrough.
 
 Configuration (environment variables):
-  GOOGLE_SHEETS_API_KEY        Google API key restricted to the Sheets API
+    GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE
+                                                                path to the service-account JSON key file
   BLACK_RATE_SPREADSHEET_ID    the long id from the sheet URL (.../d/<ID>/edit)
   BLACK_RATE_SHEET_NAME        tab name (default "Sheet1")
   BLACK_RATE_DATE_COLUMN       column letter holding dates (default "A")
@@ -17,12 +19,17 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
 
 import requests
+from google.auth.transport.requests import AuthorizedSession
+from google.oauth2 import service_account
 
 from config import get_settings
 
 _API_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
+_SCOPES = ("https://www.googleapis.com/auth/spreadsheets.readonly",)
 
 # Date formats we attempt when normalising whatever the sheet cell contains.
 _DATE_FORMATS = (
@@ -33,7 +40,44 @@ _DATE_FORMATS = (
 
 def is_black_rate_configured() -> bool:
     s = get_settings()
-    return bool(s.google_sheets_api_key and s.black_rate_spreadsheet_id)
+    return bool(s.google_sheets_service_account_file and s.black_rate_spreadsheet_id)
+
+
+def _resolve_service_account_file(raw_path: str) -> Path:
+    path = Path(raw_path).expanduser()
+    if path.is_absolute():
+        candidates = (path,)
+    else:
+        backend_dir = Path(__file__).resolve().parent
+        candidates = (
+            Path.cwd() / path,
+            backend_dir / path,
+            backend_dir.parent / path,
+        )
+
+    checked: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve(strict=False)
+        if resolved in checked:
+            continue
+        checked.add(resolved)
+        if resolved.is_file():
+            return resolved
+
+    attempted = ", ".join(str(path.resolve(strict=False)) for path in checked)
+    raise RuntimeError(
+        "Google Sheets service-account file was not found. "
+        f"Checked: {attempted}"
+    )
+
+
+@lru_cache(maxsize=4)
+def _get_authorized_session(raw_path: str) -> AuthorizedSession:
+    credentials = service_account.Credentials.from_service_account_file(
+        str(_resolve_service_account_file(raw_path)),
+        scopes=_SCOPES,
+    )
+    return AuthorizedSession(credentials)
 
 
 def _normalize_date(raw: str) -> str | None:
@@ -109,9 +153,9 @@ def fetch_black_rates() -> dict[str, float]:
     params += [
         ("majorDimension", "COLUMNS"),
         ("valueRenderOption", "FORMATTED_VALUE"),
-        ("key", s.google_sheets_api_key),
     ]
-    resp = requests.get(url, params=params, timeout=15)
+    session = _get_authorized_session(s.google_sheets_service_account_file or "")
+    resp = session.get(url, params=params, timeout=15)
     resp.raise_for_status()
     payload = resp.json()
     ranges = payload.get("valueRanges", [])

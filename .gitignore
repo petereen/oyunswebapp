@@ -43,6 +43,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+secrets/*
+!secrets/.gitkeep
 
 # Frontend
 node_modules/
