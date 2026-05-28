@@ -401,18 +401,18 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
     <div className="space-y-5">
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard icon={<Wallet className="w-4 h-4" />} label="Нийт эргэлт" value={fmtRub(s.total_volume_rub)} sub={`${fmtNum(s.valid_count)} идэвхтэй гүйлгээ`} />
-        <StatCard icon={<Activity className="w-4 h-4" />} label="Амжилттай эргэлт" value={fmtRub(s.completed_volume_rub)} sub={`${fmtNum(s.completed_count)} амжилттай`} accent="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" />
-        <StatCard icon={<BarChart3 className="w-4 h-4" />} label="Нийт гүйлгээ" value={fmtNum(s.total_count)} sub={`дундаж ${fmtRub(s.avg_transaction_rub)}`} />
+        <StatCard icon={<Wallet className="w-4 h-4" />} label="Нийт гүйлгээний дүн" value={fmtRub(s.total_volume_rub)} sub={`${fmtNum(s.valid_count)} идэвхтэй гүйлгээ`} />
+        <StatCard icon={<Activity className="w-4 h-4" />} label="Амжилттай гүйлгээ" value={fmtRub(s.completed_volume_rub)} sub={`${fmtNum(s.completed_count)} амжилттай`} accent="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" />
+        <StatCard icon={<BarChart3 className="w-4 h-4" />} label="Нийт гүйлгээний тоо" value={fmtNum(s.total_count)} sub={`дундаж ${fmtRub(s.avg_transaction_rub)}`} />
         <StatCard icon={<Clock className="w-4 h-4" />} label="Дундаж хугацаа" value={fmtDuration(s.avg_duration_minutes)} sub="амжилттай гүйлгээ" accent="bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400" />
         <StatCard icon={<ArrowDownLeft className="w-4 h-4" />} label="Авах (RUB→MNT)" value={fmtRub(s.buy_volume_rub)} sub={`${fmtNum(s.buy_count)} гүйлгээ`} accent="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" />
         <StatCard icon={<ArrowUpRight className="w-4 h-4" />} label="Зарах (MNT→RUB)" value={fmtRub(s.sell_volume_rub)} sub={`${fmtNum(s.sell_count)} гүйлгээ`} accent="bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400" />
-        <StatCard icon={<Users className="w-4 h-4" />} label="Хэрэглэгчид" value={fmtNum(s.unique_users)} sub={`${fmtNum(s.pending_count)} хүлээгдэж буй`} accent="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" />
-        <StatCard icon={<Gauge className="w-4 h-4" />} label="Цуцлагдсан" value={fmtNum(s.rejected_count)} sub={`${fmtNum(s.waiting_edit_count)} засвар хүлээж буй`} accent="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400" />
+        <StatCard icon={<Users className="w-4 h-4" />} label="Нийт хэрэглэгчид(давхцаагүй тоогоор)" value={fmtNum(s.unique_users)} sub={`${fmtNum(s.pending_count)} хүлээгдэж буй`} accent="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" />
+        <StatCard icon={<Gauge className="w-4 h-4" />} label="Цуцлагдсан гүйлгээ" value={fmtNum(s.rejected_count)} sub={`${fmtNum(s.waiting_edit_count)} засвар хүлээж буй`} accent="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400" />
       </div>
 
       {/* Volume over time */}
-      <ChartCard title="Эргэлт (RUB) хугацаагаар" icon={<TrendingUp className="w-4 h-4" />}>
+      <ChartCard title="Гүйлгээний дүн (RUB) хугацаагаар" icon={<TrendingUp className="w-4 h-4" />}>
         {data.time_series.length === 0 ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={data.time_series}>
@@ -480,9 +480,9 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
                 <thead>
                   <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
                     <th className="py-2 pr-2 font-medium">Админ</th>
-                    <th className="py-2 px-2 font-medium text-right">Амжилттай</th>
+                    <th className="py-2 px-2 font-medium text-right">Амжилттай гүйлгээ</th>
                     <th className="py-2 px-2 font-medium text-right">Дундаж хугацаа</th>
-                    <th className="py-2 pl-2 font-medium text-right">Эргэлт</th>
+                    <th className="py-2 pl-2 font-medium text-right">Гүйлгээний дүн</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -523,14 +523,14 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
 
       {/* Top users */}
       {data.top_users.length > 0 && (
-        <ChartCard title="Эргэлтээр тэргүүлэгч хэрэглэгчид" icon={<Users className="w-4 h-4" />}>
+        <ChartCard title="Гүйлгээний дүнгээр тэргүүлэгч хэрэглэгчид" icon={<Users className="w-4 h-4" />}>
           <ResponsiveContainer width="100%" height={Math.max(160, data.top_users.length * 34)}>
             <BarChart data={data.top_users} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11, fill: axisColor }} tickFormatter={(v: number) => fmtNum(v)} />
               <YAxis type="category" dataKey="user_name" tick={{ fontSize: 11, fill: axisColor }} width={130}
                 tickFormatter={(v: string, i: number) => v || `ID ${data.top_users[i]?.user_id ?? ""}`} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [fmtRub(Number(v)), "Эргэлт"]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [fmtRub(Number(v)), "Гүйлгээний дүн"]} />
               <Bar dataKey="volume_rub" fill="#c79a3a" radius={[0, 4, 4, 0]}>
                 {data.top_users.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
               </Bar>
@@ -554,7 +554,7 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Хайх: нэхэмжлэх / хэрэглэгч / админ"
+                placeholder="Хайх: Invoice ID / хэрэглэгч / админ"
                 className="pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 text-xs w-60 outline-none focus:ring-2 focus:ring-maroon-500"
               />
             </div>
@@ -571,10 +571,10 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-slate-500 dark:text-ivory-400 bg-slate-50 dark:bg-dark-700/50">
-                <th className="px-4 py-2.5 font-medium">Нэхэмжлэх</th>
+                <th className="px-4 py-2.5 font-medium">Invoice ID</th>
                 <th className="px-4 py-2.5 font-medium">Огноо</th>
                 <th className="px-4 py-2.5 font-medium">Хэрэглэгч</th>
-                <th className="px-4 py-2.5 font-medium">Төрөл</th>
+                <th className="px-4 py-2.5 font-medium">Чиглэл</th>
                 <th className="px-4 py-2.5 font-medium text-right">Дүн</th>
                 <th className="px-4 py-2.5 font-medium text-right">Ханш</th>
                 <th className="px-4 py-2.5 font-medium text-right">RUB дүн</th>
