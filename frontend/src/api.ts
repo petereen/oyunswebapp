@@ -1744,3 +1744,104 @@ export async function fetchDashboardData(params: {
   const res = await dashboardApi.get(`/dashboard/transactions${query ? `?${query}` : ""}`);
   return res.data as DashboardData;
 }
+
+// --- Dashboard Page 1: Balance accounting + Profit calculator ---
+
+export type TreasuryAccount = {
+  id: string;
+  name: string;
+  prev_balance: number;
+  adjustment: number;
+  currency: string;
+  is_active: boolean;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type BalanceSummary = {
+  date: string;
+  accounts: TreasuryAccount[];
+  rub_to_mnt_rub: number;
+  mnt_to_rub_rub: number;
+  prev_balance_total: number;
+  adjustment_total: number;
+  total_balance: number;
+};
+
+export type CostRate = {
+  rate_date: string;
+  usd_rate: number | null;
+  black_rate: number | null;
+  cost_rate: number | null;
+  updated_at?: string;
+};
+
+export type ProfitSummary = {
+  total_profit: number;
+  buy_profit: number;
+  sell_profit: number;
+  currency: string;
+  counted: number;
+  by_day: { date: string; profit: number; count: number }[];
+  missing_rate_dates: string[];
+};
+
+export async function fetchTreasuryAccounts(): Promise<TreasuryAccount[]> {
+  const res = await dashboardApi.get("/dashboard/treasury-accounts");
+  return (res.data?.accounts || []) as TreasuryAccount[];
+}
+
+export async function createTreasuryAccount(payload: Partial<TreasuryAccount>): Promise<TreasuryAccount> {
+  const res = await dashboardApi.post("/dashboard/treasury-accounts", payload);
+  return res.data.account as TreasuryAccount;
+}
+
+export async function updateTreasuryAccount(id: string, payload: Partial<TreasuryAccount>): Promise<TreasuryAccount> {
+  const res = await dashboardApi.put(`/dashboard/treasury-accounts/${id}`, payload);
+  return res.data.account as TreasuryAccount;
+}
+
+export async function deleteTreasuryAccount(id: string): Promise<void> {
+  await dashboardApi.delete(`/dashboard/treasury-accounts/${id}`);
+}
+
+export async function fetchBalanceSummary(date?: string): Promise<BalanceSummary> {
+  const res = await dashboardApi.get(`/dashboard/balance${date ? `?date=${date}` : ""}`);
+  return res.data as BalanceSummary;
+}
+
+export async function fetchBlackRates(params: { start?: string; end?: string; date?: string } = {}): Promise<{
+  configured: boolean; rates: Record<string, number | null>; error?: string;
+}> {
+  const search = new URLSearchParams();
+  if (params.start) search.set("start", params.start);
+  if (params.end) search.set("end", params.end);
+  if (params.date) search.set("date", params.date);
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/black-rate${query ? `?${query}` : ""}`);
+  return res.data;
+}
+
+export async function fetchCostRates(params: { start?: string; end?: string } = {}): Promise<CostRate[]> {
+  const search = new URLSearchParams();
+  if (params.start) search.set("start", params.start);
+  if (params.end) search.set("end", params.end);
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/cost-rates${query ? `?${query}` : ""}`);
+  return (res.data?.cost_rates || []) as CostRate[];
+}
+
+export async function saveCostRate(payload: { date: string; usd_rate: number; black_rate: number }): Promise<CostRate> {
+  const res = await dashboardApi.post("/dashboard/cost-rates", payload);
+  return res.data.cost_rate as CostRate;
+}
+
+export async function fetchProfit(params: { start?: string; end?: string }): Promise<ProfitSummary> {
+  const search = new URLSearchParams();
+  if (params.start) search.set("start", params.start);
+  if (params.end) search.set("end", params.end);
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/profit${query ? `?${query}` : ""}`);
+  return res.data as ProfitSummary;
+}

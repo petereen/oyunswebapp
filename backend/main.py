@@ -2296,6 +2296,281 @@ async def dashboard_transactions(
     }
 
 
+# ============================================================================
+# Dashboard Page 1: Balance accounting + Profit calculator (dashboard auth)
+# ============================================================================
+
+def _moscow_day_bounds(date_str: str | None):
+    """Return (start_iso, end_iso, date_iso) for a Moscow-local calendar day."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("Europe/Moscow")
+    if date_str:
+        y, m, d = (int(x) for x in date_str.split("-"))
+        day_start = datetime(y, m, d, tzinfo=tz)
+    else:
+        now = datetime.now(tz)
+        day_start = datetime(now.year, now.month, now.day, tzinfo=tz)
+    day_end = day_start + timedelta(days=1)
+    return day_start.isoformat(), day_end.isoformat(), day_start.strftime("%Y-%m-%d")
+
+
+@app.get("/api/dashboard/treasury-accounts")
+async def list_treasury_accounts(auth=Depends(get_dashboard_auth)):
+    """List the admin's treasury (balance) accounts."""
+    client = get_supabase()
+    res = client.table("treasury_accounts").select("*").order("display_order").execute()
+    return {"accounts": res.data or []}
+
+
+@app.post("/api/dashboard/treasury-accounts")
+async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth)):
+    """Create a treasury account for balance accounting."""
+    client = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+    if not (payload.get("name") or "").strip():
+        raise HTTPException(status_code=400, detail="Missing required field: name")
+    insert_data = {
+        "name": payload.get("name").strip(),
+        "prev_balance": float(payload.get("prev_balance") or 0),
+        "adjustment": float(payload.get("adjustment") or 0),
+        "currency": (payload.get("currency") or "RUB").upper(),
+        "is_active": payload.get("is_active", True),
+        "display_order": int(payload.get("display_order") or 0),
+        "created_at": now,
+        "updated_at": now,
+    }
+    result = client.table("treasury_accounts").insert(insert_data).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create treasury account")
+    return {"ok": True, "account": result.data[0]}
+
+
+@app.put("/api/dashboard/treasury-accounts/{account_id}")
+async def update_treasury_account(account_id: str, payload: dict, auth=Depends(get_dashboard_auth)):
+    """Update a treasury account (name / previous balance / adjustment)."""
+    client = get_supabase()
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if "name" in payload:
+        update_data["name"] = (payload.get("name") or "").strip()
+    for num_field in ("prev_balance", "adjustment", "display_order"):
+        if num_field in payload:
+            update_data[num_field] = float(payload[num_field] or 0)
+    if "currency" in payload:
+        update_data["currency"] = (payload.get("currency") or "RUB").upper()
+    if "is_active" in payload:
+        update_data["is_active"] = bool(payload["is_active"])
+    result = client.table("treasury_accounts").update(update_data).eq("id", account_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Treasury account not found")
+    return {"ok": True, "account": result.data[0]}
+
+
+@app.delete("/api/dashboard/treasury-accounts/{account_id}")
+async def delete_treasury_account(account_id: str, auth=Depends(get_dashboard_auth)):
+    """Delete a treasury account."""
+    client = get_supabase()
+    result = client.table("treasury_accounts").delete().eq("id", account_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Treasury account not found")
+    return {"ok": True}
+
+
+@app.get("/api/dashboard/balance")
+async def dashboard_balance(date: str = None, auth=Depends(get_dashboard_auth)):
+    """Balance accounting for a calendar day.
+
+    Returns the treasury accounts plus the day's settled RUB<->MNT flows so the
+    UI can compute:
+      previous-day balance + today's RUB→MNT (rub) - today's MNT→RUB (rub) + ±adj
+    """
+    client = get_supabase()
+    start_iso, end_iso, date_iso = _moscow_day_bounds(date)
+
+    accounts = client.table("treasury_accounts").select("*").order("display_order").execute().data or []
+
+    res = (
+        client.table("transactions")
+        .select("amount,currency_from,status,rate,timestamp")
+        .gte("timestamp", start_iso)
+        .lt("timestamp", end_iso)
+        .execute()
+    )
+    rub_to_mnt = 0.0  # руб/төг чиглэл (RUB→MNT), in RUB
+    mnt_to_rub = 0.0  # төг/руб чиглэл (MNT→RUB), in RUB
+    for r in res.data or []:
+        if not _is_successful_status(r.get("status")):
+            continue
+        cf = (r.get("currency_from") or "").upper()
+        rub = _txn_rub_equivalent(float(r.get("amount", 0) or 0), cf, float(r.get("rate", 0) or 0))
+        if cf == "RUB":
+            rub_to_mnt += rub
+        elif cf == "MNT":
+            mnt_to_rub += rub
+
+    prev_sum = sum(float(a.get("prev_balance") or 0) for a in accounts)
+    adj_sum = sum(float(a.get("adjustment") or 0) for a in accounts)
+    total_balance = prev_sum + rub_to_mnt - mnt_to_rub + adj_sum
+
+    return {
+        "date": date_iso,
+        "accounts": accounts,
+        "rub_to_mnt_rub": round(rub_to_mnt, 2),
+        "mnt_to_rub_rub": round(mnt_to_rub, 2),
+        "prev_balance_total": round(prev_sum, 2),
+        "adjustment_total": round(adj_sum, 2),
+        "total_balance": round(total_balance, 2),
+    }
+
+
+@app.get("/api/dashboard/black-rate")
+async def dashboard_black_rate(start: str = None, end: str = None, date: str = None,
+                               auth=Depends(get_dashboard_auth)):
+    """Read the black rate (а ханш) map from the configured Google Sheet."""
+    from google_sheets import fetch_black_rates, is_black_rate_configured
+    if not is_black_rate_configured():
+        return {"configured": False, "rates": {}, "error": "Google Sheets is not configured"}
+    try:
+        rates = fetch_black_rates()
+    except Exception as exc:  # network / API / parse failures
+        return {"configured": True, "rates": {}, "error": str(exc)}
+    if date:
+        return {"configured": True, "rates": {date: rates.get(date)}}
+    if start or end:
+        lo = start or "0000-00-00"
+        hi = end or "9999-99-99"
+        rates = {k: v for k, v in rates.items() if lo <= k <= hi}
+    return {"configured": True, "rates": rates}
+
+
+@app.get("/api/dashboard/cost-rates")
+async def list_cost_rates(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
+    """List stored cost rates (өртөг ханш) within an optional date range."""
+    client = get_supabase()
+    query = client.table("cost_rates").select("*")
+    if start:
+        query = query.gte("rate_date", start)
+    if end:
+        query = query.lte("rate_date", end)
+    res = query.order("rate_date", desc=True).execute()
+    return {"cost_rates": res.data or []}
+
+
+@app.post("/api/dashboard/cost-rates")
+async def upsert_cost_rate(payload: dict, auth=Depends(get_dashboard_auth)):
+    """Save a cost rate for a date: cost_rate = usd_rate / black_rate."""
+    client = get_supabase()
+    date_str = (payload.get("date") or payload.get("rate_date") or "").strip()
+    if not date_str:
+        raise HTTPException(status_code=400, detail="Missing required field: date")
+    try:
+        usd_rate = float(payload.get("usd_rate"))
+        black_rate = float(payload.get("black_rate"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="usd_rate and black_rate must be numbers")
+    if black_rate == 0:
+        raise HTTPException(status_code=400, detail="black_rate must not be zero")
+    cost_rate = usd_rate / black_rate
+    row = {
+        "rate_date": date_str,
+        "usd_rate": usd_rate,
+        "black_rate": black_rate,
+        "cost_rate": cost_rate,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = client.table("cost_rates").upsert(row, on_conflict="rate_date").execute()
+    return {"ok": True, "cost_rate": (result.data or [row])[0]}
+
+
+@app.get("/api/dashboard/profit")
+async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
+    """Profit over a period, joining each transaction's date to its cost rate.
+
+    Руб/төг (RUB→MNT):  (cost_rate - rub_buy_rate)  × amount(in RUB)
+    Төг/руб (MNT→RUB):  (rub_sell_rate - cost_rate) × amount(in RUB)
+    The "amount in RUB" is the transaction's RUB equivalent; rate is the row's
+    own buy/sell ханш. Profit is expressed in MNT (₮).
+    """
+    from collections import defaultdict
+    client = get_supabase()
+    MAX_ROWS, PAGE = 20000, 1000
+
+    rows: list[dict] = []
+    offset = 0
+    while offset < MAX_ROWS:
+        query = client.table("transactions").select(
+            "amount,currency_from,status,rate,timestamp"
+        )
+        if start:
+            query = query.gte("timestamp", start)
+        if end:
+            query = query.lte("timestamp", end)
+        res = query.order("timestamp", desc=True).range(offset, offset + PAGE - 1).execute()
+        batch = res.data or []
+        rows.extend(batch)
+        if len(batch) < PAGE:
+            break
+        offset += PAGE
+
+    # Cost rates covering the window (by calendar date).
+    cr_query = client.table("cost_rates").select("rate_date,cost_rate")
+    if start:
+        cr_query = cr_query.gte("rate_date", start[:10])
+    if end:
+        cr_query = cr_query.lte("rate_date", end[:10])
+    cost_map = {
+        r["rate_date"]: float(r["cost_rate"])
+        for r in (cr_query.execute().data or [])
+        if r.get("cost_rate") is not None
+    }
+
+    total_profit = buy_profit = sell_profit = 0.0
+    counted = 0
+    missing_dates: set[str] = set()
+    by_day: dict[str, dict] = defaultdict(lambda: {"profit": 0.0, "count": 0})
+
+    for r in rows:
+        if not _is_successful_status(r.get("status")):
+            continue
+        ts = r.get("timestamp") or ""
+        day = ts[:10]
+        cost_rate = cost_map.get(day)
+        if cost_rate is None:
+            if day:
+                missing_dates.add(day)
+            continue
+        amount = float(r.get("amount", 0) or 0)
+        rate = float(r.get("rate", 0) or 0)
+        cf = (r.get("currency_from") or "").upper()
+        rub = _txn_rub_equivalent(amount, cf, rate)
+        if cf == "RUB":  # Руб/төг
+            profit = (cost_rate - rate) * rub
+            buy_profit += profit
+        elif cf == "MNT":  # Төг/руб
+            profit = (rate - cost_rate) * rub
+            sell_profit += profit
+        else:
+            continue
+        total_profit += profit
+        counted += 1
+        by_day[day]["profit"] += profit
+        by_day[day]["count"] += 1
+
+    by_day_out = [
+        {"date": d, "profit": round(v["profit"], 2), "count": v["count"]}
+        for d, v in sorted(by_day.items())
+    ]
+    return {
+        "total_profit": round(total_profit, 2),
+        "buy_profit": round(buy_profit, 2),
+        "sell_profit": round(sell_profit, 2),
+        "currency": "MNT",
+        "counted": counted,
+        "by_day": by_day_out,
+        "missing_rate_dates": sorted(missing_dates),
+    }
+
+
 @app.get("/api/me", response_model=MeResponse)
 async def me(user=Depends(get_jwt_authenticated_user)):
     from zoneinfo import ZoneInfo

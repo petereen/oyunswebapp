@@ -13,8 +13,10 @@ import {
   fetchDashboardData, verifyDashboardKey,
 } from "../api";
 import { useTheme } from "../hooks/useTheme";
+import { BalanceProfitPage } from "./BalanceProfitPage";
 
 type PeriodKey = "today" | "7d" | "30d" | "90d" | "month" | "year" | "all" | "custom";
+type DashboardPage = "balance" | "stats";
 
 const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "Өнөөдөр" },
@@ -206,12 +208,47 @@ export function DashboardPanel() {
     );
   }
 
-  return <DashboardContent theme={theme} onLogout={handleLogout} />;
+  return <AuthedDashboard theme={theme} onLogout={handleLogout} />;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DashboardContent({ theme, onLogout }: { theme: string; onLogout: () => void }) {
+function PageTabs({ page, setPage }: { page: DashboardPage; setPage: (p: DashboardPage) => void }) {
+  const tabs: { key: DashboardPage; label: string }[] = [
+    { key: "balance", label: "Баланс ба Ашиг" },
+    { key: "stats", label: "Статистик" },
+  ];
+  return (
+    <div className="flex items-center gap-1 bg-white dark:bg-dark-800 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => setPage(t.key)}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+            page === t.key
+              ? "bg-maroon-600 text-white shadow"
+              : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AuthedDashboard({ theme, onLogout }: { theme: string; onLogout: () => void }) {
+  const [page, setPage] = useState<DashboardPage>("balance");
+  const pageTabs = <PageTabs page={page} setPage={setPage} />;
+  if (page === "stats") {
+    return <DashboardContent theme={theme} onLogout={onLogout} pageTabs={pageTabs} />;
+  }
+  return <BalanceProfitPage onLogout={onLogout} pageTabs={pageTabs} />;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DashboardContent({ theme, onLogout, pageTabs }: { theme: string; onLogout: () => void; pageTabs?: React.ReactNode }) {
   const [period, setPeriod] = useState<PeriodKey>("30d");
   const [custom, setCustom] = useState({ start: "", end: "" });
   const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>("all");
@@ -248,6 +285,7 @@ function DashboardContent({ theme, onLogout }: { theme: string; onLogout: () => 
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {pageTabs}
             <button
               onClick={() => refetch()}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-sm font-medium hover:bg-slate-100 dark:hover:bg-dark-700 transition"
