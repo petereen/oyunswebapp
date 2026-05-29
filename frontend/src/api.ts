@@ -1812,7 +1812,8 @@ export async function fetchBalanceSummary(date?: string): Promise<BalanceSummary
 }
 
 export async function fetchBlackRates(params: { start?: string; end?: string; date?: string } = {}): Promise<{
-  configured: boolean; rates: Record<string, number | null>; error?: string;
+  configured: boolean; rates: Record<string, number | null>;
+  latest?: number | null; latest_date?: string | null; error?: string;
 }> {
   const search = new URLSearchParams();
   if (params.start) search.set("start", params.start);

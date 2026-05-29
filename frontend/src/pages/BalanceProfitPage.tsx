@@ -137,37 +137,29 @@ function BalanceBody({ data, onChanged }: { data: BalanceSummary; onChanged: () 
     <div className="space-y-5">
       <TreasuryAccountsTable accounts={data.accounts} onChanged={onChanged} />
 
-      {/* Formula summary */}
-      <div className="rounded-2xl border border-maroon-200 dark:border-maroon-900/50 bg-maroon-50/60 dark:bg-maroon-900/20 p-4">
-        <div className="text-xs font-semibold text-slate-500 dark:text-ivory-400 mb-3">
-          Нийт баланс = Өмнөх өдрийн баланс + Өнөөдрийн руб/төг − Өнөөдрийн төг/руб + Custom
-        </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-          <FormulaTerm label="Өмнөх өдрийн баланс" value={fmtRub(data.prev_balance_total)} />
-          <span className="text-slate-400">+</span>
-          <FormulaTerm label="Руб→Төг (өнөөдөр)" value={fmtRub(data.rub_to_mnt_rub)} tone="pos" />
-          <span className="text-slate-400">−</span>
-          <FormulaTerm label="Төг→Руб (өнөөдөр)" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
-          <span className="text-slate-400">+</span>
-          <FormulaTerm label="Custom" value={fmtRub(data.adjustment_total)} />
-          <span className="text-slate-400">=</span>
-          <div className="px-3 py-2 rounded-xl bg-maroon-600 text-white font-bold tabular-nums">
-            {fmtRub(data.total_balance)}
-          </div>
-        </div>
+      {/* Balance summary */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <BalanceStat label="Өмнөх өдрийн баланс" value={fmtRub(data.prev_balance_total)} />
+        <BalanceStat label="Өнөөдрийн руб→төг" value={fmtRub(data.rub_to_mnt_rub)} tone="pos" />
+        <BalanceStat label="Өнөөдрийн төг→руб" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
+        <BalanceStat label="Тохируулга" value={fmtRub(data.adjustment_total)} />
+        <BalanceStat label="Нийт баланс" value={fmtRub(data.total_balance)} accent />
       </div>
     </div>
   );
 }
 
-function FormulaTerm({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
-  const color = tone === "pos" ? "text-emerald-600 dark:text-emerald-400"
+function BalanceStat({ label, value, tone, accent }: { label: string; value: string; tone?: "pos" | "neg"; accent?: boolean }) {
+  const valueColor = accent ? "text-white"
+    : tone === "pos" ? "text-emerald-600 dark:text-emerald-400"
     : tone === "neg" ? "text-rose-600 dark:text-rose-400"
     : "text-slate-700 dark:text-ivory-200";
   return (
-    <div className="px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600">
-      <div className="text-[10px] text-slate-400">{label}</div>
-      <div className={`text-sm font-semibold tabular-nums ${color}`}>{value}</div>
+    <div className={`px-3 py-3 rounded-2xl border ${accent
+      ? "bg-maroon-600 border-maroon-600"
+      : "bg-white dark:bg-dark-800 border-slate-200 dark:border-dark-600"}`}>
+      <div className={`text-[10px] ${accent ? "text-white/80" : "text-slate-400"}`}>{label}</div>
+      <div className={`text-base font-bold tabular-nums mt-0.5 ${valueColor}`}>{value}</div>
     </div>
   );
 }
@@ -367,7 +359,7 @@ function ProfitSection() {
         <b>Ашигийн томьёо:</b><br />
         Руб/төг: ( өртөг ханш − руб авах ханш ) × дүн &nbsp;·&nbsp;
         Төг/руб: ( руб зарж буй ханш − өртөг ханш ) × дүн<br />
-        <span className="text-slate-400">өртөг ханш = USD ханш ÷ а ханш (Google Sheets). Ашиг ₮-өөр илэрхийлэгдэнэ.</span>
+        <span className="text-slate-400">өртөг ханш = USD ханш ÷ black ханш (Google Sheets). Ашиг ₮-өөр илэрхийлэгдэнэ.</span>
       </div>
 
       {/* Profit summary */}
@@ -471,16 +463,20 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
       } else if (res.error) {
         setRateMsg(`Алдаа: ${res.error}`);
       } else {
-        const val = res.rates?.[date];
-        if (val == null) {
-          setRateMsg(`${date}-ний а ханш Google Sheets-д олдсонгүй.`);
+        const exact = res.rates?.[date];
+        if (exact != null) {
+          setBlack(String(exact));
+          setRateMsg(`Татаж авлаа: ${exact}`);
+        } else if (res.latest != null) {
+          // Fall back to the latest "Ханш" row when this date has no entry.
+          setBlack(String(res.latest));
+          setRateMsg(`${date}-нд бичилт алга — хамгийн сүүлийн black ханш${res.latest_date ? ` (${res.latest_date})` : ""}: ${res.latest}`);
         } else {
-          setBlack(String(val));
-          setRateMsg(`Татаж авлаа: ${val}`);
+          setRateMsg(`${date}-ний black ханш Google Sheets-д олдсонгүй.`);
         }
       }
     } catch {
-      setRateMsg("А ханш татахад алдаа гарлаа.");
+      setRateMsg("Black ханш татахад алдаа гарлаа.");
     } finally {
       setFetchingRate(false);
     }
@@ -508,7 +504,7 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700">
       <div className="flex items-center gap-2 mb-3">
         <TrendingUp className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
-        <h3 className="text-sm font-bold">Өртөг ханш (USD ханш ÷ а ханш)</h3>
+        <h3 className="text-sm font-bold">Өртөг ханш (USD ханш ÷ black ханш)</h3>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
@@ -517,7 +513,7 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
           <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div>
-          <label className="text-[10px] text-slate-400">А ханш (Sheets)</label>
+          <label className="text-[10px] text-slate-400">Black ханш (Sheets)</label>
           <div className="flex gap-1">
             <input type="number" className={inputCls} placeholder="0" value={black} onChange={(e) => setBlack(e.target.value)} />
             <button
@@ -557,7 +553,7 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
             <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
               <th className="py-2 pr-2 font-medium">Огноо</th>
               <th className="py-2 px-2 font-medium text-right">USD ханш</th>
-              <th className="py-2 px-2 font-medium text-right">А ханш</th>
+              <th className="py-2 px-2 font-medium text-right">Black ханш</th>
               <th className="py-2 pl-2 font-medium text-right">Өртөг ханш</th>
             </tr>
           </thead>

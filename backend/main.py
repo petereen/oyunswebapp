@@ -2315,11 +2315,35 @@ def _moscow_day_bounds(date_str: str | None):
     return day_start.isoformat(), day_end.isoformat(), day_start.strftime("%Y-%m-%d")
 
 
+def _dashboard_db_error(exc: Exception, action: str):
+    """Translate a Supabase/Postgres error into an actionable HTTP error.
+
+    The most common cause on a fresh install is that the Page-1 tables have
+    not been created yet, so surface a clear hint to run the migration instead
+    of a bare 500.
+    """
+    msg = str(exc)
+    logger.error(f"{action} failed: {msg}")
+    lowered = msg.lower()
+    if "does not exist" in lowered or "could not find the table" in lowered or "relation" in lowered:
+        return HTTPException(
+            status_code=500,
+            detail=(
+                "Database tables are missing. Run database/balance_profit_tables.sql "
+                "in the Supabase SQL editor to create treasury_accounts and cost_rates."
+            ),
+        )
+    return HTTPException(status_code=500, detail=f"{action}: {msg}")
+
+
 @app.get("/api/dashboard/treasury-accounts")
 async def list_treasury_accounts(auth=Depends(get_dashboard_auth)):
     """List the admin's treasury (balance) accounts."""
     client = get_supabase()
-    res = client.table("treasury_accounts").select("*").order("display_order").execute()
+    try:
+        res = client.table("treasury_accounts").select("*").order("display_order").execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "List treasury accounts")
     return {"accounts": res.data or []}
 
 
@@ -2340,7 +2364,10 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
         "created_at": now,
         "updated_at": now,
     }
-    result = client.table("treasury_accounts").insert(insert_data).execute()
+    try:
+        result = client.table("treasury_accounts").insert(insert_data).execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Create treasury account")
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create treasury account")
     return {"ok": True, "account": result.data[0]}
@@ -2387,7 +2414,10 @@ async def dashboard_balance(date: str = None, auth=Depends(get_dashboard_auth)):
     client = get_supabase()
     start_iso, end_iso, date_iso = _moscow_day_bounds(date)
 
-    accounts = client.table("treasury_accounts").select("*").order("display_order").execute().data or []
+    try:
+        accounts = client.table("treasury_accounts").select("*").order("display_order").execute().data or []
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Load balance")
 
     res = (
         client.table("transactions")
@@ -2426,21 +2456,32 @@ async def dashboard_balance(date: str = None, auth=Depends(get_dashboard_auth)):
 @app.get("/api/dashboard/black-rate")
 async def dashboard_black_rate(start: str = None, end: str = None, date: str = None,
                                auth=Depends(get_dashboard_auth)):
-    """Read the black rate (а ханш) map from the configured Google Sheet."""
+    """Read the black rate (black ханш) map from the configured Google Sheet.
+
+    The sheet is filtered to rows where column E (Төлөв) == "Ханш"; the rate is
+    read from column I. `latest`/`latest_date` expose the most recent "Ханш"
+    row so the UI can fall back to it when a specific date has no entry.
+    """
     from google_sheets import fetch_black_rates, is_black_rate_configured
     if not is_black_rate_configured():
-        return {"configured": False, "rates": {}, "error": "Google Sheets is not configured"}
+        return {"configured": False, "rates": {}, "latest": None, "latest_date": None,
+                "error": "Google Sheets is not configured"}
     try:
         rates = fetch_black_rates()
     except Exception as exc:  # network / API / parse failures
-        return {"configured": True, "rates": {}, "error": str(exc)}
+        return {"configured": True, "rates": {}, "latest": None, "latest_date": None,
+                "error": str(exc)}
+    # The most recent "Ханш" row (latest date) is the current black rate.
+    latest_date = max(rates) if rates else None
+    latest_val = rates.get(latest_date) if latest_date else None
     if date:
-        return {"configured": True, "rates": {date: rates.get(date)}}
+        return {"configured": True, "rates": {date: rates.get(date)},
+                "latest": latest_val, "latest_date": latest_date}
     if start or end:
         lo = start or "0000-00-00"
         hi = end or "9999-99-99"
         rates = {k: v for k, v in rates.items() if lo <= k <= hi}
-    return {"configured": True, "rates": rates}
+    return {"configured": True, "rates": rates, "latest": latest_val, "latest_date": latest_date}
 
 
 @app.get("/api/dashboard/cost-rates")
@@ -2452,7 +2493,10 @@ async def list_cost_rates(start: str = None, end: str = None, auth=Depends(get_d
         query = query.gte("rate_date", start)
     if end:
         query = query.lte("rate_date", end)
-    res = query.order("rate_date", desc=True).execute()
+    try:
+        res = query.order("rate_date", desc=True).execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "List cost rates")
     return {"cost_rates": res.data or []}
 
 
@@ -2478,7 +2522,10 @@ async def upsert_cost_rate(payload: dict, auth=Depends(get_dashboard_auth)):
         "cost_rate": cost_rate,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    result = client.table("cost_rates").upsert(row, on_conflict="rate_date").execute()
+    try:
+        result = client.table("cost_rates").upsert(row, on_conflict="rate_date").execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Save cost rate")
     return {"ok": True, "cost_rate": (result.data or [row])[0]}
 
 
@@ -2518,9 +2565,13 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
         cr_query = cr_query.gte("rate_date", start[:10])
     if end:
         cr_query = cr_query.lte("rate_date", end[:10])
+    try:
+        cr_data = cr_query.execute().data or []
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Load cost rates for profit")
     cost_map = {
         r["rate_date"]: float(r["cost_rate"])
-        for r in (cr_query.execute().data or [])
+        for r in cr_data
         if r.get("cost_rate") is not None
     }
 
