@@ -2336,15 +2336,64 @@ def _dashboard_db_error(exc: Exception, action: str):
     return HTTPException(status_code=500, detail=f"{action}: {msg}")
 
 
+def _moscow_today() -> str:
+    """Current calendar date in Moscow time as YYYY-MM-DD."""
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d")
+
+
+def _account_balance(a: dict) -> float:
+    """Balance for the day = prev + RUB→MNT − MNT→RUB + ±adjustment (all in RUB)."""
+    return (
+        float(a.get("prev_balance") or 0)
+        + float(a.get("rub_to_mnt") or 0)
+        - float(a.get("mnt_to_rub") or 0)
+        + float(a.get("adjustment") or 0)
+    )
+
+
+def _rollover_treasury_accounts(client) -> list[dict]:
+    """Carry each account's computed balance into prev_balance when its day ends.
+
+    Lazy rollover: when an account's stored balance_date is before the current
+    Moscow day, today's computed balance becomes the new previous-day balance
+    and the daily fields (rub_to_mnt, mnt_to_rub, adjustment) reset to 0. This is
+    triggered on read, so no always-on scheduler is required. Returns the
+    up-to-date account rows ordered by display_order.
+    """
+    today = _moscow_today()
+    accounts = client.table("treasury_accounts").select("*").order("display_order").execute().data or []
+    refreshed: list[dict] = []
+    for a in accounts:
+        bdate = (a.get("balance_date") or "")[:10]
+        if bdate and bdate < today:
+            upd = {
+                "prev_balance": round(_account_balance(a), 2),
+                "rub_to_mnt": 0,
+                "mnt_to_rub": 0,
+                "adjustment": 0,
+                "balance_date": today,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            client.table("treasury_accounts").update(upd).eq("id", a["id"]).execute()
+            a = {**a, **upd}
+        elif not bdate:
+            # First time we see this account: stamp it with today's Moscow date.
+            client.table("treasury_accounts").update({"balance_date": today}).eq("id", a["id"]).execute()
+            a = {**a, "balance_date": today}
+        refreshed.append(a)
+    return refreshed
+
+
 @app.get("/api/dashboard/treasury-accounts")
 async def list_treasury_accounts(auth=Depends(get_dashboard_auth)):
-    """List the admin's treasury (balance) accounts."""
+    """List the admin's treasury (balance) accounts (with daily rollover applied)."""
     client = get_supabase()
     try:
-        res = client.table("treasury_accounts").select("*").order("display_order").execute()
+        accounts = _rollover_treasury_accounts(client)
     except Exception as exc:
         raise _dashboard_db_error(exc, "List treasury accounts")
-    return {"accounts": res.data or []}
+    return {"accounts": accounts}
 
 
 @app.post("/api/dashboard/treasury-accounts")
@@ -2357,10 +2406,13 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
     insert_data = {
         "name": payload.get("name").strip(),
         "prev_balance": float(payload.get("prev_balance") or 0),
+        "rub_to_mnt": float(payload.get("rub_to_mnt") or 0),
+        "mnt_to_rub": float(payload.get("mnt_to_rub") or 0),
         "adjustment": float(payload.get("adjustment") or 0),
         "currency": (payload.get("currency") or "RUB").upper(),
         "is_active": payload.get("is_active", True),
         "display_order": int(payload.get("display_order") or 0),
+        "balance_date": _moscow_today(),
         "created_at": now,
         "updated_at": now,
     }
@@ -2375,14 +2427,18 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
 
 @app.put("/api/dashboard/treasury-accounts/{account_id}")
 async def update_treasury_account(account_id: str, payload: dict, auth=Depends(get_dashboard_auth)):
-    """Update a treasury account (name / previous balance / adjustment)."""
+    """Update a treasury account (name / prev balance / daily flows / adjustment)."""
     client = get_supabase()
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if "name" in payload:
         update_data["name"] = (payload.get("name") or "").strip()
-    for num_field in ("prev_balance", "adjustment", "display_order"):
+    for num_field in ("prev_balance", "rub_to_mnt", "mnt_to_rub", "adjustment", "display_order"):
         if num_field in payload:
             update_data[num_field] = float(payload[num_field] or 0)
+    # Editing the daily figures stamps the row with today's Moscow day so the
+    # next day's rollover carries the right balance forward.
+    if any(k in payload for k in ("rub_to_mnt", "mnt_to_rub", "adjustment", "prev_balance")):
+        update_data["balance_date"] = _moscow_today()
     if "currency" in payload:
         update_data["currency"] = (payload.get("currency") or "RUB").upper()
     if "is_active" in payload:
@@ -2405,45 +2461,29 @@ async def delete_treasury_account(account_id: str, auth=Depends(get_dashboard_au
 
 @app.get("/api/dashboard/balance")
 async def dashboard_balance(date: str = None, auth=Depends(get_dashboard_auth)):
-    """Balance accounting for a calendar day.
+    """Balance accounting from per-account, admin-entered daily figures.
 
-    Returns the treasury accounts plus the day's settled RUB<->MNT flows so the
-    UI can compute:
-      previous-day balance + today's RUB→MNT (rub) - today's MNT→RUB (rub) + ±adj
+    Every figure is entered by the admin (nothing is pulled from transactions):
+      balance = previous-day balance + today's RUB→MNT − today's MNT→RUB + ±adjustment
+    Today's balance rolls into previous-day balance automatically when the
+    Moscow day ends (see _rollover_treasury_accounts). The `date` parameter is
+    accepted for backward compatibility but the figures are always the current
+    Moscow day's.
     """
     client = get_supabase()
-    start_iso, end_iso, date_iso = _moscow_day_bounds(date)
-
     try:
-        accounts = client.table("treasury_accounts").select("*").order("display_order").execute().data or []
+        accounts = _rollover_treasury_accounts(client)
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load balance")
 
-    res = (
-        client.table("transactions")
-        .select("amount,currency_from,status,rate,timestamp")
-        .gte("timestamp", start_iso)
-        .lt("timestamp", end_iso)
-        .execute()
-    )
-    rub_to_mnt = 0.0  # руб/төг чиглэл (RUB→MNT), in RUB
-    mnt_to_rub = 0.0  # төг/руб чиглэл (MNT→RUB), in RUB
-    for r in res.data or []:
-        if not _is_successful_status(r.get("status")):
-            continue
-        cf = (r.get("currency_from") or "").upper()
-        rub = _txn_rub_equivalent(float(r.get("amount", 0) or 0), cf, float(r.get("rate", 0) or 0))
-        if cf == "RUB":
-            rub_to_mnt += rub
-        elif cf == "MNT":
-            mnt_to_rub += rub
-
     prev_sum = sum(float(a.get("prev_balance") or 0) for a in accounts)
+    rub_to_mnt = sum(float(a.get("rub_to_mnt") or 0) for a in accounts)
+    mnt_to_rub = sum(float(a.get("mnt_to_rub") or 0) for a in accounts)
     adj_sum = sum(float(a.get("adjustment") or 0) for a in accounts)
     total_balance = prev_sum + rub_to_mnt - mnt_to_rub + adj_sum
 
     return {
-        "date": date_iso,
+        "date": _moscow_today(),
         "accounts": accounts,
         "rub_to_mnt_rub": round(rub_to_mnt, 2),
         "mnt_to_rub_rub": round(mnt_to_rub, 2),
@@ -2463,25 +2503,45 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
     row so the UI can fall back to it when a specific date has no entry.
     """
     from google_sheets import fetch_black_rates, is_black_rate_configured
+    s = get_settings()
+    # Echo the (non-secret) config so the UI can diagnose a misconfigured sheet.
+    cfg = {
+        "spreadsheet_id_set": bool(s.black_rate_spreadsheet_id),
+        "api_key_set": bool(s.google_sheets_api_key),
+        "sheet": s.black_rate_sheet_name,
+        "date_col": s.black_rate_date_column,
+        "rate_col": s.black_rate_rate_column,
+        "status_col": s.black_rate_status_column,
+        "status_value": s.black_rate_status_value,
+    }
     if not is_black_rate_configured():
         return {"configured": False, "rates": {}, "latest": None, "latest_date": None,
-                "error": "Google Sheets is not configured"}
+                "count": 0, "config": cfg,
+                "error": "Google Sheets is not configured. Set GOOGLE_SHEETS_API_KEY and "
+                         "BLACK_RATE_SPREADSHEET_ID in the backend .env, then restart."}
     try:
         rates = fetch_black_rates()
     except Exception as exc:  # network / API / parse failures
         return {"configured": True, "rates": {}, "latest": None, "latest_date": None,
-                "error": str(exc)}
+                "count": 0, "config": cfg, "error": str(exc)}
     # The most recent "Ханш" row (latest date) is the current black rate.
     latest_date = max(rates) if rates else None
     latest_val = rates.get(latest_date) if latest_date else None
+    total = len(rates)
+    if total == 0:
+        return {"configured": True, "rates": {}, "latest": None, "latest_date": None,
+                "count": 0, "config": cfg,
+                "error": "No \"Ханш\" rows parsed. Check the tab name, that column E "
+                         "contains \"Ханш\", and that the date/rate columns (B/I) are correct."}
     if date:
         return {"configured": True, "rates": {date: rates.get(date)},
-                "latest": latest_val, "latest_date": latest_date}
+                "latest": latest_val, "latest_date": latest_date, "count": total, "config": cfg}
     if start or end:
         lo = start or "0000-00-00"
         hi = end or "9999-99-99"
         rates = {k: v for k, v in rates.items() if lo <= k <= hi}
-    return {"configured": True, "rates": rates, "latest": latest_val, "latest_date": latest_date}
+    return {"configured": True, "rates": rates, "latest": latest_val,
+            "latest_date": latest_date, "count": total, "config": cfg}
 
 
 @app.get("/api/dashboard/cost-rates")
@@ -2533,10 +2593,12 @@ async def upsert_cost_rate(payload: dict, auth=Depends(get_dashboard_auth)):
 async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
     """Profit over a period, joining each transaction's date to its cost rate.
 
-    Руб/төг (RUB→MNT):  (cost_rate - rub_buy_rate)  × amount(in RUB)
-    Төг/руб (MNT→RUB):  (rub_sell_rate - cost_rate) × amount(in RUB)
-    The "amount in RUB" is the transaction's RUB equivalent; rate is the row's
-    own buy/sell ханш. Profit is expressed in MNT (₮).
+    Direction comes from each transaction's currency_from/currency_to:
+      RUB→MNT (руб/төг):  (cost_rate − rate) × amount
+      MNT→RUB (төг/руб):  (rate − cost_rate) × amount
+    where `rate` and `amount` are that transaction row's own columns and
+    `cost_rate` (өртөг ханш) is the saved cost rate for the transaction's date.
+    Profit is expressed in MNT (₮).
     """
     from collections import defaultdict
     client = get_supabase()
@@ -2546,7 +2608,7 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
     offset = 0
     while offset < MAX_ROWS:
         query = client.table("transactions").select(
-            "amount,currency_from,status,rate,timestamp"
+            "amount,currency_from,currency_to,status,rate,timestamp"
         )
         if start:
             query = query.gte("timestamp", start)
@@ -2559,21 +2621,32 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
             break
         offset += PAGE
 
-    # Cost rates covering the window (by calendar date).
+    # Cost rates up to the end of the window, oldest→newest. We forward-fill:
+    # a transaction whose date has no cost rate uses the most recent earlier
+    # rate (carried forward until a newer rate appears). No lower bound, so a
+    # rate set before the window can carry into it.
+    import bisect
     cr_query = client.table("cost_rates").select("rate_date,cost_rate")
-    if start:
-        cr_query = cr_query.gte("rate_date", start[:10])
     if end:
         cr_query = cr_query.lte("rate_date", end[:10])
     try:
-        cr_data = cr_query.execute().data or []
+        cr_data = cr_query.order("rate_date").execute().data or []
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load cost rates for profit")
-    cost_map = {
-        r["rate_date"]: float(r["cost_rate"])
-        for r in cr_data
-        if r.get("cost_rate") is not None
-    }
+    cr_dates: list[str] = []
+    cr_values: list[float] = []
+    for cr in cr_data:
+        if cr.get("cost_rate") is None:
+            continue
+        cr_dates.append(str(cr["rate_date"])[:10])
+        cr_values.append(float(cr["cost_rate"]))
+
+    def _cost_rate_for(day: str):
+        """Most recent cost rate on or before `day` (forward-fill), or None."""
+        if not cr_dates or not day:
+            return None
+        idx = bisect.bisect_right(cr_dates, day) - 1
+        return cr_values[idx] if idx >= 0 else None
 
     total_profit = buy_profit = sell_profit = 0.0
     counted = 0
@@ -2585,7 +2658,7 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
             continue
         ts = r.get("timestamp") or ""
         day = ts[:10]
-        cost_rate = cost_map.get(day)
+        cost_rate = _cost_rate_for(day)
         if cost_rate is None:
             if day:
                 missing_dates.add(day)
@@ -2593,12 +2666,15 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
         amount = float(r.get("amount", 0) or 0)
         rate = float(r.get("rate", 0) or 0)
         cf = (r.get("currency_from") or "").upper()
-        rub = _txn_rub_equivalent(amount, cf, rate)
-        if cf == "RUB":  # Руб/төг
-            profit = (cost_rate - rate) * rub
+        ct = (r.get("currency_to") or "").upper()
+        # Profit is always computed on the RUB amount of the transaction.
+        if cf == "RUB" and ct == "MNT":      # Руб → Төг — amount is already in RUB
+            rub_amount = amount
+            profit = (cost_rate - rate) * rub_amount
             buy_profit += profit
-        elif cf == "MNT":  # Төг/руб
-            profit = (rate - cost_rate) * rub
+        elif cf == "MNT" and ct == "RUB":    # Төг → Руб — convert MNT amount to RUB
+            rub_amount = amount / rate if rate else 0.0
+            profit = (rate - cost_rate) * rub_amount
             sell_profit += profit
         else:
             continue

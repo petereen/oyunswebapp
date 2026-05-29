@@ -88,10 +88,9 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
 // ── Section A: Balance accounting ────────────────────────────────────────────
 
 function BalanceSection() {
-  const [date, setDate] = useState(todayIso());
   const { data, isLoading, isFetching, refetch, error } = useQuery({
-    queryKey: ["dashboard-balance", date],
-    queryFn: () => fetchBalanceSummary(date),
+    queryKey: ["dashboard-balance"],
+    queryFn: () => fetchBalanceSummary(),
     staleTime: 30_000,
   });
 
@@ -105,12 +104,7 @@ function BalanceSection() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-dark-600">
             <Calendar className="w-4 h-4 text-slate-400" />
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-transparent text-xs outline-none"
-            />
+            <span className="text-xs tabular-nums">{data?.date || todayIso()} <span className="text-slate-400">(Москва)</span></span>
           </div>
           <button
             onClick={() => refetch()}
@@ -120,6 +114,11 @@ function BalanceSection() {
           </button>
         </div>
       </div>
+
+      <p className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 bg-slate-50 dark:bg-dark-700/50 rounded-xl p-2.5">
+        Бүх талбарыг гараар оруулна: <b>Өмнөх өдрийн баланс + Өнөөдрийн руб→төг − Өнөөдрийн төг→руб ± Тохируулга = Өнөөдрийн баланс</b>.
+        Москвагийн өдөр дуусахад өнөөдрийн баланс автоматаар маргаашийн "Өмнөх өдрийн баланс" болж шилжинэ.
+      </p>
 
       {error ? (
         <div className="text-sm text-red-500 py-6 text-center">Баланс ачаалж чадсангүй.</div>
@@ -164,23 +163,35 @@ function BalanceStat({ label, value, tone, accent }: { label: string; value: str
   );
 }
 
+type AcctDraft = { name: string; prev_balance: string; rub_to_mnt: string; mnt_to_rub: string; adjustment: string };
+
 function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAccount[]; onChanged: () => void }) {
-  const [drafts, setDrafts] = useState<Record<string, { name: string; prev_balance: string; adjustment: string }>>({});
+  const [drafts, setDrafts] = useState<Record<string, AcctDraft>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newBalance, setNewBalance] = useState("");
 
-  const draftOf = (a: TreasuryAccount) =>
-    drafts[a.id] ?? { name: a.name, prev_balance: String(a.prev_balance ?? 0), adjustment: String(a.adjustment ?? 0) };
+  const draftOf = (a: TreasuryAccount): AcctDraft =>
+    drafts[a.id] ?? {
+      name: a.name,
+      prev_balance: String(a.prev_balance ?? 0),
+      rub_to_mnt: String(a.rub_to_mnt ?? 0),
+      mnt_to_rub: String(a.mnt_to_rub ?? 0),
+      adjustment: String(a.adjustment ?? 0),
+    };
 
-  const setDraft = (id: string, patch: Partial<{ name: string; prev_balance: string; adjustment: string }>) =>
+  const setDraft = (id: string, patch: Partial<AcctDraft>) =>
     setDrafts((d) => ({ ...d, [id]: { ...draftOf(accounts.find((a) => a.id === id)!), ...d[id], ...patch } }));
 
   const isDirty = (a: TreasuryAccount) => {
     const d = drafts[a.id];
     if (!d) return false;
-    return d.name !== a.name || Number(d.prev_balance) !== a.prev_balance || Number(d.adjustment) !== a.adjustment;
+    return d.name !== a.name
+      || Number(d.prev_balance) !== a.prev_balance
+      || Number(d.rub_to_mnt) !== a.rub_to_mnt
+      || Number(d.mnt_to_rub) !== a.mnt_to_rub
+      || Number(d.adjustment) !== a.adjustment;
   };
 
   const save = async (a: TreasuryAccount) => {
@@ -190,6 +201,8 @@ function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAcco
       await updateTreasuryAccount(a.id, {
         name: d.name,
         prev_balance: Number(d.prev_balance) || 0,
+        rub_to_mnt: Number(d.rub_to_mnt) || 0,
+        mnt_to_rub: Number(d.mnt_to_rub) || 0,
         adjustment: Number(d.adjustment) || 0,
       });
       setDrafts((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
@@ -236,25 +249,36 @@ function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAcco
           <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
             <th className="py-2 pr-2 font-medium">Дансны нэр</th>
             <th className="py-2 px-2 font-medium text-right">Өмнөх өдрийн баланс (₽)</th>
+            <th className="py-2 px-2 font-medium text-right">Өнөөдрийн руб→төг (₽)</th>
+            <th className="py-2 px-2 font-medium text-right">Өнөөдрийн төг→руб (₽)</th>
             <th className="py-2 px-2 font-medium text-right">Тохируулга ± (₽)</th>
-            <th className="py-2 px-2 font-medium text-right">Дансны дүн (₽)</th>
+            <th className="py-2 px-2 font-medium text-right">Өнөөдрийн баланс (₽)</th>
             <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
           </tr>
         </thead>
         <tbody>
           {accounts.map((a) => {
             const d = draftOf(a);
-            const subtotal = (Number(d.prev_balance) || 0) + (Number(d.adjustment) || 0);
+            const subtotal = (Number(d.prev_balance) || 0) + (Number(d.rub_to_mnt) || 0)
+              - (Number(d.mnt_to_rub) || 0) + (Number(d.adjustment) || 0);
             return (
               <tr key={a.id} className="border-b border-slate-100 dark:border-dark-700">
                 <td className="py-2 pr-2 min-w-[140px]">
                   <input className={inputCls} value={d.name} onChange={(e) => setDraft(a.id, { name: e.target.value })} />
                 </td>
-                <td className="py-2 px-2 w-36">
+                <td className="py-2 px-2 w-32">
                   <input type="number" className={`${inputCls} text-right`} value={d.prev_balance}
                     onChange={(e) => setDraft(a.id, { prev_balance: e.target.value })} />
                 </td>
                 <td className="py-2 px-2 w-32">
+                  <input type="number" className={`${inputCls} text-right`} value={d.rub_to_mnt}
+                    onChange={(e) => setDraft(a.id, { rub_to_mnt: e.target.value })} />
+                </td>
+                <td className="py-2 px-2 w-32">
+                  <input type="number" className={`${inputCls} text-right`} value={d.mnt_to_rub}
+                    onChange={(e) => setDraft(a.id, { mnt_to_rub: e.target.value })} />
+                </td>
+                <td className="py-2 px-2 w-28">
                   <input type="number" className={`${inputCls} text-right`} value={d.adjustment}
                     onChange={(e) => setDraft(a.id, { adjustment: e.target.value })} />
                 </td>
@@ -283,7 +307,7 @@ function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAcco
             );
           })}
           {accounts.length === 0 && (
-            <tr><td colSpan={5} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
+            <tr><td colSpan={7} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
           )}
         </tbody>
       </table>
@@ -357,9 +381,12 @@ function ProfitSection() {
 
       <div className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 leading-relaxed bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3">
         <b>Ашигийн томьёо:</b><br />
-        Руб/төг: ( өртөг ханш − руб авах ханш ) × дүн &nbsp;·&nbsp;
-        Төг/руб: ( руб зарж буй ханш − өртөг ханш ) × дүн<br />
-        <span className="text-slate-400">өртөг ханш = USD ханш ÷ black ханш (Google Sheets). Ашиг ₮-өөр илэрхийлэгдэнэ.</span>
+        Руб→Төг: ( өртөг ханш − rate ) × руб дүн &nbsp;·&nbsp;
+        Төг→Руб: ( rate − өртөг ханш ) × руб дүн<br />
+        <span className="text-slate-400">
+          Руб дүн: руб→төг бол анхны руб дүн, төг→руб бол amount ÷ rate. өртөг ханш = USD ханш ÷ black ханш.
+          Тухайн өдөрт ханш байхгүй бол хамгийн сүүлд мэдэгдсэн ханшийг үргэлжлүүлэн хэрэглэнэ. Ашиг ₮-өөр.
+        </span>
       </div>
 
       {/* Profit summary */}

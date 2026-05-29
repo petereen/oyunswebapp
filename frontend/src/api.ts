@@ -1751,7 +1751,10 @@ export type TreasuryAccount = {
   id: string;
   name: string;
   prev_balance: number;
+  rub_to_mnt: number;
+  mnt_to_rub: number;
   adjustment: number;
+  balance_date?: string | null;
   currency: string;
   is_active: boolean;
   display_order: number;

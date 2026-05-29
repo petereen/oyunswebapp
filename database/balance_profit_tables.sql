@@ -12,8 +12,14 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
     name          TEXT NOT NULL,
     -- Админы өмнөх өдрийн баланс (RUB). Editable; carried by the admin.
     prev_balance  NUMERIC NOT NULL DEFAULT 0,
+    -- Өнөөдрийн руб→төг чиглэлийн дүн (RUB). Admin-entered daily figure.
+    rub_to_mnt    NUMERIC NOT NULL DEFAULT 0,
+    -- Өнөөдрийн төг→руб чиглэлийн дүн (RUB). Admin-entered daily figure.
+    mnt_to_rub    NUMERIC NOT NULL DEFAULT 0,
     -- Empty +/- adjustment field (default 0).
     adjustment    NUMERIC NOT NULL DEFAULT 0,
+    -- Moscow calendar day the daily figures belong to (used for rollover).
+    balance_date  DATE,
     currency      TEXT NOT NULL DEFAULT 'RUB',
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,
     display_order INTEGER NOT NULL DEFAULT 0,
@@ -23,6 +29,11 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
 
 CREATE INDEX IF NOT EXISTS idx_treasury_accounts_order
     ON treasury_accounts(display_order);
+
+-- Upgrade existing installs (idempotent — safe to re-run).
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS rub_to_mnt   NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS mnt_to_rub   NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS balance_date DATE;
 
 -- ── Cost rates (өртөг ханш) per date ─────────────────────────────────────────
 -- black_rate is fetched from Google Sheets, usd_rate is entered by the admin,
