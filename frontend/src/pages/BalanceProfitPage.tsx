@@ -140,7 +140,7 @@ function BalanceBody({ data, onChanged }: { data: BalanceSummary; onChanged: () 
       {/* Formula summary */}
       <div className="rounded-2xl border border-maroon-200 dark:border-maroon-900/50 bg-maroon-50/60 dark:bg-maroon-900/20 p-4">
         <div className="text-xs font-semibold text-slate-500 dark:text-ivory-400 mb-3">
-          Нийт баланс = Өмнөх өдрийн баланс + Өнөөдрийн руб/төг − Өнөөдрийн төг/руб + Тохируулга
+          Нийт баланс = Өмнөх өдрийн баланс + Өнөөдрийн руб/төг − Өнөөдрийн төг/руб + Custom
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <FormulaTerm label="Өмнөх өдрийн баланс" value={fmtRub(data.prev_balance_total)} />
@@ -149,7 +149,7 @@ function BalanceBody({ data, onChanged }: { data: BalanceSummary; onChanged: () 
           <span className="text-slate-400">−</span>
           <FormulaTerm label="Төг→Руб (өнөөдөр)" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
           <span className="text-slate-400">+</span>
-          <FormulaTerm label="Тохируулга" value={fmtRub(data.adjustment_total)} />
+          <FormulaTerm label="Custom" value={fmtRub(data.adjustment_total)} />
           <span className="text-slate-400">=</span>
           <div className="px-3 py-2 rounded-xl bg-maroon-600 text-white font-bold tabular-nums">
             {fmtRub(data.total_balance)}
@@ -291,7 +291,7 @@ function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAcco
             );
           })}
           {accounts.length === 0 && (
-            <tr><td colSpan={5} className="py-6 text-center text-slate-400">Данс алга. Доороос нэмнэ үү.</td></tr>
+            <tr><td colSpan={5} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
           )}
         </tbody>
       </table>
