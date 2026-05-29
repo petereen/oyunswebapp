@@ -2506,18 +2506,19 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
     # Echo the (non-secret) config so the UI can diagnose a misconfigured sheet.
     cfg = {
         "spreadsheet_id_set": bool(s.black_rate_spreadsheet_id),
-        "api_key_set": bool(s.google_sheets_api_key),
+        "service_account_file_set": bool(s.google_sheets_service_account_file),
         "sheet": s.black_rate_sheet_name,
         "date_col": s.black_rate_date_column,
         "rate_col": s.black_rate_rate_column,
         "status_col": s.black_rate_status_column,
         "status_value": s.black_rate_status_value,
     }
-    if not (s.black_rate_spreadsheet_id and s.google_sheets_api_key):
+    if not (s.black_rate_spreadsheet_id and s.google_sheets_service_account_file):
         return {"configured": False, "rates": {}, "latest": None, "latest_date": None,
                 "count": 0, "config": cfg,
-                "error": "Google Sheets is not configured. Set GOOGLE_SHEETS_API_KEY and "
-                         "BLACK_RATE_SPREADSHEET_ID in the backend .env, then restart."}
+                "error": "Google Sheets is not configured. Set GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE "
+                         "(or GOOGLE_APPLICATION_CREDENTIALS) and BLACK_RATE_SPREADSHEET_ID in the "
+                         "backend .env, then restart."}
     # The import + fetch are wrapped so a missing module, network, API or parse
     # error surfaces as a readable message instead of a bare 500.
     try:
