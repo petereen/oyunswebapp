@@ -2502,7 +2502,6 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
     read from column I. `latest`/`latest_date` expose the most recent "Ханш"
     row so the UI can fall back to it when a specific date has no entry.
     """
-    from google_sheets import fetch_black_rates, is_black_rate_configured
     s = get_settings()
     # Echo the (non-secret) config so the UI can diagnose a misconfigured sheet.
     cfg = {
@@ -2514,16 +2513,20 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
         "status_col": s.black_rate_status_column,
         "status_value": s.black_rate_status_value,
     }
-    if not is_black_rate_configured():
+    if not (s.black_rate_spreadsheet_id and s.google_sheets_api_key):
         return {"configured": False, "rates": {}, "latest": None, "latest_date": None,
                 "count": 0, "config": cfg,
                 "error": "Google Sheets is not configured. Set GOOGLE_SHEETS_API_KEY and "
                          "BLACK_RATE_SPREADSHEET_ID in the backend .env, then restart."}
+    # The import + fetch are wrapped so a missing module, network, API or parse
+    # error surfaces as a readable message instead of a bare 500.
     try:
+        from google_sheets import fetch_black_rates
         rates = fetch_black_rates()
-    except Exception as exc:  # network / API / parse failures
+    except Exception as exc:
+        logger.error(f"black-rate fetch failed: {type(exc).__name__}: {exc}")
         return {"configured": True, "rates": {}, "latest": None, "latest_date": None,
-                "count": 0, "config": cfg, "error": str(exc)}
+                "count": 0, "config": cfg, "error": f"{type(exc).__name__}: {exc}"}
     # The most recent "Ханш" row (latest date) is the current black rate.
     latest_date = max(rates) if rates else None
     latest_val = rates.get(latest_date) if latest_date else None
