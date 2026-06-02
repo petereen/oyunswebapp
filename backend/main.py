@@ -2330,7 +2330,8 @@ def _dashboard_db_error(exc: Exception, action: str):
             status_code=500,
             detail=(
                 "Database tables are missing. Run database/balance_profit_tables.sql "
-                "in the Supabase SQL editor to create treasury_accounts and cost_rates."
+                "in the Supabase SQL editor to create treasury_accounts, cost_rates, "
+                "and plane_ticket_sales."
             ),
         )
     return HTTPException(status_code=500, detail=f"{action}: {msg}")
@@ -2340,6 +2341,37 @@ def _moscow_today() -> str:
     """Current calendar date in Moscow time as YYYY-MM-DD."""
     from zoneinfo import ZoneInfo
     return datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d")
+
+
+def _optional_int(value, field_name: str) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be an integer")
+
+
+def _dashboard_admins(client) -> list[dict]:
+    res = client.table("admin_users").select("id,name").eq("is_active", True).order("name").execute()
+    return [
+        {"admin_id": row.get("id"), "name": row.get("name")}
+        for row in (res.data or [])
+        if row.get("id") is not None
+    ]
+
+
+def _validated_dashboard_admin_id(client, value, field_name: str = "admin_id") -> int | None:
+    admin_id = _optional_int(value, field_name)
+    if admin_id is None:
+        return None
+    res = client.table("admin_users").select("id,is_active").eq("id", admin_id).limit(1).execute()
+    row = (res.data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=400, detail=f"{field_name} must reference admin_users.id")
+    if row.get("is_active") is False:
+        raise HTTPException(status_code=400, detail=f"{field_name} must reference an active admin user")
+    return admin_id
 
 
 def _account_balance(a: dict) -> float:
@@ -2352,7 +2384,7 @@ def _account_balance(a: dict) -> float:
     )
 
 
-def _rollover_treasury_accounts(client) -> list[dict]:
+def _rollover_treasury_accounts(client, admin_id: int | None = None) -> list[dict]:
     """Carry each account's computed balance into prev_balance when its day ends.
 
     Lazy rollover: when an account's stored balance_date is before the current
@@ -2362,7 +2394,10 @@ def _rollover_treasury_accounts(client) -> list[dict]:
     up-to-date account rows ordered by display_order.
     """
     today = _moscow_today()
-    accounts = client.table("treasury_accounts").select("*").order("display_order").execute().data or []
+    query = client.table("treasury_accounts").select("*")
+    if admin_id is not None:
+        query = query.eq("admin_id", admin_id)
+    accounts = query.order("display_order").execute().data or []
     refreshed: list[dict] = []
     for a in accounts:
         bdate = (a.get("balance_date") or "")[:10]
@@ -2385,12 +2420,60 @@ def _rollover_treasury_accounts(client) -> list[dict]:
     return refreshed
 
 
+def _cost_rate_for_day(client, day: str) -> float | None:
+    res = (
+        client.table("cost_rates")
+        .select("rate_date,cost_rate")
+        .lte("rate_date", day)
+        .order("rate_date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    row = (res.data or [None])[0]
+    if not row or row.get("cost_rate") is None:
+        return None
+    return float(row.get("cost_rate") or 0)
+
+
+def _plane_ticket_sale_row(client, payload: dict) -> dict:
+    sale_date = str(payload.get("sale_date") or payload.get("date") or _moscow_today())[:10]
+    try:
+        sold_price_mnt = float(payload.get("sold_price_mnt") or payload.get("sold_price") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="sold_price_mnt must be a number")
+    if sold_price_mnt <= 0:
+        raise HTTPException(status_code=400, detail="sold_price_mnt must be greater than 0")
+
+    _, latest_sell_rate = _load_latest_rates(client)
+    exchange_rate = float(latest_sell_rate or 0)
+    if exchange_rate <= 0:
+        raise HTTPException(status_code=400, detail="Current sell rate is not configured")
+
+    cost_rate = _cost_rate_for_day(client, sale_date)
+    if cost_rate is None or cost_rate <= 0:
+        raise HTTPException(status_code=400, detail=f"No cost rate is available on or before {sale_date}")
+
+    rub_equivalent = sold_price_mnt / exchange_rate if exchange_rate else 0.0
+    profit_mnt = (exchange_rate - cost_rate) * rub_equivalent
+    return {
+        "sale_date": sale_date,
+        "sold_price_mnt": round(sold_price_mnt, 2),
+        "exchange_rate": round(exchange_rate, 4),
+        "cost_rate": round(cost_rate, 4),
+        "rub_equivalent": round(rub_equivalent, 4),
+        "profit_mnt": round(profit_mnt, 2),
+        "note": (payload.get("note") or payload.get("notes") or "").strip() or None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.get("/api/dashboard/treasury-accounts")
-async def list_treasury_accounts(auth=Depends(get_dashboard_auth)):
+async def list_treasury_accounts(admin_id: int = None, auth=Depends(get_dashboard_auth)):
     """List the admin's treasury (balance) accounts (with daily rollover applied)."""
     client = get_supabase()
+    normalized_admin_id = _validated_dashboard_admin_id(client, admin_id, "admin_id")
     try:
-        accounts = _rollover_treasury_accounts(client)
+        accounts = _rollover_treasury_accounts(client, admin_id=normalized_admin_id)
     except Exception as exc:
         raise _dashboard_db_error(exc, "List treasury accounts")
     return {"accounts": accounts}
@@ -2403,8 +2486,10 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
     now = datetime.now(timezone.utc).isoformat()
     if not (payload.get("name") or "").strip():
         raise HTTPException(status_code=400, detail="Missing required field: name")
+    normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
     insert_data = {
         "name": payload.get("name").strip(),
+        "admin_id": normalized_admin_id,
         "prev_balance": float(payload.get("prev_balance") or 0),
         "rub_to_mnt": float(payload.get("rub_to_mnt") or 0),
         "mnt_to_rub": float(payload.get("mnt_to_rub") or 0),
@@ -2432,6 +2517,8 @@ async def update_treasury_account(account_id: str, payload: dict, auth=Depends(g
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     if "name" in payload:
         update_data["name"] = (payload.get("name") or "").strip()
+    if "admin_id" in payload:
+        update_data["admin_id"] = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
     for num_field in ("prev_balance", "rub_to_mnt", "mnt_to_rub", "adjustment", "display_order"):
         if num_field in payload:
             update_data[num_field] = float(payload[num_field] or 0)
@@ -2460,7 +2547,7 @@ async def delete_treasury_account(account_id: str, auth=Depends(get_dashboard_au
 
 
 @app.get("/api/dashboard/balance")
-async def dashboard_balance(date: str = None, auth=Depends(get_dashboard_auth)):
+async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends(get_dashboard_auth)):
     """Balance accounting from per-account, admin-entered daily figures.
 
     Every figure is entered by the admin (nothing is pulled from transactions):
@@ -2471,8 +2558,10 @@ async def dashboard_balance(date: str = None, auth=Depends(get_dashboard_auth)):
     Moscow day's.
     """
     client = get_supabase()
+    normalized_admin_id = _validated_dashboard_admin_id(client, admin_id, "admin_id")
     try:
-        accounts = _rollover_treasury_accounts(client)
+        accounts = _rollover_treasury_accounts(client, admin_id=normalized_admin_id)
+        admins = _dashboard_admins(client)
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load balance")
 
@@ -2484,6 +2573,8 @@ async def dashboard_balance(date: str = None, auth=Depends(get_dashboard_auth)):
 
     return {
         "date": _moscow_today(),
+        "admins": admins,
+        "selected_admin_id": normalized_admin_id,
         "accounts": accounts,
         "rub_to_mnt_rub": round(rub_to_mnt, 2),
         "mnt_to_rub_rub": round(mnt_to_rub, 2),
@@ -2593,6 +2684,58 @@ async def upsert_cost_rate(payload: dict, auth=Depends(get_dashboard_auth)):
     return {"ok": True, "cost_rate": (result.data or [row])[0]}
 
 
+@app.get("/api/dashboard/plane-ticket-sales")
+async def list_plane_ticket_sales(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
+    """List manual plane-ticket sales for the selected window."""
+    client = get_supabase()
+    query = client.table("plane_ticket_sales").select("*")
+    if start:
+        query = query.gte("sale_date", start[:10])
+    if end:
+        query = query.lte("sale_date", end[:10])
+    try:
+        rows = query.order("sale_date", desc=True).order("created_at", desc=True).execute().data or []
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "List plane ticket sales")
+
+    total_profit = sum(float(row.get("profit_mnt") or 0) for row in rows)
+    total_sold = sum(float(row.get("sold_price_mnt") or 0) for row in rows)
+    return {
+        "sales": rows,
+        "summary": {
+            "count": len(rows),
+            "total_profit": round(total_profit, 2),
+            "total_sold_price_mnt": round(total_sold, 2),
+        },
+    }
+
+
+@app.post("/api/dashboard/plane-ticket-sales")
+async def create_plane_ticket_sale(payload: dict, auth=Depends(get_dashboard_auth)):
+    """Create a manual plane-ticket sale row with computed rate snapshots."""
+    client = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+    row = _plane_ticket_sale_row(client, payload)
+    row["created_at"] = now
+    try:
+        result = client.table("plane_ticket_sales").insert(row).execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Create plane ticket sale")
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create plane ticket sale")
+    return {"ok": True, "sale": result.data[0]}
+
+
+@app.delete("/api/dashboard/plane-ticket-sales/{sale_id}")
+async def delete_plane_ticket_sale(sale_id: str, auth=Depends(get_dashboard_auth)):
+    """Delete a manual plane-ticket sale row."""
+    client = get_supabase()
+    result = client.table("plane_ticket_sales").delete().eq("id", sale_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Plane ticket sale not found")
+    return {"ok": True}
+
+
 @app.get("/api/dashboard/profit")
 async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
     """Profit over a period, joining each transaction's date to its cost rate.
@@ -2652,8 +2795,9 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
         idx = bisect.bisect_right(cr_dates, day) - 1
         return cr_values[idx] if idx >= 0 else None
 
-    total_profit = buy_profit = sell_profit = 0.0
+    total_profit = buy_profit = sell_profit = ticket_profit = 0.0
     counted = 0
+    ticket_count = 0
     missing_dates: set[str] = set()
     by_day: dict[str, dict] = defaultdict(lambda: {"profit": 0.0, "count": 0})
 
@@ -2687,6 +2831,27 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
         by_day[day]["profit"] += profit
         by_day[day]["count"] += 1
 
+    ticket_query = client.table("plane_ticket_sales").select("sale_date,profit_mnt")
+    if start:
+        ticket_query = ticket_query.gte("sale_date", start[:10])
+    if end:
+        ticket_query = ticket_query.lte("sale_date", end[:10])
+    try:
+        ticket_rows = ticket_query.order("sale_date").execute().data or []
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Load plane ticket sales for profit")
+
+    for row in ticket_rows:
+        day = str(row.get("sale_date") or "")[:10]
+        profit = float(row.get("profit_mnt") or 0)
+        ticket_profit += profit
+        total_profit += profit
+        counted += 1
+        ticket_count += 1
+        if day:
+            by_day[day]["profit"] += profit
+            by_day[day]["count"] += 1
+
     by_day_out = [
         {"date": d, "profit": round(v["profit"], 2), "count": v["count"]}
         for d, v in sorted(by_day.items())
@@ -2695,8 +2860,10 @@ async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_
         "total_profit": round(total_profit, 2),
         "buy_profit": round(buy_profit, 2),
         "sell_profit": round(sell_profit, 2),
+        "ticket_profit": round(ticket_profit, 2),
         "currency": "MNT",
         "counted": counted,
+        "ticket_count": ticket_count,
         "by_day": by_day_out,
         "missing_rate_dates": sorted(missing_dates),
     }

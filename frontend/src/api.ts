@@ -1716,6 +1716,11 @@ export type DashboardData = {
   truncated: boolean;
 };
 
+export type DashboardAdminOption = {
+  admin_id: number;
+  name: string | null;
+};
+
 export type DashboardStatusFilter = "all" | "successful" | "pending" | "waiting_edit" | "rejected";
 
 export async function verifyDashboardKey(): Promise<boolean> {
@@ -1750,6 +1755,7 @@ export async function fetchDashboardData(params: {
 export type TreasuryAccount = {
   id: string;
   name: string;
+  admin_id?: number | null;
   prev_balance: number;
   rub_to_mnt: number;
   mnt_to_rub: number;
@@ -1764,6 +1770,8 @@ export type TreasuryAccount = {
 
 export type BalanceSummary = {
   date: string;
+  admins: DashboardAdminOption[];
+  selected_admin_id?: number | null;
   accounts: TreasuryAccount[];
   rub_to_mnt_rub: number;
   mnt_to_rub_rub: number;
@@ -1784,10 +1792,36 @@ export type ProfitSummary = {
   total_profit: number;
   buy_profit: number;
   sell_profit: number;
+  ticket_profit: number;
   currency: string;
   counted: number;
+  ticket_count: number;
   by_day: { date: string; profit: number; count: number }[];
   missing_rate_dates: string[];
+};
+
+export type PlaneTicketSale = {
+  id: string;
+  sale_date: string;
+  sold_price_mnt: number;
+  exchange_rate: number;
+  cost_rate: number;
+  rub_equivalent: number;
+  profit_mnt: number;
+  note?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PlaneTicketSalesSummary = {
+  count: number;
+  total_profit: number;
+  total_sold_price_mnt: number;
+};
+
+export type PlaneTicketSalesResponse = {
+  sales: PlaneTicketSale[];
+  summary: PlaneTicketSalesSummary;
 };
 
 export async function fetchTreasuryAccounts(): Promise<TreasuryAccount[]> {
@@ -1809,8 +1843,12 @@ export async function deleteTreasuryAccount(id: string): Promise<void> {
   await dashboardApi.delete(`/dashboard/treasury-accounts/${id}`);
 }
 
-export async function fetchBalanceSummary(date?: string): Promise<BalanceSummary> {
-  const res = await dashboardApi.get(`/dashboard/balance${date ? `?date=${date}` : ""}`);
+export async function fetchBalanceSummary(params: { date?: string; admin_id?: number } = {}): Promise<BalanceSummary> {
+  const search = new URLSearchParams();
+  if (params.date) search.set("date", params.date);
+  if (params.admin_id != null) search.set("admin_id", String(params.admin_id));
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/balance${query ? `?${query}` : ""}`);
   return res.data as BalanceSummary;
 }
 
@@ -1848,4 +1886,26 @@ export async function fetchProfit(params: { start?: string; end?: string }): Pro
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/profit${query ? `?${query}` : ""}`);
   return res.data as ProfitSummary;
+}
+
+export async function fetchPlaneTicketSales(params: { start?: string; end?: string } = {}): Promise<PlaneTicketSalesResponse> {
+  const search = new URLSearchParams();
+  if (params.start) search.set("start", params.start);
+  if (params.end) search.set("end", params.end);
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/plane-ticket-sales${query ? `?${query}` : ""}`);
+  return res.data as PlaneTicketSalesResponse;
+}
+
+export async function createPlaneTicketSale(payload: {
+  sale_date?: string;
+  sold_price_mnt: number;
+  notes?: string;
+}): Promise<PlaneTicketSale> {
+  const res = await dashboardApi.post("/dashboard/plane-ticket-sales", payload);
+  return res.data.sale as PlaneTicketSale;
+}
+
+export async function deletePlaneTicketSale(id: string): Promise<void> {
+  await dashboardApi.delete(`/dashboard/plane-ticket-sales/${id}`);
 }

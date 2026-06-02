@@ -10,6 +10,7 @@
 CREATE TABLE IF NOT EXISTS treasury_accounts (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name          TEXT NOT NULL,
+    admin_id      BIGINT REFERENCES public.admin_users(id) ON UPDATE CASCADE ON DELETE SET NULL,
     -- Админы өмнөх өдрийн баланс (RUB). Editable; carried by the admin.
     prev_balance  NUMERIC NOT NULL DEFAULT 0,
     -- Өнөөдрийн руб→төг чиглэлийн дүн (RUB). Admin-entered daily figure.
@@ -27,13 +28,35 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_treasury_accounts_order
-    ON treasury_accounts(display_order);
-
 -- Upgrade existing installs (idempotent — safe to re-run).
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS rub_to_mnt   NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS mnt_to_rub   NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS balance_date DATE;
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS admin_id      BIGINT;
+
+CREATE INDEX IF NOT EXISTS idx_treasury_accounts_order
+    ON treasury_accounts(display_order);
+
+CREATE INDEX IF NOT EXISTS idx_treasury_accounts_admin_order
+    ON treasury_accounts(admin_id, display_order);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'treasury_accounts_admin_id_fkey'
+          AND conrelid = 'treasury_accounts'::regclass
+    ) THEN
+        ALTER TABLE treasury_accounts
+            ADD CONSTRAINT treasury_accounts_admin_id_fkey
+            FOREIGN KEY (admin_id)
+            REFERENCES public.admin_users(id)
+            ON UPDATE CASCADE
+            ON DELETE SET NULL
+            NOT VALID;
+    END IF;
+END $$;
 
 -- ── Cost rates (өртөг ханш) per date ─────────────────────────────────────────
 -- black_rate is fetched from Google Sheets, usd_rate is entered by the admin,
@@ -46,12 +69,33 @@ CREATE TABLE IF NOT EXISTS cost_rates (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ── Manual plane-ticket sales ───────────────────────────────────────────────
+-- The dashboard stores ticket sales as sold MNT amounts. The backend snapshots
+-- the latest sell rate plus the effective cost rate for the selected date so
+-- the entry contributes to the profit calculator like a manual MNT→RUB sale.
+CREATE TABLE IF NOT EXISTS plane_ticket_sales (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sale_date        DATE NOT NULL,
+    sold_price_mnt   NUMERIC NOT NULL,
+    exchange_rate    NUMERIC NOT NULL,
+    cost_rate        NUMERIC NOT NULL,
+    rub_equivalent   NUMERIC NOT NULL DEFAULT 0,
+    profit_mnt       NUMERIC NOT NULL DEFAULT 0,
+    note             TEXT,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_plane_ticket_sales_date
+    ON plane_ticket_sales(sale_date DESC);
+
 -- ── Row Level Security ───────────────────────────────────────────────────────
 -- These tables are only ever accessed by the backend (service-role key, which
 -- bypasses RLS). Enabling RLS with no policies blocks the public anon key, so
 -- treasury balances and cost rates are not exposed through the public REST API.
 ALTER TABLE treasury_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cost_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plane_ticket_sales ENABLE ROW LEVEL SECURITY;
 
 -- ── updated_at trigger (reuses the project's shared function if present) ──────
 DO $$
@@ -60,6 +104,16 @@ BEGIN
         DROP TRIGGER IF EXISTS update_treasury_accounts_updated_at ON treasury_accounts;
         CREATE TRIGGER update_treasury_accounts_updated_at
             BEFORE UPDATE ON treasury_accounts
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at_column') THEN
+        DROP TRIGGER IF EXISTS update_plane_ticket_sales_updated_at ON plane_ticket_sales;
+        CREATE TRIGGER update_plane_ticket_sales_updated_at
+            BEFORE UPDATE ON plane_ticket_sales
             FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     END IF;
 END $$;

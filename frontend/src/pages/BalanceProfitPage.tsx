@@ -1,16 +1,18 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle, Calculator, Calendar, Loader2, LogOut, Plus, RefreshCw,
-  Save, Trash2, TrendingUp, Wallet,
+  AlertTriangle, Calculator, Calendar, Loader2, LogOut, Plane, Plus, RefreshCw,
+  Save, Trash2, TrendingUp, UserCog, Wallet,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
 import {
-  BalanceSummary, CostRate, ProfitSummary, TreasuryAccount,
-  createTreasuryAccount, deleteTreasuryAccount, fetchBalanceSummary, fetchBlackRates,
-  fetchCostRates, fetchProfit, saveCostRate, updateTreasuryAccount,
+  BalanceSummary, CostRate, DashboardAdminOption, PlaneTicketSale, PlaneTicketSalesResponse,
+  ProfitSummary, TreasuryAccount, createPlaneTicketSale, createTreasuryAccount,
+  deletePlaneTicketSale, deleteTreasuryAccount, fetchBalanceSummary, fetchBlackRates,
+  fetchCostRates, fetchPlaneTicketSales, fetchProfit, fetchRates, saveCostRate,
+  updateTreasuryAccount,
 } from "../api";
 
 type ProfitPeriod = "today" | "7d" | "month" | "year" | "custom";
@@ -23,6 +25,10 @@ const PROFIT_PERIODS: { key: ProfitPeriod; label: string }[] = [
   { key: "custom", label: "Хугацаа сонгох" },
 ];
 
+const BALANCE_ADMIN_STORAGE = "oyuns_dashboard_balance_admin_id";
+const PANEL_CLASS = "bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm p-4 md:p-5";
+const INPUT_CLASS = "w-full rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 focus:ring-maroon-500";
+
 const todayIso = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -30,8 +36,10 @@ const todayIso = () => {
 
 const fmtNum = (n: number | null | undefined, digits = 0) =>
   (n ?? 0).toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+
 const fmtRub = (n: number | null | undefined) => `${fmtNum(n)} ₽`;
 const fmtMnt = (n: number | null | undefined) => `${fmtNum(n)} ₮`;
+const fmtRate = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(4));
 
 function profitRange(period: ProfitPeriod, custom: { start: string; end: string }) {
   const now = new Date();
@@ -50,14 +58,33 @@ function profitRange(period: ProfitPeriod, custom: { start: string; end: string 
   return { start: start ? start.toISOString() : undefined, end: now.toISOString() };
 }
 
+function readStoredBalanceAdminId() {
+  const stored = localStorage.getItem(BALANCE_ADMIN_STORAGE);
+  if (!stored) return null;
+  const parsed = Number(stored);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function adminLabel(admins: DashboardAdminOption[], adminId: number | null | undefined) {
+  if (adminId == null) return "Хуваарилаагүй";
+  const match = admins.find((admin) => admin.admin_id === adminId);
+  return match?.name || `ID ${adminId}`;
+}
+
+function accountBalance(draft: Pick<AcctDraft, "prev_balance" | "rub_to_mnt" | "mnt_to_rub" | "adjustment">) {
+  return (Number(draft.prev_balance) || 0)
+    + (Number(draft.rub_to_mnt) || 0)
+    - (Number(draft.mnt_to_rub) || 0)
+    + (Number(draft.adjustment) || 0);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void; pageTabs?: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-dark-900 text-slate-800 dark:text-ivory-200">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 space-y-5">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-maroon-600 flex items-center justify-center">
               <Wallet className="w-6 h-6 text-white" />
@@ -67,11 +94,11 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
               <p className="text-xs text-slate-500 dark:text-ivory-400">Балансын бүртгэл ба ашгийн тооцоо</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {pageTabs}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="w-full sm:w-auto">{pageTabs}</div>
             <button
               onClick={onLogout}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-sm font-medium hover:bg-slate-100 dark:hover:bg-dark-700 transition"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-sm font-medium hover:bg-slate-100 dark:hover:bg-dark-700 transition"
             >
               <LogOut className="w-4 h-4" /> Гарах
             </button>
@@ -88,56 +115,113 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
 // ── Section A: Balance accounting ────────────────────────────────────────────
 
 function BalanceSection() {
-  const { data, isLoading, isFetching, refetch, error } = useQuery({
-    queryKey: ["dashboard-balance"],
-    queryFn: () => fetchBalanceSummary(),
+  const [selectedAdminId, setSelectedAdminId] = useState<number | null>(() => readStoredBalanceAdminId());
+
+  useEffect(() => {
+    if (selectedAdminId == null) {
+      localStorage.removeItem(BALANCE_ADMIN_STORAGE);
+      return;
+    }
+    localStorage.setItem(BALANCE_ADMIN_STORAGE, String(selectedAdminId));
+  }, [selectedAdminId]);
+
+  const balanceQ = useQuery({
+    queryKey: ["dashboard-balance", selectedAdminId],
+    queryFn: () => fetchBalanceSummary({ admin_id: selectedAdminId ?? undefined }),
     staleTime: 30_000,
   });
 
+  useEffect(() => {
+    if (selectedAdminId == null || !balanceQ.data?.admins?.length) return;
+    const stillExists = balanceQ.data.admins.some((admin) => admin.admin_id === selectedAdminId);
+    if (!stillExists) setSelectedAdminId(null);
+  }, [balanceQ.data, selectedAdminId]);
+
+  useEffect(() => {
+    const status = (balanceQ.error as { response?: { status?: number } } | null)?.response?.status;
+    if (status === 400 && selectedAdminId != null) {
+      setSelectedAdminId(null);
+    }
+  }, [balanceQ.error, selectedAdminId]);
+
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm p-4 md:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className={PANEL_CLASS}>
+      <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Wallet className="w-5 h-5 text-maroon-600 dark:text-gold-400" />
           <h2 className="text-base font-bold">Балансын бүртгэл</h2>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-dark-600">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <label className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600">
+            <UserCog className="w-4 h-4 text-slate-400" />
+            <span className="text-xs font-medium text-slate-500 dark:text-ivory-400">Админ</span>
+            <select
+              value={selectedAdminId ?? ""}
+              onChange={(e) => setSelectedAdminId(e.target.value ? Number(e.target.value) : null)}
+              className="bg-transparent text-sm font-semibold outline-none cursor-pointer"
+            >
+              <option value="">Бүх админ</option>
+              {(balanceQ.data?.admins || []).map((admin) => (
+                <option key={admin.admin_id} value={admin.admin_id}>
+                  {admin.name || `ID ${admin.admin_id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600">
             <Calendar className="w-4 h-4 text-slate-400" />
-            <span className="text-xs tabular-nums">{data?.date || todayIso()} <span className="text-slate-400">(Москва)</span></span>
+            <span className="text-xs tabular-nums">{balanceQ.data?.date || todayIso()} <span className="text-slate-400">(Москва)</span></span>
           </div>
           <button
-            onClick={() => refetch()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition"
+            onClick={() => balanceQ.refetch()}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} /> Шинэчлэх
+            <RefreshCw className={`w-3.5 h-3.5 ${balanceQ.isFetching ? "animate-spin" : ""}`} /> Шинэчлэх
           </button>
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 bg-slate-50 dark:bg-dark-700/50 rounded-xl p-2.5">
+      <p className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3 leading-relaxed">
         Бүх талбарыг гараар оруулна: <b>Өмнөх өдрийн баланс + Өнөөдрийн руб→төг − Өнөөдрийн төг→руб ± Тохируулга = Өнөөдрийн баланс</b>.
         Москвагийн өдөр дуусахад өнөөдрийн баланс автоматаар маргаашийн "Өмнөх өдрийн баланс" болж шилжинэ.
       </p>
 
-      {error ? (
+      {balanceQ.error ? (
         <div className="text-sm text-red-500 py-6 text-center">Баланс ачаалж чадсангүй.</div>
-      ) : isLoading || !data ? (
+      ) : balanceQ.isLoading || !balanceQ.data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-maroon-600 animate-spin" /></div>
       ) : (
-        <BalanceBody data={data} onChanged={refetch} />
+        <BalanceBody data={balanceQ.data} selectedAdminId={selectedAdminId} onChanged={() => balanceQ.refetch()} />
       )}
     </div>
   );
 }
 
-function BalanceBody({ data, onChanged }: { data: BalanceSummary; onChanged: () => void }) {
+function BalanceBody({
+  data,
+  selectedAdminId,
+  onChanged,
+}: {
+  data: BalanceSummary;
+  selectedAdminId: number | null;
+  onChanged: () => void;
+}) {
   return (
     <div className="space-y-5">
-      <TreasuryAccountsTable accounts={data.accounts} onChanged={onChanged} />
+      {selectedAdminId != null && (
+        <div className="text-xs text-slate-500 dark:text-ivory-400">
+          Харагдаж буй баланс: <span className="font-semibold text-slate-700 dark:text-ivory-200">{adminLabel(data.admins, selectedAdminId)}</span>
+        </div>
+      )}
 
-      {/* Balance summary */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <TreasuryAccountsTable
+        accounts={data.accounts}
+        admins={data.admins}
+        selectedAdminId={selectedAdminId}
+        onChanged={onChanged}
+      />
+
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
         <BalanceStat label="Өмнөх өдрийн баланс" value={fmtRub(data.prev_balance_total)} />
         <BalanceStat label="Өнөөдрийн руб→төг" value={fmtRub(data.rub_to_mnt_rub)} tone="pos" />
         <BalanceStat label="Өнөөдрийн төг→руб" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
@@ -163,60 +247,95 @@ function BalanceStat({ label, value, tone, accent }: { label: string; value: str
   );
 }
 
-type AcctDraft = { name: string; prev_balance: string; rub_to_mnt: string; mnt_to_rub: string; adjustment: string };
+type AcctDraft = {
+  name: string;
+  admin_id: string;
+  prev_balance: string;
+  rub_to_mnt: string;
+  mnt_to_rub: string;
+  adjustment: string;
+};
 
-function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAccount[]; onChanged: () => void }) {
+function TreasuryAccountsTable({
+  accounts,
+  admins,
+  selectedAdminId,
+  onChanged,
+}: {
+  accounts: TreasuryAccount[];
+  admins: DashboardAdminOption[];
+  selectedAdminId: number | null;
+  onChanged: () => void;
+}) {
   const [drafts, setDrafts] = useState<Record<string, AcctDraft>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newBalance, setNewBalance] = useState("");
+  const [newAdminId, setNewAdminId] = useState(selectedAdminId != null ? String(selectedAdminId) : "");
 
-  const draftOf = (a: TreasuryAccount): AcctDraft =>
-    drafts[a.id] ?? {
-      name: a.name,
-      prev_balance: String(a.prev_balance ?? 0),
-      rub_to_mnt: String(a.rub_to_mnt ?? 0),
-      mnt_to_rub: String(a.mnt_to_rub ?? 0),
-      adjustment: String(a.adjustment ?? 0),
+  useEffect(() => {
+    setNewAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
+  }, [selectedAdminId]);
+
+  const draftOf = (account: TreasuryAccount): AcctDraft =>
+    drafts[account.id] ?? {
+      name: account.name,
+      admin_id: account.admin_id != null ? String(account.admin_id) : "",
+      prev_balance: String(account.prev_balance ?? 0),
+      rub_to_mnt: String(account.rub_to_mnt ?? 0),
+      mnt_to_rub: String(account.mnt_to_rub ?? 0),
+      adjustment: String(account.adjustment ?? 0),
     };
 
-  const setDraft = (id: string, patch: Partial<AcctDraft>) =>
-    setDrafts((d) => ({ ...d, [id]: { ...draftOf(accounts.find((a) => a.id === id)!), ...d[id], ...patch } }));
-
-  const isDirty = (a: TreasuryAccount) => {
-    const d = drafts[a.id];
-    if (!d) return false;
-    return d.name !== a.name
-      || Number(d.prev_balance) !== a.prev_balance
-      || Number(d.rub_to_mnt) !== a.rub_to_mnt
-      || Number(d.mnt_to_rub) !== a.mnt_to_rub
-      || Number(d.adjustment) !== a.adjustment;
+  const setDraft = (id: string, patch: Partial<AcctDraft>) => {
+    const account = accounts.find((item) => item.id === id);
+    if (!account) return;
+    setDrafts((current) => ({
+      ...current,
+      [id]: { ...draftOf(account), ...current[id], ...patch },
+    }));
   };
 
-  const save = async (a: TreasuryAccount) => {
-    const d = draftOf(a);
-    setBusyId(a.id);
+  const isDirty = (account: TreasuryAccount) => {
+    const draft = drafts[account.id];
+    if (!draft) return false;
+    return draft.name !== account.name
+      || Number(draft.admin_id || 0) !== Number(account.admin_id || 0)
+      || Number(draft.prev_balance) !== account.prev_balance
+      || Number(draft.rub_to_mnt) !== account.rub_to_mnt
+      || Number(draft.mnt_to_rub) !== account.mnt_to_rub
+      || Number(draft.adjustment) !== account.adjustment;
+  };
+
+  const save = async (account: TreasuryAccount) => {
+    const draft = draftOf(account);
+    setBusyId(account.id);
     try {
-      await updateTreasuryAccount(a.id, {
-        name: d.name,
-        prev_balance: Number(d.prev_balance) || 0,
-        rub_to_mnt: Number(d.rub_to_mnt) || 0,
-        mnt_to_rub: Number(d.mnt_to_rub) || 0,
-        adjustment: Number(d.adjustment) || 0,
+      await updateTreasuryAccount(account.id, {
+        name: draft.name,
+        admin_id: draft.admin_id ? Number(draft.admin_id) : null,
+        prev_balance: Number(draft.prev_balance) || 0,
+        rub_to_mnt: Number(draft.rub_to_mnt) || 0,
+        mnt_to_rub: Number(draft.mnt_to_rub) || 0,
+        adjustment: Number(draft.adjustment) || 0,
       });
-      setDrafts((prev) => { const n = { ...prev }; delete n[a.id]; return n; });
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[account.id];
+        return next;
+      });
       onChanged();
     } finally {
       setBusyId(null);
     }
   };
 
-  const remove = async (a: TreasuryAccount) => {
-    if (!window.confirm(`"${a.name}" дансыг устгах уу?`)) return;
-    setBusyId(a.id);
+  const remove = async (account: TreasuryAccount) => {
+    if (!window.confirm(`"${account.name}" дансыг устгах уу?`)) return;
+    setBusyId(account.id);
     try {
-      await deleteTreasuryAccount(a.id);
+      await deleteTreasuryAccount(account.id);
       onChanged();
     } finally {
       setBusyId(null);
@@ -229,6 +348,7 @@ function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAcco
     try {
       await createTreasuryAccount({
         name: newName.trim(),
+        admin_id: newAdminId ? Number(newAdminId) : null,
         prev_balance: Number(newBalance) || 0,
         display_order: accounts.length,
       });
@@ -240,95 +360,187 @@ function TreasuryAccountsTable({ accounts, onChanged }: { accounts: TreasuryAcco
     }
   };
 
-  const inputCls = "w-full rounded-lg border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 px-2 py-1.5 text-xs tabular-nums outline-none focus:ring-2 focus:ring-maroon-500";
-
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
-            <th className="py-2 pr-2 font-medium">Дансны нэр</th>
-            <th className="py-2 px-2 font-medium text-right">Өмнөх өдрийн баланс (₽)</th>
-            <th className="py-2 px-2 font-medium text-right">Өнөөдрийн руб→төг (₽)</th>
-            <th className="py-2 px-2 font-medium text-right">Өнөөдрийн төг→руб (₽)</th>
-            <th className="py-2 px-2 font-medium text-right">Тохируулга ± (₽)</th>
-            <th className="py-2 px-2 font-medium text-right">Өнөөдрийн баланс (₽)</th>
-            <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
-          </tr>
-        </thead>
-        <tbody>
-          {accounts.map((a) => {
-            const d = draftOf(a);
-            const subtotal = (Number(d.prev_balance) || 0) + (Number(d.rub_to_mnt) || 0)
-              - (Number(d.mnt_to_rub) || 0) + (Number(d.adjustment) || 0);
-            return (
-              <tr key={a.id} className="border-b border-slate-100 dark:border-dark-700">
-                <td className="py-2 pr-2 min-w-[140px]">
-                  <input className={inputCls} value={d.name} onChange={(e) => setDraft(a.id, { name: e.target.value })} />
-                </td>
-                <td className="py-2 px-2 w-32">
-                  <input type="number" className={`${inputCls} text-right`} value={d.prev_balance}
-                    onChange={(e) => setDraft(a.id, { prev_balance: e.target.value })} />
-                </td>
-                <td className="py-2 px-2 w-32">
-                  <input type="number" className={`${inputCls} text-right`} value={d.rub_to_mnt}
-                    onChange={(e) => setDraft(a.id, { rub_to_mnt: e.target.value })} />
-                </td>
-                <td className="py-2 px-2 w-32">
-                  <input type="number" className={`${inputCls} text-right`} value={d.mnt_to_rub}
-                    onChange={(e) => setDraft(a.id, { mnt_to_rub: e.target.value })} />
-                </td>
-                <td className="py-2 px-2 w-28">
-                  <input type="number" className={`${inputCls} text-right`} value={d.adjustment}
-                    onChange={(e) => setDraft(a.id, { adjustment: e.target.value })} />
-                </td>
-                <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(subtotal)}</td>
-                <td className="py-2 pl-2">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      onClick={() => save(a)}
-                      disabled={!isDirty(a) || busyId === a.id}
-                      className="p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-30 hover:bg-maroon-700 transition"
-                      title="Хадгалах"
-                    >
-                      {busyId === a.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    </button>
-                    <button
-                      onClick={() => remove(a)}
-                      disabled={busyId === a.id}
-                      className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
-                      title="Устгах"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-          {accounts.length === 0 && (
-            <tr><td colSpan={7} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
-          )}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      <div className="grid gap-3 md:hidden">
+        {accounts.map((account) => {
+          const draft = draftOf(account);
+          const subtotal = accountBalance(draft);
+          return (
+            <div key={account.id} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] text-slate-400">Данс</div>
+                  <div className="font-semibold">{account.name}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] text-slate-400">Өнөөдрийн баланс</div>
+                  <div className="font-bold tabular-nums text-maroon-600 dark:text-gold-400">{fmtRub(subtotal)}</div>
+                </div>
+              </div>
 
-      {/* Add account */}
-      <div className="flex flex-wrap items-end gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-dark-700">
-        <div className="flex-1 min-w-[160px]">
-          <label className="text-[10px] text-slate-400">Шинэ дансны нэр</label>
-          <input className={inputCls} placeholder="Жишээ: Сбербанк ₽" value={newName} onChange={(e) => setNewName(e.target.value)} />
+              <div className="grid grid-cols-1 gap-3">
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
+                  <input className={INPUT_CLASS} value={draft.name} onChange={(e) => setDraft(account.id, { name: e.target.value })} />
+                </label>
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
+                  <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value })}>
+                    <option value="">Хуваарилаагүй</option>
+                    {admins.map((admin) => (
+                      <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Өмнөх баланс</div>
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.prev_balance} onChange={(e) => setDraft(account.id, { prev_balance: e.target.value })} />
+                  </label>
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Руб→төг</div>
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.rub_to_mnt} onChange={(e) => setDraft(account.id, { rub_to_mnt: e.target.value })} />
+                  </label>
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Төг→руб</div>
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.mnt_to_rub} onChange={(e) => setDraft(account.id, { mnt_to_rub: e.target.value })} />
+                  </label>
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Тохируулга</div>
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.adjustment} onChange={(e) => setDraft(account.id, { adjustment: e.target.value })} />
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => save(account)}
+                  disabled={!isDirty(account) || busyId === account.id}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-maroon-700 transition"
+                >
+                  {busyId === account.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
+                </button>
+                <button
+                  onClick={() => remove(account)}
+                  disabled={busyId === account.id}
+                  className="px-3 py-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {accounts.length === 0 && (
+          <div className="py-6 text-center text-sm text-slate-400 rounded-2xl border border-dashed border-slate-200 dark:border-dark-600">
+            Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.
+          </div>
+        )}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
+              <th className="py-2 pr-2 font-medium">Дансны нэр</th>
+              <th className="py-2 px-2 font-medium">Админ</th>
+              <th className="py-2 px-2 font-medium text-right">Өмнөх баланс (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Руб→төг (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Төг→руб (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Тохируулга (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Өнөөдрийн баланс (₽)</th>
+              <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map((account) => {
+              const draft = draftOf(account);
+              const subtotal = accountBalance(draft);
+              return (
+                <tr key={account.id} className="border-b border-slate-100 dark:border-dark-700">
+                  <td className="py-2 pr-2 min-w-[180px]">
+                    <input className={INPUT_CLASS} value={draft.name} onChange={(e) => setDraft(account.id, { name: e.target.value })} />
+                  </td>
+                  <td className="py-2 px-2 min-w-[180px]">
+                    <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value })}>
+                      <option value="">Хуваарилаагүй</option>
+                      {admins.map((admin) => (
+                        <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-2 px-2 w-36">
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.prev_balance} onChange={(e) => setDraft(account.id, { prev_balance: e.target.value })} />
+                  </td>
+                  <td className="py-2 px-2 w-36">
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.rub_to_mnt} onChange={(e) => setDraft(account.id, { rub_to_mnt: e.target.value })} />
+                  </td>
+                  <td className="py-2 px-2 w-36">
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.mnt_to_rub} onChange={(e) => setDraft(account.id, { mnt_to_rub: e.target.value })} />
+                  </td>
+                  <td className="py-2 px-2 w-36">
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.adjustment} onChange={(e) => setDraft(account.id, { adjustment: e.target.value })} />
+                  </td>
+                  <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(subtotal)}</td>
+                  <td className="py-2 pl-2">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => save(account)}
+                        disabled={!isDirty(account) || busyId === account.id}
+                        className="p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-30 hover:bg-maroon-700 transition"
+                        title="Хадгалах"
+                      >
+                        {busyId === account.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        onClick={() => remove(account)}
+                        disabled={busyId === account.id}
+                        className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
+                        title="Устгах"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {accounts.length === 0 && (
+              <tr><td colSpan={8} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4">
+        <div className="text-sm font-semibold mb-3">Шинэ данс нэмэх</div>
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_180px_auto] gap-2 items-end">
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
+            <input className={INPUT_CLASS} placeholder="Жишээ: Сбербанк ₽" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          </label>
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
+            <select className={INPUT_CLASS} value={newAdminId} onChange={(e) => setNewAdminId(e.target.value)}>
+              <option value="">Хуваарилаагүй</option>
+              {admins.map((admin) => (
+                <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Өмнөх өдрийн баланс</div>
+            <input type="number" className={`${INPUT_CLASS} text-right`} placeholder="0" value={newBalance} onChange={(e) => setNewBalance(e.target.value)} />
+          </label>
+          <button
+            onClick={add}
+            disabled={!newName.trim() || adding}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+          >
+            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Данс нэмэх
+          </button>
         </div>
-        <div className="w-40">
-          <label className="text-[10px] text-slate-400">Өмнөх өдрийн баланс</label>
-          <input type="number" className={`${inputCls} text-right`} placeholder="0" value={newBalance} onChange={(e) => setNewBalance(e.target.value)} />
-        </div>
-        <button
-          onClick={add}
-          disabled={!newName.trim() || adding}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-xs font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
-        >
-          {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Данс нэмэх
-        </button>
       </div>
     </div>
   );
@@ -348,32 +560,36 @@ function ProfitSection() {
     staleTime: 30_000,
   });
 
+  const refreshProfit = () => {
+    profitQ.refetch();
+  };
+
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm p-4 md:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className={PANEL_CLASS}>
+      <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Calculator className="w-5 h-5 text-maroon-600 dark:text-gold-400" />
           <h2 className="text-base font-bold">Ашгийн тооцоо</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap items-center gap-1 bg-slate-50 dark:bg-dark-700 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
-            {PROFIT_PERIODS.map((p) => (
+            {PROFIT_PERIODS.map((periodOption) => (
               <button
-                key={p.key}
-                onClick={() => setPeriod(p.key)}
+                key={periodOption.key}
+                onClick={() => setPeriod(periodOption.key)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                  period === p.key ? "bg-maroon-600 text-white shadow" : "text-slate-600 dark:text-ivory-400 hover:bg-slate-200 dark:hover:bg-dark-600"
+                  period === periodOption.key ? "bg-maroon-600 text-white shadow" : "text-slate-600 dark:text-ivory-400 hover:bg-slate-200 dark:hover:bg-dark-600"
                 }`}
               >
-                {p.label}
+                {periodOption.label}
               </button>
             ))}
           </div>
           {period === "custom" && (
             <div className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 p-1.5 rounded-2xl border border-slate-200 dark:border-dark-600">
-              <input type="date" value={custom.start} onChange={(e) => setCustom((c) => ({ ...c, start: e.target.value }))} className="bg-transparent text-xs p-1 outline-none" />
+              <input type="date" value={custom.start} onChange={(e) => setCustom((current) => ({ ...current, start: e.target.value }))} className="bg-transparent text-xs p-1 outline-none" />
               <span className="text-slate-400 text-xs">→</span>
-              <input type="date" value={custom.end} onChange={(e) => setCustom((c) => ({ ...c, end: e.target.value }))} className="bg-transparent text-xs p-1 outline-none" />
+              <input type="date" value={custom.end} onChange={(e) => setCustom((current) => ({ ...current, end: e.target.value }))} className="bg-transparent text-xs p-1 outline-none" />
             </div>
           )}
         </div>
@@ -382,14 +598,14 @@ function ProfitSection() {
       <div className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 leading-relaxed bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3">
         <b>Ашигийн томьёо:</b><br />
         Руб→Төг: ( өртөг ханш − rate ) × руб дүн &nbsp;·&nbsp;
-        Төг→Руб: ( rate − өртөг ханш ) × руб дүн<br />
+        Төг→Руб: ( rate − өртөг ханш ) × руб дүн &nbsp;·&nbsp;
+        Онгоцны тийз: ( current exchange rate − өртөг ханш ) × руб дүн
+        <br />
         <span className="text-slate-400">
-          Руб дүн: руб→төг бол анхны руб дүн, төг→руб бол amount ÷ rate. өртөг ханш = USD ханш ÷ black ханш.
-          Тухайн өдөрт ханш байхгүй бол хамгийн сүүлд мэдэгдсэн ханшийг үргэлжлүүлэн хэрэглэнэ. Ашиг ₮-өөр.
+          Руб дүн: руб→төг бол анхны руб дүн, төг→руб болон тийз дээр amount ÷ rate. өртөг ханш = USD ханш ÷ black ханш. Ашиг ₮-өөр.
         </span>
       </div>
 
-      {/* Profit summary */}
       {profitQ.error ? (
         <div className="text-sm text-red-500 py-6 text-center">Ашиг тооцоолж чадсангүй.</div>
       ) : profitQ.isLoading || !profitQ.data ? (
@@ -398,7 +614,8 @@ function ProfitSection() {
         <ProfitBody data={profitQ.data} />
       )}
 
-      <CostRateManager range={range} onSaved={() => profitQ.refetch()} />
+      <PlaneTicketSalesManager range={range} onSaved={refreshProfit} />
+      <CostRateManager range={range} onSaved={refreshProfit} />
     </div>
   );
 }
@@ -407,11 +624,12 @@ function ProfitBody({ data }: { data: ProfitSummary }) {
   const chartData = data.by_day;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
         <ProfitCard label="Нийт ашиг" value={fmtMnt(data.total_profit)} accent="bg-maroon-600 text-white" big />
         <ProfitCard label="Руб/төг ашиг" value={fmtMnt(data.buy_profit)} />
         <ProfitCard label="Төг/руб ашиг" value={fmtMnt(data.sell_profit)} />
-        <ProfitCard label="Тооцсон гүйлгээ" value={fmtNum(data.counted)} />
+        <ProfitCard label="Тийзний ашиг" value={fmtMnt(data.ticket_profit)} />
+        <ProfitCard label="Тооцсон мөр" value={fmtNum(data.counted)} sub={`${fmtNum(data.ticket_count)} тийз`} />
       </div>
 
       {data.missing_rate_dates.length > 0 && (
@@ -431,10 +649,10 @@ function ProfitBody({ data }: { data: ProfitSummary }) {
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={20} />
-              <YAxis tick={{ fontSize: 10 }} width={56} tickFormatter={(v: number) => fmtNum(v)} />
-              <Tooltip formatter={(v: any) => [fmtMnt(Number(v)), "Ашиг"]} contentStyle={{ borderRadius: 12, fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 10 }} width={56} tickFormatter={(value: number) => fmtNum(value)} />
+              <Tooltip formatter={(value: unknown) => [fmtMnt(Number(value)), "Ашиг"]} contentStyle={{ borderRadius: 12, fontSize: 12 }} />
               <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                {chartData.map((d, i) => <Cell key={i} fill={d.profit >= 0 ? "#10b981" : "#ef4444"} />)}
+                {chartData.map((day, index) => <Cell key={index} fill={day.profit >= 0 ? "#10b981" : "#ef4444"} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -444,11 +662,246 @@ function ProfitBody({ data }: { data: ProfitSummary }) {
   );
 }
 
-function ProfitCard({ label, value, accent, big }: { label: string; value: string; accent?: string; big?: boolean }) {
+function ProfitCard({ label, value, accent, big, sub }: { label: string; value: string; accent?: string; big?: boolean; sub?: string }) {
   return (
     <div className={`rounded-2xl border border-slate-200 dark:border-dark-600 p-4 ${accent || "bg-slate-50 dark:bg-dark-700"}`}>
       <div className={`text-xs font-medium ${accent ? "text-white/80" : "text-slate-500 dark:text-ivory-400"}`}>{label}</div>
       <div className={`${big ? "text-2xl" : "text-xl"} font-bold mt-1 tabular-nums`}>{value}</div>
+      {sub && <div className={`text-xs mt-1 ${accent ? "text-white/75" : "text-slate-400"}`}>{sub}</div>}
+    </div>
+  );
+}
+
+function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; end?: string }; onSaved: () => void }) {
+  const [saleDate, setSaleDate] = useState(todayIso());
+  const [soldPrice, setSoldPrice] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const salesQ = useQuery({
+    queryKey: ["dashboard-plane-ticket-sales", range.start, range.end],
+    queryFn: () => fetchPlaneTicketSales({ start: range.start, end: range.end }),
+    staleTime: 30_000,
+  });
+
+  const ratesQ = useQuery({
+    queryKey: ["rates"],
+    queryFn: () => fetchRates(),
+    staleTime: 60_000,
+  });
+
+  const costPreviewQ = useQuery({
+    queryKey: ["dashboard-cost-rate-preview", saleDate],
+    queryFn: () => fetchCostRates({ end: saleDate }),
+    staleTime: 30_000,
+  });
+
+  const costRateRow = useMemo(
+    () => (costPreviewQ.data || []).find((rate) => rate.cost_rate != null) ?? null,
+    [costPreviewQ.data],
+  );
+
+  const currentExchangeRate = ratesQ.data?.sell_rate ?? null;
+  const costRatePreview = costRateRow?.cost_rate ?? null;
+  const soldPriceValue = Number(soldPrice);
+  const rubPreview = soldPriceValue > 0 && currentExchangeRate ? soldPriceValue / currentExchangeRate : null;
+  const profitPreview = rubPreview != null && currentExchangeRate != null && costRatePreview != null
+    ? (currentExchangeRate - costRatePreview) * rubPreview
+    : null;
+
+  const save = async () => {
+    if (!(soldPriceValue > 0)) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      await createPlaneTicketSale({ sale_date: saleDate, sold_price_mnt: soldPriceValue, notes });
+      setSoldPrice("");
+      setNotes("");
+      await salesQ.refetch();
+      onSaved();
+      setMessage("Тийзийн борлуулалтыг хадгаллаа.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Тийз хадгалах үед алдаа гарлаа.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (sale: PlaneTicketSale) => {
+    if (!window.confirm(`${sale.sale_date} өдрийн тийзийн борлуулалтыг устгах уу?`)) return;
+    setDeletingId(sale.id);
+    try {
+      await deletePlaneTicketSale(sale.id);
+      await salesQ.refetch();
+      onSaved();
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const summary = salesQ.data?.summary;
+  const canSave = soldPriceValue > 0 && currentExchangeRate != null && costRatePreview != null && !saving;
+
+  return (
+    <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700 space-y-4">
+      <div className="flex items-center gap-2">
+        <Plane className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
+        <h3 className="text-sm font-bold">Онгоцны тийзийн борлуулалт</h3>
+      </div>
+
+      <p className="text-[11px] text-slate-500 dark:text-ivory-400 leading-relaxed bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3">
+        Зөвхөн <b>зарагдсан үнийг</b> оруулна. Систем одоогийн төг→руб ханш болон тухайн өдрийн өртөг ханшийг ашиглаад руб дүн, ашгийг автоматаар тооцно.
+      </p>
+
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+        <ProfitCard label="Тийзийн мөр" value={fmtNum(summary?.count)} />
+        <ProfitCard label="Нийт зарагдсан үнэ" value={fmtMnt(summary?.total_sold_price_mnt)} />
+        <ProfitCard label="Тийзийн ашиг" value={fmtMnt(summary?.total_profit)} />
+        <ProfitCard label="Current exchange rate" value={currentExchangeRate == null ? "—" : fmtRate(currentExchangeRate)} />
+        <ProfitCard label="Өртөг ханш" value={costRatePreview == null ? "—" : fmtRate(costRatePreview)} sub={costRateRow && costRateRow.rate_date !== saleDate ? `${costRateRow.rate_date}-ны ханш ашиглаж байна` : undefined} />
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-[180px_220px_minmax(0,1fr)_auto] gap-2 items-end">
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Огноо</div>
+            <input type="date" className={INPUT_CLASS} value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
+          </label>
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Зарагдсан үнэ (₮)</div>
+            <input type="number" className={`${INPUT_CLASS} text-right`} placeholder="0" value={soldPrice} onChange={(e) => setSoldPrice(e.target.value)} />
+          </label>
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Тайлбар</div>
+            <input className={INPUT_CLASS} placeholder="Нэмэлт тэмдэглэл" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </label>
+          <button
+            onClick={save}
+            disabled={!canSave}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Борлуулалт нэмэх
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <BalanceStat label="Exchange rate" value={currentExchangeRate == null ? "—" : fmtRate(currentExchangeRate)} />
+          <BalanceStat label="Өртөг ханш" value={costRatePreview == null ? "—" : fmtRate(costRatePreview)} />
+          <BalanceStat label="Руб дүн" value={rubPreview == null ? "—" : fmtRub(rubPreview)} />
+          <BalanceStat label="Тооцоолсон ашиг" value={profitPreview == null ? "—" : fmtMnt(profitPreview)} tone={profitPreview != null && profitPreview < 0 ? "neg" : "pos"} />
+        </div>
+
+        {costRatePreview == null && (
+          <div className="text-xs text-amber-600 dark:text-amber-300">
+            {saleDate}-наас өмнөх өртөг ханш олдсонгүй. Эхлээд доорх хэсэгт өртөг ханш хадгална уу.
+          </div>
+        )}
+        {message && <div className="text-xs text-slate-500 dark:text-ivory-400">{message}</div>}
+      </div>
+
+      {salesQ.error ? (
+        <div className="text-sm text-red-500 py-4 text-center">Тийзийн борлуулалт ачаалж чадсангүй.</div>
+      ) : salesQ.isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-maroon-600 animate-spin" /></div>
+      ) : (
+        <PlaneTicketSalesList data={salesQ.data as PlaneTicketSalesResponse} onDelete={remove} deletingId={deletingId} />
+      )}
+    </div>
+  );
+}
+
+function PlaneTicketSalesList({
+  data,
+  onDelete,
+  deletingId,
+}: {
+  data: PlaneTicketSalesResponse;
+  onDelete: (sale: PlaneTicketSale) => void;
+  deletingId: string | null;
+}) {
+  if (!data.sales.length) {
+    return <div className="py-6 text-center text-sm text-slate-400">Энэ хугацаанд бүртгэсэн тийзийн борлуулалт алга.</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:hidden">
+        {data.sales.map((sale) => (
+          <div key={sale.id} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[11px] text-slate-400">Огноо</div>
+                <div className="font-semibold">{sale.sale_date}</div>
+              </div>
+              <button
+                onClick={() => onDelete(sale)}
+                disabled={deletingId === sale.id}
+                className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
+              >
+                {deletingId === sale.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <Metric label="Зарагдсан үнэ" value={fmtMnt(sale.sold_price_mnt)} />
+              <Metric label="Exchange rate" value={fmtRate(sale.exchange_rate)} />
+              <Metric label="Өртөг ханш" value={fmtRate(sale.cost_rate)} />
+              <Metric label="Руб дүн" value={fmtRub(sale.rub_equivalent)} />
+              <Metric label="Ашиг" value={fmtMnt(sale.profit_mnt)} />
+              <Metric label="Тайлбар" value={sale.note || "—"} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
+              <th className="py-2 pr-2 font-medium">Огноо</th>
+              <th className="py-2 px-2 font-medium text-right">Зарагдсан үнэ</th>
+              <th className="py-2 px-2 font-medium text-right">Exchange rate</th>
+              <th className="py-2 px-2 font-medium text-right">Өртөг ханш</th>
+              <th className="py-2 px-2 font-medium text-right">Руб дүн</th>
+              <th className="py-2 px-2 font-medium text-right">Ашиг</th>
+              <th className="py-2 px-2 font-medium">Тайлбар</th>
+              <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.sales.map((sale) => (
+              <tr key={sale.id} className="border-b border-slate-100 dark:border-dark-700">
+                <td className="py-2 pr-2 font-mono">{sale.sale_date}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmtMnt(sale.sold_price_mnt)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmtRate(sale.exchange_rate)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmtRate(sale.cost_rate)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmtRub(sale.rub_equivalent)}</td>
+                <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtMnt(sale.profit_mnt)}</td>
+                <td className="py-2 px-2 text-slate-500 dark:text-ivory-300">{sale.note || "—"}</td>
+                <td className="py-2 pl-2 text-right">
+                  <button
+                    onClick={() => onDelete(sale)}
+                    disabled={deletingId === sale.id}
+                    className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
+                  >
+                    {deletingId === sale.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] text-slate-400">{label}</div>
+      <div className="font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
@@ -475,9 +928,10 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
   });
 
   const costPreview = useMemo(() => {
-    const u = Number(usd), b = Number(black);
-    if (!u || !b) return null;
-    return u / b;
+    const usdRate = Number(usd);
+    const blackRate = Number(black);
+    if (!usdRate || !blackRate) return null;
+    return usdRate / blackRate;
   }, [usd, black]);
 
   const fetchBlack = async () => {
@@ -495,7 +949,6 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
           setBlack(String(exact));
           setRateMsg(`Татаж авлаа: ${exact}`);
         } else if (res.latest != null) {
-          // Fall back to the latest "Ханш" row when this date has no entry.
           setBlack(String(res.latest));
           setRateMsg(`${date}-нд бичилт алга — хамгийн сүүлийн black ханш${res.latest_date ? ` (${res.latest_date})` : ""}: ${res.latest}`);
         } else {
@@ -510,22 +963,21 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
   };
 
   const save = async () => {
-    const u = Number(usd), b = Number(black);
-    if (!u || !b) return;
+    const usdRate = Number(usd);
+    const blackRate = Number(black);
+    if (!usdRate || !blackRate) return;
     setSaving(true);
     try {
-      await saveCostRate({ date, usd_rate: u, black_rate: b });
+      await saveCostRate({ date, usd_rate: usdRate, black_rate: blackRate });
       setUsd("");
       setBlack("");
       setRateMsg(null);
-      ratesQ.refetch();
+      await ratesQ.refetch();
       onSaved();
     } finally {
       setSaving(false);
     }
   };
-
-  const inputCls = "w-full rounded-lg border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 px-2.5 py-2 text-xs tabular-nums outline-none focus:ring-2 focus:ring-maroon-500";
 
   return (
     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700">
@@ -535,46 +987,60 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
-        <div>
-          <label className="text-[10px] text-slate-400">Огноо</label>
-          <input type="date" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-[10px] text-slate-400">Black ханш (Sheets)</label>
+        <label>
+          <div className="text-[10px] text-slate-400 mb-1">Огноо</div>
+          <input type="date" className={INPUT_CLASS} value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+        <label>
+          <div className="text-[10px] text-slate-400 mb-1">Black ханш (Sheets)</div>
           <div className="flex gap-1">
-            <input type="number" className={inputCls} placeholder="0" value={black} onChange={(e) => setBlack(e.target.value)} />
+            <input type="number" className={INPUT_CLASS} placeholder="0" value={black} onChange={(e) => setBlack(e.target.value)} />
             <button
               onClick={fetchBlack}
               disabled={fetchingRate}
-              className="px-2 rounded-lg bg-slate-100 dark:bg-dark-700 hover:bg-slate-200 transition shrink-0"
+              className="px-3 rounded-xl bg-slate-100 dark:bg-dark-700 hover:bg-slate-200 transition shrink-0"
               title="Google Sheets-ээс татах"
             >
               {fetchingRate ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             </button>
           </div>
-        </div>
+        </label>
+        <label>
+          <div className="text-[10px] text-slate-400 mb-1">USD ханш</div>
+          <input type="number" className={INPUT_CLASS} placeholder="0" value={usd} onChange={(e) => setUsd(e.target.value)} />
+        </label>
         <div>
-          <label className="text-[10px] text-slate-400">USD ханш</label>
-          <input type="number" className={inputCls} placeholder="0" value={usd} onChange={(e) => setUsd(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-[10px] text-slate-400">Өртөг ханш</label>
-          <div className={`${inputCls} flex items-center font-semibold ${costPreview == null ? "text-slate-300" : "text-maroon-600 dark:text-gold-400"}`}>
+          <div className="text-[10px] text-slate-400 mb-1">Өртөг ханш</div>
+          <div className={`${INPUT_CLASS} flex items-center font-semibold ${costPreview == null ? "text-slate-300" : "text-maroon-600 dark:text-gold-400"}`}>
             {costPreview == null ? "—" : costPreview.toFixed(4)}
           </div>
         </div>
         <button
           onClick={save}
           disabled={!costPreview || saving}
-          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-xs font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
         </button>
       </div>
+
       {rateMsg && <div className="text-[11px] text-slate-500 dark:text-ivory-400 mt-2">{rateMsg}</div>}
 
-      {/* Saved cost rates for the period */}
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 grid gap-3 md:hidden">
+        {(ratesQ.data || []).map((rate) => (
+          <div key={rate.rate_date} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 grid grid-cols-2 gap-3 text-sm">
+            <Metric label="Огноо" value={rate.rate_date} />
+            <Metric label="Өртөг ханш" value={rate.cost_rate != null ? rate.cost_rate.toFixed(4) : "—"} />
+            <Metric label="USD ханш" value={fmtNum(rate.usd_rate, 2)} />
+            <Metric label="Black ханш" value={fmtNum(rate.black_rate, 2)} />
+          </div>
+        ))}
+        {(!ratesQ.data || ratesQ.data.length === 0) && (
+          <div className="py-5 text-center text-sm text-slate-400">Энэ хугацаанд хадгалсан өртөг ханш алга.</div>
+        )}
+      </div>
+
+      <div className="hidden md:block mt-4 overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
@@ -585,12 +1051,12 @@ function CostRateManager({ range, onSaved }: { range: { start?: string; end?: st
             </tr>
           </thead>
           <tbody>
-            {(ratesQ.data || []).map((r: CostRate) => (
-              <tr key={r.rate_date} className="border-b border-slate-100 dark:border-dark-700">
-                <td className="py-2 pr-2 font-mono">{r.rate_date}</td>
-                <td className="py-2 px-2 text-right tabular-nums">{fmtNum(r.usd_rate, 2)}</td>
-                <td className="py-2 px-2 text-right tabular-nums">{fmtNum(r.black_rate, 2)}</td>
-                <td className="py-2 pl-2 text-right tabular-nums font-semibold text-maroon-600 dark:text-gold-400">{r.cost_rate != null ? r.cost_rate.toFixed(4) : "—"}</td>
+            {(ratesQ.data || []).map((rate: CostRate) => (
+              <tr key={rate.rate_date} className="border-b border-slate-100 dark:border-dark-700">
+                <td className="py-2 pr-2 font-mono">{rate.rate_date}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmtNum(rate.usd_rate, 2)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{fmtNum(rate.black_rate, 2)}</td>
+                <td className="py-2 pl-2 text-right tabular-nums font-semibold text-maroon-600 dark:text-gold-400">{rate.cost_rate != null ? rate.cost_rate.toFixed(4) : "—"}</td>
               </tr>
             ))}
             {(!ratesQ.data || ratesQ.data.length === 0) && (

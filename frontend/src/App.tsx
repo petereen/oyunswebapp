@@ -22,6 +22,7 @@ import { fetchMe } from "./api";
 export default function App() {
   const queryParams = new URLSearchParams(window.location.search);
   const rawPath = window.location.pathname;
+  const hostname = window.location.hostname.toLowerCase();
   const normalizedPath = rawPath === "/" ? "/" : rawPath.replace(/\/+$/, "");
   const requestedTab = queryParams.get("tab");
   const requestedTournament = queryParams.get("tournament");
@@ -32,7 +33,7 @@ export default function App() {
   if (isOyunsSagsAdmin) return <OyunsSagsAdminPanel />;
 
   // Standalone analytics dashboard without Telegram auth
-  if (normalizedPath === "/dashboard") return <DashboardPanel />;
+  if (hostname === "dashboard.oyuns.mn" || normalizedPath === "/dashboard") return <DashboardPanel />;
 
   // Check URL for fuel admin panel
   const isFuelAdmin = queryParams.has("fuel-admin");

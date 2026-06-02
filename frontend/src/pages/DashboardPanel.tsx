@@ -219,12 +219,12 @@ function PageTabs({ page, setPage }: { page: DashboardPage; setPage: (p: Dashboa
     { key: "stats", label: "Статистик" },
   ];
   return (
-    <div className="flex items-center gap-1 bg-white dark:bg-dark-800 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
+    <div className="flex w-full sm:w-auto items-center gap-1 bg-white dark:bg-dark-800 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
       {tabs.map((t) => (
         <button
           key={t.key}
           onClick={() => setPage(t.key)}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+          className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
             page === t.key
               ? "bg-maroon-600 text-white shadow"
               : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"
@@ -274,7 +274,7 @@ function DashboardContent({ theme, onLogout, pageTabs }: { theme: string; onLogo
     <div className="min-h-screen bg-slate-50 dark:bg-dark-900 text-slate-800 dark:text-ivory-200">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-5">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div className="flex flex-col gap-3 mb-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-maroon-600 flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-white" />
@@ -284,7 +284,7 @@ function DashboardContent({ theme, onLogout, pageTabs }: { theme: string; onLogo
               <p className="text-xs text-slate-500 dark:text-ivory-400">Гүйлгээний статистик самбар</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {pageTabs}
             <button
               onClick={() => refetch()}
@@ -427,6 +427,7 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
       (t.promo_code || "").toLowerCase().includes(q)
     );
   }, [data.transactions, search]);
+  const visibleRows = filteredRows.slice(0, 500);
 
   const tooltipStyle = {
     borderRadius: 12, fontSize: 12, border: `1px solid ${gridColor}`,
@@ -513,34 +514,53 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* Per-admin table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
-                    <th className="py-2 pr-2 font-medium">Админ</th>
-                    <th className="py-2 px-2 font-medium text-right">Амжилттай гүйлгээ</th>
-                    <th className="py-2 px-2 font-medium text-right">Дундаж хугацаа</th>
-                    <th className="py-2 pl-2 font-medium text-right">Гүйлгээний дүн</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.admin_stats.map((a) => (
-                    <tr key={a.admin_id} className="border-b border-slate-100 dark:border-dark-700">
-                      <td className="py-2.5 pr-2">
-                        <div className="font-medium">{a.admin_name || `ID ${a.admin_id}`}</div>
-                        <div className="text-[10px] text-slate-400">{a.admin_id}</div>
-                      </td>
-                      <td className="py-2.5 px-2 text-right tabular-nums font-semibold">{fmtNum(a.count)}</td>
-                      <td className="py-2.5 px-2 text-right tabular-nums">
-                        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                          <Clock className="w-3 h-3" />{fmtDuration(a.avg_duration_minutes)}
-                        </span>
-                      </td>
-                      <td className="py-2.5 pl-2 text-right tabular-nums">{fmtRub(a.volume_rub)}</td>
+            <div>
+              <div className="grid gap-3 md:hidden">
+                {data.admin_stats.map((admin) => (
+                  <div key={admin.admin_id} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold">{admin.admin_name || `ID ${admin.admin_id}`}</div>
+                        <div className="text-[10px] text-slate-400">{admin.admin_id}</div>
+                      </div>
+                      <div className="text-right text-sm font-bold tabular-nums">{fmtRub(admin.volume_rub)}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <InfoField label="Амжилттай гүйлгээ" value={fmtNum(admin.count)} />
+                      <InfoField label="Дундаж хугацаа" value={fmtDuration(admin.avg_duration_minutes)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
+                      <th className="py-2 pr-2 font-medium">Админ</th>
+                      <th className="py-2 px-2 font-medium text-right">Амжилттай гүйлгээ</th>
+                      <th className="py-2 px-2 font-medium text-right">Дундаж хугацаа</th>
+                      <th className="py-2 pl-2 font-medium text-right">Гүйлгээний дүн</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.admin_stats.map((a) => (
+                      <tr key={a.admin_id} className="border-b border-slate-100 dark:border-dark-700">
+                        <td className="py-2.5 pr-2">
+                          <div className="font-medium">{a.admin_name || `ID ${a.admin_id}`}</div>
+                          <div className="text-[10px] text-slate-400">{a.admin_id}</div>
+                        </td>
+                        <td className="py-2.5 px-2 text-right tabular-nums font-semibold">{fmtNum(a.count)}</td>
+                        <td className="py-2.5 px-2 text-right tabular-nums">
+                          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                            <Clock className="w-3 h-3" />{fmtDuration(a.avg_duration_minutes)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pl-2 text-right tabular-nums">{fmtRub(a.volume_rub)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
             {/* Per-admin chart: avg duration (minutes) */}
             <ResponsiveContainer width="100%" height={Math.max(160, data.admin_stats.length * 40)}>
@@ -579,21 +599,21 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
 
       {/* Transactions table */}
       <div className="bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-200 dark:border-dark-600">
+        <div className="flex flex-col gap-3 p-4 border-b border-slate-200 dark:border-dark-600 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold">Гүйлгээнүүд</h3>
             <span className="text-xs text-slate-500 dark:text-ivory-400">
               {fmtNum(filteredRows.length)} / {fmtNum(data.row_count)}{data.truncated ? " (20мянгаар хязгаарласан)" : ""}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="relative">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-auto">
               <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Хайх: Invoice ID / хэрэглэгч / админ"
-                className="pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 text-xs w-60 outline-none focus:ring-2 focus:ring-maroon-500"
+                className="pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 text-xs w-full sm:w-60 outline-none focus:ring-2 focus:ring-maroon-500"
               />
             </div>
             <button
@@ -605,63 +625,75 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-slate-500 dark:text-ivory-400 bg-slate-50 dark:bg-dark-700/50">
-                <th className="px-4 py-2.5 font-medium">Invoice ID</th>
-                <th className="px-4 py-2.5 font-medium">Огноо</th>
-                <th className="px-4 py-2.5 font-medium">Хэрэглэгч</th>
-                <th className="px-4 py-2.5 font-medium">Чиглэл</th>
-                <th className="px-4 py-2.5 font-medium text-right">Дүн</th>
-                <th className="px-4 py-2.5 font-medium text-right">Ханш</th>
-                <th className="px-4 py-2.5 font-medium text-right">RUB дүн</th>
-                <th className="px-4 py-2.5 font-medium">Төлөв</th>
-                <th className="px-4 py-2.5 font-medium">Админ</th>
-                <th className="px-4 py-2.5 font-medium text-right">Хугацаа</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.slice(0, 500).map((t, i) => (
-                <tr key={`${t.invoice}-${i}`} className="border-t border-slate-100 dark:border-dark-700 hover:bg-slate-50 dark:hover:bg-dark-700/40">
-                  <td className="px-4 py-2.5 font-mono text-[11px]">{t.invoice || "—"}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 dark:text-ivory-300">{fmtDateTime(t.timestamp)}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="font-medium">{t.user_name || "—"}</div>
-                    <div className="text-[10px] text-slate-400">{t.user_id ?? ""}</div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
-                      t.direction === "buy" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
-                    }`}>
-                      {t.direction === "buy" ? "АВАХ" : "ЗАРАХ"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap tabular-nums">
-                    {fmtNum(t.amount)} <span className="text-slate-400">{t.currency_from}</span>
-                    <span className="text-slate-300 dark:text-slate-600"> → {t.currency_to}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-ivory-300">{t.rate ? fmtNum(t.rate, 2) : "—"}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-medium">{fmtNum(t.rub_equivalent)}</td>
-                  <td className="px-4 py-2.5">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap">
-                      <span className="w-2 h-2 rounded-full" style={{ background: statusColor(t.status || "") }} />
-                      {statusLabel(t.status || "")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600 dark:text-ivory-300">{t.admin_name || (t.completed_by_admin ? `ID ${t.completed_by_admin}` : "—")}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-ivory-300">{fmtDuration(t.duration_minutes)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredRows.length === 0 && (
+        <div>
+          {filteredRows.length === 0 ? (
             <div className="py-12 text-center text-sm text-slate-400">Шүүлтэнд тохирох гүйлгээ алга.</div>
-          )}
-          {filteredRows.length > 500 && (
-            <div className="py-3 text-center text-[11px] text-slate-400 border-t border-slate-100 dark:border-dark-700">
-              Эхний 500 мөр харагдаж байна · бүгдийг CSV-ээр татна уу ({fmtNum(filteredRows.length)}).
-            </div>
+          ) : (
+            <>
+              <div className="md:hidden divide-y divide-slate-100 dark:divide-dark-700">
+                {visibleRows.map((transaction, index) => (
+                  <TransactionMobileCard key={`${transaction.invoice}-${index}`} transaction={transaction} />
+                ))}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-500 dark:text-ivory-400 bg-slate-50 dark:bg-dark-700/50">
+                      <th className="px-4 py-2.5 font-medium">Invoice ID</th>
+                      <th className="px-4 py-2.5 font-medium">Огноо</th>
+                      <th className="px-4 py-2.5 font-medium">Хэрэглэгч</th>
+                      <th className="px-4 py-2.5 font-medium">Чиглэл</th>
+                      <th className="px-4 py-2.5 font-medium text-right">Дүн</th>
+                      <th className="px-4 py-2.5 font-medium text-right">Ханш</th>
+                      <th className="px-4 py-2.5 font-medium text-right">RUB дүн</th>
+                      <th className="px-4 py-2.5 font-medium">Төлөв</th>
+                      <th className="px-4 py-2.5 font-medium">Админ</th>
+                      <th className="px-4 py-2.5 font-medium text-right">Хугацаа</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((t, i) => (
+                      <tr key={`${t.invoice}-${i}`} className="border-t border-slate-100 dark:border-dark-700 hover:bg-slate-50 dark:hover:bg-dark-700/40">
+                        <td className="px-4 py-2.5 font-mono text-[11px]">{t.invoice || "—"}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 dark:text-ivory-300">{fmtDateTime(t.timestamp)}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="font-medium">{t.user_name || "—"}</div>
+                          <div className="text-[10px] text-slate-400">{t.user_id ?? ""}</div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
+                            t.direction === "buy" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+                          }`}>
+                            {t.direction === "buy" ? "АВАХ" : "ЗАРАХ"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap tabular-nums">
+                          {fmtNum(t.amount)} <span className="text-slate-400">{t.currency_from}</span>
+                          <span className="text-slate-300 dark:text-slate-600"> → {t.currency_to}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-ivory-300">{t.rate ? fmtNum(t.rate, 2) : "—"}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums font-medium">{fmtNum(t.rub_equivalent)}</td>
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap">
+                            <span className="w-2 h-2 rounded-full" style={{ background: statusColor(t.status || "") }} />
+                            {statusLabel(t.status || "")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-ivory-300">{t.admin_name || (t.completed_by_admin ? `ID ${t.completed_by_admin}` : "—")}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-600 dark:text-ivory-300">{fmtDuration(t.duration_minutes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredRows.length > 500 && (
+                <div className="py-3 text-center text-[11px] text-slate-400 border-t border-slate-100 dark:border-dark-700">
+                  Эхний 500 мөр харагдаж байна · бүгдийг CSV-ээр татна уу ({fmtNum(filteredRows.length)}).
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -674,6 +706,44 @@ function EmptyChart() {
     <div className="flex flex-col items-center justify-center py-16 text-slate-400">
       <BarChart3 className="w-10 h-10 mb-2" />
       <p className="text-xs">Энэ хугацаанд мэдээлэл алга</p>
+    </div>
+  );
+}
+
+function InfoField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] text-slate-400">{label}</div>
+      <div className="font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function TransactionMobileCard({ transaction }: { transaction: DashboardTransaction }) {
+  return (
+    <div className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] text-slate-400">Invoice ID</div>
+          <div className="font-mono text-xs">{transaction.invoice || "—"}</div>
+        </div>
+        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold ${
+          transaction.direction === "buy" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+        }`}>
+          {transaction.direction === "buy" ? "АВАХ" : "ЗАРАХ"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <InfoField label="Огноо" value={fmtDateTime(transaction.timestamp)} />
+        <InfoField label="Төлөв" value={statusLabel(transaction.status || "")} />
+        <InfoField label="Хэрэглэгч" value={transaction.user_name || `ID ${transaction.user_id || "—"}`} />
+        <InfoField label="Админ" value={transaction.admin_name || (transaction.completed_by_admin ? `ID ${transaction.completed_by_admin}` : "—")} />
+        <InfoField label="Дүн" value={`${fmtNum(transaction.amount)} ${transaction.currency_from || ""}`} />
+        <InfoField label="Ханш" value={transaction.rate ? fmtNum(transaction.rate, 2) : "—"} />
+        <InfoField label="RUB дүн" value={fmtRub(transaction.rub_equivalent)} />
+        <InfoField label="Хугацаа" value={fmtDuration(transaction.duration_minutes)} />
+      </div>
     </div>
   );
 }
