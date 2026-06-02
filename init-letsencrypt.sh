@@ -17,6 +17,15 @@ data_path="./certbot"
 email="" # Adding a valid address is strongly recommended
 staging=0 # Set to 1 iifif you're testing your setup to avoid hitting request limits
 
+cleanup_certificate_state() {
+  for domain in "$@"; do
+    rm -rf \
+      "$data_path/conf/live/$domain" \
+      "$data_path/conf/archive/$domain" \
+      "$data_path/conf/renewal/$domain.conf"
+  done
+}
+
 create_dummy_certificate() {
   echo "### Creating dummy certificate for ${domains[*]} ..."
   path="/etc/letsencrypt/live/$primary_domain"
@@ -45,6 +54,7 @@ if [ ! -e "$data_path/conf/options-ssl-nginx.conf" ] || [ ! -e "$data_path/conf/
   echo
 fi
 
+cleanup_certificate_state "$primary_domain" "${domains[@]}"
 create_dummy_certificate
 
 
@@ -53,10 +63,7 @@ $DOCKER_COMPOSE up --force-recreate -d nginx
 echo
 
 echo "### Deleting dummy certificate ..."
-$DOCKER_COMPOSE run --rm --entrypoint "\
-  rm -Rf /etc/letsencrypt/live/$primary_domain && \
-  rm -Rf /etc/letsencrypt/archive/$primary_domain && \
-  rm -Rf /etc/letsencrypt/renewal/$primary_domain.conf" certbot
+cleanup_certificate_state "$primary_domain" "${domains[@]}"
 echo
 
 
@@ -90,6 +97,7 @@ set -e
 echo
 
 if [ $certbot_status -ne 0 ]; then
+  cleanup_certificate_state "$primary_domain" "${domains[@]}"
   create_dummy_certificate
   echo "### Certbot failed; skipping nginx reload so the current process keeps serving." >&2
   echo "### Fix the ACME challenge path or DNS/port routing, then rerun ./init-letsencrypt.sh" >&2
