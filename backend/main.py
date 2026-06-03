@@ -2331,7 +2331,7 @@ def _dashboard_db_error(exc: Exception, action: str):
             detail=(
                 "Database tables are missing. Run database/balance_profit_tables.sql "
                 "in the Supabase SQL editor to create treasury_accounts, cost_rates, "
-                "and plane_ticket_sales."
+                "plane_ticket_sales, dashboard_balance_daily, and dashboard_balance_adjustments."
             ),
         )
     return HTTPException(status_code=500, detail=f"{action}: {msg}")
@@ -2350,6 +2350,22 @@ def _optional_int(value, field_name: str) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail=f"{field_name} must be an integer")
+
+
+def _optional_float(value, field_name: str) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a number")
+
+
+def _normalize_balance_tag(value) -> str:
+    tag = str(value or "").strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="tag is required")
+    return tag[:80]
 
 
 def _dashboard_admins(client) -> list[dict]:
@@ -2372,6 +2388,278 @@ def _validated_dashboard_admin_id(client, value, field_name: str = "admin_id") -
     if row.get("is_active") is False:
         raise HTTPException(status_code=400, detail=f"{field_name} must reference an active admin user")
     return admin_id
+
+
+def _dashboard_scoped_admins(admins: list[dict], admin_id: int | None) -> list[dict]:
+    if admin_id is None:
+        return admins
+    return [admin for admin in admins if admin.get("admin_id") == admin_id]
+
+
+def _dashboard_calculated_balance(
+    opening_balance: float,
+    rub_to_mnt_rub: float,
+    mnt_to_rub_rub: float,
+    adjustment_total: float,
+) -> float:
+    return opening_balance + rub_to_mnt_rub - mnt_to_rub_rub + adjustment_total
+
+
+def _dashboard_balance_rows_for_day(client, admin_ids: list[int], day: str) -> dict[int, dict]:
+    if not admin_ids:
+        return {}
+    query = client.table("dashboard_balance_daily").select("*").eq("balance_date", day)
+    if len(admin_ids) == 1:
+        query = query.eq("admin_id", admin_ids[0])
+    else:
+        query = query.in_("admin_id", admin_ids)
+    rows = query.execute().data or []
+    return {
+        int(row.get("admin_id")): row
+        for row in rows
+        if row.get("admin_id") is not None
+    }
+
+
+def _dashboard_latest_prior_balance_rows(client, admin_ids: list[int], day: str) -> dict[int, dict]:
+    if not admin_ids:
+        return {}
+    query = client.table("dashboard_balance_daily").select("*").lt("balance_date", day).order("balance_date", desc=True)
+    if len(admin_ids) == 1:
+        query = query.eq("admin_id", admin_ids[0])
+    else:
+        query = query.in_("admin_id", admin_ids)
+    rows = query.execute().data or []
+    latest: dict[int, dict] = {}
+    for row in rows:
+        raw_admin_id = row.get("admin_id")
+        if raw_admin_id is None:
+            continue
+        admin_id = int(raw_admin_id)
+        if admin_id not in latest:
+            latest[admin_id] = row
+            if len(latest) == len(admin_ids):
+                break
+    return latest
+
+
+def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int]) -> dict[int, dict[str, float]]:
+    if not admin_ids:
+        return {}
+    start_iso, end_iso, _ = _moscow_day_bounds(day)
+    rows: list[dict] = []
+    page = 1000
+    offset = 0
+    while offset < 20000:
+        query = (
+            client.table("transactions")
+            .select("amount,currency_from,rate,status,completed_by_admin,timestamp")
+            .gte("timestamp", start_iso)
+            .lt("timestamp", end_iso)
+            .order("timestamp", desc=False)
+        )
+        if len(admin_ids) == 1:
+            query = query.eq("completed_by_admin", admin_ids[0])
+        else:
+            query = query.in_("completed_by_admin", admin_ids)
+        batch = query.range(offset, offset + page - 1).execute().data or []
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
+
+    totals = {
+        admin_id: {"rub_to_mnt_rub": 0.0, "mnt_to_rub_rub": 0.0}
+        for admin_id in admin_ids
+    }
+    for row in rows:
+        if not _is_successful_status(row.get("status") or ""):
+            continue
+        raw_admin_id = row.get("completed_by_admin")
+        if raw_admin_id is None:
+            continue
+        admin_id = int(raw_admin_id)
+        if admin_id not in totals:
+            continue
+        amount = float(row.get("amount") or 0)
+        rate = float(row.get("rate") or 0)
+        currency_from = (row.get("currency_from") or "").upper()
+        rub_equivalent = _txn_rub_equivalent(amount, currency_from, rate)
+        if currency_from == "RUB":
+            totals[admin_id]["rub_to_mnt_rub"] += rub_equivalent
+        else:
+            totals[admin_id]["mnt_to_rub_rub"] += rub_equivalent
+    return totals
+
+
+def _dashboard_adjustments_for_day(client, day: str, admin_ids: list[int]) -> dict:
+    if not admin_ids:
+        return {"rows": [], "by_admin": {}, "totals": {}}
+    query = client.table("dashboard_balance_adjustments").select("*").eq("balance_date", day).order("created_at")
+    if len(admin_ids) == 1:
+        query = query.eq("admin_id", admin_ids[0])
+    else:
+        query = query.in_("admin_id", admin_ids)
+    rows = query.execute().data or []
+    totals = {admin_id: 0.0 for admin_id in admin_ids}
+    by_admin = {admin_id: [] for admin_id in admin_ids}
+    normalized_rows: list[dict] = []
+    for row in rows:
+        raw_admin_id = row.get("admin_id")
+        if raw_admin_id is None:
+            continue
+        admin_id = int(raw_admin_id)
+        amount = float(row.get("amount") or 0)
+        normalized = {
+            **row,
+            "admin_id": admin_id,
+            "amount": round(amount, 2),
+        }
+        normalized_rows.append(normalized)
+        totals[admin_id] = totals.get(admin_id, 0.0) + amount
+        by_admin.setdefault(admin_id, []).append(normalized)
+    return {"rows": normalized_rows, "by_admin": by_admin, "totals": totals}
+
+
+def _dashboard_previous_closing_balance(client, prior_row: dict) -> float:
+    entered_balance = prior_row.get("entered_balance")
+    if entered_balance is not None:
+        return float(entered_balance or 0)
+    raw_admin_id = prior_row.get("admin_id")
+    if raw_admin_id is None:
+        return float(prior_row.get("opening_balance") or 0)
+    admin_id = int(raw_admin_id)
+    day = str(prior_row.get("balance_date") or "")[:10]
+    txn_totals = _dashboard_daily_transaction_totals(client, day, [admin_id]).get(admin_id, {})
+    adjustment_total = _dashboard_adjustments_for_day(client, day, [admin_id])["totals"].get(admin_id, 0.0)
+    return _dashboard_calculated_balance(
+        float(prior_row.get("opening_balance") or 0),
+        float(txn_totals.get("rub_to_mnt_rub") or 0),
+        float(txn_totals.get("mnt_to_rub_rub") or 0),
+        float(adjustment_total or 0),
+    )
+
+
+def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str) -> dict[int, dict]:
+    admin_ids = [int(admin["admin_id"]) for admin in admins if admin.get("admin_id") is not None]
+    if not admin_ids:
+        return {}
+    rows_by_admin = _dashboard_balance_rows_for_day(client, admin_ids, day)
+    missing_admin_ids = [admin_id for admin_id in admin_ids if admin_id not in rows_by_admin]
+    if not missing_admin_ids:
+        return rows_by_admin
+
+    prior_rows = _dashboard_latest_prior_balance_rows(client, missing_admin_ids, day)
+    now = datetime.now(timezone.utc).isoformat()
+    inserts = []
+    for admin_id in missing_admin_ids:
+        opening_balance = 0.0
+        prior_row = prior_rows.get(admin_id)
+        if prior_row:
+            opening_balance = round(_dashboard_previous_closing_balance(client, prior_row), 2)
+        inserts.append({
+            "admin_id": admin_id,
+            "balance_date": day,
+            "opening_balance": opening_balance,
+            "entered_balance": None,
+            "created_at": now,
+            "updated_at": now,
+        })
+    if inserts:
+        client.table("dashboard_balance_daily").upsert(inserts, on_conflict="admin_id,balance_date").execute()
+    return _dashboard_balance_rows_for_day(client, admin_ids, day)
+
+
+def _dashboard_balance_payload(client, day: str, selected_admin_id: int | None) -> dict:
+    admins = _dashboard_admins(client)
+    scoped_admins = _dashboard_scoped_admins(admins, selected_admin_id)
+    rows_by_admin = _ensure_dashboard_balance_rows(client, scoped_admins, day)
+    admin_ids = [int(admin["admin_id"]) for admin in scoped_admins if admin.get("admin_id") is not None]
+    txn_totals = _dashboard_daily_transaction_totals(client, day, admin_ids)
+    adjustment_data = _dashboard_adjustments_for_day(client, day, admin_ids)
+    admin_names = {
+        int(admin["admin_id"]): admin.get("name")
+        for admin in admins
+        if admin.get("admin_id") is not None
+    }
+
+    daily_balances = []
+    prev_balance_total = 0.0
+    rub_to_mnt_total = 0.0
+    mnt_to_rub_total = 0.0
+    adjustment_total = 0.0
+    calculated_total = 0.0
+    entered_balance_total = 0.0
+    missing_entered_balance_count = 0
+
+    for admin in scoped_admins:
+        admin_id = int(admin["admin_id"])
+        row = rows_by_admin.get(admin_id) or {}
+        opening_balance = float(row.get("opening_balance") or 0)
+        entered_balance_raw = row.get("entered_balance")
+        entered_balance = float(entered_balance_raw or 0) if entered_balance_raw is not None else None
+        rub_to_mnt_rub = float(txn_totals.get(admin_id, {}).get("rub_to_mnt_rub") or 0)
+        mnt_to_rub_rub = float(txn_totals.get(admin_id, {}).get("mnt_to_rub_rub") or 0)
+        admin_adjustment_total = float(adjustment_data["totals"].get(admin_id) or 0)
+        calculated_balance = _dashboard_calculated_balance(
+            opening_balance,
+            rub_to_mnt_rub,
+            mnt_to_rub_rub,
+            admin_adjustment_total,
+        )
+        discrepancy = calculated_balance - entered_balance if entered_balance is not None else None
+
+        prev_balance_total += opening_balance
+        rub_to_mnt_total += rub_to_mnt_rub
+        mnt_to_rub_total += mnt_to_rub_rub
+        adjustment_total += admin_adjustment_total
+        calculated_total += calculated_balance
+        if entered_balance is not None:
+            entered_balance_total += entered_balance
+        else:
+            missing_entered_balance_count += 1
+
+        daily_balances.append({
+            "admin_id": admin_id,
+            "admin_name": admin_names.get(admin_id),
+            "balance_date": day,
+            "opening_balance": round(opening_balance, 2),
+            "entered_balance": round(entered_balance, 2) if entered_balance is not None else None,
+            "rub_to_mnt_rub": round(rub_to_mnt_rub, 2),
+            "mnt_to_rub_rub": round(mnt_to_rub_rub, 2),
+            "adjustment_total": round(admin_adjustment_total, 2),
+            "calculated_balance": round(calculated_balance, 2),
+            "discrepancy": round(discrepancy, 2) if discrepancy is not None else None,
+        })
+
+    adjustments = []
+    for row in adjustment_data["rows"]:
+        adjustments.append({
+            **row,
+            "admin_name": admin_names.get(int(row["admin_id"])),
+        })
+
+    selected_daily_balance = daily_balances[0] if selected_admin_id is not None and daily_balances else None
+    discrepancy_total = None
+    if missing_entered_balance_count == 0:
+        discrepancy_total = calculated_total - entered_balance_total
+
+    return {
+        "date": day,
+        "admins": admins,
+        "selected_admin_id": selected_admin_id,
+        "daily_balances": daily_balances,
+        "selected_daily_balance": selected_daily_balance,
+        "adjustments": adjustments,
+        "rub_to_mnt_rub": round(rub_to_mnt_total, 2),
+        "mnt_to_rub_rub": round(mnt_to_rub_total, 2),
+        "prev_balance_total": round(prev_balance_total, 2),
+        "adjustment_total": round(adjustment_total, 2),
+        "total_balance": round(calculated_total, 2),
+        "entered_balance_total": round(entered_balance_total, 2),
+        "difference_total": round(discrepancy_total, 2) if discrepancy_total is not None else None,
+        "missing_entered_balance_count": missing_entered_balance_count,
+    }
 
 
 def _account_balance(a: dict) -> float:
@@ -2546,41 +2834,133 @@ async def delete_treasury_account(account_id: str, auth=Depends(get_dashboard_au
     return {"ok": True}
 
 
+@app.put("/api/dashboard/balance/daily")
+async def upsert_dashboard_balance_daily(payload: dict, auth=Depends(get_dashboard_auth)):
+    """Save today's entered closing balance for a specific admin."""
+    client = get_supabase()
+    normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
+    if normalized_admin_id is None:
+        raise HTTPException(status_code=400, detail="admin_id is required")
+    if "entered_balance" not in payload:
+        raise HTTPException(status_code=400, detail="entered_balance is required")
+    entered_balance = _optional_float(payload.get("entered_balance"), "entered_balance")
+    day = str(payload.get("balance_date") or _moscow_today())[:10]
+
+    admins = _dashboard_scoped_admins(_dashboard_admins(client), normalized_admin_id)
+    try:
+        rows_by_admin = _ensure_dashboard_balance_rows(client, admins, day)
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Prepare daily balance")
+
+    now = datetime.now(timezone.utc).isoformat()
+    update_payload = {
+        "admin_id": normalized_admin_id,
+        "balance_date": day,
+        "opening_balance": float(rows_by_admin.get(normalized_admin_id, {}).get("opening_balance") or 0),
+        "entered_balance": entered_balance,
+        "updated_at": now,
+    }
+    if normalized_admin_id not in rows_by_admin:
+        update_payload["created_at"] = now
+    try:
+        result = client.table("dashboard_balance_daily").upsert(update_payload, on_conflict="admin_id,balance_date").execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Save daily balance")
+    row = (result.data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=500, detail="Failed to save daily balance")
+    return {
+        "ok": True,
+        "daily_balance": {
+            **row,
+            "admin_id": normalized_admin_id,
+            "opening_balance": round(float(row.get("opening_balance") or 0), 2),
+            "entered_balance": round(float(row.get("entered_balance") or 0), 2) if row.get("entered_balance") is not None else None,
+        },
+    }
+
+
+@app.post("/api/dashboard/balance/adjustments")
+async def create_dashboard_balance_adjustment(payload: dict, auth=Depends(get_dashboard_auth)):
+    """Create a tagged manual income/expense item for the daily balance calculator."""
+    client = get_supabase()
+    normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
+    if normalized_admin_id is None:
+        raise HTTPException(status_code=400, detail="admin_id is required")
+    amount = _optional_float(payload.get("amount"), "amount")
+    if amount is None:
+        raise HTTPException(status_code=400, detail="amount is required")
+    if abs(amount) < 0.0000001:
+        raise HTTPException(status_code=400, detail="amount must not be 0")
+    day = str(payload.get("balance_date") or _moscow_today())[:10]
+    now = datetime.now(timezone.utc).isoformat()
+    insert_payload = {
+        "admin_id": normalized_admin_id,
+        "balance_date": day,
+        "amount": amount,
+        "tag": _normalize_balance_tag(payload.get("tag")),
+        "description": (payload.get("description") or "").strip() or None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        result = client.table("dashboard_balance_adjustments").insert(insert_payload).execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Create balance adjustment")
+    row = (result.data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=500, detail="Failed to create balance adjustment")
+    admin_name = None
+    for admin in _dashboard_admins(client):
+        if admin.get("admin_id") == normalized_admin_id:
+            admin_name = admin.get("name")
+            break
+    return {
+        "ok": True,
+        "adjustment": {
+            **row,
+            "admin_id": normalized_admin_id,
+            "admin_name": admin_name,
+            "amount": round(float(row.get("amount") or 0), 2),
+        },
+    }
+
+
+@app.delete("/api/dashboard/balance/adjustments/{adjustment_id}")
+async def delete_dashboard_balance_adjustment(adjustment_id: str, auth=Depends(get_dashboard_auth)):
+    """Delete a tagged manual income/expense item from the daily balance calculator."""
+    client = get_supabase()
+    try:
+        result = client.table("dashboard_balance_adjustments").delete().eq("id", adjustment_id).execute()
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Delete balance adjustment")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Balance adjustment not found")
+    return {"ok": True}
+
+
 @app.get("/api/dashboard/balance")
 async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends(get_dashboard_auth)):
-    """Balance accounting from per-account, admin-entered daily figures.
+    """Daily balance calculator scoped to one admin or all admins.
 
-    Every figure is entered by the admin (nothing is pulled from transactions):
-      balance = previous-day balance + today's RUB→MNT − today's MNT→RUB + ±adjustment
-    Today's balance rolls into previous-day balance automatically when the
-    Moscow day ends (see _rollover_treasury_accounts). The `date` parameter is
-    accepted for backward compatibility but the figures are always the current
-    Moscow day's.
+    The opening balance is carried from the previous Moscow day's entered
+    balance. Today's RUB→MNT and MNT→RUB amounts are derived automatically
+    from successful transactions completed by the selected admin(s). Manual
+    tagged adjustments are included as +/- income/expense items. The system
+    then compares the computed closing balance against the admin-entered actual
+    balance to produce the discrepancy value.
     """
     client = get_supabase()
     normalized_admin_id = _validated_dashboard_admin_id(client, admin_id, "admin_id")
+    day = str(date or _moscow_today())[:10]
     try:
+        payload = _dashboard_balance_payload(client, day, normalized_admin_id)
         accounts = _rollover_treasury_accounts(client, admin_id=normalized_admin_id)
-        admins = _dashboard_admins(client)
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load balance")
-
-    prev_sum = sum(float(a.get("prev_balance") or 0) for a in accounts)
-    rub_to_mnt = sum(float(a.get("rub_to_mnt") or 0) for a in accounts)
-    mnt_to_rub = sum(float(a.get("mnt_to_rub") or 0) for a in accounts)
-    adj_sum = sum(float(a.get("adjustment") or 0) for a in accounts)
-    total_balance = prev_sum + rub_to_mnt - mnt_to_rub + adj_sum
-
     return {
-        "date": _moscow_today(),
-        "admins": admins,
-        "selected_admin_id": normalized_admin_id,
+        **payload,
         "accounts": accounts,
-        "rub_to_mnt_rub": round(rub_to_mnt, 2),
-        "mnt_to_rub_rub": round(mnt_to_rub, 2),
-        "prev_balance_total": round(prev_sum, 2),
-        "adjustment_total": round(adj_sum, 2),
-        "total_balance": round(total_balance, 2),
     }
 
 

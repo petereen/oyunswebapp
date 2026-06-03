@@ -8,11 +8,13 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
 import {
-  BalanceSummary, CostRate, DashboardAdminOption, PlaneTicketSale, PlaneTicketSalesResponse,
-  ProfitSummary, TreasuryAccount, createPlaneTicketSale, createTreasuryAccount,
-  deletePlaneTicketSale, deleteTreasuryAccount, fetchBalanceSummary, fetchBlackRates,
-  fetchCostRates, fetchPlaneTicketSales, fetchProfit, fetchRates, saveCostRate,
-  updateTreasuryAccount,
+  BalanceAdjustment, BalanceSummary, CostRate, DailyBalanceRow, DashboardAdminOption,
+  PlaneTicketSale, PlaneTicketSalesResponse, ProfitSummary, TreasuryAccount,
+  createBalanceAdjustment, createPlaneTicketSale, createTreasuryAccount,
+  deleteBalanceAdjustment, deletePlaneTicketSale, deleteTreasuryAccount,
+  fetchBalanceSummary, fetchBlackRates, fetchCostRates, fetchPlaneTicketSales,
+  fetchProfit, fetchRates, saveCostRate, updateTreasuryAccount,
+  upsertBalanceDaily,
 } from "../api";
 
 type ProfitPeriod = "today" | "7d" | "month" | "year" | "custom";
@@ -182,8 +184,10 @@ function BalanceSection() {
       </div>
 
       <p className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3 leading-relaxed">
-        Бүх талбарыг гараар оруулна: <b>Өмнөх өдрийн баланс + Өнөөдрийн руб→төг − Өнөөдрийн төг→руб ± Тохируулга = Өнөөдрийн баланс</b>.
-        Москвагийн өдөр дуусахад өнөөдрийн баланс автоматаар маргаашийн "Өмнөх өдрийн баланс" болж шилжинэ.
+        Систем <b>Өмнөх өдрийн баланс + Өнөөдрийн руб→төг − Өнөөдрийн төг→руб ± Бусад орлого/зардал</b> томьёогоор
+        <b> тооцоолсон дүн</b>-г автоматаар гаргана. Админ өнөөдрийн бодит балансаа оруулахад
+        <b> Зөрүү = Тооцоолсон дүн − Оруулсан дүн</b> гэж бодно. Москвагийн өдөр дуусахад оруулсан өнөөдрийн баланс автоматаар маргаашийн
+        "Өмнөх өдрийн баланс" болж шилжинэ.
       </p>
 
       {balanceQ.error ? (
@@ -206,28 +210,50 @@ function BalanceBody({
   selectedAdminId: number | null;
   onChanged: () => void;
 }) {
+  const viewLabel = selectedAdminId == null ? "Бүх админ" : adminLabel(data.admins, selectedAdminId);
   return (
     <div className="space-y-5">
-      {selectedAdminId != null && (
-        <div className="text-xs text-slate-500 dark:text-ivory-400">
-          Харагдаж буй баланс: <span className="font-semibold text-slate-700 dark:text-ivory-200">{adminLabel(data.admins, selectedAdminId)}</span>
+      <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-ivory-400 md:flex-row md:items-center md:justify-between">
+        <div>
+          Харагдаж буй тооцоо: <span className="font-semibold text-slate-700 dark:text-ivory-200">{viewLabel}</span>
         </div>
-      )}
+        <div>
+          Оруулсан балансын нийлбэр: <span className="font-semibold text-slate-700 dark:text-ivory-200">{fmtRub(data.entered_balance_total)}</span>
+        </div>
+      </div>
 
-      <TreasuryAccountsTable
-        accounts={data.accounts}
-        admins={data.admins}
-        selectedAdminId={selectedAdminId}
-        onChanged={onChanged}
-      />
-
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
         <BalanceStat label="Өмнөх өдрийн баланс" value={fmtRub(data.prev_balance_total)} />
         <BalanceStat label="Өнөөдрийн руб→төг" value={fmtRub(data.rub_to_mnt_rub)} tone="pos" />
         <BalanceStat label="Өнөөдрийн төг→руб" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
         <BalanceStat label="Тохируулга" value={fmtRub(data.adjustment_total)} />
         <BalanceStat label="Нийт баланс" value={fmtRub(data.total_balance)} accent />
+        <BalanceStat
+          label="Зөрүү"
+          value={data.difference_total == null ? "—" : fmtRub(data.difference_total)}
+          tone={data.difference_total == null ? undefined : data.difference_total > 0 ? "pos" : data.difference_total < 0 ? "neg" : undefined}
+        />
       </div>
+
+      {data.missing_entered_balance_count > 0 && (
+        <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl p-3">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            {data.missing_entered_balance_count} админ өнөөдрийн бодит балансаа хараахан оруулаагүй байна. Дутуу мөрүүд дээр оруулсан дүнг хадгалсны дараа
+            нийт "Зөрүү" автоматаар гарна.
+          </div>
+        </div>
+      )}
+
+      <DailyBalanceRowsTable rows={data.daily_balances} onChanged={onChanged} />
+      <BalanceAdjustmentsPanel
+        admins={data.admins}
+        adjustments={data.adjustments}
+        balanceDate={data.date}
+        selectedAdminId={selectedAdminId}
+        totalAdjustment={data.adjustment_total}
+        onChanged={onChanged}
+      />
     </div>
   );
 }
@@ -243,6 +269,326 @@ function BalanceStat({ label, value, tone, accent }: { label: string; value: str
       : "bg-white dark:bg-dark-800 border-slate-200 dark:border-dark-600"}`}>
       <div className={`text-[10px] ${accent ? "text-white/80" : "text-slate-400"}`}>{label}</div>
       <div className={`text-base font-bold tabular-nums mt-0.5 ${valueColor}`}>{value}</div>
+    </div>
+  );
+}
+
+type DailyBalanceDraft = {
+  entered_balance: string;
+};
+
+function DailyBalanceRowsTable({ rows, onChanged }: { rows: DailyBalanceRow[]; onChanged: () => void }) {
+  const [drafts, setDrafts] = useState<Record<number, DailyBalanceDraft>>({});
+  const [busyAdminId, setBusyAdminId] = useState<number | null>(null);
+
+  const draftOf = (row: DailyBalanceRow): DailyBalanceDraft => drafts[row.admin_id] ?? {
+    entered_balance: row.entered_balance != null ? String(row.entered_balance) : "",
+  };
+
+  const setDraft = (adminId: number, patch: Partial<DailyBalanceDraft>) => {
+    const row = rows.find((item) => item.admin_id === adminId);
+    if (!row) return;
+    setDrafts((current) => ({
+      ...current,
+      [adminId]: { ...draftOf(row), ...current[adminId], ...patch },
+    }));
+  };
+
+  const isDirty = (row: DailyBalanceRow) => {
+    const draft = drafts[row.admin_id];
+    if (!draft) return false;
+    const entered = draft.entered_balance.trim() === "" ? null : Number(draft.entered_balance);
+    return entered !== row.entered_balance;
+  };
+
+  const previewDifference = (row: DailyBalanceRow) => {
+    const draft = draftOf(row);
+    const entered = draft.entered_balance.trim() === "" ? null : Number(draft.entered_balance);
+    return entered == null ? null : row.calculated_balance - entered;
+  };
+
+  const save = async (row: DailyBalanceRow) => {
+    const draft = draftOf(row);
+    const enteredBalance = draft.entered_balance.trim() === "" ? null : Number(draft.entered_balance);
+    setBusyAdminId(row.admin_id);
+    try {
+      await upsertBalanceDaily({
+        admin_id: row.admin_id,
+        balance_date: row.balance_date,
+        entered_balance: enteredBalance,
+      });
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[row.admin_id];
+        return next;
+      });
+      onChanged();
+    } finally {
+      setBusyAdminId(null);
+    }
+  };
+
+  if (rows.length === 0) {
+    return (
+      <div className="py-6 text-center text-sm text-slate-400 rounded-2xl border border-dashed border-slate-200 dark:border-dark-600">
+        Идэвхтэй админ олдсонгүй.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm font-semibold">Ерөнхий тооцоолуур</div>
+
+      <div className="grid gap-3 md:hidden">
+        {rows.map((row) => {
+          const draft = draftOf(row);
+          const difference = previewDifference(row);
+          return (
+            <div key={row.admin_id} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] text-slate-400">Админ</div>
+                  <div className="font-semibold">{row.admin_name || `ID ${row.admin_id}`}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] text-slate-400">Зөрүү</div>
+                  <div className={`font-bold tabular-nums ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>
+                    {difference == null ? "—" : fmtRub(difference)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <BalanceMiniStat label="Өмнөх" value={fmtRub(row.opening_balance)} />
+                <BalanceMiniStat label="Руб→төг" value={fmtRub(row.rub_to_mnt_rub)} tone="pos" />
+                <BalanceMiniStat label="Төг→руб" value={fmtRub(row.mnt_to_rub_rub)} tone="neg" />
+                <BalanceMiniStat label="Тохируулга" value={fmtRub(row.adjustment_total)} />
+                <BalanceMiniStat label="Тооцоолсон" value={fmtRub(row.calculated_balance)} accent />
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Оруулсан баланс</div>
+                  <input
+                    type="number"
+                    className={`${INPUT_CLASS} text-right`}
+                    value={draft.entered_balance}
+                    onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
+                    placeholder="0"
+                  />
+                </label>
+              </div>
+
+              <button
+                onClick={() => save(row)}
+                disabled={!isDirty(row) || busyAdminId === row.admin_id}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-maroon-700 transition"
+              >
+                {busyAdminId === row.admin_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
+              <th className="py-2 pr-2 font-medium">Админ</th>
+              <th className="py-2 px-2 font-medium text-right">Өмнөх баланс (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Руб→төг (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Төг→руб (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Тохируулга (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Тооцоолсон дүн (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Оруулсан баланс (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Зөрүү (₽)</th>
+              <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const draft = draftOf(row);
+              const difference = previewDifference(row);
+              return (
+                <tr key={row.admin_id} className="border-b border-slate-100 dark:border-dark-700">
+                  <td className="py-2 pr-2 min-w-[160px] font-semibold">{row.admin_name || `ID ${row.admin_id}`}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{fmtRub(row.opening_balance)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtRub(row.rub_to_mnt_rub)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums text-rose-600 dark:text-rose-400">{fmtRub(row.mnt_to_rub_rub)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{fmtRub(row.adjustment_total)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(row.calculated_balance)}</td>
+                  <td className="py-2 px-2 w-40">
+                    <input
+                      type="number"
+                      className={`${INPUT_CLASS} text-right`}
+                      value={draft.entered_balance}
+                      onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
+                      placeholder="0"
+                    />
+                  </td>
+                  <td className={`py-2 px-2 text-right tabular-nums font-semibold ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>
+                    {difference == null ? "—" : fmtRub(difference)}
+                  </td>
+                  <td className="py-2 pl-2 text-right">
+                    <button
+                      onClick={() => save(row)}
+                      disabled={!isDirty(row) || busyAdminId === row.admin_id}
+                      className="inline-flex items-center justify-center p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-30 hover:bg-maroon-700 transition"
+                      title="Оруулсан балансыг хадгалах"
+                    >
+                      {busyAdminId === row.admin_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function BalanceMiniStat({ label, value, tone, accent }: { label: string; value: string; tone?: "pos" | "neg"; accent?: boolean }) {
+  const color = accent ? "text-maroon-600 dark:text-gold-400"
+    : tone === "pos" ? "text-emerald-600 dark:text-emerald-400"
+    : tone === "neg" ? "text-rose-600 dark:text-rose-400"
+    : "text-slate-700 dark:text-ivory-200";
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2">
+      <div className="text-[10px] text-slate-400">{label}</div>
+      <div className={`text-sm font-semibold tabular-nums mt-0.5 ${color}`}>{value}</div>
+    </div>
+  );
+}
+
+function BalanceAdjustmentsPanel({
+  admins,
+  adjustments,
+  balanceDate,
+  selectedAdminId,
+  totalAdjustment,
+  onChanged,
+}: {
+  admins: DashboardAdminOption[];
+  adjustments: BalanceAdjustment[];
+  balanceDate: string;
+  selectedAdminId: number | null;
+  totalAdjustment: number;
+  onChanged: () => void;
+}) {
+  const [formAdminId, setFormAdminId] = useState(selectedAdminId != null ? String(selectedAdminId) : "");
+  const [amount, setAmount] = useState("");
+  const [tag, setTag] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFormAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
+  }, [selectedAdminId]);
+
+  const add = async () => {
+    const parsedAmount = Number(amount);
+    if (!formAdminId || !tag.trim() || !Number.isFinite(parsedAmount) || parsedAmount === 0) return;
+    setSaving(true);
+    try {
+      await createBalanceAdjustment({
+        admin_id: Number(formAdminId),
+        balance_date: balanceDate,
+        amount: parsedAmount,
+        tag: tag.trim(),
+        description: description.trim() || undefined,
+      });
+      setAmount("");
+      setTag("");
+      setDescription("");
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (adjustment: BalanceAdjustment) => {
+    if (!window.confirm(`"${adjustment.tag}" мөрийг устгах уу?`)) return;
+    setDeletingId(adjustment.id);
+    try {
+      await deleteBalanceAdjustment(adjustment.id);
+      onChanged();
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-4">
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="text-sm font-semibold">Бусад орлого / зардал</div>
+          <div className="text-xs text-slate-500 dark:text-ivory-400">Таг, тайлбартай гараар оруулах тохируулга</div>
+        </div>
+        <div className="text-sm font-semibold tabular-nums">Нийт тохируулга: {fmtRub(totalAdjustment)}</div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[180px_170px_minmax(0,1fr)_minmax(0,1.4fr)_auto] gap-2 items-end">
+        <label>
+          <div className="text-[10px] text-slate-400 mb-1">Админ</div>
+          <select className={INPUT_CLASS} value={formAdminId} onChange={(e) => setFormAdminId(e.target.value)}>
+            <option value="">Админ сонгох</option>
+            {admins.map((admin) => (
+              <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <div className="text-[10px] text-slate-400 mb-1">Дүн (₽)</div>
+          <input type="number" className={`${INPUT_CLASS} text-right`} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="+1000 эсвэл -500" />
+        </label>
+        <label>
+          <div className="text-[10px] text-slate-400 mb-1">Таг</div>
+          <input className={INPUT_CLASS} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Жишээ: касс, шимтгэл, буцаалт" />
+        </label>
+        <label>
+          <div className="text-[10px] text-slate-400 mb-1">Тайлбар</div>
+          <input className={INPUT_CLASS} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Нэмэлт тайлбар" />
+        </label>
+        <button
+          onClick={add}
+          disabled={!formAdminId || !tag.trim() || !amount.trim() || saving}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Нэмэх
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {adjustments.length === 0 ? (
+          <div className="py-6 text-center text-sm text-slate-400 rounded-2xl border border-dashed border-slate-200 dark:border-dark-600">
+            Бусад орлого/зардлын мөр алга байна.
+          </div>
+        ) : adjustments.map((adjustment) => (
+          <div key={adjustment.id} className="flex flex-col gap-2 rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-semibold">{adjustment.tag}</span>
+                <span className={`tabular-nums font-semibold ${adjustment.amount > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                  {fmtRub(adjustment.amount)}
+                </span>
+                <span className="text-xs text-slate-400">{adjustment.admin_name || `ID ${adjustment.admin_id}`}</span>
+              </div>
+              <div className="text-xs text-slate-500 dark:text-ivory-400 mt-1 break-words">
+                {adjustment.description || "Тайлбаргүй"}
+              </div>
+            </div>
+            <button
+              onClick={() => remove(adjustment)}
+              disabled={deletingId === adjustment.id}
+              className="self-start md:self-center px-3 py-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition disabled:opacity-50"
+            >
+              {deletingId === adjustment.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1768,16 +1768,47 @@ export type TreasuryAccount = {
   updated_at?: string;
 };
 
+export type DailyBalanceRow = {
+  admin_id: number;
+  admin_name: string | null;
+  balance_date: string;
+  opening_balance: number;
+  entered_balance: number | null;
+  rub_to_mnt_rub: number;
+  mnt_to_rub_rub: number;
+  adjustment_total: number;
+  calculated_balance: number;
+  discrepancy: number | null;
+};
+
+export type BalanceAdjustment = {
+  id: string;
+  admin_id: number;
+  admin_name?: string | null;
+  balance_date: string;
+  amount: number;
+  tag: string;
+  description?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type BalanceSummary = {
   date: string;
   admins: DashboardAdminOption[];
   selected_admin_id?: number | null;
   accounts: TreasuryAccount[];
+  daily_balances: DailyBalanceRow[];
+  selected_daily_balance?: DailyBalanceRow | null;
+  adjustments: BalanceAdjustment[];
   rub_to_mnt_rub: number;
   mnt_to_rub_rub: number;
   prev_balance_total: number;
   adjustment_total: number;
   total_balance: number;
+  entered_balance_total: number;
+  difference_total: number | null;
+  missing_entered_balance_count: number;
 };
 
 export type CostRate = {
@@ -1850,6 +1881,30 @@ export async function fetchBalanceSummary(params: { date?: string; admin_id?: nu
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/balance${query ? `?${query}` : ""}`);
   return res.data as BalanceSummary;
+}
+
+export async function upsertBalanceDaily(payload: {
+  admin_id: number;
+  balance_date?: string;
+  entered_balance: number | null;
+}): Promise<DailyBalanceRow> {
+  const res = await dashboardApi.put("/dashboard/balance/daily", payload);
+  return res.data.daily_balance as DailyBalanceRow;
+}
+
+export async function createBalanceAdjustment(payload: {
+  admin_id: number;
+  balance_date?: string;
+  amount: number;
+  tag: string;
+  description?: string;
+}): Promise<BalanceAdjustment> {
+  const res = await dashboardApi.post("/dashboard/balance/adjustments", payload);
+  return res.data.adjustment as BalanceAdjustment;
+}
+
+export async function deleteBalanceAdjustment(id: string): Promise<void> {
+  await dashboardApi.delete(`/dashboard/balance/adjustments/${id}`);
 }
 
 export async function fetchBlackRates(params: { start?: string; end?: string; date?: string } = {}): Promise<{
