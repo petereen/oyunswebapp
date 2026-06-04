@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
     rub_to_mnt    NUMERIC NOT NULL DEFAULT 0,
     -- Өнөөдрийн төг→руб чиглэлийн дүн (RUB). Admin-entered daily figure.
     mnt_to_rub    NUMERIC NOT NULL DEFAULT 0,
-    -- Empty +/- adjustment field (default 0).
+    -- Legacy aggregate adjustment field kept for backward compatibility.
     adjustment    NUMERIC NOT NULL DEFAULT 0,
     -- The actual balance physically present in the bank account for today.
     entered_balance NUMERIC,
@@ -84,10 +84,11 @@ CREATE INDEX IF NOT EXISTS idx_dashboard_balance_daily_date
     ON dashboard_balance_daily(balance_date DESC, admin_id);
 
 -- Tagged +/- manual income/expense items that affect the day's calculated
--- closing balance.
+-- closing balance. Each row should point at the treasury account it changes.
 CREATE TABLE IF NOT EXISTS dashboard_balance_adjustments (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     admin_id    BIGINT NOT NULL REFERENCES public.admin_users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    treasury_account_id UUID REFERENCES treasury_accounts(id) ON UPDATE CASCADE ON DELETE CASCADE,
     balance_date DATE NOT NULL,
     amount      NUMERIC NOT NULL,
     tag         TEXT NOT NULL,
@@ -96,12 +97,34 @@ CREATE TABLE IF NOT EXISTS dashboard_balance_adjustments (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE dashboard_balance_adjustments ADD COLUMN IF NOT EXISTS treasury_account_id UUID;
 ALTER TABLE dashboard_balance_adjustments ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE dashboard_balance_adjustments ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 ALTER TABLE dashboard_balance_adjustments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'dashboard_balance_adjustments_treasury_account_id_fkey'
+          AND conrelid = 'dashboard_balance_adjustments'::regclass
+    ) THEN
+        ALTER TABLE dashboard_balance_adjustments
+            ADD CONSTRAINT dashboard_balance_adjustments_treasury_account_id_fkey
+            FOREIGN KEY (treasury_account_id)
+            REFERENCES treasury_accounts(id)
+            ON UPDATE CASCADE
+            ON DELETE CASCADE
+            NOT VALID;
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_dashboard_balance_adjustments_day_admin
     ON dashboard_balance_adjustments(balance_date DESC, admin_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_balance_adjustments_day_account
+    ON dashboard_balance_adjustments(balance_date DESC, treasury_account_id, created_at);
 
 -- ── Cost rates (өртөг ханш) per date ─────────────────────────────────────────
 -- black_rate is fetched from Google Sheets, usd_rate is entered by the admin,

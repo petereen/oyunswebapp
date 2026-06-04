@@ -1761,6 +1761,7 @@ export type TreasuryAccount = {
   rub_to_mnt: number;
   mnt_to_rub: number;
   adjustment: number;
+  adjustment_total?: number;
   entered_balance?: number | null;
   calculated_balance?: number;
   discrepancy?: number | null;
@@ -1789,6 +1790,8 @@ export type BalanceAdjustment = {
   id: string;
   admin_id: number;
   admin_name?: string | null;
+  treasury_account_id?: string | null;
+  account_name?: string | null;
   balance_date: string;
   amount: number;
   tag: string;
@@ -1900,6 +1903,7 @@ export async function upsertBalanceDaily(payload: {
 
 export async function createBalanceAdjustment(payload: {
   admin_id: number;
+  treasury_account_id?: string;
   balance_date?: string;
   amount: number;
   tag: string;
