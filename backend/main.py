@@ -2766,6 +2766,88 @@ def _account_balance(a: dict) -> float:
     )
 
 
+def _account_entered_balance(a: dict) -> float | None:
+    raw = a.get("entered_balance")
+    if raw is None:
+        return None
+    return float(raw or 0)
+
+
+def _account_discrepancy(a: dict) -> float | None:
+    entered_balance = _account_entered_balance(a)
+    if entered_balance is None:
+        return None
+    return _account_balance(a) - entered_balance
+
+
+def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None) -> dict:
+    admins = _dashboard_admins(client)
+    accounts = _rollover_treasury_accounts(client, admin_id=selected_admin_id)
+    admin_names = {
+        int(admin["admin_id"]): admin.get("name")
+        for admin in admins
+        if admin.get("admin_id") is not None
+    }
+
+    enriched_accounts: list[dict] = []
+    prev_sum = 0.0
+    rub_to_mnt_sum = 0.0
+    mnt_to_rub_sum = 0.0
+    adjustment_sum = 0.0
+    calculated_total = 0.0
+    entered_balance_total = 0.0
+    missing_entered_balance_count = 0
+
+    for account in accounts:
+        calculated_balance = round(_account_balance(account), 2)
+        entered_balance = _account_entered_balance(account)
+        discrepancy = _account_discrepancy(account)
+
+        prev_sum += float(account.get("prev_balance") or 0)
+        rub_to_mnt_sum += float(account.get("rub_to_mnt") or 0)
+        mnt_to_rub_sum += float(account.get("mnt_to_rub") or 0)
+        adjustment_sum += float(account.get("adjustment") or 0)
+        calculated_total += calculated_balance
+        if entered_balance is None:
+            missing_entered_balance_count += 1
+        else:
+            entered_balance_total += entered_balance
+
+        admin_id = _optional_int(account.get("admin_id"), "admin_id")
+        enriched_accounts.append({
+            **account,
+            "admin_id": admin_id,
+            "admin_name": admin_names.get(admin_id) if admin_id is not None else None,
+            "entered_balance": round(entered_balance, 2) if entered_balance is not None else None,
+            "calculated_balance": calculated_balance,
+            "discrepancy": round(discrepancy, 2) if discrepancy is not None else None,
+        })
+
+    difference_total = None
+    if missing_entered_balance_count == 0:
+        difference_total = round(calculated_total - entered_balance_total, 2)
+
+    return {
+        "date": _moscow_today(),
+        "admins": admins,
+        "selected_admin_id": selected_admin_id,
+        "accounts": enriched_accounts,
+        "daily_balances": [],
+        "selected_daily_balance": None,
+        "adjustments": [],
+        "rub_to_mnt_rub": round(rub_to_mnt_sum, 2),
+        "mnt_to_rub_rub": round(mnt_to_rub_sum, 2),
+        "prev_balance_total": round(prev_sum, 2),
+        "adjustment_total": round(adjustment_sum, 2),
+        "total_balance": round(calculated_total, 2),
+        "entered_balance_total": round(entered_balance_total, 2),
+        "difference_total": difference_total,
+        "missing_entered_balance_count": missing_entered_balance_count,
+        "setup_required": False,
+        "setup_error": None,
+    }
+
+
 def _rollover_treasury_accounts(client, admin_id: int | None = None) -> list[dict]:
     """Carry each account's computed balance into prev_balance when its day ends.
 
@@ -2789,6 +2871,7 @@ def _rollover_treasury_accounts(client, admin_id: int | None = None) -> list[dic
                 "rub_to_mnt": 0,
                 "mnt_to_rub": 0,
                 "adjustment": 0,
+                "entered_balance": None,
                 "balance_date": today,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
@@ -2876,6 +2959,7 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
         "rub_to_mnt": float(payload.get("rub_to_mnt") or 0),
         "mnt_to_rub": float(payload.get("mnt_to_rub") or 0),
         "adjustment": float(payload.get("adjustment") or 0),
+        "entered_balance": _optional_float(payload.get("entered_balance"), "entered_balance") if "entered_balance" in payload else None,
         "currency": (payload.get("currency") or "RUB").upper(),
         "is_active": payload.get("is_active", True),
         "display_order": int(payload.get("display_order") or 0),
@@ -2904,9 +2988,11 @@ async def update_treasury_account(account_id: str, payload: dict, auth=Depends(g
     for num_field in ("prev_balance", "rub_to_mnt", "mnt_to_rub", "adjustment", "display_order"):
         if num_field in payload:
             update_data[num_field] = float(payload[num_field] or 0)
+    if "entered_balance" in payload:
+        update_data["entered_balance"] = _optional_float(payload.get("entered_balance"), "entered_balance")
     # Editing the daily figures stamps the row with today's Moscow day so the
     # next day's rollover carries the right balance forward.
-    if any(k in payload for k in ("rub_to_mnt", "mnt_to_rub", "adjustment", "prev_balance")):
+    if any(k in payload for k in ("rub_to_mnt", "mnt_to_rub", "adjustment", "prev_balance", "entered_balance")):
         update_data["balance_date"] = _moscow_today()
     if "currency" in payload:
         update_data["currency"] = (payload.get("currency") or "RUB").upper()
@@ -3035,42 +3121,20 @@ async def delete_dashboard_balance_adjustment(adjustment_id: str, auth=Depends(g
 
 @app.get("/api/dashboard/balance")
 async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends(get_dashboard_auth)):
-    """Daily balance calculator scoped to one admin or all admins.
+    """Manual per-account balance calculator scoped to one admin or all admins.
 
-    The opening balance is carried from the previous Moscow day's entered
-    balance. Today's RUB→MNT and MNT→RUB amounts are derived automatically
-    from successful transactions completed by the selected admin(s). Manual
-    tagged adjustments are included as +/- income/expense items. The system
-    then compares the computed closing balance against the admin-entered actual
-    balance to produce the discrepancy value.
+    Admins enter previous balance, RUB→MNT, MNT→RUB, adjustment, and the real
+    entered balance per treasury account. The system computes the calculated
+    balance per account and aggregates the visible accounts for the selected
+    admin or all admins.
     """
     client = get_supabase()
     normalized_admin_id = _validated_dashboard_admin_id(client, admin_id, "admin_id")
-    day = str(date or _moscow_today())[:10]
     try:
-        payload = _dashboard_balance_payload(client, day, normalized_admin_id)
+        payload = _dashboard_treasury_balance_payload(client, normalized_admin_id)
     except Exception as exc:
-        setup_detail = _dashboard_balance_setup_detail(exc)
-        if setup_detail:
-            logger.warning(f"Load balance fallback: {exc}")
-            payload = _dashboard_balance_fallback_payload(client, day, normalized_admin_id, setup_detail)
-        else:
-            raise _dashboard_db_error(exc, "Load balance")
-
-    accounts: list[dict] = []
-    try:
-        accounts = _rollover_treasury_accounts(client, admin_id=normalized_admin_id)
-    except Exception as exc:
-        setup_detail = _dashboard_balance_setup_detail(exc)
-        if setup_detail:
-            logger.warning(f"Skip treasury accounts on balance load: {exc}")
-        else:
-            raise _dashboard_db_error(exc, "Load treasury accounts")
-
-    return {
-        **payload,
-        "accounts": accounts,
-    }
+        raise _dashboard_db_error(exc, "Load balance")
+    return payload
 
 
 @app.get("/api/dashboard/black-rate")

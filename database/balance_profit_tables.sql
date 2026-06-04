@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
     mnt_to_rub    NUMERIC NOT NULL DEFAULT 0,
     -- Empty +/- adjustment field (default 0).
     adjustment    NUMERIC NOT NULL DEFAULT 0,
+    -- The actual balance physically present in the bank account for today.
+    entered_balance NUMERIC,
     -- Moscow calendar day the daily figures belong to (used for rollover).
     balance_date  DATE,
     currency      TEXT NOT NULL DEFAULT 'RUB',
@@ -31,6 +33,7 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
 -- Upgrade existing installs (idempotent — safe to re-run).
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS rub_to_mnt   NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS mnt_to_rub   NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS entered_balance NUMERIC;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS balance_date DATE;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS admin_id      BIGINT;
 

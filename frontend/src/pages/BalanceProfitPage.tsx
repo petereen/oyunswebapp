@@ -85,6 +85,16 @@ function accountBalance(draft: Pick<AcctDraft, "prev_balance" | "rub_to_mnt" | "
     + (Number(draft.adjustment) || 0);
 }
 
+function accountEnteredBalance(draft: Pick<AcctDraft, "entered_balance">) {
+  return draft.entered_balance.trim() === "" ? null : (Number(draft.entered_balance) || 0);
+}
+
+function accountDifference(draft: Pick<AcctDraft, "prev_balance" | "rub_to_mnt" | "mnt_to_rub" | "adjustment" | "entered_balance">) {
+  const enteredBalance = accountEnteredBalance(draft);
+  if (enteredBalance == null) return null;
+  return accountBalance(draft) - enteredBalance;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void; pageTabs?: React.ReactNode }) {
@@ -98,7 +108,7 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
             </div>
             <div>
               <h1 className="text-lg md:text-xl font-bold leading-tight">Баланс ба Ашиг · Oyuns AIO Bot</h1>
-              <p className="text-xs text-slate-500 dark:text-ivory-400">Балансын бүртгэл ба ашгийн тооцоо</p>
+              <p className="text-xs text-slate-500 dark:text-ivory-400">Баланс бүртгэл ба ашгийн тооцоо</p>
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -156,7 +166,7 @@ function BalanceSection() {
       <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Wallet className="w-5 h-5 text-maroon-600 dark:text-gold-400" />
-          <h2 className="text-base font-bold">Балансын бүртгэл</h2>
+          <h2 className="text-base font-bold">Баланс бүртгэл</h2>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <label className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600">
@@ -189,10 +199,10 @@ function BalanceSection() {
       </div>
 
       <p className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3 leading-relaxed">
-        Систем <b>Өмнөх өдрийн баланс + Өнөөдрийн руб→төг − Өнөөдрийн төг→руб ± Бусад орлого/зардал</b> томьёогоор
-        <b> тооцоолсон дүн</b>-г автоматаар гаргана. Админ өнөөдрийн бодит балансаа оруулахад
-        <b> Зөрүү = Тооцоолсон дүн − Оруулсан дүн</b> гэж бодно. Москвагийн өдөр дуусахад оруулсан өнөөдрийн баланс автоматаар маргаашийн
-        "Өмнөх өдрийн баланс" болж шилжинэ.
+        Данс бүр дээр <b>Руб→төг, Төг→руб, Тохируулга</b> дүнг гараар оруулна.
+        Систем <b>Өмнөх өдрийн баланс + Руб→төг − Төг→руб ± Тохируулга</b> томьёогоор <b>Тооцоолсон дүн</b>-г бодно.
+        <b>Оруулсан баланс</b> нь тухайн банк дансанд байгаа бодит мөнгө, харин <b>Зөрүү = Тооцоолсон дүн − Оруулсан баланс</b>.
+        <b>Москвагийн цагаар өдөр дуусахад Тооцоолсон дүн автоматаар маргаашийн "Өмнөх өдрийн баланс" болж шилжинэ.</b>
       </p>
 
       {balanceQ.error ? (
@@ -218,24 +228,24 @@ function BalanceBody({
   onChanged: () => void;
 }) {
   const viewLabel = selectedAdminId == null ? "Бүх админ" : adminLabel(data.admins, selectedAdminId);
-  const setupRequired = Boolean(data.setup_required);
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-ivory-400 md:flex-row md:items-center md:justify-between">
         <div>
-          Харагдаж буй тооцоо: <span className="font-semibold text-slate-700 dark:text-ivory-200">{viewLabel}</span>
+          Харагдаж буй дүн: <span className="font-semibold text-slate-700 dark:text-ivory-200">{viewLabel}</span>
         </div>
         <div>
-          Оруулсан балансын нийлбэр: <span className="font-semibold text-slate-700 dark:text-ivory-200">{fmtRub(data.entered_balance_total)}</span>
+          Харагдаж буй дансны тоо: <span className="font-semibold text-slate-700 dark:text-ivory-200">{data.accounts.length}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3">
         <BalanceStat label="Өмнөх өдрийн баланс" value={fmtRub(data.prev_balance_total)} />
         <BalanceStat label="Өнөөдрийн руб→төг" value={fmtRub(data.rub_to_mnt_rub)} tone="pos" />
         <BalanceStat label="Өнөөдрийн төг→руб" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
         <BalanceStat label="Тохируулга" value={fmtRub(data.adjustment_total)} />
-        <BalanceStat label="Нийт баланс" value={fmtRub(data.total_balance)} accent />
+        <BalanceStat label="Тооцоолсон дүн" value={fmtRub(data.total_balance)} accent />
+        <BalanceStat label="Оруулсан баланс" value={fmtRub(data.entered_balance_total)} />
         <BalanceStat
           label="Зөрүү"
           value={data.difference_total == null ? "—" : fmtRub(data.difference_total)}
@@ -247,33 +257,18 @@ function BalanceBody({
         <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl p-3">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
-            {data.missing_entered_balance_count} админ өнөөдрийн бодит балансаа хараахан оруулаагүй байна. Дутуу мөрүүд дээр оруулсан дүнг хадгалсны дараа
+            {data.missing_entered_balance_count} дансанд өнөөдрийн бодит баланс хараахан ороогүй байна. Дутуу мөрүүд дээр оруулсан дүнг хадгалсны дараа
             нийт "Зөрүү" автоматаар гарна.
           </div>
         </div>
       )}
 
-      {setupRequired && (
-        <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl p-3">
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <div>
-            <div className="font-semibold">Балансын шинэ хүснэгтүүд хараахан бэлэн биш байна.</div>
-            <div className="mt-1">{data.setup_error || "database/balance_profit_tables.sql-г Supabase дээр ажиллуулах шаардлагатай."}</div>
-          </div>
-        </div>
-      )}
-
-      <DailyBalanceRowsTable rows={data.daily_balances} onChanged={onChanged} readOnly={setupRequired} />
-      {!setupRequired && (
-        <BalanceAdjustmentsPanel
-          admins={data.admins}
-          adjustments={data.adjustments}
-          balanceDate={data.date}
-          selectedAdminId={selectedAdminId}
-          totalAdjustment={data.adjustment_total}
-          onChanged={onChanged}
-        />
-      )}
+      <TreasuryAccountsTable
+        accounts={data.accounts}
+        admins={data.admins}
+        selectedAdminId={selectedAdminId}
+        onChanged={onChanged}
+      />
     </div>
   );
 }
@@ -575,7 +570,7 @@ function BalanceAdjustmentsPanel({
         </label>
         <label>
           <div className="text-[10px] text-slate-400 mb-1">Таг</div>
-          <input className={INPUT_CLASS} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Жишээ: касс, шимтгэл, буцаалт" />
+          <input className={INPUT_CLASS} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Жишээ: зээл, шимтгэл, буцаалт" />
         </label>
         <label>
           <div className="text-[10px] text-slate-400 mb-1">Тайлбар</div>
@@ -630,6 +625,7 @@ type AcctDraft = {
   rub_to_mnt: string;
   mnt_to_rub: string;
   adjustment: string;
+  entered_balance: string;
 };
 
 function TreasuryAccountsTable({
@@ -662,6 +658,7 @@ function TreasuryAccountsTable({
       rub_to_mnt: String(account.rub_to_mnt ?? 0),
       mnt_to_rub: String(account.mnt_to_rub ?? 0),
       adjustment: String(account.adjustment ?? 0),
+      entered_balance: account.entered_balance != null ? String(account.entered_balance) : "",
     };
 
   const setDraft = (id: string, patch: Partial<AcctDraft>) => {
@@ -681,7 +678,8 @@ function TreasuryAccountsTable({
       || Number(draft.prev_balance) !== account.prev_balance
       || Number(draft.rub_to_mnt) !== account.rub_to_mnt
       || Number(draft.mnt_to_rub) !== account.mnt_to_rub
-      || Number(draft.adjustment) !== account.adjustment;
+      || Number(draft.adjustment) !== account.adjustment
+      || accountEnteredBalance(draft) !== (account.entered_balance ?? null);
   };
 
   const save = async (account: TreasuryAccount) => {
@@ -695,6 +693,7 @@ function TreasuryAccountsTable({
         rub_to_mnt: Number(draft.rub_to_mnt) || 0,
         mnt_to_rub: Number(draft.mnt_to_rub) || 0,
         adjustment: Number(draft.adjustment) || 0,
+        entered_balance: accountEnteredBalance(draft),
       });
       setDrafts((current) => {
         const next = { ...current };
@@ -742,6 +741,7 @@ function TreasuryAccountsTable({
         {accounts.map((account) => {
           const draft = draftOf(account);
           const subtotal = accountBalance(draft);
+          const difference = accountDifference(draft);
           return (
             <div key={account.id} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 space-y-3">
               <div className="flex items-start justify-between gap-3">
@@ -750,8 +750,11 @@ function TreasuryAccountsTable({
                   <div className="font-semibold">{account.name}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[11px] text-slate-400">Өнөөдрийн баланс</div>
+                  <div className="text-[11px] text-slate-400">Тооцоолсон дүн</div>
                   <div className="font-bold tabular-nums text-maroon-600 dark:text-gold-400">{fmtRub(subtotal)}</div>
+                  <div className={`text-xs mt-1 tabular-nums ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-ivory-400"}`}>
+                    Зөрүү: {difference == null ? "—" : fmtRub(difference)}
+                  </div>
                 </div>
               </div>
 
@@ -785,6 +788,10 @@ function TreasuryAccountsTable({
                   <label>
                     <div className="text-[10px] text-slate-400 mb-1">Тохируулга</div>
                     <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.adjustment} onChange={(e) => setDraft(account.id, { adjustment: e.target.value })} />
+                  </label>
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Оруулсан баланс</div>
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.entered_balance} onChange={(e) => setDraft(account.id, { entered_balance: e.target.value })} placeholder="Бодит үлдэгдэл" />
                   </label>
                 </div>
               </div>
@@ -825,7 +832,9 @@ function TreasuryAccountsTable({
               <th className="py-2 px-2 font-medium text-right">Руб→төг (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Төг→руб (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Тохируулга (₽)</th>
-              <th className="py-2 px-2 font-medium text-right">Өнөөдрийн баланс (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Тооцоолсон дүн (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Оруулсан баланс (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Зөрүү (₽)</th>
               <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
             </tr>
           </thead>
@@ -833,6 +842,7 @@ function TreasuryAccountsTable({
             {accounts.map((account) => {
               const draft = draftOf(account);
               const subtotal = accountBalance(draft);
+              const difference = accountDifference(draft);
               return (
                 <tr key={account.id} className="border-b border-slate-100 dark:border-dark-700">
                   <td className="py-2 pr-2 min-w-[180px]">
@@ -859,6 +869,10 @@ function TreasuryAccountsTable({
                     <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.adjustment} onChange={(e) => setDraft(account.id, { adjustment: e.target.value })} />
                   </td>
                   <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(subtotal)}</td>
+                  <td className="py-2 px-2 w-36">
+                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.entered_balance} onChange={(e) => setDraft(account.id, { entered_balance: e.target.value })} placeholder="Бодит үлдэгдэл" />
+                  </td>
+                  <td className={`py-2 px-2 text-right tabular-nums font-semibold ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>{difference == null ? "—" : fmtRub(difference)}</td>
                   <td className="py-2 pl-2">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
@@ -883,7 +897,7 @@ function TreasuryAccountsTable({
               );
             })}
             {accounts.length === 0 && (
-              <tr><td colSpan={8} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
+              <tr><td colSpan={10} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
             )}
           </tbody>
         </table>
