@@ -663,6 +663,7 @@ function TreasuryAccountsTable({
   const [drafts, setDrafts] = useState<Record<string, AcctDraft>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showNewAccountForm, setShowNewAccountForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newBalance, setNewBalance] = useState("");
   const [newAdminId, setNewAdminId] = useState(selectedAdminId != null ? String(selectedAdminId) : "");
@@ -738,10 +739,24 @@ function TreasuryAccountsTable({
       });
       setNewName("");
       setNewBalance("");
+      setNewAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
+      setShowNewAccountForm(false);
       onChanged();
     } finally {
       setAdding(false);
     }
+  };
+
+  const toggleNewAccountForm = () => {
+    setShowNewAccountForm((current) => {
+      const next = !current;
+      if (!next) {
+        setNewName("");
+        setNewBalance("");
+        setNewAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
+      }
+      return next;
+    });
   };
 
   return (
@@ -906,34 +921,52 @@ function TreasuryAccountsTable({
         </table>
       </div>
 
-      <div className="rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4">
-        <div className="text-sm font-semibold mb-3">Шинэ данс нэмэх</div>
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_180px_auto] gap-2 items-end">
-          <label>
-            <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
-            <input className={INPUT_CLASS} placeholder="Жишээ: Сбербанк ₽" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          </label>
-          <label>
-            <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
-            <select className={INPUT_CLASS} value={newAdminId} onChange={(e) => setNewAdminId(e.target.value)}>
-              <option value="">Хуваарилаагүй</option>
-              {admins.map((admin) => (
-                <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <div className="text-[10px] text-slate-400 mb-1">Эхлэх баланс</div>
-            <input type="number" className={`${INPUT_CLASS} text-right`} placeholder="0" value={newBalance} onChange={(e) => setNewBalance(e.target.value)} />
-          </label>
-          <button
-            onClick={add}
-            disabled={!newName.trim() || adding}
-            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
-          >
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Данс нэмэх
-          </button>
-        </div>
+      <div className="rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4 space-y-3">
+        <button
+          type="button"
+          onClick={toggleNewAccountForm}
+          className="w-full flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 dark:border-dark-600 bg-white/80 dark:bg-dark-800/70 px-3 py-3 text-left hover:border-maroon-300 hover:bg-white transition"
+        >
+          <span className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-maroon-600 text-white shadow-sm">
+              <Plus className={`w-4 h-4 transition-transform ${showNewAccountForm ? "rotate-45" : ""}`} />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold text-slate-800 dark:text-ivory-100">New bank account</span>
+              <span className="block text-xs text-slate-400">Одоо байгаа данс нэмэх формыг нээх</span>
+            </span>
+          </span>
+          <span className="text-xs font-medium text-slate-500 dark:text-ivory-400">{showNewAccountForm ? "Хаах" : "Нээх"}</span>
+        </button>
+
+        {showNewAccountForm && (
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_180px_auto] gap-2 items-end">
+            <label>
+              <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
+              <input className={INPUT_CLASS} placeholder="Жишээ: Сбербанк ₽" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            </label>
+            <label>
+              <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
+              <select className={INPUT_CLASS} value={newAdminId} onChange={(e) => setNewAdminId(e.target.value)}>
+                <option value="">Хуваарилаагүй</option>
+                {admins.map((admin) => (
+                  <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <div className="text-[10px] text-slate-400 mb-1">Эхлэх баланс</div>
+              <input type="number" className={`${INPUT_CLASS} text-right`} placeholder="0" value={newBalance} onChange={(e) => setNewBalance(e.target.value)} />
+            </label>
+            <button
+              onClick={add}
+              disabled={!newName.trim() || adding}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+            >
+              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Данс нэмэх
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
