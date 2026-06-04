@@ -1809,6 +1809,8 @@ export type BalanceSummary = {
   entered_balance_total: number;
   difference_total: number | null;
   missing_entered_balance_count: number;
+  setup_required?: boolean;
+  setup_error?: string | null;
 };
 
 export type CostRate = {

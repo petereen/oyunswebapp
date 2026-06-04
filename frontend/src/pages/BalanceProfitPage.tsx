@@ -43,6 +43,11 @@ const fmtRub = (n: number | null | undefined) => `${fmtNum(n)} ₽`;
 const fmtMnt = (n: number | null | undefined) => `${fmtNum(n)} ₮`;
 const fmtRate = (n: number | null | undefined) => (n == null ? "—" : n.toFixed(4));
 
+function getApiErrorDetail(error: unknown, fallback: string) {
+  const detail = (error as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail;
+  return typeof detail === "string" ? detail : fallback;
+}
+
 function profitRange(period: ProfitPeriod, custom: { start: string; end: string }) {
   const now = new Date();
   let start: Date | null = null;
@@ -191,7 +196,9 @@ function BalanceSection() {
       </p>
 
       {balanceQ.error ? (
-        <div className="text-sm text-red-500 py-6 text-center">Баланс ачаалж чадсангүй.</div>
+        <div className="text-sm text-red-500 py-6 text-center px-4">
+          {getApiErrorDetail(balanceQ.error, "Баланс ачаалж чадсангүй.")}
+        </div>
       ) : balanceQ.isLoading || !balanceQ.data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-maroon-600 animate-spin" /></div>
       ) : (
@@ -211,6 +218,7 @@ function BalanceBody({
   onChanged: () => void;
 }) {
   const viewLabel = selectedAdminId == null ? "Бүх админ" : adminLabel(data.admins, selectedAdminId);
+  const setupRequired = Boolean(data.setup_required);
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-ivory-400 md:flex-row md:items-center md:justify-between">
@@ -245,15 +253,27 @@ function BalanceBody({
         </div>
       )}
 
-      <DailyBalanceRowsTable rows={data.daily_balances} onChanged={onChanged} />
-      <BalanceAdjustmentsPanel
-        admins={data.admins}
-        adjustments={data.adjustments}
-        balanceDate={data.date}
-        selectedAdminId={selectedAdminId}
-        totalAdjustment={data.adjustment_total}
-        onChanged={onChanged}
-      />
+      {setupRequired && (
+        <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl p-3">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">Балансын шинэ хүснэгтүүд хараахан бэлэн биш байна.</div>
+            <div className="mt-1">{data.setup_error || "database/balance_profit_tables.sql-г Supabase дээр ажиллуулах шаардлагатай."}</div>
+          </div>
+        </div>
+      )}
+
+      <DailyBalanceRowsTable rows={data.daily_balances} onChanged={onChanged} readOnly={setupRequired} />
+      {!setupRequired && (
+        <BalanceAdjustmentsPanel
+          admins={data.admins}
+          adjustments={data.adjustments}
+          balanceDate={data.date}
+          selectedAdminId={selectedAdminId}
+          totalAdjustment={data.adjustment_total}
+          onChanged={onChanged}
+        />
+      )}
     </div>
   );
 }
@@ -277,7 +297,15 @@ type DailyBalanceDraft = {
   entered_balance: string;
 };
 
-function DailyBalanceRowsTable({ rows, onChanged }: { rows: DailyBalanceRow[]; onChanged: () => void }) {
+function DailyBalanceRowsTable({
+  rows,
+  onChanged,
+  readOnly = false,
+}: {
+  rows: DailyBalanceRow[];
+  onChanged: () => void;
+  readOnly?: boolean;
+}) {
   const [drafts, setDrafts] = useState<Record<number, DailyBalanceDraft>>({});
   const [busyAdminId, setBusyAdminId] = useState<number | null>(null);
 
@@ -373,16 +401,17 @@ function DailyBalanceRowsTable({ rows, onChanged }: { rows: DailyBalanceRow[]; o
                     value={draft.entered_balance}
                     onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
                     placeholder="0"
+                    disabled={readOnly}
                   />
                 </label>
               </div>
 
               <button
                 onClick={() => save(row)}
-                disabled={!isDirty(row) || busyAdminId === row.admin_id}
+                disabled={readOnly || !isDirty(row) || busyAdminId === row.admin_id}
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-maroon-700 transition"
               >
-                {busyAdminId === row.admin_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
+                {busyAdminId === row.admin_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {readOnly ? "Түр хаалттай" : "Хадгалах"}
               </button>
             </div>
           );
@@ -423,6 +452,7 @@ function DailyBalanceRowsTable({ rows, onChanged }: { rows: DailyBalanceRow[]; o
                       value={draft.entered_balance}
                       onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
                       placeholder="0"
+                      disabled={readOnly}
                     />
                   </td>
                   <td className={`py-2 px-2 text-right tabular-nums font-semibold ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>
@@ -431,9 +461,9 @@ function DailyBalanceRowsTable({ rows, onChanged }: { rows: DailyBalanceRow[]; o
                   <td className="py-2 pl-2 text-right">
                     <button
                       onClick={() => save(row)}
-                      disabled={!isDirty(row) || busyAdminId === row.admin_id}
+                      disabled={readOnly || !isDirty(row) || busyAdminId === row.admin_id}
                       className="inline-flex items-center justify-center p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-30 hover:bg-maroon-700 transition"
-                      title="Оруулсан балансыг хадгалах"
+                      title={readOnly ? "Migration хийгдтэл идэвхгүй" : "Оруулсан балансыг хадгалах"}
                     >
                       {busyAdminId === row.admin_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     </button>

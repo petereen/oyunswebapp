@@ -2368,6 +2368,20 @@ def _normalize_balance_tag(value) -> str:
     return tag[:80]
 
 
+def _dashboard_balance_setup_detail(exc: Exception) -> str | None:
+    lowered = str(exc).lower()
+    if not any(name in lowered for name in (
+        "dashboard_balance_daily",
+        "dashboard_balance_adjustments",
+        "treasury_accounts",
+    )):
+        return None
+    return (
+        "Dashboard balance tables are not fully set up. Run database/balance_profit_tables.sql "
+        "in Supabase, then restart the backend if the schema cache is stale."
+    )
+
+
 def _dashboard_admins(client) -> list[dict]:
     res = client.table("admin_users").select("id,name").eq("is_active", True).order("name").execute()
     return [
@@ -2659,6 +2673,58 @@ def _dashboard_balance_payload(client, day: str, selected_admin_id: int | None) 
         "entered_balance_total": round(entered_balance_total, 2),
         "difference_total": round(discrepancy_total, 2) if discrepancy_total is not None else None,
         "missing_entered_balance_count": missing_entered_balance_count,
+    }
+
+
+def _dashboard_balance_fallback_payload(client, day: str, selected_admin_id: int | None, setup_error: str) -> dict:
+    admins = _dashboard_admins(client)
+    scoped_admins = _dashboard_scoped_admins(admins, selected_admin_id)
+    admin_ids = [int(admin["admin_id"]) for admin in scoped_admins if admin.get("admin_id") is not None]
+    txn_totals = _dashboard_daily_transaction_totals(client, day, admin_ids)
+
+    daily_balances = []
+    rub_to_mnt_total = 0.0
+    mnt_to_rub_total = 0.0
+    total_balance = 0.0
+    for admin in scoped_admins:
+        admin_id = int(admin["admin_id"])
+        rub_to_mnt_rub = float(txn_totals.get(admin_id, {}).get("rub_to_mnt_rub") or 0)
+        mnt_to_rub_rub = float(txn_totals.get(admin_id, {}).get("mnt_to_rub_rub") or 0)
+        calculated_balance = _dashboard_calculated_balance(0.0, rub_to_mnt_rub, mnt_to_rub_rub, 0.0)
+        rub_to_mnt_total += rub_to_mnt_rub
+        mnt_to_rub_total += mnt_to_rub_rub
+        total_balance += calculated_balance
+        daily_balances.append({
+            "admin_id": admin_id,
+            "admin_name": admin.get("name"),
+            "balance_date": day,
+            "opening_balance": 0.0,
+            "entered_balance": None,
+            "rub_to_mnt_rub": round(rub_to_mnt_rub, 2),
+            "mnt_to_rub_rub": round(mnt_to_rub_rub, 2),
+            "adjustment_total": 0.0,
+            "calculated_balance": round(calculated_balance, 2),
+            "discrepancy": None,
+        })
+
+    selected_daily_balance = daily_balances[0] if selected_admin_id is not None and daily_balances else None
+    return {
+        "date": day,
+        "admins": admins,
+        "selected_admin_id": selected_admin_id,
+        "daily_balances": daily_balances,
+        "selected_daily_balance": selected_daily_balance,
+        "adjustments": [],
+        "rub_to_mnt_rub": round(rub_to_mnt_total, 2),
+        "mnt_to_rub_rub": round(mnt_to_rub_total, 2),
+        "prev_balance_total": 0.0,
+        "adjustment_total": 0.0,
+        "total_balance": round(total_balance, 2),
+        "entered_balance_total": 0.0,
+        "difference_total": None,
+        "missing_entered_balance_count": len(scoped_admins),
+        "setup_required": True,
+        "setup_error": setup_error,
     }
 
 
@@ -2955,9 +3021,24 @@ async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends
     day = str(date or _moscow_today())[:10]
     try:
         payload = _dashboard_balance_payload(client, day, normalized_admin_id)
+    except Exception as exc:
+        setup_detail = _dashboard_balance_setup_detail(exc)
+        if setup_detail:
+            logger.warning(f"Load balance fallback: {exc}")
+            payload = _dashboard_balance_fallback_payload(client, day, normalized_admin_id, setup_detail)
+        else:
+            raise _dashboard_db_error(exc, "Load balance")
+
+    accounts: list[dict] = []
+    try:
         accounts = _rollover_treasury_accounts(client, admin_id=normalized_admin_id)
     except Exception as exc:
-        raise _dashboard_db_error(exc, "Load balance")
+        setup_detail = _dashboard_balance_setup_detail(exc)
+        if setup_detail:
+            logger.warning(f"Skip treasury accounts on balance load: {exc}")
+        else:
+            raise _dashboard_db_error(exc, "Load treasury accounts")
+
     return {
         **payload,
         "accounts": accounts,
