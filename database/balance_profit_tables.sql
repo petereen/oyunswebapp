@@ -134,7 +134,9 @@ CREATE INDEX IF NOT EXISTS idx_plane_ticket_sales_date
 -- ── Row Level Security ───────────────────────────────────────────────────────
 -- These tables are only ever accessed by the backend (service-role key, which
 -- bypasses RLS). Enabling RLS with no policies blocks the public anon key, so
--- treasury balances and cost rates are not exposed through the public REST API.
+-- the backend must use SUPABASE_SERVICE_ROLE_KEY (preferred) or another
+-- service-role key value. If the backend still uses the anon SUPABASE_KEY,
+-- these dashboard tables will look "missing" even after this SQL runs.
 ALTER TABLE treasury_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dashboard_balance_daily ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dashboard_balance_adjustments ENABLE ROW LEVEL SECURITY;

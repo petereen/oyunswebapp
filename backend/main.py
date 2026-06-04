@@ -2370,15 +2370,43 @@ def _normalize_balance_tag(value) -> str:
 
 def _dashboard_balance_setup_detail(exc: Exception) -> str | None:
     lowered = str(exc).lower()
-    if not any(name in lowered for name in (
+    has_balance_table_ref = any(name in lowered for name in (
         "dashboard_balance_daily",
         "dashboard_balance_adjustments",
         "treasury_accounts",
-    )):
+    ))
+    has_permission_ref = any(token in lowered for token in (
+        "permission denied",
+        "row-level security",
+        "violates row-level security",
+        "forbidden",
+        "42501",
+    ))
+    has_schema_ref = any(token in lowered for token in (
+        "schema cache",
+        "could not find the table",
+        "does not exist",
+        "relation",
+    ))
+    if not (has_balance_table_ref or has_permission_ref or has_schema_ref):
         return None
+    settings = get_settings()
+    key_hint = (
+        "The backend is currently using SUPABASE_KEY. If that env var contains the anon key, "
+        "these RLS-enabled dashboard tables will stay inaccessible. Set SUPABASE_SERVICE_ROLE_KEY "
+        "for the backend (preferred), or replace SUPABASE_KEY with the service-role key."
+        if settings.supabase_key_source == "SUPABASE_KEY"
+        else "The backend is already using SUPABASE_SERVICE_ROLE_KEY."
+    )
+    if has_permission_ref:
+        return (
+            "Dashboard balance tables exist but the backend cannot read them. "
+            f"{key_hint} Underlying error: {exc}"
+        )
     return (
-        "Dashboard balance tables are not fully set up. Run database/balance_profit_tables.sql "
-        "in Supabase, then restart the backend if the schema cache is stale."
+        "Dashboard balance tables are not fully available to the backend. Run database/balance_profit_tables.sql "
+        "in Supabase, then restart the backend if the schema cache is stale. "
+        f"{key_hint} Underlying error: {exc}"
     )
 
 

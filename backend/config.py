@@ -15,6 +15,7 @@ except ImportError:
 class Settings:
     supabase_url: str
     supabase_key: str
+    supabase_key_source: str
     bot_token: str
     admin_chat_id: str
     admin_chat_ids: List[int]
@@ -60,7 +61,10 @@ class Settings:
 def get_settings() -> Settings:
     # Strip to avoid hidden whitespace/newlines from env files and potential quote wrappers
     supabase_url = os.getenv("SUPABASE_URL", "").strip().strip('"').strip("'")
-    supabase_key = os.getenv("SUPABASE_KEY", "").strip().strip('"').strip("'")
+    supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip().strip('"').strip("'")
+    supabase_public_key = os.getenv("SUPABASE_KEY", "").strip().strip('"').strip("'")
+    supabase_key = supabase_service_role_key or supabase_public_key
+    supabase_key_source = "SUPABASE_SERVICE_ROLE_KEY" if supabase_service_role_key else "SUPABASE_KEY"
     bot_token = os.getenv("BOT_TOKEN", "").strip().strip('"').strip("'")
     admin_chat_id = os.getenv("ADMIN_CHAT_ID", "").strip().strip('"').strip("'")
     admin_chat_ids_env = os.getenv("ADMIN_CHAT_IDS", "").strip().strip('"').strip("'")
@@ -100,7 +104,7 @@ def get_settings() -> Settings:
     black_rate_status_value = os.getenv("BLACK_RATE_STATUS_VALUE", "Ханш").strip().strip('"').strip("'")
 
     if not supabase_url or not supabase_key or not bot_token:
-        raise RuntimeError("SUPABASE_URL, SUPABASE_KEY, and BOT_TOKEN must be set")
+        raise RuntimeError("SUPABASE_URL, BOT_TOKEN, and either SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY must be set")
     
     if not jwt_secret:
         raise RuntimeError("JWT_SECRET must be set for secure authentication")
@@ -158,6 +162,7 @@ def get_settings() -> Settings:
     return Settings(
         supabase_url=supabase_url,
         supabase_key=supabase_key,
+        supabase_key_source=supabase_key_source,
         bot_token=bot_token,
         admin_chat_id=admin_chat_id or str(admin_chat_ids[0]),
         admin_chat_ids=admin_chat_ids,
