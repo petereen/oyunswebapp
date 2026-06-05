@@ -298,17 +298,17 @@ function BalanceBody({
         <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl p-3">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
-            {data.missing_entered_balance_count} админд өнөөдрийн ерөнхий оруулсан баланс хараахан ороогүй байна. Дутуу мөрүүд дээр оруулсан дүнг хадгалсны дараа
+            {data.missing_entered_balance_count} дансанд өнөөдрийн оруулсан баланс хараахан ороогүй байна. Дутуу мөрүүд дээр оруулсан дүнг хадгалсны дараа
             нийт "Зөрүү" автоматаар гарна.
           </div>
         </div>
       )}
 
-      {showAdminScopedDetails && data.daily_balances.length > 0 && (
+      {data.daily_balances.length > 0 && (
         <DailyBalanceRowsTable
           rows={data.daily_balances}
           onChanged={onChanged}
-          readOnly={false}
+          readOnly
         />
       )}
 
@@ -423,7 +423,9 @@ function DailyBalanceRowsTable({
 
   return (
     <div className="space-y-4">
-      <div className="text-sm font-semibold">Ерөнхий тооцоолуур</div>
+      <div className="text-sm font-semibold">
+        {rows.length > 1 ? "Админ тус бүрийн нийт дүн" : "Админы нийт дүн"}
+      </div>
 
       <div className="grid gap-3 md:hidden">
         {rows.map((row) => {

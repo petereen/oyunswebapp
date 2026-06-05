@@ -3011,6 +3011,117 @@ def _account_discrepancy(a: dict) -> float | None:
     return _account_balance(a) - entered_balance
 
 
+def _dashboard_daily_rows_from_accounts(
+    accounts: list[dict],
+    admins: list[dict],
+    day: str,
+    selected_admin_id: int | None,
+) -> dict:
+    scoped_admins = _dashboard_scoped_admins(admins, selected_admin_id)
+    summaries: dict[int, dict] = {}
+    for admin in scoped_admins:
+        raw_admin_id = admin.get("admin_id")
+        if raw_admin_id is None:
+            continue
+        admin_id = int(raw_admin_id)
+        summaries[admin_id] = {
+            "admin_id": admin_id,
+            "admin_name": admin.get("name"),
+            "balance_date": day,
+            "opening_balance": 0.0,
+            "entered_balance": 0.0,
+            "rub_to_mnt_rub": 0.0,
+            "mnt_to_rub_rub": 0.0,
+            "adjustment_total": 0.0,
+            "calculated_balance": 0.0,
+            "account_count": 0,
+            "missing_entered_balance_count": 0,
+        }
+
+    for account in accounts:
+        raw_admin_id = account.get("admin_id")
+        if raw_admin_id is None:
+            continue
+        admin_id = int(raw_admin_id)
+        summary = summaries.get(admin_id)
+        if not summary:
+            continue
+        summary["account_count"] += 1
+        summary["opening_balance"] += float(account.get("prev_balance") or 0)
+        summary["rub_to_mnt_rub"] += float(account.get("rub_to_mnt") or 0)
+        summary["mnt_to_rub_rub"] += float(account.get("mnt_to_rub") or 0)
+        summary["adjustment_total"] += float(account.get("adjustment_total") or 0)
+        summary["calculated_balance"] += float(account.get("calculated_balance") or 0)
+
+        entered_balance = account.get("entered_balance")
+        if entered_balance is None:
+            summary["missing_entered_balance_count"] += 1
+        else:
+            summary["entered_balance"] += float(entered_balance or 0)
+
+    daily_balances: list[dict] = []
+    prev_balance_total = 0.0
+    rub_to_mnt_total = 0.0
+    mnt_to_rub_total = 0.0
+    adjustment_total = 0.0
+    calculated_total = 0.0
+    entered_balance_total = 0.0
+    missing_entered_balance_count = 0
+
+    for admin in scoped_admins:
+        raw_admin_id = admin.get("admin_id")
+        if raw_admin_id is None:
+            continue
+        admin_id = int(raw_admin_id)
+        summary = summaries[admin_id]
+        if selected_admin_id is None and summary["account_count"] == 0:
+            continue
+
+        entered_balance_value = round(summary["entered_balance"], 2)
+        discrepancy = None
+        if summary["account_count"] > 0 and summary["missing_entered_balance_count"] == 0:
+            discrepancy = round(summary["calculated_balance"] - summary["entered_balance"], 2)
+
+        prev_balance_total += summary["opening_balance"]
+        rub_to_mnt_total += summary["rub_to_mnt_rub"]
+        mnt_to_rub_total += summary["mnt_to_rub_rub"]
+        adjustment_total += summary["adjustment_total"]
+        calculated_total += summary["calculated_balance"]
+        entered_balance_total += summary["entered_balance"]
+        missing_entered_balance_count += summary["missing_entered_balance_count"]
+
+        daily_balances.append({
+            "admin_id": admin_id,
+            "admin_name": summary["admin_name"],
+            "balance_date": day,
+            "opening_balance": round(summary["opening_balance"], 2),
+            "entered_balance": entered_balance_value,
+            "rub_to_mnt_rub": round(summary["rub_to_mnt_rub"], 2),
+            "mnt_to_rub_rub": round(summary["mnt_to_rub_rub"], 2),
+            "adjustment_total": round(summary["adjustment_total"], 2),
+            "calculated_balance": round(summary["calculated_balance"], 2),
+            "discrepancy": discrepancy,
+        })
+
+    difference_total = None
+    if daily_balances and missing_entered_balance_count == 0:
+        difference_total = round(calculated_total - entered_balance_total, 2)
+
+    selected_daily_balance = daily_balances[0] if selected_admin_id is not None and daily_balances else None
+    return {
+        "daily_balances": daily_balances,
+        "selected_daily_balance": selected_daily_balance,
+        "prev_balance_total": round(prev_balance_total, 2),
+        "rub_to_mnt_rub": round(rub_to_mnt_total, 2),
+        "mnt_to_rub_rub": round(mnt_to_rub_total, 2),
+        "adjustment_total": round(adjustment_total, 2),
+        "total_balance": round(calculated_total, 2),
+        "entered_balance_total": round(entered_balance_total, 2),
+        "difference_total": difference_total,
+        "missing_entered_balance_count": missing_entered_balance_count,
+    }
+
+
 def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None) -> dict:
     admins = _dashboard_admins(client)
     accounts = _rollover_treasury_accounts(client, admin_id=selected_admin_id)
@@ -3077,26 +3188,24 @@ def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None) -
             "account_name": account_names.get(str(account_id)) if account_id else None,
         })
 
-    difference_total = None
-    if missing_entered_balance_count == 0:
-        difference_total = round(calculated_total - entered_balance_total, 2)
+    account_summary = _dashboard_daily_rows_from_accounts(enriched_accounts, admins, today, selected_admin_id)
 
     return {
         "date": _moscow_today(),
         "admins": admins,
         "selected_admin_id": selected_admin_id,
         "accounts": enriched_accounts,
-        "daily_balances": [],
-        "selected_daily_balance": None,
+        "daily_balances": account_summary["daily_balances"],
+        "selected_daily_balance": account_summary["selected_daily_balance"],
         "adjustments": adjustments,
-        "rub_to_mnt_rub": round(rub_to_mnt_sum, 2),
-        "mnt_to_rub_rub": round(mnt_to_rub_sum, 2),
-        "prev_balance_total": round(prev_sum, 2),
-        "adjustment_total": round(adjustment_sum, 2),
-        "total_balance": round(calculated_total, 2),
-        "entered_balance_total": round(entered_balance_total, 2),
-        "difference_total": difference_total,
-        "missing_entered_balance_count": missing_entered_balance_count,
+        "rub_to_mnt_rub": account_summary["rub_to_mnt_rub"],
+        "mnt_to_rub_rub": account_summary["mnt_to_rub_rub"],
+        "prev_balance_total": account_summary["prev_balance_total"],
+        "adjustment_total": account_summary["adjustment_total"],
+        "total_balance": account_summary["total_balance"],
+        "entered_balance_total": account_summary["entered_balance_total"],
+        "difference_total": account_summary["difference_total"],
+        "missing_entered_balance_count": account_summary["missing_entered_balance_count"],
         "setup_required": False,
         "setup_error": None,
     }
@@ -3435,16 +3544,7 @@ async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends
             _ensure_dashboard_balance_history_snapshots(client)
         except Exception as history_exc:
             logger.warning(f"dashboard balance history snapshot skipped: {history_exc}")
-
-        summary_payload = _dashboard_balance_payload(client, _moscow_today(), normalized_admin_id)
-        treasury_payload = _dashboard_treasury_balance_payload(client, normalized_admin_id)
-        payload = {
-            **summary_payload,
-            "accounts": treasury_payload.get("accounts", []),
-            "adjustments": treasury_payload.get("adjustments", []),
-            "setup_required": bool(summary_payload.get("setup_required") or treasury_payload.get("setup_required")),
-            "setup_error": treasury_payload.get("setup_error") or summary_payload.get("setup_error"),
-        }
+        payload = _dashboard_treasury_balance_payload(client, normalized_admin_id)
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load balance")
     return payload
