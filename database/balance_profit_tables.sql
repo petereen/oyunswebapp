@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
     rub_to_mnt    NUMERIC NOT NULL DEFAULT 0,
     -- Өнөөдрийн төг→руб чиглэлийн дүн (RUB). Admin-entered daily figure.
     mnt_to_rub    NUMERIC NOT NULL DEFAULT 0,
+    -- Creation-time/admin-reassignment snapshot so same-day totals start from that point.
+    baseline_rub_to_mnt NUMERIC NOT NULL DEFAULT 0,
+    baseline_mnt_to_rub NUMERIC NOT NULL DEFAULT 0,
     -- Legacy aggregate adjustment field kept for backward compatibility.
     adjustment    NUMERIC NOT NULL DEFAULT 0,
     -- The actual balance physically present in the bank account for today.
@@ -33,6 +36,8 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
 -- Upgrade existing installs (idempotent — safe to re-run).
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS rub_to_mnt   NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS mnt_to_rub   NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS baseline_rub_to_mnt NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS baseline_mnt_to_rub NUMERIC NOT NULL DEFAULT 0;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS entered_balance NUMERIC;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS balance_date DATE;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS admin_id      BIGINT;
@@ -82,6 +87,57 @@ ALTER TABLE dashboard_balance_daily ADD COLUMN IF NOT EXISTS updated_at TIMESTAM
 
 CREATE INDEX IF NOT EXISTS idx_dashboard_balance_daily_date
     ON dashboard_balance_daily(balance_date DESC, admin_id);
+
+-- End-of-day snapshot rows for the overall balance calculator.
+-- Stores one general row (`scope_type = 'all'`) plus one row per admin.
+CREATE TABLE IF NOT EXISTS dashboard_balance_history (
+    row_key           TEXT PRIMARY KEY,
+    balance_date      DATE NOT NULL,
+    scope_type        TEXT NOT NULL,
+    admin_id          BIGINT REFERENCES public.admin_users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    admin_name        TEXT,
+    opening_balance   NUMERIC NOT NULL DEFAULT 0,
+    rub_to_mnt_rub    NUMERIC NOT NULL DEFAULT 0,
+    mnt_to_rub_rub    NUMERIC NOT NULL DEFAULT 0,
+    adjustment_total  NUMERIC NOT NULL DEFAULT 0,
+    calculated_balance NUMERIC NOT NULL DEFAULT 0,
+    entered_balance   NUMERIC,
+    discrepancy       NUMERIC,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS row_key TEXT;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS balance_date DATE;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS scope_type TEXT;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS admin_id BIGINT;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS admin_name TEXT;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS opening_balance NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS rub_to_mnt_rub NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS mnt_to_rub_rub NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS adjustment_total NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS calculated_balance NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS entered_balance NUMERIC;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS discrepancy NUMERIC;
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE dashboard_balance_history ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_balance_history_date
+    ON dashboard_balance_history(balance_date DESC, scope_type, admin_id);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'dashboard_balance_history_scope_type_check'
+          AND conrelid = 'dashboard_balance_history'::regclass
+    ) THEN
+        ALTER TABLE dashboard_balance_history
+            ADD CONSTRAINT dashboard_balance_history_scope_type_check
+            CHECK (scope_type IN ('all', 'admin'));
+    END IF;
+END $$;
 
 -- Tagged +/- manual income/expense items that affect the day's calculated
 -- closing balance. Each row should point at the treasury account it changes.
@@ -165,6 +221,7 @@ CREATE INDEX IF NOT EXISTS idx_plane_ticket_sales_date
 -- these dashboard tables will look "missing" even after this SQL runs.
 ALTER TABLE treasury_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dashboard_balance_daily ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboard_balance_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dashboard_balance_adjustments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cost_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plane_ticket_sales ENABLE ROW LEVEL SECURITY;
@@ -186,6 +243,16 @@ BEGIN
         DROP TRIGGER IF EXISTS update_dashboard_balance_daily_updated_at ON dashboard_balance_daily;
         CREATE TRIGGER update_dashboard_balance_daily_updated_at
             BEFORE UPDATE ON dashboard_balance_daily
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at_column') THEN
+        DROP TRIGGER IF EXISTS update_dashboard_balance_history_updated_at ON dashboard_balance_history;
+        CREATE TRIGGER update_dashboard_balance_history_updated_at
+            BEFORE UPDATE ON dashboard_balance_history
             FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     END IF;
 END $$;

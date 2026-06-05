@@ -1786,6 +1786,28 @@ export type DailyBalanceRow = {
   discrepancy: number | null;
 };
 
+export type BalanceHistoryRow = {
+  row_key: string;
+  balance_date: string;
+  scope_type: "all" | "admin";
+  admin_id: number | null;
+  admin_name: string | null;
+  opening_balance: number;
+  rub_to_mnt_rub: number;
+  mnt_to_rub_rub: number;
+  adjustment_total: number;
+  calculated_balance: number;
+  entered_balance: number | null;
+  discrepancy: number | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type BalanceHistoryResponse = {
+  days: string[];
+  rows: BalanceHistoryRow[];
+};
+
 export type BalanceAdjustment = {
   id: string;
   admin_id: number;
@@ -1899,6 +1921,14 @@ export async function upsertBalanceDaily(payload: {
 }): Promise<DailyBalanceRow> {
   const res = await dashboardApi.put("/dashboard/balance/daily", payload);
   return res.data.daily_balance as DailyBalanceRow;
+}
+
+export async function fetchBalanceHistory(params: { days?: number } = {}): Promise<BalanceHistoryResponse> {
+  const search = new URLSearchParams();
+  if (params.days != null) search.set("days", String(params.days));
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/balance/history${query ? `?${query}` : ""}`);
+  return res.data as BalanceHistoryResponse;
 }
 
 export async function createBalanceAdjustment(payload: {

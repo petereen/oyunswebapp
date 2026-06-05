@@ -2372,6 +2372,7 @@ def _dashboard_balance_setup_detail(exc: Exception) -> str | None:
     lowered = str(exc).lower()
     has_balance_table_ref = any(name in lowered for name in (
         "dashboard_balance_daily",
+        "dashboard_balance_history",
         "dashboard_balance_adjustments",
         "treasury_accounts",
     ))
@@ -2577,6 +2578,16 @@ def _dashboard_adjustments_for_day(client, day: str, admin_ids: list[int]) -> di
     }
 
 
+def _treasury_account_transaction_baseline(client, admin_id: int | None, day: str) -> dict[str, float]:
+    if admin_id is None:
+        return {"baseline_rub_to_mnt": 0.0, "baseline_mnt_to_rub": 0.0}
+    admin_totals = _dashboard_daily_transaction_totals(client, day, [admin_id]).get(admin_id, {})
+    return {
+        "baseline_rub_to_mnt": round(float(admin_totals.get("rub_to_mnt_rub") or 0), 2),
+        "baseline_mnt_to_rub": round(float(admin_totals.get("mnt_to_rub_rub") or 0), 2),
+    }
+
+
 def _account_adjustment_totals(accounts: list[dict], adjustment_data: dict) -> dict[str, float]:
     by_account_totals = {
         str(account_id): float(total or 0)
@@ -2632,9 +2643,11 @@ def _account_transaction_totals(accounts: list[dict], txn_totals_by_admin: dict[
 
         assigned_admins.add(admin_id)
         admin_totals = txn_totals_by_admin.get(admin_id, {})
+        baseline_rub_to_mnt = float(account.get("baseline_rub_to_mnt") or 0)
+        baseline_mnt_to_rub = float(account.get("baseline_mnt_to_rub") or 0)
         totals_by_account[account_id] = {
-            "rub_to_mnt": float(admin_totals.get("rub_to_mnt_rub") or 0),
-            "mnt_to_rub": float(admin_totals.get("mnt_to_rub_rub") or 0),
+            "rub_to_mnt": max(float(admin_totals.get("rub_to_mnt_rub") or 0) - baseline_rub_to_mnt, 0.0),
+            "mnt_to_rub": max(float(admin_totals.get("mnt_to_rub_rub") or 0) - baseline_mnt_to_rub, 0.0),
         }
     return totals_by_account
 
@@ -2777,6 +2790,140 @@ def _dashboard_balance_payload(client, day: str, selected_admin_id: int | None) 
         "difference_total": round(discrepancy_total, 2) if discrepancy_total is not None else None,
         "missing_entered_balance_count": missing_entered_balance_count,
     }
+
+
+def _dashboard_balance_history_row_key(day: str, admin_id: int | None) -> str:
+    return f"{day}:all" if admin_id is None else f"{day}:admin:{admin_id}"
+
+
+def _dashboard_balance_history_rows(payload: dict) -> list[dict]:
+    day = str(payload.get("date") or "")[:10]
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [{
+        "row_key": _dashboard_balance_history_row_key(day, None),
+        "balance_date": day,
+        "scope_type": "all",
+        "admin_id": None,
+        "admin_name": "Бүх админ",
+        "opening_balance": round(float(payload.get("prev_balance_total") or 0), 2),
+        "rub_to_mnt_rub": round(float(payload.get("rub_to_mnt_rub") or 0), 2),
+        "mnt_to_rub_rub": round(float(payload.get("mnt_to_rub_rub") or 0), 2),
+        "adjustment_total": round(float(payload.get("adjustment_total") or 0), 2),
+        "calculated_balance": round(float(payload.get("total_balance") or 0), 2),
+        "entered_balance": round(float(payload.get("entered_balance_total") or 0), 2),
+        "discrepancy": round(float(payload.get("difference_total") or 0), 2) if payload.get("difference_total") is not None else None,
+        "created_at": now,
+        "updated_at": now,
+    }]
+
+    for row in payload.get("daily_balances") or []:
+        admin_id = int(row["admin_id"])
+        rows.append({
+            "row_key": _dashboard_balance_history_row_key(day, admin_id),
+            "balance_date": day,
+            "scope_type": "admin",
+            "admin_id": admin_id,
+            "admin_name": row.get("admin_name"),
+            "opening_balance": round(float(row.get("opening_balance") or 0), 2),
+            "rub_to_mnt_rub": round(float(row.get("rub_to_mnt_rub") or 0), 2),
+            "mnt_to_rub_rub": round(float(row.get("mnt_to_rub_rub") or 0), 2),
+            "adjustment_total": round(float(row.get("adjustment_total") or 0), 2),
+            "calculated_balance": round(float(row.get("calculated_balance") or 0), 2),
+            "entered_balance": round(float(row.get("entered_balance") or 0), 2) if row.get("entered_balance") is not None else None,
+            "discrepancy": round(float(row.get("discrepancy") or 0), 2) if row.get("discrepancy") is not None else None,
+            "created_at": now,
+            "updated_at": now,
+        })
+    return rows
+
+
+def _dashboard_balance_history_candidate_days(client, today: str) -> list[str]:
+    days: set[str] = set()
+    for table_name in ("dashboard_balance_daily", "dashboard_balance_adjustments"):
+        rows = (
+            client.table(table_name)
+            .select("balance_date")
+            .lt("balance_date", today)
+            .order("balance_date", desc=False)
+            .execute()
+            .data
+            or []
+        )
+        for row in rows:
+            raw_day = str(row.get("balance_date") or "")[:10]
+            if raw_day:
+                days.add(raw_day)
+
+    yesterday = (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=1)).date().isoformat()
+    if yesterday:
+        days.add(yesterday)
+    return sorted(day for day in days if day < today)
+
+
+def _ensure_dashboard_balance_history_snapshots(client) -> None:
+    today = _moscow_today()
+    for day in _dashboard_balance_history_candidate_days(client, today):
+        history_key = _dashboard_balance_history_row_key(day, None)
+        exists = (
+            client.table("dashboard_balance_history")
+            .select("row_key")
+            .eq("row_key", history_key)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if exists:
+            continue
+        payload = _dashboard_balance_payload(client, day, None)
+        rows = _dashboard_balance_history_rows(payload)
+        if rows:
+            client.table("dashboard_balance_history").upsert(rows, on_conflict="row_key").execute()
+
+
+def _list_dashboard_balance_history(client, max_days: int) -> dict:
+    _ensure_dashboard_balance_history_snapshots(client)
+    rows = (
+        client.table("dashboard_balance_history")
+        .select("*")
+        .order("balance_date", desc=True)
+        .limit(max(max_days * 12, 120))
+        .execute()
+        .data
+        or []
+    )
+
+    normalized_rows: list[dict] = []
+    included_days: list[str] = []
+    seen_days: set[str] = set()
+    for row in rows:
+        day = str(row.get("balance_date") or "")[:10]
+        if not day:
+            continue
+        if day not in seen_days:
+            if len(seen_days) >= max_days:
+                continue
+            seen_days.add(day)
+            included_days.append(day)
+        normalized_rows.append({
+            **row,
+            "balance_date": day,
+            "admin_id": int(row["admin_id"]) if row.get("admin_id") is not None else None,
+            "opening_balance": round(float(row.get("opening_balance") or 0), 2),
+            "rub_to_mnt_rub": round(float(row.get("rub_to_mnt_rub") or 0), 2),
+            "mnt_to_rub_rub": round(float(row.get("mnt_to_rub_rub") or 0), 2),
+            "adjustment_total": round(float(row.get("adjustment_total") or 0), 2),
+            "calculated_balance": round(float(row.get("calculated_balance") or 0), 2),
+            "entered_balance": round(float(row.get("entered_balance") or 0), 2) if row.get("entered_balance") is not None else None,
+            "discrepancy": round(float(row.get("discrepancy") or 0), 2) if row.get("discrepancy") is not None else None,
+        })
+
+    normalized_rows.sort(key=lambda row: (
+        row["balance_date"],
+        1 if row.get("scope_type") == "all" else 0,
+        (row.get("admin_name") or "").lower(),
+    ), reverse=True)
+    return {"days": included_days, "rows": normalized_rows}
 
 
 def _dashboard_balance_fallback_payload(client, day: str, selected_admin_id: int | None, setup_error: str) -> dict:
@@ -2992,6 +3139,8 @@ def _rollover_treasury_accounts(client, admin_id: int | None = None) -> list[dic
                 "prev_balance": round(_account_balance(a, txn_totals=account_txns), 2),
                 "rub_to_mnt": 0,
                 "mnt_to_rub": 0,
+                "baseline_rub_to_mnt": 0,
+                "baseline_mnt_to_rub": 0,
                 "adjustment": 0,
                 "entered_balance": None,
                 "balance_date": today,
@@ -3074,6 +3223,7 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
     if not (payload.get("name") or "").strip():
         raise HTTPException(status_code=400, detail="Missing required field: name")
     normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
+    balance_day = _moscow_today()
     insert_data = {
         "name": payload.get("name").strip(),
         "admin_id": normalized_admin_id,
@@ -3085,10 +3235,11 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
         "currency": (payload.get("currency") or "RUB").upper(),
         "is_active": payload.get("is_active", True),
         "display_order": int(payload.get("display_order") or 0),
-        "balance_date": _moscow_today(),
+        "balance_date": balance_day,
         "created_at": now,
         "updated_at": now,
     }
+    insert_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, balance_day))
     try:
         result = client.table("treasury_accounts").insert(insert_data).execute()
     except Exception as exc:
@@ -3103,10 +3254,20 @@ async def update_treasury_account(account_id: str, payload: dict, auth=Depends(g
     """Update editable treasury-account metadata and entered balance."""
     client = get_supabase()
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    existing_account = None
+    if "admin_id" in payload:
+        existing_result = client.table("treasury_accounts").select("id,admin_id").eq("id", account_id).limit(1).execute()
+        existing_account = (existing_result.data or [None])[0]
+        if not existing_account:
+            raise HTTPException(status_code=404, detail="Treasury account not found")
     if "name" in payload:
         update_data["name"] = (payload.get("name") or "").strip()
     if "admin_id" in payload:
-        update_data["admin_id"] = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
+        normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
+        update_data["admin_id"] = normalized_admin_id
+        previous_admin_id = _optional_int(existing_account.get("admin_id"), "admin_id") if existing_account else None
+        if previous_admin_id != normalized_admin_id:
+          update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _moscow_today()))
     for num_field in ("display_order",):
         if num_field in payload:
             update_data[num_field] = float(payload[num_field] or 0)
@@ -3270,9 +3431,33 @@ async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends
     client = get_supabase()
     normalized_admin_id = _validated_dashboard_admin_id(client, admin_id, "admin_id")
     try:
-        payload = _dashboard_treasury_balance_payload(client, normalized_admin_id)
+        try:
+            _ensure_dashboard_balance_history_snapshots(client)
+        except Exception as history_exc:
+            logger.warning(f"dashboard balance history snapshot skipped: {history_exc}")
+
+        summary_payload = _dashboard_balance_payload(client, _moscow_today(), normalized_admin_id)
+        treasury_payload = _dashboard_treasury_balance_payload(client, normalized_admin_id)
+        payload = {
+            **summary_payload,
+            "accounts": treasury_payload.get("accounts", []),
+            "adjustments": treasury_payload.get("adjustments", []),
+            "setup_required": bool(summary_payload.get("setup_required") or treasury_payload.get("setup_required")),
+            "setup_error": treasury_payload.get("setup_error") or summary_payload.get("setup_error"),
+        }
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load balance")
+    return payload
+
+
+@app.get("/api/dashboard/balance/history")
+async def dashboard_balance_history(days: int = 30, auth=Depends(get_dashboard_auth)):
+    client = get_supabase()
+    normalized_days = max(1, min(int(days or 30), 180))
+    try:
+        payload = _list_dashboard_balance_history(client, normalized_days)
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Load balance history")
     return payload
 
 

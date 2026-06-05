@@ -1,18 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle, Calculator, Calendar, Loader2, LogOut, Plane, Plus, RefreshCw,
+  AlertTriangle, Calculator, Calendar, Download, History, Loader2, LogOut, Plane, Plus, RefreshCw,
   Save, Trash2, TrendingUp, UserCog, Wallet,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
 import {
-  BalanceAdjustment, BalanceSummary, CostRate, DailyBalanceRow, DashboardAdminOption,
+  BalanceAdjustment, BalanceHistoryRow, BalanceSummary, CostRate, DailyBalanceRow, DashboardAdminOption,
   PlaneTicketSale, PlaneTicketSalesResponse, ProfitSummary, TreasuryAccount,
   createBalanceAdjustment, createPlaneTicketSale, createTreasuryAccount,
   deleteBalanceAdjustment, deletePlaneTicketSale, deleteTreasuryAccount,
-  fetchBalanceSummary, fetchBlackRates, fetchCostRates, fetchPlaneTicketSales,
+  fetchBalanceHistory, fetchBalanceSummary, fetchBlackRates, fetchCostRates, fetchPlaneTicketSales,
   fetchProfit, fetchRates, saveCostRate, updateTreasuryAccount,
   upsertBalanceDaily,
 } from "../api";
@@ -136,6 +136,7 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
 
 function BalanceSection() {
   const [selectedAdminId, setSelectedAdminId] = useState<number | null>(() => readStoredBalanceAdminId());
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     if (selectedAdminId == null) {
@@ -149,6 +150,13 @@ function BalanceSection() {
     queryKey: ["dashboard-balance", selectedAdminId],
     queryFn: () => fetchBalanceSummary({ admin_id: selectedAdminId ?? undefined }),
     staleTime: 30_000,
+  });
+
+  const historyQ = useQuery({
+    queryKey: ["dashboard-balance-history"],
+    queryFn: () => fetchBalanceHistory({ days: 60 }),
+    enabled: historyOpen,
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -193,6 +201,15 @@ function BalanceSection() {
             <span className="text-xs tabular-nums">{balanceQ.data?.date || todayIso()} <span className="text-slate-400">(Москва)</span></span>
           </div>
           <button
+            onClick={() => setHistoryOpen((current) => !current)}
+            className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition ${historyOpen
+              ? "border-maroon-300 bg-maroon-50 text-maroon-700 dark:border-gold-500/40 dark:bg-dark-700"
+              : "border-slate-200 bg-slate-50 text-slate-500 dark:border-dark-600 dark:bg-dark-700 dark:text-ivory-300"}`}
+            title="Өдрийн тооцооны түүх"
+          >
+            <History className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => balanceQ.refetch()}
             className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition"
           >
@@ -209,6 +226,22 @@ function BalanceSection() {
         <b>Оруулсан баланс</b> нь тухайн банк дансанд байгаа бодит мөнгө, харин <b>Зөрүү = Тооцоолсон дүн − Оруулсан баланс</b>.
         <b>Москвагийн цагаар өдөр дуусахад Тооцоолсон дүн автоматаар маргаашийн "Өмнөх баланс" болж шилжинэ.</b>
       </p>
+
+      {historyOpen && (
+        <div className="mb-4">
+          {historyQ.error ? (
+            <div className="text-sm text-red-500 px-4 py-3 rounded-2xl border border-red-200 bg-red-50">
+              {getApiErrorDetail(historyQ.error, "Балансын түүх ачаалж чадсангүй.")}
+            </div>
+          ) : (
+            <BalanceHistoryPanel
+              rows={historyQ.data?.rows || []}
+              loading={historyQ.isLoading || historyQ.isFetching}
+              onDownload={() => exportBalanceHistoryCsv(historyQ.data?.rows || [])}
+            />
+          )}
+        </div>
+      )}
 
       {balanceQ.error ? (
         <div className="text-sm text-red-500 py-6 text-center px-4">
@@ -262,10 +295,18 @@ function BalanceBody({
         <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl p-3">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
-            {data.missing_entered_balance_count} дансанд өнөөдрийн бодит баланс хараахан ороогүй байна. Дутуу мөрүүд дээр оруулсан дүнг хадгалсны дараа
+            {data.missing_entered_balance_count} админд өнөөдрийн ерөнхий оруулсан баланс хараахан ороогүй байна. Дутуу мөрүүд дээр оруулсан дүнг хадгалсны дараа
             нийт "Зөрүү" автоматаар гарна.
           </div>
         </div>
+      )}
+
+      {data.daily_balances.length > 0 && (
+        <DailyBalanceRowsTable
+          rows={data.daily_balances}
+          onChanged={onChanged}
+          readOnly={selectedAdminId == null}
+        />
       )}
 
       <TreasuryAccountsTable
@@ -280,6 +321,7 @@ function BalanceBody({
         adjustments={data.adjustments}
         balanceDate={data.date}
         totalAdjustment={data.adjustment_total}
+        canAdd={selectedAdminId != null}
         onChanged={onChanged}
       />
     </div>
@@ -401,26 +443,31 @@ function DailyBalanceRowsTable({
                 <BalanceMiniStat label="Төг→руб" value={fmtRub(row.mnt_to_rub_rub)} tone="neg" />
                 <BalanceMiniStat label="Бусад орлого/зарлага" value={fmtRub(row.adjustment_total)} />
                 <BalanceMiniStat label="Тооцоолсон" value={fmtRub(row.calculated_balance)} accent />
-                <label>
-                  <div className="text-[10px] text-slate-400 mb-1">Оруулсан баланс</div>
-                  <input
-                    type="number"
-                    className={`${INPUT_CLASS} text-right`}
-                    value={draft.entered_balance}
-                    onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
-                    placeholder="0"
-                    disabled={readOnly}
-                  />
-                </label>
+                {readOnly ? (
+                  <BalanceMiniStat label="Оруулсан баланс" value={row.entered_balance == null ? "—" : fmtRub(row.entered_balance)} />
+                ) : (
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Оруулсан баланс</div>
+                    <input
+                      type="number"
+                      className={`${INPUT_CLASS} text-right`}
+                      value={draft.entered_balance}
+                      onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
+                      placeholder="0"
+                    />
+                  </label>
+                )}
               </div>
 
-              <button
-                onClick={() => save(row)}
-                disabled={readOnly || !isDirty(row) || busyAdminId === row.admin_id}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-maroon-700 transition"
-              >
-                {busyAdminId === row.admin_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {readOnly ? "Түр хаалттай" : "Хадгалах"}
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => save(row)}
+                  disabled={!isDirty(row) || busyAdminId === row.admin_id}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-sm font-semibold disabled:opacity-40 hover:bg-maroon-700 transition"
+                >
+                  {busyAdminId === row.admin_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
+                </button>
+              )}
             </div>
           );
         })}
@@ -438,7 +485,7 @@ function DailyBalanceRowsTable({
               <th className="py-2 px-2 font-medium text-right">Тооцоолсон дүн (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Оруулсан баланс (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Зөрүү (₽)</th>
-              <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
+              {!readOnly && <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>}
             </tr>
           </thead>
           <tbody>
@@ -454,34 +501,114 @@ function DailyBalanceRowsTable({
                   <td className="py-2 px-2 text-right tabular-nums">{fmtRub(row.adjustment_total)}</td>
                   <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(row.calculated_balance)}</td>
                   <td className="py-2 px-2 w-40">
-                    <input
-                      type="number"
-                      className={`${INPUT_CLASS} text-right`}
-                      value={draft.entered_balance}
-                      onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
-                      placeholder="0"
-                      disabled={readOnly}
-                    />
+                    {readOnly ? (
+                      <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm text-right tabular-nums">
+                        {row.entered_balance == null ? "—" : fmtRub(row.entered_balance)}
+                      </div>
+                    ) : (
+                      <input
+                        type="number"
+                        className={`${INPUT_CLASS} text-right`}
+                        value={draft.entered_balance}
+                        onChange={(e) => setDraft(row.admin_id, { entered_balance: e.target.value })}
+                        placeholder="0"
+                      />
+                    )}
                   </td>
                   <td className={`py-2 px-2 text-right tabular-nums font-semibold ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>
                     {difference == null ? "—" : fmtRub(difference)}
                   </td>
-                  <td className="py-2 pl-2 text-right">
-                    <button
-                      onClick={() => save(row)}
-                      disabled={readOnly || !isDirty(row) || busyAdminId === row.admin_id}
-                      className="inline-flex items-center justify-center p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-30 hover:bg-maroon-700 transition"
-                      title={readOnly ? "Migration хийгдтэл идэвхгүй" : "Оруулсан балансыг хадгалах"}
-                    >
-                      {busyAdminId === row.admin_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                    </button>
-                  </td>
+                  {!readOnly && (
+                    <td className="py-2 pl-2 text-right">
+                      <button
+                        onClick={() => save(row)}
+                        disabled={!isDirty(row) || busyAdminId === row.admin_id}
+                        className="inline-flex items-center justify-center p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-30 hover:bg-maroon-700 transition"
+                        title="Оруулсан балансыг хадгалах"
+                      >
+                        {busyAdminId === row.admin_id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function BalanceHistoryPanel({
+  rows,
+  loading,
+  onDownload,
+}: {
+  rows: BalanceHistoryRow[];
+  loading: boolean;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-4 space-y-3">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="text-sm font-semibold">Өдрийн тооцооны түүх</div>
+          <div className="text-xs text-slate-500 dark:text-ivory-400">Ерөнхий мөр болон админ тус бүрийн өдөр дууссан тооцоог хадгална.</div>
+        </div>
+        <button
+          onClick={onDownload}
+          disabled={loading || rows.length === 0}
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition disabled:opacity-40"
+        >
+          <Download className="w-4 h-4" /> CSV
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-maroon-600 animate-spin" /></div>
+      ) : rows.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-dark-600 px-4 py-6 text-sm text-slate-400 text-center">
+          Хадгалагдсан өдрийн тооцоо хараахан алга байна.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
+                <th className="py-2 pr-2 font-medium">Огноо</th>
+                <th className="py-2 px-2 font-medium">Хүрээ</th>
+                <th className="py-2 px-2 font-medium text-right">Өмнөх баланс</th>
+                <th className="py-2 px-2 font-medium text-right">Руб→төг</th>
+                <th className="py-2 px-2 font-medium text-right">Төг→руб</th>
+                <th className="py-2 px-2 font-medium text-right">Орлого/зарлага</th>
+                <th className="py-2 px-2 font-medium text-right">Тооцоолсон дүн</th>
+                <th className="py-2 px-2 font-medium text-right">Оруулсан баланс</th>
+                <th className="py-2 pl-2 font-medium text-right">Зөрүү</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.row_key} className="border-b border-slate-100 dark:border-dark-700">
+                  <td className="py-2 pr-2 tabular-nums whitespace-nowrap">{row.balance_date}</td>
+                  <td className="py-2 px-2 min-w-[160px] font-semibold">
+                    {row.scope_type === "all" ? "Бүх админ" : row.admin_name || `ID ${row.admin_id}`}
+                  </td>
+                  <td className="py-2 px-2 text-right tabular-nums">{fmtRub(row.opening_balance)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtRub(row.rub_to_mnt_rub)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums text-rose-600 dark:text-rose-400">{fmtRub(row.mnt_to_rub_rub)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{fmtRub(row.adjustment_total)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(row.calculated_balance)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums">{row.entered_balance == null ? "—" : fmtRub(row.entered_balance)}</td>
+                  <td className={`py-2 pl-2 text-right tabular-nums font-semibold ${row.discrepancy == null ? "text-slate-400" : row.discrepancy > 0 ? "text-emerald-600 dark:text-emerald-400" : row.discrepancy < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>
+                    {row.discrepancy == null ? "—" : fmtRub(row.discrepancy)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -504,12 +631,14 @@ function BalanceAdjustmentsPanel({
   adjustments,
   balanceDate,
   totalAdjustment,
+  canAdd,
   onChanged,
 }: {
   accounts: TreasuryAccount[];
   adjustments: BalanceAdjustment[];
   balanceDate: string;
   totalAdjustment: number;
+  canAdd: boolean;
   onChanged: () => void;
 }) {
   const adjustableAccounts = useMemo(
@@ -572,7 +701,11 @@ function BalanceAdjustmentsPanel({
         <div className="text-sm font-semibold tabular-nums">Нийт бүртгэсэн орлого/зарлага: {fmtRub(totalAdjustment)}</div>
       </div>
 
-      {adjustableAccounts.length === 0 ? (
+      {!canAdd ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-dark-600 px-4 py-5 text-sm text-slate-400">
+          Админ сонгосны дараа шинэ орлого / зарлагын мөр нэмнэ.
+        </div>
+      ) : adjustableAccounts.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 dark:border-dark-600 px-4 py-5 text-sm text-slate-400">
           Бусад орлого/зарлагын мөр нэмэхийн өмнө дор хаяж нэг дансыг админд хуваарилна уу.
         </div>
@@ -667,10 +800,18 @@ function TreasuryAccountsTable({
   const [newName, setNewName] = useState("");
   const [newBalance, setNewBalance] = useState("");
   const [newAdminId, setNewAdminId] = useState(selectedAdminId != null ? String(selectedAdminId) : "");
+  const canAdd = selectedAdminId != null;
 
   useEffect(() => {
     setNewAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
   }, [selectedAdminId]);
+
+  useEffect(() => {
+    if (canAdd) return;
+    setShowNewAccountForm(false);
+    setNewName("");
+    setNewBalance("");
+  }, [canAdd]);
 
   const draftOf = (account: TreasuryAccount): AcctDraft =>
     drafts[account.id] ?? {
@@ -922,54 +1063,98 @@ function TreasuryAccountsTable({
       </div>
 
       <div className="rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4 space-y-3">
-        <button
-          type="button"
-          onClick={toggleNewAccountForm}
-          className="w-full flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 dark:border-dark-600 bg-white/80 dark:bg-dark-800/70 px-3 py-3 text-left hover:border-maroon-300 hover:bg-white transition"
-        >
-          <span className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-maroon-600 text-white shadow-sm">
-              <Plus className={`w-4 h-4 transition-transform ${showNewAccountForm ? "rotate-45" : ""}`} />
-            </span>
-            <span>
-              <span className="block text-sm font-semibold text-slate-800 dark:text-ivory-100">New bank account</span>
-              <span className="block text-xs text-slate-400">Одоо байгаа данс нэмэх формыг нээх</span>
-            </span>
-          </span>
-          <span className="text-xs font-medium text-slate-500 dark:text-ivory-400">{showNewAccountForm ? "Хаах" : "Нээх"}</span>
-        </button>
-
-        {showNewAccountForm && (
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_180px_auto] gap-2 items-end">
-            <label>
-              <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
-              <input className={INPUT_CLASS} placeholder="Жишээ: Сбербанк ₽" value={newName} onChange={(e) => setNewName(e.target.value)} />
-            </label>
-            <label>
-              <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
-              <select className={INPUT_CLASS} value={newAdminId} onChange={(e) => setNewAdminId(e.target.value)}>
-                <option value="">Хуваарилаагүй</option>
-                {admins.map((admin) => (
-                  <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <div className="text-[10px] text-slate-400 mb-1">Эхлэх баланс</div>
-              <input type="number" className={`${INPUT_CLASS} text-right`} placeholder="0" value={newBalance} onChange={(e) => setNewBalance(e.target.value)} />
-            </label>
-            <button
-              onClick={add}
-              disabled={!newName.trim() || adding}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
-            >
-              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Данс нэмэх
-            </button>
+        {!canAdd ? (
+          <div className="rounded-xl border border-dashed border-slate-200 dark:border-dark-600 bg-white/80 dark:bg-dark-800/70 px-3 py-4 text-sm text-slate-400">
+            Админ сонгосны дараа шинэ балансын данс нэмнэ.
           </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={toggleNewAccountForm}
+              className="w-full flex items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 dark:border-dark-600 bg-white/80 dark:bg-dark-800/70 px-3 py-3 text-left hover:border-maroon-300 hover:bg-white transition"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-maroon-600 text-white shadow-sm">
+                  <Plus className={`w-4 h-4 transition-transform ${showNewAccountForm ? "rotate-45" : ""}`} />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-slate-800 dark:text-ivory-100">New bank account</span>
+                  <span className="block text-xs text-slate-400">Одоо байгаа данс нэмэх формыг нээх</span>
+                </span>
+              </span>
+              <span className="text-xs font-medium text-slate-500 dark:text-ivory-400">{showNewAccountForm ? "Хаах" : "Нээх"}</span>
+            </button>
+
+            {showNewAccountForm && (
+              <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_180px_auto] gap-2 items-end">
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
+                  <input className={INPUT_CLASS} placeholder="Жишээ: Сбербанк ₽" value={newName} onChange={(e) => setNewName(e.target.value)} />
+                </label>
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
+                  <select className={INPUT_CLASS} value={newAdminId} onChange={(e) => setNewAdminId(e.target.value)}>
+                    <option value="">Хуваарилаагүй</option>
+                    {admins.map((admin) => (
+                      <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Эхлэх баланс</div>
+                  <input type="number" className={`${INPUT_CLASS} text-right`} placeholder="0" value={newBalance} onChange={(e) => setNewBalance(e.target.value)} />
+                </label>
+                <button
+                  onClick={add}
+                  disabled={!newName.trim() || adding}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+                >
+                  {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Данс нэмэх
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
   );
+}
+
+function exportBalanceHistoryCsv(rows: BalanceHistoryRow[]) {
+  const headers = [
+    "balance_date",
+    "scope",
+    "admin_id",
+    "admin_name",
+    "opening_balance",
+    "rub_to_mnt_rub",
+    "mnt_to_rub_rub",
+    "adjustment_total",
+    "calculated_balance",
+    "entered_balance",
+    "discrepancy",
+  ];
+  const escape = (value: unknown) => {
+    const str = value == null ? "" : String(value);
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const csv = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => {
+      if (header === "scope") {
+        return escape(row.scope_type === "all" ? "Бүх админ" : "Админ");
+      }
+      return escape((row as unknown as Record<string, unknown>)[header]);
+    }).join(",")),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `dashboard-balance-history-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── Section B: Profit calculator ─────────────────────────────────────────────
