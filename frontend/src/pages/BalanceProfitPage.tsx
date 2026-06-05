@@ -266,8 +266,11 @@ function BalanceBody({
   onChanged: () => void;
 }) {
   const viewLabel = selectedAdminId == null ? "Бүх админ" : adminLabel(data.admins, selectedAdminId);
+  const showAdminScopedDetails = selectedAdminId != null;
   return (
     <div className="space-y-5">
+      <div className="text-sm font-semibold">Ерөнхий тооцоолуур</div>
+
       <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-ivory-400 md:flex-row md:items-center md:justify-between">
         <div>
           Харагдаж буй дүн: <span className="font-semibold text-slate-700 dark:text-ivory-200">{viewLabel}</span>
@@ -291,7 +294,7 @@ function BalanceBody({
         />
       </div>
 
-      {data.missing_entered_balance_count > 0 && (
+      {showAdminScopedDetails && data.missing_entered_balance_count > 0 && (
         <div className="flex items-start gap-2 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 rounded-xl p-3">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
@@ -301,29 +304,33 @@ function BalanceBody({
         </div>
       )}
 
-      {data.daily_balances.length > 0 && (
+      {showAdminScopedDetails && data.daily_balances.length > 0 && (
         <DailyBalanceRowsTable
           rows={data.daily_balances}
           onChanged={onChanged}
-          readOnly={selectedAdminId == null}
+          readOnly={false}
         />
       )}
 
-      <TreasuryAccountsTable
-        accounts={data.accounts}
-        admins={data.admins}
-        selectedAdminId={selectedAdminId}
-        onChanged={onChanged}
-      />
+      {showAdminScopedDetails && (
+        <TreasuryAccountsTable
+          accounts={data.accounts}
+          admins={data.admins}
+          selectedAdminId={selectedAdminId}
+          onChanged={onChanged}
+        />
+      )}
 
-      <BalanceAdjustmentsPanel
-        accounts={data.accounts}
-        adjustments={data.adjustments}
-        balanceDate={data.date}
-        totalAdjustment={data.adjustment_total}
-        canAdd={selectedAdminId != null}
-        onChanged={onChanged}
-      />
+      {showAdminScopedDetails && (
+        <BalanceAdjustmentsPanel
+          accounts={data.accounts}
+          adjustments={data.adjustments}
+          balanceDate={data.date}
+          totalAdjustment={data.adjustment_total}
+          canAdd
+          onChanged={onChanged}
+        />
+      )}
     </div>
   );
 }
@@ -577,11 +584,11 @@ function BalanceHistoryPanel({
             <thead>
               <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
                 <th className="py-2 pr-2 font-medium">Огноо</th>
-                <th className="py-2 px-2 font-medium">Хүрээ</th>
+                <th className="py-2 px-2 font-medium">Админ нэр</th>
                 <th className="py-2 px-2 font-medium text-right">Өмнөх баланс</th>
                 <th className="py-2 px-2 font-medium text-right">Руб→төг</th>
                 <th className="py-2 px-2 font-medium text-right">Төг→руб</th>
-                <th className="py-2 px-2 font-medium text-right">Орлого/зарлага</th>
+                <th className="py-2 px-2 font-medium text-right">Бусад орлого/зарлага</th>
                 <th className="py-2 px-2 font-medium text-right">Тооцоолсон дүн</th>
                 <th className="py-2 px-2 font-medium text-right">Оруулсан баланс</th>
                 <th className="py-2 pl-2 font-medium text-right">Зөрүү</th>
