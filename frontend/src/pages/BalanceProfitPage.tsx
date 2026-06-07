@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import {
   BalanceAdjustment, BalanceHistoryRow, BalanceSummary, CostRate, DailyBalanceRow, DashboardAdminOption,
+  DashboardTimeZone,
   PlaneTicketSale, PlaneTicketSalesResponse, ProfitSummary, TreasuryAccount,
   createBalanceAdjustment, createPlaneTicketSale, createTreasuryAccount,
   deleteBalanceAdjustment, deletePlaneTicketSale, deleteTreasuryAccount,
@@ -28,13 +29,64 @@ const PROFIT_PERIODS: { key: ProfitPeriod; label: string }[] = [
 ];
 
 const BALANCE_ADMIN_STORAGE = "oyuns_dashboard_balance_admin_id";
+const DASHBOARD_TIMEZONE_STORAGE = "oyuns_dashboard_timezone";
 const PANEL_CLASS = "bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm p-4 md:p-5";
 const INPUT_CLASS = "w-full rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 focus:ring-maroon-500";
 
-const todayIso = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
+const DASHBOARD_TIMEZONES: { key: DashboardTimeZone; label: string; short: string; iana: string }[] = [
+  { key: "moscow", label: "Moscow time", short: "MSK", iana: "Europe/Moscow" },
+  { key: "ub", label: "UB time", short: "UB", iana: "Asia/Ulaanbaatar" },
+];
+
+function dashboardTimeZoneConfig(timeZone: DashboardTimeZone) {
+  return DASHBOARD_TIMEZONES.find((item) => item.key === timeZone) || DASHBOARD_TIMEZONES[0];
+}
+
+function zonedDateParts(date: Date, timeZone: DashboardTimeZone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: dashboardTimeZoneConfig(timeZone).iana,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "00";
+  return {
+    year: valueOf("year"),
+    month: valueOf("month"),
+    day: valueOf("day"),
+    hour: valueOf("hour"),
+    minute: valueOf("minute"),
+    second: valueOf("second"),
+  };
+}
+
+function zonedDateIso(date: Date, timeZone: DashboardTimeZone) {
+  const parts = zonedDateParts(date, timeZone);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function zonedDateTimeToUtcIso(timeZone: DashboardTimeZone, dateIso: string, timeValue: string) {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  const [hour, minute, second] = timeValue.split(":").map(Number);
+  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  const parts = zonedDateParts(guess, timeZone);
+  const asIfUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return new Date(guess.getTime() - (asIfUtc - guess.getTime())).toISOString();
+}
+
+const todayIso = (timeZone: DashboardTimeZone = "moscow") => zonedDateIso(new Date(), timeZone);
 
 const fmtNum = (n: number | null | undefined, digits = 0) =>
   (n ?? 0).toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
@@ -48,21 +100,44 @@ function getApiErrorDetail(error: unknown, fallback: string) {
   return typeof detail === "string" ? detail : fallback;
 }
 
-function profitRange(period: ProfitPeriod, custom: { start: string; end: string }) {
+function profitRange(period: ProfitPeriod, custom: { start: string; end: string }, timeZone: DashboardTimeZone) {
   const now = new Date();
-  let start: Date | null = null;
+  const nowDate = zonedDateIso(now, timeZone);
+  let startIso: string | undefined;
+  let startDate: string | undefined;
   switch (period) {
-    case "today": start = new Date(now.getFullYear(), now.getMonth(), now.getDate()); break;
-    case "7d": start = new Date(now.getTime() - 7 * 864e5); break;
-    case "month": start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-    case "year": start = new Date(now.getTime() - 365 * 864e5); break;
+    case "today":
+      startDate = nowDate;
+      startIso = zonedDateTimeToUtcIso(timeZone, startDate, "00:00:00");
+      break;
+    case "7d": {
+      const start = new Date(now.getTime() - 7 * 864e5);
+      startIso = start.toISOString();
+      startDate = zonedDateIso(start, timeZone);
+      break;
+    }
+    case "month": {
+      const parts = zonedDateParts(now, timeZone);
+      startDate = `${parts.year}-${parts.month}-01`;
+      startIso = zonedDateTimeToUtcIso(timeZone, startDate, "00:00:00");
+      break;
+    }
+    case "year": {
+      const start = new Date(now.getTime() - 365 * 864e5);
+      startIso = start.toISOString();
+      startDate = zonedDateIso(start, timeZone);
+      break;
+    }
     case "custom": {
-      const s = custom.start ? new Date(custom.start + "T00:00:00") : null;
-      const e = custom.end ? new Date(custom.end + "T23:59:59") : now;
-      return { start: s ? s.toISOString() : undefined, end: e.toISOString() };
+      return {
+        start: custom.start ? zonedDateTimeToUtcIso(timeZone, custom.start, "00:00:00") : undefined,
+        end: custom.end ? zonedDateTimeToUtcIso(timeZone, custom.end, "23:59:59") : now.toISOString(),
+        startDate: custom.start || undefined,
+        endDate: custom.end || nowDate,
+      };
     }
   }
-  return { start: start ? start.toISOString() : undefined, end: now.toISOString() };
+  return { start: startIso, end: now.toISOString(), startDate, endDate: nowDate };
 }
 
 function readStoredBalanceAdminId() {
@@ -70,6 +145,11 @@ function readStoredBalanceAdminId() {
   if (!stored) return null;
   const parsed = Number(stored);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readStoredDashboardTimeZone(): DashboardTimeZone {
+  const stored = localStorage.getItem(DASHBOARD_TIMEZONE_STORAGE);
+  return stored === "ub" ? "ub" : "moscow";
 }
 
 function adminLabel(admins: DashboardAdminOption[], adminId: number | null | undefined) {
@@ -101,6 +181,12 @@ function accountDifference(account: Pick<TreasuryAccount, "prev_balance" | "rub_
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void; pageTabs?: React.ReactNode }) {
+  const [dashboardTimeZone, setDashboardTimeZone] = useState<DashboardTimeZone>(() => readStoredDashboardTimeZone());
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_TIMEZONE_STORAGE, dashboardTimeZone);
+  }, [dashboardTimeZone]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-dark-900 text-slate-800 dark:text-ivory-200">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 space-y-5">
@@ -116,6 +202,21 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <div className="w-full sm:w-auto">{pageTabs}</div>
+            <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-1">
+              {DASHBOARD_TIMEZONES.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setDashboardTimeZone(option.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${dashboardTimeZone === option.key
+                    ? "bg-maroon-600 text-white shadow"
+                    : "text-slate-500 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"}`}
+                  title={option.label}
+                >
+                  {option.short}
+                </button>
+              ))}
+            </div>
             <button
               onClick={onLogout}
               className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-sm font-medium hover:bg-slate-100 dark:hover:bg-dark-700 transition"
@@ -125,8 +226,8 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
           </div>
         </div>
 
-        <BalanceSection />
-        <ProfitSection />
+        <BalanceSection dashboardTimeZone={dashboardTimeZone} />
+        <ProfitSection dashboardTimeZone={dashboardTimeZone} />
       </div>
     </div>
   );
@@ -134,9 +235,10 @@ export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void
 
 // ── Section A: Balance accounting ────────────────────────────────────────────
 
-function BalanceSection() {
+function BalanceSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTimeZone }) {
   const [selectedAdminId, setSelectedAdminId] = useState<number | null>(() => readStoredBalanceAdminId());
   const [historyOpen, setHistoryOpen] = useState(false);
+  const timeZoneMeta = dashboardTimeZoneConfig(dashboardTimeZone);
 
   useEffect(() => {
     if (selectedAdminId == null) {
@@ -147,14 +249,14 @@ function BalanceSection() {
   }, [selectedAdminId]);
 
   const balanceQ = useQuery({
-    queryKey: ["dashboard-balance", selectedAdminId],
-    queryFn: () => fetchBalanceSummary({ admin_id: selectedAdminId ?? undefined }),
+    queryKey: ["dashboard-balance", selectedAdminId, dashboardTimeZone],
+    queryFn: () => fetchBalanceSummary({ admin_id: selectedAdminId ?? undefined, tz: dashboardTimeZone }),
     staleTime: 30_000,
   });
 
   const historyQ = useQuery({
-    queryKey: ["dashboard-balance-history"],
-    queryFn: () => fetchBalanceHistory({ days: 60 }),
+    queryKey: ["dashboard-balance-history", dashboardTimeZone],
+    queryFn: () => fetchBalanceHistory({ days: 60, tz: dashboardTimeZone }),
     enabled: historyOpen,
     staleTime: 60_000,
   });
@@ -198,7 +300,7 @@ function BalanceSection() {
           </label>
           <div className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600">
             <Calendar className="w-4 h-4 text-slate-400" />
-            <span className="text-xs tabular-nums">{balanceQ.data?.date || todayIso()} <span className="text-slate-400">(Москва)</span></span>
+            <span className="text-xs tabular-nums">{balanceQ.data?.date || todayIso(dashboardTimeZone)} <span className="text-slate-400">({timeZoneMeta.short})</span></span>
           </div>
           <button
             onClick={() => setHistoryOpen((current) => !current)}
@@ -224,7 +326,7 @@ function BalanceSection() {
         <b>Бусад орлого/зарлага</b> нь таг, тайлбартай <b>+/- мөрөөр</b> тусдаа бүртгэгдэнэ.
         Систем <b>Өмнөх баланс + Руб→төг − Төг→руб</b> томьёогоор <b>Тооцоолсон дүн</b>-г бодно.
         <b>Оруулсан баланс</b> нь тухайн банк дансанд байгаа бодит мөнгө, харин <b>Зөрүү = Тооцоолсон дүн − Оруулсан баланс</b>.
-        <b>Москвагийн цагаар өдөр дуусахад Тооцоолсон дүн автоматаар маргаашийн "Өмнөх баланс" болж шилжинэ.</b>
+        <b>{timeZoneMeta.label}-аар өдөр дуусахад Тооцоолсон дүн автоматаар маргаашийн "Өмнөх баланс" болж шилжинэ.</b>
       </p>
 
       {historyOpen && (
@@ -250,7 +352,7 @@ function BalanceSection() {
       ) : balanceQ.isLoading || !balanceQ.data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-maroon-600 animate-spin" /></div>
       ) : (
-        <BalanceBody data={balanceQ.data} selectedAdminId={selectedAdminId} onChanged={() => balanceQ.refetch()} />
+        <BalanceBody data={balanceQ.data} dashboardTimeZone={dashboardTimeZone} selectedAdminId={selectedAdminId} onChanged={() => balanceQ.refetch()} />
       )}
     </div>
   );
@@ -258,10 +360,12 @@ function BalanceSection() {
 
 function BalanceBody({
   data,
+  dashboardTimeZone,
   selectedAdminId,
   onChanged,
 }: {
   data: BalanceSummary;
+  dashboardTimeZone: DashboardTimeZone;
   selectedAdminId: number | null;
   onChanged: () => void;
 }) {
@@ -316,6 +420,7 @@ function BalanceBody({
         <TreasuryAccountsTable
           accounts={data.accounts}
           admins={data.admins}
+          dashboardTimeZone={dashboardTimeZone}
           selectedAdminId={selectedAdminId}
           onChanged={onChanged}
         />
@@ -794,11 +899,13 @@ type AcctDraft = {
 function TreasuryAccountsTable({
   accounts,
   admins,
+  dashboardTimeZone,
   selectedAdminId,
   onChanged,
 }: {
   accounts: TreasuryAccount[];
   admins: DashboardAdminOption[];
+  dashboardTimeZone: DashboardTimeZone;
   selectedAdminId: number | null;
   onChanged: () => void;
 }) {
@@ -854,6 +961,7 @@ function TreasuryAccountsTable({
         name: draft.name,
         admin_id: draft.admin_id ? Number(draft.admin_id) : null,
         entered_balance: accountEnteredBalance(draft),
+        tz: dashboardTimeZone,
       });
       setDrafts((current) => {
         const next = { ...current };
@@ -886,6 +994,7 @@ function TreasuryAccountsTable({
         admin_id: newAdminId ? Number(newAdminId) : null,
         prev_balance: Number(newBalance) || 0,
         display_order: accounts.length,
+        tz: dashboardTimeZone,
       });
       setNewName("");
       setNewBalance("");
@@ -1168,14 +1277,14 @@ function exportBalanceHistoryCsv(rows: BalanceHistoryRow[]) {
 
 // ── Section B: Profit calculator ─────────────────────────────────────────────
 
-function ProfitSection() {
+function ProfitSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTimeZone }) {
   const [period, setPeriod] = useState<ProfitPeriod>("today");
   const [custom, setCustom] = useState({ start: "", end: "" });
-  const range = useMemo(() => profitRange(period, custom), [period, custom]);
+  const range = useMemo(() => profitRange(period, custom, dashboardTimeZone), [period, custom, dashboardTimeZone]);
 
   const profitQ = useQuery({
-    queryKey: ["dashboard-profit", range.start, range.end],
-    queryFn: () => fetchProfit({ start: range.start, end: range.end }),
+    queryKey: ["dashboard-profit", range.start, range.end, dashboardTimeZone],
+    queryFn: () => fetchProfit({ start: range.start, end: range.end, tz: dashboardTimeZone }),
     enabled: period !== "custom" || Boolean(custom.start),
     staleTime: 30_000,
   });
@@ -1234,8 +1343,8 @@ function ProfitSection() {
         <ProfitBody data={profitQ.data} />
       )}
 
-      <PlaneTicketSalesManager range={range} onSaved={refreshProfit} />
-      <CostRateManager range={range} onSaved={refreshProfit} />
+      <PlaneTicketSalesManager range={range} dashboardTimeZone={dashboardTimeZone} todayDate={todayIso(dashboardTimeZone)} onSaved={refreshProfit} />
+      <CostRateManager range={range} dashboardTimeZone={dashboardTimeZone} todayDate={todayIso(dashboardTimeZone)} onSaved={refreshProfit} />
     </div>
   );
 }
@@ -1292,8 +1401,18 @@ function ProfitCard({ label, value, accent, big, sub }: { label: string; value: 
   );
 }
 
-function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; end?: string }; onSaved: () => void }) {
-  const [saleDate, setSaleDate] = useState(todayIso());
+function PlaneTicketSalesManager({
+  range,
+  dashboardTimeZone,
+  todayDate,
+  onSaved,
+}: {
+  range: { start?: string; end?: string; startDate?: string; endDate?: string };
+  dashboardTimeZone: DashboardTimeZone;
+  todayDate: string;
+  onSaved: () => void;
+}) {
+  const [saleDate, setSaleDate] = useState(todayDate);
   const [soldPrice, setSoldPrice] = useState("");
   const [exchangeRate, setExchangeRate] = useState("");
   const [notes, setNotes] = useState("");
@@ -1301,15 +1420,19 @@ function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    setSaleDate(todayDate);
+  }, [todayDate]);
+
   const salesQ = useQuery({
-    queryKey: ["dashboard-plane-ticket-sales", range.start, range.end],
-    queryFn: () => fetchPlaneTicketSales({ start: range.start, end: range.end }),
+    queryKey: ["dashboard-plane-ticket-sales", range.startDate, range.endDate, dashboardTimeZone],
+    queryFn: () => fetchPlaneTicketSales({ start: range.startDate, end: range.endDate, tz: dashboardTimeZone }),
     staleTime: 30_000,
   });
 
   const costPreviewQ = useQuery({
-    queryKey: ["dashboard-cost-rate-preview", saleDate],
-    queryFn: () => fetchCostRates({ end: saleDate }),
+    queryKey: ["dashboard-cost-rate-preview", saleDate, dashboardTimeZone],
+    queryFn: () => fetchCostRates({ end: saleDate, tz: dashboardTimeZone }),
     staleTime: 30_000,
   });
 
@@ -1528,22 +1651,36 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 // ── Cost rate (өртөг ханш) manager ───────────────────────────────────────────
 
-function CostRateManager({ range, onSaved }: { range: { start?: string; end?: string }; onSaved: () => void }) {
-  const [date, setDate] = useState(todayIso());
+function CostRateManager({
+  range,
+  dashboardTimeZone,
+  todayDate,
+  onSaved,
+}: {
+  range: { start?: string; end?: string; startDate?: string; endDate?: string };
+  dashboardTimeZone: DashboardTimeZone;
+  todayDate: string;
+  onSaved: () => void;
+}) {
+  const [date, setDate] = useState(todayDate);
   const [usd, setUsd] = useState("");
   const [black, setBlack] = useState("");
   const [fetchingRate, setFetchingRate] = useState(false);
   const [rateMsg, setRateMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    setDate(todayDate);
+  }, [todayDate]);
+
   const listRange = useMemo(() => ({
-    start: range.start ? range.start.slice(0, 10) : undefined,
-    end: range.end ? range.end.slice(0, 10) : undefined,
-  }), [range.start, range.end]);
+    start: range.startDate,
+    end: range.endDate,
+  }), [range.endDate, range.startDate]);
 
   const ratesQ = useQuery({
-    queryKey: ["dashboard-cost-rates", listRange.start, listRange.end],
-    queryFn: () => fetchCostRates(listRange),
+    queryKey: ["dashboard-cost-rates", listRange.start, listRange.end, dashboardTimeZone],
+    queryFn: () => fetchCostRates({ ...listRange, tz: dashboardTimeZone }),
     staleTime: 30_000,
   });
 

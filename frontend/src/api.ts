@@ -1886,17 +1886,19 @@ export type PlaneTicketSalesResponse = {
   summary: PlaneTicketSalesSummary;
 };
 
+export type DashboardTimeZone = "moscow" | "ub";
+
 export async function fetchTreasuryAccounts(): Promise<TreasuryAccount[]> {
   const res = await dashboardApi.get("/dashboard/treasury-accounts");
   return (res.data?.accounts || []) as TreasuryAccount[];
 }
 
-export async function createTreasuryAccount(payload: Partial<TreasuryAccount>): Promise<TreasuryAccount> {
+export async function createTreasuryAccount(payload: Partial<TreasuryAccount> & { tz?: DashboardTimeZone }): Promise<TreasuryAccount> {
   const res = await dashboardApi.post("/dashboard/treasury-accounts", payload);
   return res.data.account as TreasuryAccount;
 }
 
-export async function updateTreasuryAccount(id: string, payload: Partial<TreasuryAccount>): Promise<TreasuryAccount> {
+export async function updateTreasuryAccount(id: string, payload: Partial<TreasuryAccount> & { tz?: DashboardTimeZone }): Promise<TreasuryAccount> {
   const res = await dashboardApi.put(`/dashboard/treasury-accounts/${id}`, payload);
   return res.data.account as TreasuryAccount;
 }
@@ -1905,10 +1907,11 @@ export async function deleteTreasuryAccount(id: string): Promise<void> {
   await dashboardApi.delete(`/dashboard/treasury-accounts/${id}`);
 }
 
-export async function fetchBalanceSummary(params: { date?: string; admin_id?: number } = {}): Promise<BalanceSummary> {
+export async function fetchBalanceSummary(params: { date?: string; admin_id?: number; tz?: DashboardTimeZone } = {}): Promise<BalanceSummary> {
   const search = new URLSearchParams();
   if (params.date) search.set("date", params.date);
   if (params.admin_id != null) search.set("admin_id", String(params.admin_id));
+  if (params.tz) search.set("tz", params.tz);
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/balance${query ? `?${query}` : ""}`);
   return res.data as BalanceSummary;
@@ -1923,9 +1926,10 @@ export async function upsertBalanceDaily(payload: {
   return res.data.daily_balance as DailyBalanceRow;
 }
 
-export async function fetchBalanceHistory(params: { days?: number } = {}): Promise<BalanceHistoryResponse> {
+export async function fetchBalanceHistory(params: { days?: number; tz?: DashboardTimeZone } = {}): Promise<BalanceHistoryResponse> {
   const search = new URLSearchParams();
   if (params.days != null) search.set("days", String(params.days));
+  if (params.tz) search.set("tz", params.tz);
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/balance/history${query ? `?${query}` : ""}`);
   return res.data as BalanceHistoryResponse;
@@ -1960,10 +1964,11 @@ export async function fetchBlackRates(params: { start?: string; end?: string; da
   return res.data;
 }
 
-export async function fetchCostRates(params: { start?: string; end?: string } = {}): Promise<CostRate[]> {
+export async function fetchCostRates(params: { start?: string; end?: string; tz?: DashboardTimeZone } = {}): Promise<CostRate[]> {
   const search = new URLSearchParams();
   if (params.start) search.set("start", params.start);
   if (params.end) search.set("end", params.end);
+  if (params.tz) search.set("tz", params.tz);
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/cost-rates${query ? `?${query}` : ""}`);
   return (res.data?.cost_rates || []) as CostRate[];
@@ -1974,19 +1979,21 @@ export async function saveCostRate(payload: { date: string; usd_rate: number; bl
   return res.data.cost_rate as CostRate;
 }
 
-export async function fetchProfit(params: { start?: string; end?: string }): Promise<ProfitSummary> {
+export async function fetchProfit(params: { start?: string; end?: string; tz?: DashboardTimeZone }): Promise<ProfitSummary> {
   const search = new URLSearchParams();
   if (params.start) search.set("start", params.start);
   if (params.end) search.set("end", params.end);
+  if (params.tz) search.set("tz", params.tz);
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/profit${query ? `?${query}` : ""}`);
   return res.data as ProfitSummary;
 }
 
-export async function fetchPlaneTicketSales(params: { start?: string; end?: string } = {}): Promise<PlaneTicketSalesResponse> {
+export async function fetchPlaneTicketSales(params: { start?: string; end?: string; tz?: DashboardTimeZone } = {}): Promise<PlaneTicketSalesResponse> {
   const search = new URLSearchParams();
   if (params.start) search.set("start", params.start);
   if (params.end) search.set("end", params.end);
+  if (params.tz) search.set("tz", params.tz);
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/plane-ticket-sales${query ? `?${query}` : ""}`);
   return res.data as PlaneTicketSalesResponse;

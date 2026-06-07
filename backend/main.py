@@ -2300,11 +2300,24 @@ async def dashboard_transactions(
 # Dashboard Page 1: Balance accounting + Profit calculator (dashboard auth)
 # ============================================================================
 
-def _moscow_day_bounds(date_str: str | None):
-    """Return (start_iso, end_iso, date_iso) for a Moscow-local calendar day."""
-    from datetime import timedelta
+def _dashboard_timezone_key(value) -> str:
+    normalized = str(value or "moscow").strip().lower()
+    if normalized in {"ub", "ulaanbaatar", "asia/ulaanbaatar"}:
+        return "ub"
+    return "moscow"
+
+
+def _dashboard_zoneinfo(tz_key: str):
     from zoneinfo import ZoneInfo
-    tz = ZoneInfo("Europe/Moscow")
+
+    return ZoneInfo("Asia/Ulaanbaatar" if tz_key == "ub" else "Europe/Moscow")
+
+
+def _dashboard_day_bounds(date_str: str | None, tz_key: str = "moscow"):
+    """Return (start_iso, end_iso, date_iso) for the selected dashboard-local day."""
+    from datetime import timedelta
+
+    tz = _dashboard_zoneinfo(tz_key)
     if date_str:
         y, m, d = (int(x) for x in date_str.split("-"))
         day_start = datetime(y, m, d, tzinfo=tz)
@@ -2313,6 +2326,11 @@ def _moscow_day_bounds(date_str: str | None):
         day_start = datetime(now.year, now.month, now.day, tzinfo=tz)
     day_end = day_start + timedelta(days=1)
     return day_start.isoformat(), day_end.isoformat(), day_start.strftime("%Y-%m-%d")
+
+
+def _moscow_day_bounds(date_str: str | None):
+    """Return (start_iso, end_iso, date_iso) for a Moscow-local calendar day."""
+    return _dashboard_day_bounds(date_str, "moscow")
 
 
 def _dashboard_db_error(exc: Exception, action: str):
@@ -2337,10 +2355,29 @@ def _dashboard_db_error(exc: Exception, action: str):
     return HTTPException(status_code=500, detail=f"{action}: {msg}")
 
 
+def _dashboard_today(tz_key: str = "moscow") -> str:
+    """Current calendar date in the selected dashboard timezone as YYYY-MM-DD."""
+    return datetime.now(_dashboard_zoneinfo(tz_key)).strftime("%Y-%m-%d")
+
+
 def _moscow_today() -> str:
     """Current calendar date in Moscow time as YYYY-MM-DD."""
-    from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d")
+    return _dashboard_today("moscow")
+
+
+def _dashboard_local_day_from_value(value, tz_key: str) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+        return raw
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return raw[:10] if len(raw) >= 10 else None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(_dashboard_zoneinfo(tz_key)).strftime("%Y-%m-%d")
 
 
 def _optional_int(value, field_name: str) -> int | None:
@@ -2486,10 +2523,10 @@ def _dashboard_latest_prior_balance_rows(client, admin_ids: list[int], day: str)
     return latest
 
 
-def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int]) -> dict[int, dict[str, float]]:
+def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], tz_key: str = "moscow") -> dict[int, dict[str, float]]:
     if not admin_ids:
         return {}
-    start_iso, end_iso, _ = _moscow_day_bounds(day)
+    start_iso, end_iso, _ = _dashboard_day_bounds(day, tz_key)
     rows: list[dict] = []
     page = 1000
     offset = 0
@@ -2578,10 +2615,10 @@ def _dashboard_adjustments_for_day(client, day: str, admin_ids: list[int]) -> di
     }
 
 
-def _treasury_account_transaction_baseline(client, admin_id: int | None, day: str) -> dict[str, float]:
+def _treasury_account_transaction_baseline(client, admin_id: int | None, day: str, tz_key: str = "moscow") -> dict[str, float]:
     if admin_id is None:
         return {"baseline_rub_to_mnt": 0.0, "baseline_mnt_to_rub": 0.0}
-    admin_totals = _dashboard_daily_transaction_totals(client, day, [admin_id]).get(admin_id, {})
+    admin_totals = _dashboard_daily_transaction_totals(client, day, [admin_id], tz_key=tz_key).get(admin_id, {})
     return {
         "baseline_rub_to_mnt": round(float(admin_totals.get("rub_to_mnt_rub") or 0), 2),
         "baseline_mnt_to_rub": round(float(admin_totals.get("mnt_to_rub_rub") or 0), 2),
@@ -2652,7 +2689,7 @@ def _account_transaction_totals(accounts: list[dict], txn_totals_by_admin: dict[
     return totals_by_account
 
 
-def _dashboard_previous_closing_balance(client, prior_row: dict) -> float:
+def _dashboard_previous_closing_balance(client, prior_row: dict, tz_key: str = "moscow") -> float:
     entered_balance = prior_row.get("entered_balance")
     if entered_balance is not None:
         return float(entered_balance or 0)
@@ -2661,7 +2698,7 @@ def _dashboard_previous_closing_balance(client, prior_row: dict) -> float:
         return float(prior_row.get("opening_balance") or 0)
     admin_id = int(raw_admin_id)
     day = str(prior_row.get("balance_date") or "")[:10]
-    txn_totals = _dashboard_daily_transaction_totals(client, day, [admin_id]).get(admin_id, {})
+    txn_totals = _dashboard_daily_transaction_totals(client, day, [admin_id], tz_key=tz_key).get(admin_id, {})
     return _dashboard_calculated_balance(
         float(prior_row.get("opening_balance") or 0),
         float(txn_totals.get("rub_to_mnt_rub") or 0),
@@ -2670,7 +2707,7 @@ def _dashboard_previous_closing_balance(client, prior_row: dict) -> float:
     )
 
 
-def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str) -> dict[int, dict]:
+def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str, tz_key: str = "moscow") -> dict[int, dict]:
     admin_ids = [int(admin["admin_id"]) for admin in admins if admin.get("admin_id") is not None]
     if not admin_ids:
         return {}
@@ -2686,7 +2723,7 @@ def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str) -> dict
         opening_balance = 0.0
         prior_row = prior_rows.get(admin_id)
         if prior_row:
-            opening_balance = round(_dashboard_previous_closing_balance(client, prior_row), 2)
+            opening_balance = round(_dashboard_previous_closing_balance(client, prior_row, tz_key=tz_key), 2)
         inserts.append({
             "admin_id": admin_id,
             "balance_date": day,
@@ -2700,12 +2737,12 @@ def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str) -> dict
     return _dashboard_balance_rows_for_day(client, admin_ids, day)
 
 
-def _dashboard_balance_payload(client, day: str, selected_admin_id: int | None) -> dict:
+def _dashboard_balance_payload(client, day: str, selected_admin_id: int | None, tz_key: str = "moscow") -> dict:
     admins = _dashboard_admins(client)
     scoped_admins = _dashboard_scoped_admins(admins, selected_admin_id)
-    rows_by_admin = _ensure_dashboard_balance_rows(client, scoped_admins, day)
+    rows_by_admin = _ensure_dashboard_balance_rows(client, scoped_admins, day, tz_key=tz_key)
     admin_ids = [int(admin["admin_id"]) for admin in scoped_admins if admin.get("admin_id") is not None]
-    txn_totals = _dashboard_daily_transaction_totals(client, day, admin_ids)
+    txn_totals = _dashboard_daily_transaction_totals(client, day, admin_ids, tz_key=tz_key)
     adjustment_data = _dashboard_adjustments_for_day(client, day, admin_ids)
     admin_names = {
         int(admin["admin_id"]): admin.get("name")
@@ -3122,12 +3159,12 @@ def _dashboard_daily_rows_from_accounts(
     }
 
 
-def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None) -> dict:
+def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None, tz_key: str = "moscow") -> dict:
     admins = _dashboard_admins(client)
-    accounts = _rollover_treasury_accounts(client, admin_id=selected_admin_id)
-    today = _moscow_today()
+    accounts = _rollover_treasury_accounts(client, admin_id=selected_admin_id, tz_key=tz_key)
+    today = _dashboard_today(tz_key)
     admin_ids = sorted({int(account["admin_id"]) for account in accounts if account.get("admin_id") is not None})
-    txn_totals = _dashboard_daily_transaction_totals(client, today, admin_ids)
+    txn_totals = _dashboard_daily_transaction_totals(client, today, admin_ids, tz_key=tz_key)
     account_txn_totals = _account_transaction_totals(accounts, txn_totals)
     adjustment_data = _dashboard_adjustments_for_day(client, today, admin_ids)
     account_adjustment_totals = _account_adjustment_totals(accounts, adjustment_data)
@@ -3191,7 +3228,7 @@ def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None) -
     account_summary = _dashboard_daily_rows_from_accounts(enriched_accounts, admins, today, selected_admin_id)
 
     return {
-        "date": _moscow_today(),
+        "date": today,
         "admins": admins,
         "selected_admin_id": selected_admin_id,
         "accounts": enriched_accounts,
@@ -3211,7 +3248,7 @@ def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None) -
     }
 
 
-def _rollover_treasury_accounts(client, admin_id: int | None = None) -> list[dict]:
+def _rollover_treasury_accounts(client, admin_id: int | None = None, tz_key: str = "moscow") -> list[dict]:
     """Carry each account's computed balance into prev_balance when its day ends.
 
     Lazy rollover: when an account's stored balance_date is before the current
@@ -3222,7 +3259,7 @@ def _rollover_treasury_accounts(client, admin_id: int | None = None) -> list[dic
     triggered on read, so no always-on scheduler is required. Returns the
     up-to-date account rows ordered by display_order.
     """
-    today = _moscow_today()
+    today = _dashboard_today(tz_key)
     query = client.table("treasury_accounts").select("*")
     if admin_id is not None:
         query = query.eq("admin_id", admin_id)
@@ -3236,7 +3273,7 @@ def _rollover_treasury_accounts(client, admin_id: int | None = None) -> list[dic
     txn_totals_by_day: dict[str, dict[str, dict[str, float]]] = {}
     for balance_day, day_accounts in stale_accounts_by_day.items():
         admin_ids = sorted({int(account["admin_id"]) for account in day_accounts if account.get("admin_id") is not None})
-        day_txn_totals = _dashboard_daily_transaction_totals(client, balance_day, admin_ids)
+        day_txn_totals = _dashboard_daily_transaction_totals(client, balance_day, admin_ids, tz_key=tz_key)
         txn_totals_by_day[balance_day] = _account_transaction_totals(day_accounts, day_txn_totals)
 
     refreshed: list[dict] = []
@@ -3537,7 +3574,7 @@ async def delete_dashboard_balance_adjustment(adjustment_id: str, auth=Depends(g
 
 
 @app.get("/api/dashboard/balance")
-async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends(get_dashboard_auth)):
+async def dashboard_balance(date: str = None, admin_id: int = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
     """Manual per-account balance calculator scoped to one admin or all admins.
 
     Previous balance rolls over automatically. RUB→MNT and MNT→RUB are derived
@@ -3547,6 +3584,8 @@ async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends
     all admins.
     """
     client = get_supabase()
+    tz_key = _dashboard_timezone_key(tz)
+    day = _dashboard_local_day_from_value(date, tz_key) or _dashboard_today(tz_key)
     normalized_admin_id = _validated_dashboard_admin_id(client, admin_id, "admin_id")
     try:
         try:
@@ -3560,8 +3599,9 @@ async def dashboard_balance(date: str = None, admin_id: int = None, auth=Depends
 
 
 @app.get("/api/dashboard/balance/history")
-async def dashboard_balance_history(days: int = 30, auth=Depends(get_dashboard_auth)):
+async def dashboard_balance_history(days: int = 30, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
     client = get_supabase()
+    tz_key = _dashboard_timezone_key(tz)
     normalized_days = max(1, min(int(days or 30), 180))
     try:
         payload = _list_dashboard_balance_history(client, normalized_days)
@@ -3626,9 +3666,12 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
 
 
 @app.get("/api/dashboard/cost-rates")
-async def list_cost_rates(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
+async def list_cost_rates(start: str = None, end: str = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
     """List stored cost rates (өртөг ханш) within an optional date range."""
     client = get_supabase()
+    tz_key = _dashboard_timezone_key(tz)
+    start = _dashboard_local_day_from_value(start, tz_key)
+    end = _dashboard_local_day_from_value(end, tz_key)
     query = client.table("cost_rates").select("*")
     if start:
         query = query.gte("rate_date", start)
@@ -3671,14 +3714,17 @@ async def upsert_cost_rate(payload: dict, auth=Depends(get_dashboard_auth)):
 
 
 @app.get("/api/dashboard/plane-ticket-sales")
-async def list_plane_ticket_sales(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
+async def list_plane_ticket_sales(start: str = None, end: str = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
     """List manual plane-ticket sales for the selected window."""
+    tz_key = _dashboard_timezone_key(tz)
     client = get_supabase()
     query = client.table("plane_ticket_sales").select("*")
-    if start:
-        query = query.gte("sale_date", start[:10])
-    if end:
-        query = query.lte("sale_date", end[:10])
+    start_day = _dashboard_local_day_from_value(start, tz_key)
+    end_day = _dashboard_local_day_from_value(end, tz_key)
+    if start_day:
+        query = query.gte("sale_date", start_day)
+    if end_day:
+        query = query.lte("sale_date", end_day)
     try:
         rows = query.order("sale_date", desc=True).order("created_at", desc=True).execute().data or []
     except Exception as exc:
@@ -3723,7 +3769,7 @@ async def delete_plane_ticket_sale(sale_id: str, auth=Depends(get_dashboard_auth
 
 
 @app.get("/api/dashboard/profit")
-async def dashboard_profit(start: str = None, end: str = None, auth=Depends(get_dashboard_auth)):
+async def dashboard_profit(start: str = None, end: str = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
     """Profit over a period, joining each transaction's date to its cost rate.
 
     Direction comes from each transaction's currency_from/currency_to:
