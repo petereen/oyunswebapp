@@ -13,7 +13,7 @@ import {
   createBalanceAdjustment, createPlaneTicketSale, createTreasuryAccount,
   deleteBalanceAdjustment, deletePlaneTicketSale, deleteTreasuryAccount,
   fetchBalanceHistory, fetchBalanceSummary, fetchBlackRates, fetchCostRates, fetchPlaneTicketSales,
-  fetchProfit, fetchRates, saveCostRate, updateTreasuryAccount,
+  fetchProfit, saveCostRate, updateTreasuryAccount,
   upsertBalanceDaily,
 } from "../api";
 
@@ -1295,6 +1295,7 @@ function ProfitCard({ label, value, accent, big, sub }: { label: string; value: 
 function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; end?: string }; onSaved: () => void }) {
   const [saleDate, setSaleDate] = useState(todayIso());
   const [soldPrice, setSoldPrice] = useState("");
+  const [exchangeRate, setExchangeRate] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1304,12 +1305,6 @@ function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; 
     queryKey: ["dashboard-plane-ticket-sales", range.start, range.end],
     queryFn: () => fetchPlaneTicketSales({ start: range.start, end: range.end }),
     staleTime: 30_000,
-  });
-
-  const ratesQ = useQuery({
-    queryKey: ["rates"],
-    queryFn: () => fetchRates(),
-    staleTime: 60_000,
   });
 
   const costPreviewQ = useQuery({
@@ -1323,21 +1318,23 @@ function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; 
     [costPreviewQ.data],
   );
 
-  const currentExchangeRate = ratesQ.data?.sell_rate ?? null;
   const costRatePreview = costRateRow?.cost_rate ?? null;
   const soldPriceValue = Number(soldPrice);
-  const rubPreview = soldPriceValue > 0 && currentExchangeRate ? soldPriceValue / currentExchangeRate : null;
-  const profitPreview = rubPreview != null && currentExchangeRate != null && costRatePreview != null
-    ? (currentExchangeRate - costRatePreview) * rubPreview
+  const exchangeRateValue = Number(exchangeRate);
+  const manualExchangeRate = exchangeRateValue > 0 ? exchangeRateValue : null;
+  const rubPreview = soldPriceValue > 0 && manualExchangeRate ? soldPriceValue / manualExchangeRate : null;
+  const profitPreview = rubPreview != null && manualExchangeRate != null && costRatePreview != null
+    ? (manualExchangeRate - costRatePreview) * rubPreview
     : null;
 
   const save = async () => {
-    if (!(soldPriceValue > 0)) return;
+    if (!(soldPriceValue > 0) || !(exchangeRateValue > 0)) return;
     setSaving(true);
     setMessage(null);
     try {
-      await createPlaneTicketSale({ sale_date: saleDate, sold_price_mnt: soldPriceValue, notes });
+      await createPlaneTicketSale({ sale_date: saleDate, sold_price_mnt: soldPriceValue, exchange_rate: exchangeRateValue, notes });
       setSoldPrice("");
+      setExchangeRate("");
       setNotes("");
       await salesQ.refetch();
       onSaved();
@@ -1362,7 +1359,7 @@ function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; 
   };
 
   const summary = salesQ.data?.summary;
-  const canSave = soldPriceValue > 0 && currentExchangeRate != null && costRatePreview != null && !saving;
+  const canSave = soldPriceValue > 0 && manualExchangeRate != null && costRatePreview != null && !saving;
 
   return (
     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700 space-y-4">
@@ -1372,19 +1369,18 @@ function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; 
       </div>
 
       <p className="text-[11px] text-slate-500 dark:text-ivory-400 leading-relaxed bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3">
-        Зөвхөн <b>зарагдсан үнийг</b> оруулна. Систем одоогийн төг→руб ханш болон тухайн өдрийн өртөг ханшийг ашиглаад руб дүн, ашгийг автоматаар тооцно.
+        Админ <b>зарагдсан үнэ</b>, <b>ханш</b>, <b>тайлбар</b> оруулна. <b>Ханшийг гараар заавал оруулна.</b> Систем тухайн оруулсан ханш болон өртөг ханшийг ашиглаад руб дүн, ашгийг автоматаар тооцно.
       </p>
 
-      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         <ProfitCard label="Тийзийн мөр" value={fmtNum(summary?.count)} />
         <ProfitCard label="Нийт зарагдсан үнэ" value={fmtMnt(summary?.total_sold_price_mnt)} />
         <ProfitCard label="Тийзийн ашиг" value={fmtMnt(summary?.total_profit)} />
-        <ProfitCard label="Current exchange rate" value={currentExchangeRate == null ? "—" : fmtRate(currentExchangeRate)} />
         <ProfitCard label="Өртөг ханш" value={costRatePreview == null ? "—" : fmtRate(costRatePreview)} sub={costRateRow && costRateRow.rate_date !== saleDate ? `${costRateRow.rate_date}-ны ханш ашиглаж байна` : undefined} />
       </div>
 
       <div className="rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-[180px_220px_minmax(0,1fr)_auto] gap-2 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-[180px_220px_180px_minmax(0,1fr)_auto] gap-2 items-end">
           <label>
             <div className="text-[10px] text-slate-400 mb-1">Огноо</div>
             <input type="date" className={INPUT_CLASS} value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
@@ -1392,6 +1388,10 @@ function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; 
           <label>
             <div className="text-[10px] text-slate-400 mb-1">Зарагдсан үнэ (₮)</div>
             <input type="number" className={`${INPUT_CLASS} text-right`} placeholder="0" value={soldPrice} onChange={(e) => setSoldPrice(e.target.value)} />
+          </label>
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Ханш</div>
+            <input type="number" min="0.0001" step="0.0001" className={`${INPUT_CLASS} text-right`} placeholder="0.0000" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} />
           </label>
           <label>
             <div className="text-[10px] text-slate-400 mb-1">Тайлбар</div>
@@ -1407,7 +1407,7 @@ function PlaneTicketSalesManager({ range, onSaved }: { range: { start?: string; 
         </div>
 
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <BalanceStat label="Exchange rate" value={currentExchangeRate == null ? "—" : fmtRate(currentExchangeRate)} />
+          <BalanceStat label="Оруулсан ханш" value={manualExchangeRate == null ? "—" : fmtRate(manualExchangeRate)} />
           <BalanceStat label="Өртөг ханш" value={costRatePreview == null ? "—" : fmtRate(costRatePreview)} />
           <BalanceStat label="Руб дүн" value={rubPreview == null ? "—" : fmtRub(rubPreview)} />
           <BalanceStat label="Тооцоолсон ашиг" value={profitPreview == null ? "—" : fmtMnt(profitPreview)} tone={profitPreview != null && profitPreview < 0 ? "neg" : "pos"} />
@@ -1465,7 +1465,7 @@ function PlaneTicketSalesList({
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Metric label="Зарагдсан үнэ" value={fmtMnt(sale.sold_price_mnt)} />
-              <Metric label="Exchange rate" value={fmtRate(sale.exchange_rate)} />
+              <Metric label="Ханш" value={fmtRate(sale.exchange_rate)} />
               <Metric label="Өртөг ханш" value={fmtRate(sale.cost_rate)} />
               <Metric label="Руб дүн" value={fmtRub(sale.rub_equivalent)} />
               <Metric label="Ашиг" value={fmtMnt(sale.profit_mnt)} />
@@ -1481,7 +1481,7 @@ function PlaneTicketSalesList({
             <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
               <th className="py-2 pr-2 font-medium">Огноо</th>
               <th className="py-2 px-2 font-medium text-right">Зарагдсан үнэ</th>
-              <th className="py-2 px-2 font-medium text-right">Exchange rate</th>
+              <th className="py-2 px-2 font-medium text-right">Ханш</th>
               <th className="py-2 px-2 font-medium text-right">Өртөг ханш</th>
               <th className="py-2 px-2 font-medium text-right">Руб дүн</th>
               <th className="py-2 px-2 font-medium text-right">Ашиг</th>

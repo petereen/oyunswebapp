@@ -3289,10 +3289,19 @@ def _plane_ticket_sale_row(client, payload: dict) -> dict:
     if sold_price_mnt <= 0:
         raise HTTPException(status_code=400, detail="sold_price_mnt must be greater than 0")
 
-    _, latest_sell_rate = _load_latest_rates(client)
-    exchange_rate = float(latest_sell_rate or 0)
+    raw_exchange_rate = payload.get("exchange_rate")
+    if raw_exchange_rate in (None, ""):
+        raw_exchange_rate = payload.get("rate")
+
+    if raw_exchange_rate in (None, ""):
+        raise HTTPException(status_code=400, detail="exchange_rate is required")
+
+    try:
+        exchange_rate = float(raw_exchange_rate)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="exchange_rate must be a number")
     if exchange_rate <= 0:
-        raise HTTPException(status_code=400, detail="Current sell rate is not configured")
+        raise HTTPException(status_code=400, detail="exchange_rate must be greater than 0")
 
     cost_rate = _cost_rate_for_day(client, sale_date)
     if cost_rate is None or cost_rate <= 0:
@@ -3689,7 +3698,7 @@ async def list_plane_ticket_sales(start: str = None, end: str = None, auth=Depen
 
 @app.post("/api/dashboard/plane-ticket-sales")
 async def create_plane_ticket_sale(payload: dict, auth=Depends(get_dashboard_auth)):
-    """Create a manual plane-ticket sale row with computed rate snapshots."""
+    """Create a manual plane-ticket sale row with a required manual exchange rate."""
     client = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
     row = _plane_ticket_sale_row(client, payload)

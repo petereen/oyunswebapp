@@ -1995,6 +1995,7 @@ export async function fetchPlaneTicketSales(params: { start?: string; end?: stri
 export async function createPlaneTicketSale(payload: {
   sale_date?: string;
   sold_price_mnt: number;
+  exchange_rate: number;
   notes?: string;
 }): Promise<PlaneTicketSale> {
   const res = await dashboardApi.post("/dashboard/plane-ticket-sales", payload);
