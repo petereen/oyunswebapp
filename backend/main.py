@@ -397,6 +397,29 @@ def _derive_waiting_edit_base_rate(
     return base_rate.quantize(Decimal("0.01"))
 
 
+def _is_sell_direction_locked_for_reverification(client, user_id: int) -> bool:
+    """Return True when a previously verified user is awaiting bank re-verification."""
+    try:
+        user_res = (
+            client.table("users")
+            .select("verified,ready_for_verification,verification_level")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not user_res.data:
+            return False
+
+        row = user_res.data[0]
+        verified = row.get("verified")
+        ready_for_verification = bool(row.get("ready_for_verification"))
+        verification_level = _safe_int(row.get("verification_level"), 0)
+        return verified is False and ready_for_verification and verification_level >= 2
+    except Exception as e:
+        logger.warning(f"Failed to determine sell-direction lock for user {user_id}: {e}")
+        return False
+
+
 def _get_user_lang(user_id: int) -> str:
     """Get user's language preference from DB. Returns 'mn' by default."""
     try:
@@ -4880,6 +4903,12 @@ async def create_exchange(
     if direction not in {"buy", "sell"}:
         raise HTTPException(status_code=400, detail="Invalid direction")
 
+    if direction == "sell" and _is_sell_direction_locked_for_reverification(client, user.id):
+        raise HTTPException(
+            status_code=400,
+            detail="MNT->RUB is temporarily unavailable until your bank edit is verified by admin",
+        )
+
     # Always calculate effective rate on backend to keep pricing rules authoritative.
     buy_rate, sell_rate = _load_latest_rates(client)
     base_rate = buy_rate if direction == "buy" else sell_rate
@@ -5164,6 +5193,12 @@ async def resubmit_exchange(
         raise HTTPException(status_code=400, detail="Transaction cannot be resubmitted")
 
     direction = "buy" if (trx.get("currency_from") or "").upper() == "RUB" else "sell"
+    if direction == "sell" and _is_sell_direction_locked_for_reverification(client, user.id):
+        raise HTTPException(
+            status_code=400,
+            detail="MNT->RUB is temporarily unavailable until your bank edit is verified by admin",
+        )
+
     stored_rate = _to_decimal(trx.get("rate"))
     existing_promo_code = trx.get("promo_code")
     promo_discount = Decimal("0")
@@ -5936,7 +5971,17 @@ async def admin_kyc_action(
         # Generate one-time welcome promo code ONLY if user has BOTH bank_rub AND bank_mnt filled
         promo_code = None
         try:
-            if has_all_bank_info:
+            existing_welcome_res = (
+                client.table("promo_codes")
+                .select("id", count="exact")
+                .eq("user_id", payload.user_id)
+                .eq("source", "verification")
+                .limit(1)
+                .execute()
+            )
+            has_existing_welcome = (existing_welcome_res.count or 0) > 0
+
+            if has_all_bank_info and not has_existing_welcome:
                 import secrets
                 import string
                 # Generate unique promo code
@@ -5952,6 +5997,8 @@ async def admin_kyc_action(
                 }
                 client.table("promo_codes").insert(promo_payload).execute()
                 logger.info(f"Generated welcome promo code {promo_code} for user {payload.user_id} (has all bank info)")
+            elif has_existing_welcome:
+                logger.info(f"Skipped welcome promo for user {payload.user_id} - already granted before")
             else:
                 logger.info(f"No promo code generated for user {payload.user_id} - missing bank info (RUB: {has_russian_bank}, MNT: {has_mongolian_bank})")
         except Exception as promo_err:

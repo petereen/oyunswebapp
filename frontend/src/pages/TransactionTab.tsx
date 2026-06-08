@@ -69,6 +69,9 @@ export function TransactionTab({
   const savedBankRub = userProfile?.bank_rub;
   const savedBankMnt = userProfile?.bank_mnt;
   const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
+  const isSellLockedForReverification = userProfile?.verified === false
+    && Boolean(userProfile?.ready_for_verification)
+    && verificationLevel >= 2;
 
   // Flow states: "card" | "promo" | "adminBank" | "receipt" | "receivingBank" | "success"
   const [flowStep, setFlowStep] = useState<string>("card");
@@ -268,6 +271,10 @@ export function TransactionTab({
   };
 
   const handleProceed = (dir: "buy" | "sell", amt: number, rt: number) => {
+    if (dir === "sell" && isSellLockedForReverification) {
+      setError(t("txn.sell_locked_reverification"));
+      return;
+    }
     if (dir === "sell" && !hasRubBank) {
       setShowRubBankWarning(true);
       return;

@@ -156,6 +156,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "txn.edit_title": { ru: "Исправить и отправить заново", mn: "Засаад дахин илгээх" },
   "txn.edit_invoice_label": { ru: "Invoice:", mn: "Invoice:" },
   "txn.edit_amount_label": { ru: "Сумма ({currency})", mn: "Дүн ({currency})" },
+  "txn.sell_locked_reverification": { ru: "MNT→RUB временно недоступно: дождитесь проверки изменённых банковских данных админом", mn: "MNT→RUB түр хаалттай: өөрчилсөн банкны мэдээллээ админаар баталгаажуулахыг хүлээнэ үү" },
   "txn.fill_all_edit_fields": { ru: "Заполните сумму, реквизиты и загрузите чек", mn: "Дүн, дансны мэдээллээ бөглөж баримтаа оруулна уу" },
   "txn.edit_resubmit": { ru: "Сохранить и отправить заново", mn: "Хадгалаад дахин илгээх" },
   "txn.edit_resubmit_error": { ru: "Не удалось отправить исправленную заявку", mn: "Зассан хүсэлтийг илгээж чадсангүй" },
