@@ -85,6 +85,7 @@ class ExchangeCreateRequest(BaseModel):
     receipt_path: Optional[str] = None
     receipt_paths: Optional[list[str]] = None  # Multiple receipt images
     invoice: Optional[str] = None
+    admin_bank_id: Optional[str] = None
 
 
 class ExchangeCreateResponse(BaseModel):
@@ -102,6 +103,7 @@ class ExchangeResubmitRequest(BaseModel):
     bank_details: str
     receipt_path: Optional[str] = None
     receipt_paths: Optional[list[str]] = None
+    admin_bank_id: Optional[str] = None
 
 
 class ExchangeEditableResponse(BaseModel):

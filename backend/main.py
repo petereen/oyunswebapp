@@ -2546,7 +2546,7 @@ def _dashboard_latest_prior_balance_rows(client, admin_ids: list[int], day: str)
     return latest
 
 
-def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], tz_key: str = "moscow") -> dict[int, dict[str, float]]:
+def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], tz_key: str = "moscow") -> dict:
     if not admin_ids:
         return {}
     start_iso, end_iso, _ = _dashboard_day_bounds(day, tz_key)
@@ -2556,7 +2556,7 @@ def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], 
     while offset < 20000:
         query = (
             client.table("transactions")
-            .select("amount,currency_from,rate,status,completed_by_admin,timestamp")
+            .select("amount,currency_from,rate,status,completed_by_admin,timestamp,admin_bank_id")
             .gte("timestamp", start_iso)
             .lt("timestamp", end_iso)
             .order("timestamp", desc=False)
@@ -2584,14 +2584,30 @@ def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], 
         admin_id = int(raw_admin_id)
         if admin_id not in totals:
             continue
+        admin_bank_id = str(row.get("admin_bank_id")) if row.get("admin_bank_id") else None
+        if admin_bank_id and admin_bank_id not in totals:
+            totals[admin_bank_id] = {"rub_to_mnt_rub": 0.0, "mnt_to_rub_rub": 0.0}
+
+        unassigned_key = f"unassigned_{admin_id}"
+        if not admin_bank_id and unassigned_key not in totals:
+            totals[unassigned_key] = {"rub_to_mnt_rub": 0.0, "mnt_to_rub_rub": 0.0}
+
         amount = float(row.get("amount") or 0)
         rate = float(row.get("rate") or 0)
         currency_from = (row.get("currency_from") or "").upper()
         rub_equivalent = _txn_rub_equivalent(amount, currency_from, rate)
         if currency_from == "RUB":
             totals[admin_id]["rub_to_mnt_rub"] += rub_equivalent
+            if admin_bank_id:
+                totals[admin_bank_id]["rub_to_mnt_rub"] += rub_equivalent
+            else:
+                totals[unassigned_key]["rub_to_mnt_rub"] += rub_equivalent
         else:
             totals[admin_id]["mnt_to_rub_rub"] += rub_equivalent
+            if admin_bank_id:
+                totals[admin_bank_id]["mnt_to_rub_rub"] += rub_equivalent
+            else:
+                totals[unassigned_key]["mnt_to_rub_rub"] += rub_equivalent
     return totals
 
 
@@ -2679,35 +2695,38 @@ def _account_adjustment_totals(accounts: list[dict], adjustment_data: dict) -> d
     return by_account_totals
 
 
-def _account_transaction_totals(accounts: list[dict], txn_totals_by_admin: dict[int, dict[str, float]]) -> dict[str, dict[str, float]]:
-    """Map each admin's daily transaction totals onto a single account row.
-
-    Transactions only record `completed_by_admin`, not a treasury-account ID. To
-    keep account totals deterministic without double-counting when one admin has
-    multiple treasury accounts, the first account for that admin (by
-    display_order) receives the admin's daily totals and the rest receive zero.
+def _account_transaction_totals(accounts: list[dict], txn_totals_by_admin: dict) -> dict[str, dict[str, float]]:
+    """Map explicit bank transaction totals onto specific account rows, and
+    dump historical unassigned transactions onto the admin's first listed account.
     """
     assigned_admins: set[int] = set()
     totals_by_account: dict[str, dict[str, float]] = {}
+    
     for account in accounts:
         account_id = str(account["id"])
         raw_admin_id = account.get("admin_id")
-        if raw_admin_id is None:
-            totals_by_account[account_id] = {"rub_to_mnt": 0.0, "mnt_to_rub": 0.0}
-            continue
+        
+        # 1. Start with any explicitly assigned amounts
+        acct_txns = txn_totals_by_admin.get(account_id, {"rub_to_mnt_rub": 0.0, "mnt_to_rub_rub": 0.0})
+        rub_to_mnt = float(acct_txns.get("rub_to_mnt_rub") or 0)
+        mnt_to_rub = float(acct_txns.get("mnt_to_rub_rub") or 0)
 
-        admin_id = int(raw_admin_id)
-        if admin_id in assigned_admins:
-            totals_by_account[account_id] = {"rub_to_mnt": 0.0, "mnt_to_rub": 0.0}
-            continue
+        # 2. Add unassigned amounts IF this is the admin's first account
+        if raw_admin_id is not None:
+            admin_id = int(raw_admin_id)
+            if admin_id not in assigned_admins:
+                assigned_admins.add(admin_id)
+                unassigned_key = f"unassigned_{admin_id}"
+                unassigned_txns = txn_totals_by_admin.get(unassigned_key, {"rub_to_mnt_rub": 0.0, "mnt_to_rub_rub": 0.0})
+                rub_to_mnt += float(unassigned_txns.get("rub_to_mnt_rub") or 0)
+                mnt_to_rub += float(unassigned_txns.get("mnt_to_rub_rub") or 0)
 
-        assigned_admins.add(admin_id)
-        admin_totals = txn_totals_by_admin.get(admin_id, {})
         baseline_rub_to_mnt = float(account.get("baseline_rub_to_mnt") or 0)
         baseline_mnt_to_rub = float(account.get("baseline_mnt_to_rub") or 0)
+        
         totals_by_account[account_id] = {
-            "rub_to_mnt": max(float(admin_totals.get("rub_to_mnt_rub") or 0) - baseline_rub_to_mnt, 0.0),
-            "mnt_to_rub": max(float(admin_totals.get("mnt_to_rub_rub") or 0) - baseline_mnt_to_rub, 0.0),
+            "rub_to_mnt": max(rub_to_mnt - baseline_rub_to_mnt, 0.0),
+            "mnt_to_rub": max(mnt_to_rub - baseline_mnt_to_rub, 0.0),
         }
     return totals_by_account
 
@@ -5054,6 +5073,7 @@ async def create_exchange(
         "receipt_id": receipt_id_value,
         "promo_code": applied_promo_code,
         "bank_details": payload.bank_details,
+        "admin_bank_id": payload.admin_bank_id,
         "receipt_submitted_at": now.isoformat() if receipt_paths_list else None,
     }
 
@@ -5295,6 +5315,7 @@ async def resubmit_exchange(
         "amount": str(payload.amount),
         "rate": str(effective_rate),
         "bank_details": payload.bank_details,
+        "admin_bank_id": payload.admin_bank_id,
         "bill_url": bill_url_value,
         "receipt_id": receipt_id_value,
         "promo_code": resolved_promo_code,

@@ -309,7 +309,7 @@ export type ExchangeCreateInput = {
   receipt_path?: string;
   receipt_paths?: string[]; // Multiple receipt images
   invoice?: string;
-  admin_bank_id?: number;
+  admin_bank_id?: string;
 };
 
 export type PhoneTopupCreateInput = {
@@ -320,7 +320,7 @@ export type PhoneTopupCreateInput = {
   receipt_path?: string;
   receipt_paths?: string[];
   invoice?: string;
-  admin_bank_id?: number;
+  admin_bank_id?: string;
 };
 
 export type ExchangeCreateResponse = {
