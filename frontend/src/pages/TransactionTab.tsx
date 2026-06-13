@@ -392,7 +392,7 @@ export function TransactionTab({
         receipt_path: receiptUrls[0],
         receipt_paths: receiptUrls,
         promo_code: promoValid && !isVolumeDiscountApplied ? promoCode : undefined,
-        admin_bank_id: selectedAdminBank?.id != null ? Number(selectedAdminBank.id) : undefined,
+        admin_bank_id: selectedAdminBank?.id != null ? String(selectedAdminBank.id) : undefined,
         invoice: invoiceId,
       };
       const res = await createExchange(payload);

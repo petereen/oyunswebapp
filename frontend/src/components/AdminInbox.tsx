@@ -1268,6 +1268,12 @@ export function AdminInbox() {
                     )}
                   </div>
                 ))}
+                {item.admin_bank_name && (
+                  <div className="p-2.5 bg-blue-50/50 rounded-lg border border-blue-100 flex items-center justify-between">
+                    <span className="text-xs text-blue-600/70 uppercase tracking-wider font-semibold">Хүлээн авсан данс</span>
+                    <span className="text-sm font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded">{item.admin_bank_name}</span>
+                  </div>
+                )}
 
                 {/* Actions for Pending - Pre-approve or Reject */}
                 {item.status === "pending" && (

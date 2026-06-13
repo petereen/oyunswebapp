@@ -250,6 +250,12 @@ export function AdminHistory() {
                       <div className="font-mono text-xs p-2 rounded mt-1 break-all bg-slate-50">
                         {item.bank_details || "—"}
                       </div>
+                      {item.admin_bank_name && (
+                        <div className="mt-2 text-xs">
+                          <span className="text-slate-500 mr-2">Хүлээн авсан данс:</span>
+                          <span className="font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{item.admin_bank_name}</span>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <span className="text-slate-500">Валют:</span>

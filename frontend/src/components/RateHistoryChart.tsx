@@ -89,7 +89,7 @@ export function RateHistoryChart() {
             <YAxis tick={{ fontSize: 10 }} domain={["auto", "auto"]} width={35} />
             <Tooltip
               contentStyle={{ borderRadius: 12, fontSize: 12, border: "1px solid #e2e8f0" }}
-              formatter={(value: number, name: string) => [
+              formatter={(value: any, name: any) => [
                 `${value} ₮`,
                 name === "buy" ? t("chart.tooltip_buy") : t("chart.tooltip_sell"),
               ]}

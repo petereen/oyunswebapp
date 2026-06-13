@@ -2,22 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle, XCircle, Bug } from "lucide-react";
 
 // Extend Window interface for Telegram WebApp
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initData: string;
-        initDataUnsafe?: {
-          user?: {
-            id: number;
-            first_name?: string;
-            username?: string;
-          };
-        };
-      };
-    };
-  }
-}
+
 
 interface DiagnosticInfo {
   telegramAvailable: boolean;

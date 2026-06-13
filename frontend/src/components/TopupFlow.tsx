@@ -165,7 +165,7 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
         receipt_path: receiptUrls[0],
         receipt_paths: receiptUrls,
         invoice: invoiceId,
-        admin_bank_id: Number(selectedBank.id),
+        admin_bank_id: selectedBank?.id != null ? String(selectedBank.id) : undefined,
       });
       setSuccessInvoice(response.invoice);
       setStep(4);

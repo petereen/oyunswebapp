@@ -85,6 +85,7 @@ class ExchangeCreateRequest(BaseModel):
     receipt_path: Optional[str] = None
     receipt_paths: Optional[list[str]] = None  # Multiple receipt images
     invoice: Optional[str] = None
+    admin_bank_id: Optional[str] = None
 
 
 class ExchangeCreateResponse(BaseModel):
@@ -102,6 +103,7 @@ class ExchangeResubmitRequest(BaseModel):
     bank_details: str
     receipt_path: Optional[str] = None
     receipt_paths: Optional[list[str]] = None
+    admin_bank_id: Optional[str] = None
 
 
 class ExchangeEditableResponse(BaseModel):
@@ -209,6 +211,8 @@ class AdminInboxItem(BaseModel):
     saved_bank_info: Optional[str] = None  # User's saved bank info for comparison
     admin_label: Optional[str] = None  # Admin label for user (e.g. Тэмдэглэл, Сэжигтэй)
     admin_label_note: Optional[str] = None  # Admin note for the label
+    admin_bank_id: Optional[str] = None
+    admin_bank_name: Optional[str] = None
 
 
 class UserLabelUpdateRequest(BaseModel):
@@ -501,6 +505,8 @@ class AdminHistoryItem(BaseModel):
     rejection_comment: Optional[str] = None
     direction: Optional[str] = None
     completed_by_admin: Optional[int] = None
+    admin_bank_id: Optional[str] = None
+    admin_bank_name: Optional[str] = None
 
 
 class AdminHistoryResponse(BaseModel):
