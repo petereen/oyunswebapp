@@ -2427,11 +2427,44 @@ def _optional_float(value, field_name: str) -> float | None:
         raise HTTPException(status_code=400, detail=f"{field_name} must be a number")
 
 
+_TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED: bool | None = None
+
+
 def _normalize_balance_tag(value) -> str:
     tag = str(value or "").strip()
     if not tag:
         raise HTTPException(status_code=400, detail="tag is required")
     return tag[:80]
+
+def _is_missing_admin_bank_id_error(exc: Exception) -> bool:
+    lowered = str(exc).lower()
+    return (
+        "admin_bank_id" in lowered
+        and any(token in lowered for token in (
+            "schema cache",
+            "could not find the",
+            "column",
+            "does not exist",
+            "pgrst",
+        ))
+    )
+
+def _transactions_admin_bank_id_supported(client) -> bool:
+    global _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED
+    if _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED is not None:
+        return _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED
+    try:
+        client.table("transactions").select("admin_bank_id").limit(1).execute()
+        _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED = True
+    except Exception as exc:
+        if not _is_missing_admin_bank_id_error(exc):
+            raise
+        logger.warning(
+            "transactions.admin_bank_id is unavailable; falling back to legacy transaction flow: %s",
+            exc,
+        )
+        _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED = False
+    return _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED
 
 
 def _dashboard_balance_setup_detail(exc: Exception) -> str | None:
@@ -2556,13 +2589,17 @@ def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], 
     if not admin_ids:
         return {}
     start_iso, end_iso, _ = _dashboard_day_bounds(day, tz_key)
+    admin_bank_supported = _transactions_admin_bank_id_supported(client)
     rows: list[dict] = []
     page = 1000
     offset = 0
     while offset < 20000:
+        select_fields = "amount,currency_from,rate,status,completed_by_admin,timestamp"
+        if admin_bank_supported:
+            select_fields += ",admin_bank_id"
         query = (
             client.table("transactions")
-            .select("amount,currency_from,rate,status,completed_by_admin,timestamp,admin_bank_id")
+            .select(select_fields)
             .gte("timestamp", start_iso)
             .lt("timestamp", end_iso)
             .order("timestamp", desc=False)
@@ -4951,6 +4988,7 @@ async def create_exchange(
 
     client = get_supabase()
     _require_service_open(client)
+    admin_bank_supported = _transactions_admin_bank_id_supported(client)
 
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz)
@@ -5079,9 +5117,10 @@ async def create_exchange(
         "receipt_id": receipt_id_value,
         "promo_code": applied_promo_code,
         "bank_details": payload.bank_details,
-        "admin_bank_id": payload.admin_bank_id,
         "receipt_submitted_at": now.isoformat() if receipt_paths_list else None,
     }
+    if admin_bank_supported and payload.admin_bank_id:
+        insert_payload["admin_bank_id"] = payload.admin_bank_id
 
     # snapshot buy/sell side
     if direction == "buy":
@@ -5307,6 +5346,7 @@ async def resubmit_exchange(
 
     bill_url_value = json.dumps(receipt_paths_list) if receipt_paths_list else None
     receipt_id_value = receipt_paths_list[0] if receipt_paths_list else None
+    admin_bank_supported = _transactions_admin_bank_id_supported(client)
 
     total_paused_seconds = _to_decimal(trx.get("total_paused_seconds"), Decimal("0"))
     paused_at_raw = trx.get("timer_paused_at")
@@ -5321,7 +5361,6 @@ async def resubmit_exchange(
         "amount": str(payload.amount),
         "rate": str(effective_rate),
         "bank_details": payload.bank_details,
-        "admin_bank_id": payload.admin_bank_id,
         "bill_url": bill_url_value,
         "receipt_id": receipt_id_value,
         "promo_code": resolved_promo_code,
@@ -5337,6 +5376,8 @@ async def resubmit_exchange(
         "timer_paused_at": None,
         "total_paused_seconds": float(total_paused_seconds),
     }
+    if admin_bank_supported and payload.admin_bank_id:
+        update_payload["admin_bank_id"] = payload.admin_bank_id
 
     if direction == "buy":
         update_payload["buy_rate"] = str(effective_rate)
@@ -5736,9 +5777,13 @@ async def admin_action(
 @app.get("/api/admin/inbox", response_model=AdminInboxResponse)
 async def admin_inbox(admin=Depends(require_admin)):
     client = get_supabase()
+    admin_bank_supported = _transactions_admin_bank_id_supported(client)
+    select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment"
+    if admin_bank_supported:
+        select_fields += ",admin_bank_id"
     res = (
         client.table("transactions")
-        .select("invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,admin_bank_id")
+        .select(select_fields)
         .in_("status", ["pending", "approved"])
         .order("timestamp", desc=False)  # Oldest first by default
         .limit(100)
@@ -5762,9 +5807,10 @@ async def admin_inbox(admin=Depends(require_admin)):
     
     # Fetch admin bank accounts for name resolution
     admin_banks = {}
-    banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
-    for b in banks_res.data or []:
-        admin_banks[str(b.get("id"))] = b.get("bank_name")
+    if admin_bank_supported:
+        banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
+        for b in banks_res.data or []:
+            admin_banks[str(b.get("id"))] = b.get("bank_name")
         
     items = []
     for row in res.data or []:
@@ -5841,7 +5887,7 @@ async def admin_inbox(admin=Depends(require_admin)):
             saved_bank_info=saved_bank_info,
             admin_label=user_label,
             admin_label_note=user_label_note,
-            admin_bank_id=row.get("admin_bank_id"),
+            admin_bank_id=str(row.get("admin_bank_id")) if row.get("admin_bank_id") else None,
             admin_bank_name=admin_banks.get(str(row.get("admin_bank_id"))) if row.get("admin_bank_id") else None,
         ))
     return AdminInboxResponse(items=items)
@@ -5880,12 +5926,13 @@ async def admin_history(
 ):
     """Get all transactions with filters for admin history view."""
     client = get_supabase()
+    admin_bank_supported = _transactions_admin_bank_id_supported(client)
     
     # Build query
-    query = client.table("transactions").select(
-        "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,completed_by_admin,admin_bank_id",
-        count="exact"
-    )
+    select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,completed_by_admin"
+    if admin_bank_supported:
+        select_fields += ",admin_bank_id"
+    query = client.table("transactions").select(select_fields, count="exact")
     
     # Apply status filter if provided
     if status and status != "all":
@@ -5909,9 +5956,10 @@ async def admin_history(
     
     # Fetch admin bank accounts for name resolution
     admin_banks = {}
-    banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
-    for b in banks_res.data or []:
-        admin_banks[str(b.get("id"))] = b.get("bank_name")
+    if admin_bank_supported:
+        banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
+        for b in banks_res.data or []:
+            admin_banks[str(b.get("id"))] = b.get("bank_name")
         
     items = []
     for row in res.data or []:
@@ -5951,7 +5999,7 @@ async def admin_history(
             rejection_comment=row.get("rejection_comment"),
             direction=direction,
             completed_by_admin=row.get("completed_by_admin"),
-            admin_bank_id=row.get("admin_bank_id"),
+            admin_bank_id=str(row.get("admin_bank_id")) if row.get("admin_bank_id") else None,
             admin_bank_name=admin_banks.get(str(row.get("admin_bank_id"))) if row.get("admin_bank_id") else None,
         ))
     
