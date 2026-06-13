@@ -488,7 +488,7 @@ export function OyunsSagsAdminPanel() {
   );
 
   const startEditGroup = (group: GroupFormState | TournamentGroup) => {
-    setEditingGroupId(group.id);
+    setEditingGroupId(group.id as string);
     setEditingGroup({
       id: group.id,
       category: group.category,

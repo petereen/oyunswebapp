@@ -1850,6 +1850,12 @@ async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
     # Filter to only pending/approved or recently (within 24h) completed/successful/rejected
     from datetime import datetime, timedelta
     now = datetime.now()
+    # Fetch admin bank accounts for name resolution
+    admin_banks = {}
+    banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
+    for b in banks_res.data or []:
+        admin_banks[str(b.get("id"))] = b.get("bank_name")
+        
     items = []
     for row in res.data or []:
         status = row.get("status")
@@ -5732,7 +5738,7 @@ async def admin_inbox(admin=Depends(require_admin)):
     client = get_supabase()
     res = (
         client.table("transactions")
-        .select("invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment")
+        .select("invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,admin_bank_id")
         .in_("status", ["pending", "approved"])
         .order("timestamp", desc=False)  # Oldest first by default
         .limit(100)
@@ -5754,6 +5760,12 @@ async def admin_inbox(admin=Depends(require_admin)):
                 "admin_label_note": user.get("admin_label_note"),
             }
     
+    # Fetch admin bank accounts for name resolution
+    admin_banks = {}
+    banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
+    for b in banks_res.data or []:
+        admin_banks[str(b.get("id"))] = b.get("bank_name")
+        
     items = []
     for row in res.data or []:
         # Determine direction from currency pair (case-insensitive)
@@ -5829,6 +5841,8 @@ async def admin_inbox(admin=Depends(require_admin)):
             saved_bank_info=saved_bank_info,
             admin_label=user_label,
             admin_label_note=user_label_note,
+            admin_bank_id=row.get("admin_bank_id"),
+            admin_bank_name=admin_banks.get(str(row.get("admin_bank_id"))) if row.get("admin_bank_id") else None,
         ))
     return AdminInboxResponse(items=items)
 
@@ -5869,7 +5883,7 @@ async def admin_history(
     
     # Build query
     query = client.table("transactions").select(
-        "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,completed_by_admin",
+        "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,completed_by_admin,admin_bank_id",
         count="exact"
     )
     
@@ -5893,6 +5907,12 @@ async def admin_history(
                 "bank_rub": u.get("bank_rub"),
             }
     
+    # Fetch admin bank accounts for name resolution
+    admin_banks = {}
+    banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
+    for b in banks_res.data or []:
+        admin_banks[str(b.get("id"))] = b.get("bank_name")
+        
     items = []
     for row in res.data or []:
         direction = "buy" if (row.get("currency_from") or "").upper() == "RUB" else "sell"
@@ -5931,6 +5951,8 @@ async def admin_history(
             rejection_comment=row.get("rejection_comment"),
             direction=direction,
             completed_by_admin=row.get("completed_by_admin"),
+            admin_bank_id=row.get("admin_bank_id"),
+            admin_bank_name=admin_banks.get(str(row.get("admin_bank_id"))) if row.get("admin_bank_id") else None,
         ))
     
     return AdminHistoryResponse(items=items, total=res.count or len(items))

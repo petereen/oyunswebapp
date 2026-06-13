@@ -961,6 +961,8 @@ export interface AdminInboxItem {
   saved_bank_info?: string;
   admin_label?: string;
   admin_label_note?: string;
+  admin_bank_id?: string;
+  admin_bank_name?: string;
 }
 
 export interface AdminInboxResponse {
@@ -993,6 +995,8 @@ export interface AdminHistoryItem {
   rejection_comment?: string;
   direction?: string;
   completed_by_admin?: number;
+  admin_bank_id?: string;
+  admin_bank_name?: string;
 }
 
 export interface AdminHistoryResponse {
@@ -1027,6 +1031,8 @@ export async function adminAction(payload: {
   admin_comment?: string;
   admin_bill_url?: string;
   completed_by_admin?: number;
+  admin_bank_id?: string;
+  admin_bank_name?: string;
 }) {
   const res = await api.post('/admin/action', payload);
   return res.data;
