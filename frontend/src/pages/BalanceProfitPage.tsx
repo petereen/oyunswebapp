@@ -162,8 +162,20 @@ function accountAdjustmentTotal(account: Pick<TreasuryAccount, "adjustment_total
   return Number(account.adjustment_total ?? account.adjustment ?? 0) || 0;
 }
 
+function accountBalance(account: Pick<TreasuryAccount, "prev_balance" | "rub_to_mnt" | "mnt_to_rub">) {
+  return (Number(account.prev_balance) || 0)
+    + (Number(account.rub_to_mnt) || 0)
+    - (Number(account.mnt_to_rub) || 0);
+}
+
 function accountEnteredBalance(draft: Pick<AcctDraft, "entered_balance">) {
   return draft.entered_balance.trim() === "" ? null : (Number(draft.entered_balance) || 0);
+}
+
+function accountDifference(account: Pick<TreasuryAccount, "prev_balance" | "rub_to_mnt" | "mnt_to_rub">, draft: Pick<AcctDraft, "entered_balance">) {
+  const enteredBalance = accountEnteredBalance(draft);
+  if (enteredBalance == null) return null;
+  return accountBalance(account) - enteredBalance;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1011,12 +1023,21 @@ function TreasuryAccountsTable({
       <div className="grid gap-3 md:hidden">
         {accounts.map((account) => {
           const draft = draftOf(account);
+          const subtotal = accountBalance(account);
+          const difference = accountDifference(account, draft);
           return (
             <div key={account.id} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-[11px] text-slate-400">Данс</div>
                   <div className="font-semibold">{account.name}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] text-slate-400">Тооцоолсон дүн</div>
+                  <div className="font-bold tabular-nums text-maroon-600 dark:text-gold-400">{fmtRub(subtotal)}</div>
+                  <div className={`text-xs mt-1 tabular-nums ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-ivory-400"}`}>
+                    Зөрүү: {difference == null ? "—" : fmtRub(difference)}
+                  </div>
                 </div>
               </div>
 
@@ -1038,6 +1059,14 @@ function TreasuryAccountsTable({
                   <label>
                     <div className="text-[10px] text-slate-400 mb-1">Өмнөх баланс</div>
                     <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm text-right tabular-nums">{fmtRub(account.prev_balance)}</div>
+                  </label>
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Руб→төг</div>
+                    <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtRub(account.rub_to_mnt)}</div>
+                  </label>
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">Төг→руб</div>
+                    <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm text-right tabular-nums text-rose-600 dark:text-rose-400">{fmtRub(account.mnt_to_rub)}</div>
                   </label>
                   <label>
                     <div className="text-[10px] text-slate-400 mb-1">Бусад орлого/зарлага</div>
@@ -1083,14 +1112,20 @@ function TreasuryAccountsTable({
               <th className="py-2 pr-2 font-medium">Дансны нэр</th>
               <th className="py-2 px-2 font-medium">Админ</th>
               <th className="py-2 px-2 font-medium text-right">Өмнөх баланс (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Руб→төг (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Төг→руб (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Бусад орлого/зарлага (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Тооцоолсон дүн (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Оруулсан баланс (₽)</th>
+              <th className="py-2 px-2 font-medium text-right">Зөрүү (₽)</th>
               <th className="py-2 pl-2 font-medium text-right">Үйлдэл</th>
             </tr>
           </thead>
           <tbody>
             {accounts.map((account) => {
               const draft = draftOf(account);
+              const subtotal = accountBalance(account);
+              const difference = accountDifference(account, draft);
               return (
                 <tr key={account.id} className="border-b border-slate-100 dark:border-dark-700">
                   <td className="py-2 pr-2 min-w-[180px]">
@@ -1105,12 +1140,16 @@ function TreasuryAccountsTable({
                     </select>
                   </td>
                   <td className="py-2 px-2 text-right tabular-nums">{fmtRub(account.prev_balance)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{fmtRub(account.rub_to_mnt)}</td>
+                  <td className="py-2 px-2 text-right tabular-nums text-rose-600 dark:text-rose-400">{fmtRub(account.mnt_to_rub)}</td>
                   <td className="py-2 px-2 w-36">
                     <div className="rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 px-3 py-2 text-sm text-right tabular-nums">{fmtRub(accountAdjustmentTotal(account))}</div>
                   </td>
+                  <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(subtotal)}</td>
                   <td className="py-2 px-2 w-36">
                     <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.entered_balance} onChange={(e) => setDraft(account.id, { entered_balance: e.target.value })} placeholder="Бодит үлдэгдэл" />
                   </td>
+                  <td className={`py-2 px-2 text-right tabular-nums font-semibold ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>{difference == null ? "—" : fmtRub(difference)}</td>
                   <td className="py-2 pl-2">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
@@ -1135,7 +1174,7 @@ function TreasuryAccountsTable({
               );
             })}
             {accounts.length === 0 && (
-              <tr><td colSpan={6} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
+              <tr><td colSpan={10} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
             )}
           </tbody>
         </table>
