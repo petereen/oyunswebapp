@@ -8,12 +8,12 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
 import {
-  BalanceAdjustment, BalanceHistoryRow, BalanceSummary, CostRate, DailyBalanceRow, DashboardAdminOption,
+  AdminBankAccountFull, BalanceAdjustment, BalanceHistoryRow, BalanceSummary, CostRate, DailyBalanceRow, DashboardAdminOption,
   DashboardTimeZone,
   PlaneTicketSale, PlaneTicketSalesResponse, ProfitSummary, TreasuryAccount,
   createBalanceAdjustment, createPlaneTicketSale, createTreasuryAccount,
   deleteBalanceAdjustment, deletePlaneTicketSale, deleteTreasuryAccount,
-  fetchBalanceHistory, fetchBalanceSummary, fetchBlackRates, fetchCostRates, fetchPlaneTicketSales,
+  fetchBalanceHistory, fetchBalanceSummary, fetchBlackRates, fetchCostRates, fetchDashboardAdminBankAccounts, fetchPlaneTicketSales,
   fetchProfit, saveCostRate, updateTreasuryAccount,
   upsertBalanceDaily,
 } from "../api";
@@ -893,8 +893,16 @@ function BalanceAdjustmentsPanel({
 type AcctDraft = {
   name: string;
   admin_id: string;
+  admin_bank_id: string;
   entered_balance: string;
 };
+
+function formatAdminBankOption(bank: AdminBankAccountFull) {
+  const detail = bank.currency === "RUB"
+    ? (bank.card_number || bank.phone || bank.account_number || "")
+    : (bank.account_number || bank.card_number || "");
+  return [bank.bank_name, bank.owner_name, detail].filter(Boolean).join(" · ");
+}
 
 function TreasuryAccountsTable({
   accounts,
@@ -909,6 +917,11 @@ function TreasuryAccountsTable({
   selectedAdminId: number | null;
   onChanged: () => void;
 }) {
+  const adminBanksQ = useQuery({
+    queryKey: ["dashboard-admin-bank-accounts"],
+    queryFn: fetchDashboardAdminBankAccounts,
+    staleTime: 60_000,
+  });
   const [drafts, setDrafts] = useState<Record<string, AcctDraft>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -916,10 +929,13 @@ function TreasuryAccountsTable({
   const [newName, setNewName] = useState("");
   const [newBalance, setNewBalance] = useState("");
   const [newAdminId, setNewAdminId] = useState(selectedAdminId != null ? String(selectedAdminId) : "");
+  const [newAdminBankId, setNewAdminBankId] = useState("");
   const canAdd = selectedAdminId != null;
+  const adminBanks = adminBanksQ.data?.accounts || [];
 
   useEffect(() => {
     setNewAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
+    setNewAdminBankId("");
   }, [selectedAdminId]);
 
   useEffect(() => {
@@ -927,12 +943,22 @@ function TreasuryAccountsTable({
     setShowNewAccountForm(false);
     setNewName("");
     setNewBalance("");
+    setNewAdminBankId("");
   }, [canAdd]);
+
+  const availableBanksForAdmin = (adminIdValue: string, currentBankId?: string) => (
+    adminBanks.filter((bank) => {
+      if (!bank.is_active && bank.id !== currentBankId) return false;
+      if (!adminIdValue) return bank.id === currentBankId;
+      return bank.admin_id == null || String(bank.admin_id) === adminIdValue || bank.id === currentBankId;
+    })
+  );
 
   const draftOf = (account: TreasuryAccount): AcctDraft =>
     drafts[account.id] ?? {
       name: account.name,
       admin_id: account.admin_id != null ? String(account.admin_id) : "",
+      admin_bank_id: account.admin_bank_id != null ? String(account.admin_bank_id) : "",
       entered_balance: account.entered_balance != null ? String(account.entered_balance) : "",
     };
 
@@ -950,6 +976,7 @@ function TreasuryAccountsTable({
     if (!draft) return false;
     return draft.name !== account.name
       || Number(draft.admin_id || 0) !== Number(account.admin_id || 0)
+      || String(draft.admin_bank_id || "") !== String(account.admin_bank_id || "")
       || accountEnteredBalance(draft) !== (account.entered_balance ?? null);
   };
 
@@ -960,6 +987,7 @@ function TreasuryAccountsTable({
       await updateTreasuryAccount(account.id, {
         name: draft.name,
         admin_id: draft.admin_id ? Number(draft.admin_id) : null,
+        admin_bank_id: draft.admin_bank_id || null,
         entered_balance: accountEnteredBalance(draft),
         tz: dashboardTimeZone,
       });
@@ -992,6 +1020,7 @@ function TreasuryAccountsTable({
       await createTreasuryAccount({
         name: newName.trim(),
         admin_id: newAdminId ? Number(newAdminId) : null,
+        admin_bank_id: newAdminBankId || null,
         prev_balance: Number(newBalance) || 0,
         display_order: accounts.length,
         tz: dashboardTimeZone,
@@ -999,6 +1028,7 @@ function TreasuryAccountsTable({
       setNewName("");
       setNewBalance("");
       setNewAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
+      setNewAdminBankId("");
       setShowNewAccountForm(false);
       onChanged();
     } finally {
@@ -1013,6 +1043,7 @@ function TreasuryAccountsTable({
         setNewName("");
         setNewBalance("");
         setNewAdminId(selectedAdminId != null ? String(selectedAdminId) : "");
+        setNewAdminBankId("");
       }
       return next;
     });
@@ -1048,10 +1079,19 @@ function TreasuryAccountsTable({
                 </label>
                 <label>
                   <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
-                  <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value })}>
+                  <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value, admin_bank_id: "" })}>
                     <option value="">Хуваарилаагүй</option>
                     {admins.map((admin) => (
                       <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Холбосон банк</div>
+                  <select className={INPUT_CLASS} value={draft.admin_bank_id} onChange={(e) => setDraft(account.id, { admin_bank_id: e.target.value })}>
+                    <option value="">Сонгоогүй</option>
+                    {availableBanksForAdmin(draft.admin_id, draft.admin_bank_id).map((bank) => (
+                      <option key={bank.id} value={bank.id}>{formatAdminBankOption(bank)}</option>
                     ))}
                   </select>
                 </label>
@@ -1111,6 +1151,7 @@ function TreasuryAccountsTable({
             <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
               <th className="py-2 pr-2 font-medium">Дансны нэр</th>
               <th className="py-2 px-2 font-medium">Админ</th>
+              <th className="py-2 px-2 font-medium">Холбосон банк</th>
               <th className="py-2 px-2 font-medium text-right">Өмнөх баланс (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Руб→төг (₽)</th>
               <th className="py-2 px-2 font-medium text-right">Төг→руб (₽)</th>
@@ -1132,10 +1173,18 @@ function TreasuryAccountsTable({
                     <input className={INPUT_CLASS} value={draft.name} onChange={(e) => setDraft(account.id, { name: e.target.value })} />
                   </td>
                   <td className="py-2 px-2 min-w-[180px]">
-                    <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value })}>
+                    <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value, admin_bank_id: "" })}>
                       <option value="">Хуваарилаагүй</option>
                       {admins.map((admin) => (
                         <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-2 px-2 min-w-[260px]">
+                    <select className={INPUT_CLASS} value={draft.admin_bank_id} onChange={(e) => setDraft(account.id, { admin_bank_id: e.target.value })}>
+                      <option value="">Сонгоогүй</option>
+                      {availableBanksForAdmin(draft.admin_id, draft.admin_bank_id).map((bank) => (
+                        <option key={bank.id} value={bank.id}>{formatAdminBankOption(bank)}</option>
                       ))}
                     </select>
                   </td>
@@ -1174,7 +1223,7 @@ function TreasuryAccountsTable({
               );
             })}
             {accounts.length === 0 && (
-              <tr><td colSpan={10} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
+              <tr><td colSpan={11} className="py-6 text-center text-slate-400">Данс алга. Эхлээд баланс тооцох данс нэмнэ үү.</td></tr>
             )}
           </tbody>
         </table>
@@ -1205,17 +1254,26 @@ function TreasuryAccountsTable({
             </button>
 
             {showNewAccountForm && (
-              <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_180px_auto] gap-2 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px_minmax(0,1fr)_180px_auto] gap-2 items-end">
                 <label>
                   <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
                   <input className={INPUT_CLASS} placeholder="Жишээ: Сбербанк ₽" value={newName} onChange={(e) => setNewName(e.target.value)} />
                 </label>
                 <label>
                   <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
-                  <select className={INPUT_CLASS} value={newAdminId} onChange={(e) => setNewAdminId(e.target.value)}>
+                  <select className={INPUT_CLASS} value={newAdminId} onChange={(e) => { setNewAdminId(e.target.value); setNewAdminBankId(""); }}>
                     <option value="">Хуваарилаагүй</option>
                     {admins.map((admin) => (
                       <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <div className="text-[10px] text-slate-400 mb-1">Холбосон банк</div>
+                  <select className={INPUT_CLASS} value={newAdminBankId} onChange={(e) => setNewAdminBankId(e.target.value)}>
+                    <option value="">Сонгоогүй</option>
+                    {availableBanksForAdmin(newAdminId, newAdminBankId).map((bank) => (
+                      <option key={bank.id} value={bank.id}>{formatAdminBankOption(bank)}</option>
                     ))}
                   </select>
                 </label>

@@ -6,11 +6,13 @@
 
 -- ── Treasury accounts ───────────────────────────────────────────────────────
 -- The admin's own RUB balance accounts used for daily balance accounting.
--- These are SEPARATE from `admin_bank_accounts` (the cards users pay into).
+-- They can optionally be linked to `admin_bank_accounts` when one treasury row
+-- should track the real user-facing bank/card used for incoming transactions.
 CREATE TABLE IF NOT EXISTS treasury_accounts (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name          TEXT NOT NULL,
     admin_id      BIGINT REFERENCES public.admin_users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    admin_bank_id UUID REFERENCES public.admin_bank_accounts(id) ON UPDATE CASCADE ON DELETE SET NULL,
     -- Админы өмнөх өдрийн баланс (RUB). Editable; carried by the admin.
     prev_balance  NUMERIC NOT NULL DEFAULT 0,
     -- Өнөөдрийн руб→төг чиглэлийн дүн (RUB). Admin-entered daily figure.
@@ -41,6 +43,7 @@ ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS baseline_mnt_to_rub NUMER
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS entered_balance NUMERIC;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS balance_date DATE;
 ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS admin_id      BIGINT;
+ALTER TABLE treasury_accounts ADD COLUMN IF NOT EXISTS admin_bank_id UUID;
 
 CREATE INDEX IF NOT EXISTS idx_treasury_accounts_order
     ON treasury_accounts(display_order);
@@ -65,6 +68,31 @@ BEGIN
             NOT VALID;
     END IF;
 END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'treasury_accounts_admin_bank_id_fkey'
+          AND conrelid = 'treasury_accounts'::regclass
+    ) THEN
+        ALTER TABLE treasury_accounts
+            ADD CONSTRAINT treasury_accounts_admin_bank_id_fkey
+            FOREIGN KEY (admin_bank_id)
+            REFERENCES public.admin_bank_accounts(id)
+            ON UPDATE CASCADE
+            ON DELETE SET NULL
+            NOT VALID;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_treasury_accounts_admin_bank_id
+    ON treasury_accounts(admin_bank_id);
+
+CREATE INDEX IF NOT EXISTS idx_treasury_accounts_admin_bank_order
+    ON treasury_accounts(admin_id, admin_bank_id, display_order);
+
 
 -- ── General daily balance calculator ────────────────────────────────────────
 -- One row per admin per Moscow day. opening_balance is carried from the

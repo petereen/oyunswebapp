@@ -1184,6 +1184,11 @@ export async function fetchAllAdminBankAccounts(): Promise<{ accounts: AdminBank
   return res.data;
 }
 
+export async function fetchDashboardAdminBankAccounts(): Promise<{ accounts: AdminBankAccountFull[] }> {
+  const res = await dashboardApi.get('/dashboard/admin-bank-accounts');
+  return res.data as { accounts: AdminBankAccountFull[] };
+}
+
 export async function createAdminBankAccount(payload: Partial<AdminBankAccountFull>) {
   const res = await api.post('/admin/bank-accounts', payload);
   return res.data;
@@ -1763,6 +1768,10 @@ export type TreasuryAccount = {
   name: string;
   admin_id?: number | null;
   admin_name?: string | null;
+  admin_bank_id?: string | null;
+  admin_bank_name?: string | null;
+  admin_bank_owner?: string | null;
+  admin_bank_currency?: string | null;
   prev_balance: number;
   rub_to_mnt: number;
   mnt_to_rub: number;

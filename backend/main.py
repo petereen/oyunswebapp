@@ -2428,6 +2428,7 @@ def _optional_float(value, field_name: str) -> float | None:
 
 
 _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED: bool | None = None
+_TREASURY_ACCOUNTS_ADMIN_BANK_ID_SUPPORTED: bool | None = None
 
 
 def _normalize_balance_tag(value) -> str:
@@ -2465,6 +2466,35 @@ def _transactions_admin_bank_id_supported(client) -> bool:
         )
         _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED = False
     return _TRANSACTIONS_ADMIN_BANK_ID_SUPPORTED
+
+
+def _treasury_accounts_admin_bank_id_supported(client) -> bool:
+    global _TREASURY_ACCOUNTS_ADMIN_BANK_ID_SUPPORTED
+    if _TREASURY_ACCOUNTS_ADMIN_BANK_ID_SUPPORTED is not None:
+        return _TREASURY_ACCOUNTS_ADMIN_BANK_ID_SUPPORTED
+    try:
+        client.table("treasury_accounts").select("admin_bank_id").limit(1).execute()
+        _TREASURY_ACCOUNTS_ADMIN_BANK_ID_SUPPORTED = True
+    except Exception as exc:
+        if not _is_missing_admin_bank_id_error(exc):
+            raise
+        logger.warning(
+            "treasury_accounts.admin_bank_id is unavailable; falling back to admin-level treasury mapping: %s",
+            exc,
+        )
+        _TREASURY_ACCOUNTS_ADMIN_BANK_ID_SUPPORTED = False
+    return _TREASURY_ACCOUNTS_ADMIN_BANK_ID_SUPPORTED
+
+
+def _validated_admin_bank_account_id(client, value, field_name: str = "admin_bank_id") -> str | None:
+    if value in (None, ""):
+        return None
+    admin_bank_id = str(value).strip()
+    res = client.table("admin_bank_accounts").select("id").eq("id", admin_bank_id).limit(1).execute()
+    row = (res.data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=400, detail=f"{field_name} must reference admin_bank_accounts.id")
+    return admin_bank_id
 
 
 def _dashboard_balance_setup_detail(exc: Exception) -> str | None:
@@ -2697,10 +2727,20 @@ def _dashboard_adjustments_for_day(client, day: str, admin_ids: list[int]) -> di
     }
 
 
-def _treasury_account_transaction_baseline(client, admin_id: int | None, day: str, tz_key: str = "moscow") -> dict[str, float]:
+def _treasury_account_transaction_baseline(
+    client,
+    admin_id: int | None,
+    day: str,
+    tz_key: str = "moscow",
+    admin_bank_id: str | None = None,
+) -> dict[str, float]:
     if admin_id is None:
         return {"baseline_rub_to_mnt": 0.0, "baseline_mnt_to_rub": 0.0}
-    admin_totals = _dashboard_daily_transaction_totals(client, day, [admin_id], tz_key=tz_key).get(admin_id, {})
+    day_totals = _dashboard_daily_transaction_totals(client, day, [admin_id], tz_key=tz_key)
+    if admin_bank_id and _transactions_admin_bank_id_supported(client):
+        admin_totals = day_totals.get(admin_bank_id, {})
+    else:
+        admin_totals = day_totals.get(admin_id, {})
     return {
         "baseline_rub_to_mnt": round(float(admin_totals.get("rub_to_mnt_rub") or 0), 2),
         "baseline_mnt_to_rub": round(float(admin_totals.get("mnt_to_rub_rub") or 0), 2),
@@ -2748,9 +2788,11 @@ def _account_transaction_totals(accounts: list[dict], txn_totals_by_admin: dict)
     for account in accounts:
         account_id = str(account["id"])
         raw_admin_id = account.get("admin_id")
+        mapped_admin_bank_id = str(account.get("admin_bank_id")) if account.get("admin_bank_id") else None
         
         # 1. Start with any explicitly assigned amounts
-        acct_txns = txn_totals_by_admin.get(account_id, {"rub_to_mnt_rub": 0.0, "mnt_to_rub_rub": 0.0})
+        lookup_key = mapped_admin_bank_id or account_id
+        acct_txns = txn_totals_by_admin.get(lookup_key, {"rub_to_mnt_rub": 0.0, "mnt_to_rub_rub": 0.0})
         rub_to_mnt = float(acct_txns.get("rub_to_mnt_rub") or 0)
         mnt_to_rub = float(acct_txns.get("mnt_to_rub_rub") or 0)
 
@@ -3249,6 +3291,7 @@ def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None, t
     admins = _dashboard_admins(client)
     accounts = _rollover_treasury_accounts(client, admin_id=selected_admin_id, tz_key=tz_key)
     today = _dashboard_today(tz_key)
+    treasury_bank_supported = _treasury_accounts_admin_bank_id_supported(client)
     admin_ids = sorted({int(account["admin_id"]) for account in accounts if account.get("admin_id") is not None})
     txn_totals = _dashboard_daily_transaction_totals(client, today, admin_ids, tz_key=tz_key)
     account_txn_totals = _account_transaction_totals(accounts, txn_totals)
@@ -3259,6 +3302,14 @@ def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None, t
         for admin in admins
         if admin.get("admin_id") is not None
     }
+    admin_banks_by_id: dict[str, dict] = {}
+    if treasury_bank_supported:
+        banks_res = client.table("admin_bank_accounts").select("id,bank_name,owner_name,currency,admin_id").execute()
+        admin_banks_by_id = {
+            str(bank.get("id")): bank
+            for bank in (banks_res.data or [])
+            if bank.get("id") is not None
+        }
     account_names = {str(account["id"]): account.get("name") for account in accounts}
 
     enriched_accounts: list[dict] = []
@@ -3290,10 +3341,16 @@ def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None, t
             entered_balance_total += entered_balance
 
         admin_id = _optional_int(account.get("admin_id"), "admin_id")
+        admin_bank_id = str(account.get("admin_bank_id")) if account.get("admin_bank_id") else None
+        bank_meta = admin_banks_by_id.get(admin_bank_id) if admin_bank_id else None
         enriched_accounts.append({
             **account,
             "admin_id": admin_id,
             "admin_name": admin_names.get(admin_id) if admin_id is not None else None,
+            "admin_bank_id": admin_bank_id,
+            "admin_bank_name": bank_meta.get("bank_name") if bank_meta else None,
+            "admin_bank_owner": bank_meta.get("owner_name") if bank_meta else None,
+            "admin_bank_currency": bank_meta.get("currency") if bank_meta else None,
             "rub_to_mnt": round(rub_to_mnt, 2),
             "mnt_to_rub": round(mnt_to_rub, 2),
             "entered_balance": round(entered_balance, 2) if entered_balance is not None else None,
@@ -3491,9 +3548,11 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
     """Create a treasury account for balance accounting."""
     client = get_supabase()
     now = datetime.now(timezone.utc).isoformat()
+    treasury_bank_supported = _treasury_accounts_admin_bank_id_supported(client)
     if not (payload.get("name") or "").strip():
         raise HTTPException(status_code=400, detail="Missing required field: name")
     normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
+    normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.get("admin_bank_id"), "admin_bank_id") if treasury_bank_supported else None
     balance_day = _moscow_today()
     insert_data = {
         "name": payload.get("name").strip(),
@@ -3510,35 +3569,53 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
         "created_at": now,
         "updated_at": now,
     }
-    insert_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, balance_day))
+    if treasury_bank_supported and normalized_admin_bank_id:
+        insert_data["admin_bank_id"] = normalized_admin_bank_id
+    insert_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, balance_day, admin_bank_id=normalized_admin_bank_id))
     try:
         result = client.table("treasury_accounts").insert(insert_data).execute()
     except Exception as exc:
         raise _dashboard_db_error(exc, "Create treasury account")
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create treasury account")
-    return {"ok": True, "account": result.data[0]}
+    created_id = str(result.data[0].get("id"))
+    refreshed = _dashboard_treasury_balance_payload(client, normalized_admin_id).get("accounts", [])
+    account = next((row for row in refreshed if str(row.get("id")) == created_id), result.data[0])
+    return {"ok": True, "account": account}
 
 
 @app.put("/api/dashboard/treasury-accounts/{account_id}")
 async def update_treasury_account(account_id: str, payload: dict, auth=Depends(get_dashboard_auth)):
     """Update editable treasury-account metadata and entered balance."""
     client = get_supabase()
+    treasury_bank_supported = _treasury_accounts_admin_bank_id_supported(client)
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     existing_account = None
-    if "admin_id" in payload:
-        existing_result = client.table("treasury_accounts").select("id,admin_id").eq("id", account_id).limit(1).execute()
+    if "admin_id" in payload or "admin_bank_id" in payload:
+        select_fields = "id,admin_id"
+        if treasury_bank_supported:
+            select_fields += ",admin_bank_id"
+        existing_result = client.table("treasury_accounts").select(select_fields).eq("id", account_id).limit(1).execute()
         existing_account = (existing_result.data or [None])[0]
         if not existing_account:
             raise HTTPException(status_code=404, detail="Treasury account not found")
     if "name" in payload:
         update_data["name"] = (payload.get("name") or "").strip()
+    normalized_admin_id = _optional_int(existing_account.get("admin_id"), "admin_id") if existing_account else None
     if "admin_id" in payload:
         normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
         update_data["admin_id"] = normalized_admin_id
         previous_admin_id = _optional_int(existing_account.get("admin_id"), "admin_id") if existing_account else None
         if previous_admin_id != normalized_admin_id:
-          update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _moscow_today()))
+            update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _moscow_today()))
+    normalized_admin_bank_id = str(existing_account.get("admin_bank_id")) if existing_account and existing_account.get("admin_bank_id") else None
+    if treasury_bank_supported and "admin_bank_id" in payload:
+        normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.get("admin_bank_id"), "admin_bank_id")
+        update_data["admin_bank_id"] = normalized_admin_bank_id
+    admin_changed = existing_account is not None and _optional_int(existing_account.get("admin_id"), "admin_id") != normalized_admin_id
+    bank_changed = existing_account is not None and str(existing_account.get("admin_bank_id") or "") != str(normalized_admin_bank_id or "")
+    if admin_changed or bank_changed:
+        update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _moscow_today(), admin_bank_id=normalized_admin_bank_id))
     for num_field in ("display_order",):
         if num_field in payload:
             update_data[num_field] = float(payload[num_field] or 0)
@@ -3553,7 +3630,42 @@ async def update_treasury_account(account_id: str, payload: dict, auth=Depends(g
     result = client.table("treasury_accounts").update(update_data).eq("id", account_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Treasury account not found")
-    return {"ok": True, "account": result.data[0]}
+    refreshed = _dashboard_treasury_balance_payload(client, normalized_admin_id).get("accounts", [])
+    account = next((row for row in refreshed if str(row.get("id")) == account_id), result.data[0])
+    return {"ok": True, "account": account}
+
+
+@app.get("/api/dashboard/admin-bank-accounts")
+async def list_dashboard_admin_bank_accounts(auth=Depends(get_dashboard_auth)):
+    client = get_supabase()
+    res = (
+        client.table("admin_bank_accounts")
+        .select("id,bank_name,account_number,card_number,phone,owner_name,currency,is_active,is_priority,display_order,admin_id,logo_url,created_at,updated_at")
+        .order("admin_id", desc=False)
+        .order("currency", desc=False)
+        .order("display_order", desc=False)
+        .execute()
+    )
+    accounts = [
+        {
+            "id": str(row.get("id")),
+            "bank_name": row.get("bank_name"),
+            "account_number": row.get("account_number"),
+            "card_number": row.get("card_number"),
+            "phone": row.get("phone"),
+            "owner_name": row.get("owner_name"),
+            "currency": row.get("currency"),
+            "is_active": row.get("is_active", True),
+            "is_priority": row.get("is_priority", False),
+            "display_order": row.get("display_order", 0),
+            "admin_id": row.get("admin_id"),
+            "logo_url": row.get("logo_url"),
+            "created_at": row.get("created_at"),
+            "updated_at": row.get("updated_at"),
+        }
+        for row in (res.data or [])
+    ]
+    return {"accounts": accounts}
 
 
 @app.delete("/api/dashboard/treasury-accounts/{account_id}")
