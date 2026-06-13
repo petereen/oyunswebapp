@@ -5101,6 +5101,7 @@ async def create_exchange(
     client = get_supabase()
     _require_service_open(client)
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
+    normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.admin_bank_id, "admin_bank_id") if payload.admin_bank_id else None
 
     moscow_tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(moscow_tz)
@@ -5231,8 +5232,8 @@ async def create_exchange(
         "bank_details": payload.bank_details,
         "receipt_submitted_at": now.isoformat() if receipt_paths_list else None,
     }
-    if admin_bank_supported and payload.admin_bank_id:
-        insert_payload["admin_bank_id"] = payload.admin_bank_id
+    if admin_bank_supported and normalized_admin_bank_id:
+        insert_payload["admin_bank_id"] = normalized_admin_bank_id
 
     # snapshot buy/sell side
     if direction == "buy":
@@ -5335,7 +5336,7 @@ async def get_editable_exchange(
     client = get_supabase()
     res = (
         client.table("transactions")
-        .select("id,invoice,user_id,amount,currency_from,currency_to,rate,promo_code,bank_details,bill_url,receipt_id,status")
+        .select("id,invoice,user_id,amount,currency_from,currency_to,rate,promo_code,bank_details,bill_url,receipt_id,status,admin_bank_id")
         .eq("invoice", invoice)
         .eq("user_id", user.id)
         .limit(1)
@@ -5371,6 +5372,7 @@ async def get_editable_exchange(
         promo_discount=promo_discount,
         bank_details=trx.get("bank_details") or "",
         receipt_urls=receipt_urls,
+        admin_bank_id=str(trx.get("admin_bank_id")) if trx.get("admin_bank_id") else None,
         can_edit=True,
     )
 
@@ -5459,6 +5461,7 @@ async def resubmit_exchange(
     bill_url_value = json.dumps(receipt_paths_list) if receipt_paths_list else None
     receipt_id_value = receipt_paths_list[0] if receipt_paths_list else None
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
+    normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.admin_bank_id, "admin_bank_id") if payload.admin_bank_id else None
 
     total_paused_seconds = _to_decimal(trx.get("total_paused_seconds"), Decimal("0"))
     paused_at_raw = trx.get("timer_paused_at")
@@ -5488,8 +5491,8 @@ async def resubmit_exchange(
         "timer_paused_at": None,
         "total_paused_seconds": float(total_paused_seconds),
     }
-    if admin_bank_supported and payload.admin_bank_id:
-        update_payload["admin_bank_id"] = payload.admin_bank_id
+    if admin_bank_supported and normalized_admin_bank_id:
+        update_payload["admin_bank_id"] = normalized_admin_bank_id
 
     if direction == "buy":
         update_payload["buy_rate"] = str(effective_rate)

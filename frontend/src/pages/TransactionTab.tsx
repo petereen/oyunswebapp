@@ -116,6 +116,7 @@ export function TransactionTab({
   const [successInvoice, setSuccessInvoice] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(initialEditInvoice || null);
+  const [editAdminBankId, setEditAdminBankId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAdminBankAccounts()
@@ -214,6 +215,7 @@ export function TransactionTab({
         setPromoMessage("");
         setPromoError("");
         setUseSavedBank(false);
+        setEditAdminBankId(editable.admin_bank_id || null);
 
         const parts = (editable.bank_details || "").split(",").map((part) => part.trim());
         if (dir === "buy") {
@@ -392,7 +394,9 @@ export function TransactionTab({
         receipt_path: receiptUrls[0],
         receipt_paths: receiptUrls,
         promo_code: promoValid && !isVolumeDiscountApplied ? promoCode : undefined,
-        admin_bank_id: selectedAdminBank?.id != null ? String(selectedAdminBank.id) : undefined,
+        admin_bank_id: direction === "buy"
+          ? (selectedAdminBank?.id != null ? String(selectedAdminBank.id) : undefined)
+          : (selectedMntAdminBank?.id != null ? String(selectedMntAdminBank.id) : undefined),
         invoice: invoiceId,
       };
       const res = await createExchange(payload);
@@ -422,6 +426,9 @@ export function TransactionTab({
         bank_details: buildBankDetails(),
         receipt_path: receiptUrls[0],
         receipt_paths: receiptUrls,
+        admin_bank_id: direction === "buy"
+          ? (selectedAdminBank?.id != null ? String(selectedAdminBank.id) : editAdminBankId || undefined)
+          : (selectedMntAdminBank?.id != null ? String(selectedMntAdminBank.id) : editAdminBankId || undefined),
       });
       setSuccessInvoice(response.invoice);
       setFlowStep("success");
@@ -464,6 +471,7 @@ export function TransactionTab({
     setMntIban("");
     setMntOwnerName("");
     setEditInvoiceId(null);
+    setEditAdminBankId(null);
   };
 
   // Registration modal state

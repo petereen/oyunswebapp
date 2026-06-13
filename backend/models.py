@@ -117,6 +117,7 @@ class ExchangeEditableResponse(BaseModel):
     promo_discount: Decimal = Decimal("0")
     bank_details: str
     receipt_urls: list[str] = Field(default_factory=list)
+    admin_bank_id: Optional[str] = None
     can_edit: bool = False
 
 

@@ -532,6 +532,7 @@ export interface ExchangeEditableResponse {
   promo_discount: number;
   bank_details: string;
   receipt_urls: string[];
+  admin_bank_id?: string;
   can_edit: boolean;
 }
 
@@ -557,6 +558,7 @@ export interface ExchangeResubmitInput {
   bank_details: string;
   receipt_path?: string;
   receipt_paths?: string[];
+  admin_bank_id?: string;
 }
 
 export async function resubmitExchange(payload: ExchangeResubmitInput) {

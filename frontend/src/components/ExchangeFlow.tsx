@@ -416,7 +416,9 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
         receipt_path: receiptUrls[0], // First image for backward compatibility
         receipt_paths: receiptUrls, // All images
         promo_code: promoValid ? promoCode : undefined,
-        admin_bank_id: selectedAdminBank?.id != null ? String(selectedAdminBank.id) : undefined,
+        admin_bank_id: direction === "buy"
+          ? (selectedAdminBank?.id != null ? String(selectedAdminBank.id) : undefined)
+          : (selectedMntAdminBank?.id != null ? String(selectedMntAdminBank.id) : undefined),
         invoice: invoiceId, // Pass the pre-generated invoice ID
       };
       console.log("Creating exchange with payload:", payload);
