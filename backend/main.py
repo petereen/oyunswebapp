@@ -2921,6 +2921,7 @@ def _dashboard_balance_history_candidate_days(client, today: str) -> list[str]:
 
 
 def _ensure_dashboard_balance_history_snapshots(client) -> None:
+    _rollover_treasury_accounts(client)
     today = _moscow_today()
     for day in _dashboard_balance_history_candidate_days(client, today):
         history_key = _dashboard_balance_history_row_key(day, None)
@@ -3299,13 +3300,43 @@ def _rollover_treasury_accounts(client, admin_id: int | None = None, tz_key: str
         day_txn_totals = _dashboard_daily_transaction_totals(client, balance_day, admin_ids, tz_key=tz_key)
         txn_totals_by_day[balance_day] = _account_transaction_totals(day_accounts, day_txn_totals)
 
+        admin_entered: dict[int, float] = {}
+        admin_missing: dict[int, bool] = {}
+        admin_opening: dict[int, float] = {}
+        for account in day_accounts:
+            a_id = account.get("admin_id")
+            if a_id is None:
+                continue
+            a_id = int(a_id)
+            admin_opening[a_id] = admin_opening.get(a_id, 0.0) + float(account.get("prev_balance") or 0)
+            eb = _account_entered_balance(account)
+            if eb is None:
+                admin_missing[a_id] = True
+            else:
+                admin_entered[a_id] = admin_entered.get(a_id, 0.0) + eb
+                
+        for a_id in admin_ids:
+            if not admin_missing.get(a_id, False) and a_id in admin_entered:
+                try:
+                    client.table("dashboard_balance_daily").upsert({
+                        "admin_id": a_id,
+                        "balance_date": balance_day,
+                        "opening_balance": round(admin_opening.get(a_id, 0.0), 2),
+                        "entered_balance": round(admin_entered[a_id], 2),
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }, on_conflict="admin_id,balance_date").execute()
+                except Exception as sync_exc:
+                    logger.warning(f"Failed to sync daily entered balance on rollover: {sync_exc}")
+
     refreshed: list[dict] = []
     for a in accounts:
         bdate = (a.get("balance_date") or "")[:10]
         if bdate and bdate < today:
             account_txns = txn_totals_by_day.get(bdate, {}).get(str(a["id"]), {"rub_to_mnt": 0.0, "mnt_to_rub": 0.0})
+            entered_balance = _account_entered_balance(a)
+            new_prev = entered_balance if entered_balance is not None else _account_balance(a, txn_totals=account_txns)
             upd = {
-                "prev_balance": round(_account_balance(a, txn_totals=account_txns), 2),
+                "prev_balance": round(new_prev, 2),
                 "rub_to_mnt": 0,
                 "mnt_to_rub": 0,
                 "baseline_rub_to_mnt": 0,
