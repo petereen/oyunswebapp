@@ -10,7 +10,7 @@ else
   DOCKER_COMPOSE="docker-compose"
 fi
 
-domains=(app.oyuns.mn dashboard.oyuns.mn)
+domains=(app.oyuns.mn dashboard.oyuns.mn oyuns.mn www.oyuns.mn)
 primary_domain="${domains[0]}"
 rsa_key_size=4096
 data_path="./certbot"
