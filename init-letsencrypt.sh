@@ -10,7 +10,7 @@ else
   DOCKER_COMPOSE="docker-compose"
 fi
 
-default_domains=(app.oyuns.mn dashboard.oyuns.mn oyuns.mn www.oyuns.mn)
+default_domains=(app.oyuns.mn dashboard.oyuns.mn)
 
 # Optional override for emergency or staged issuance.
 # Example:
