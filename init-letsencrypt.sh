@@ -10,7 +10,16 @@ else
   DOCKER_COMPOSE="docker-compose"
 fi
 
-domains=(app.oyuns.mn dashboard.oyuns.mn oyuns.mn www.oyuns.mn)
+default_domains=(app.oyuns.mn dashboard.oyuns.mn oyuns.mn www.oyuns.mn)
+
+# Optional override for emergency or staged issuance.
+# Example:
+#   LE_DOMAINS="app.oyuns.mn dashboard.oyuns.mn" bash ./init-letsencrypt.sh
+if [ -n "$LE_DOMAINS" ]; then
+  read -r -a domains <<< "$LE_DOMAINS"
+else
+  domains=("${default_domains[@]}")
+fi
 primary_domain="${domains[0]}"
 rsa_key_size=4096
 data_path="./certbot"
