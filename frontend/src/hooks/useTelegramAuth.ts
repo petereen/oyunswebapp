@@ -131,6 +131,12 @@ function normalizeBrowserLoginError(error: unknown): string {
   if (message === 'popup_blocked') {
     return 'Allow popups and try Telegram login again';
   }
+  if (message === 'telegram_login_timeout') {
+    return 'Telegram login timed out. Please try again.';
+  }
+  if (message.toLowerCase().includes('redirect_uri required')) {
+    return `Telegram Login is not configured for this URL. In BotFather > Bot Settings > Web Login, add exact Allowed URL: ${window.location.origin}${window.location.pathname}`;
+  }
   return message;
 }
 
@@ -250,6 +256,15 @@ async function openTelegramLoginWithSdk(challenge: TelegramBrowserAuthChallenge)
   const lang = getStoredLang();
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(new Error('telegram_login_timeout'));
+    }, 30000);
+
     auth(
       {
         client_id: clientId,
@@ -257,6 +272,12 @@ async function openTelegramLoginWithSdk(challenge: TelegramBrowserAuthChallenge)
         ...(lang ? { lang } : {}),
       },
       (result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeoutId);
+
         if (result?.error) {
           reject(new Error(result.error));
           return;
@@ -448,7 +469,16 @@ export function useTelegramAuth() {
       try {
         loginResult = await openTelegramLoginWithSdk(challenge);
       } catch (sdkError) {
-        console.warn('Telegram Login SDK flow failed, falling back to popup OAuth URL:', sdkError);
+        const sdkErrorMessage = sdkError instanceof Error ? sdkError.message : '';
+        const canFallback =
+          sdkErrorMessage.includes('SDK is unavailable') ||
+          sdkErrorMessage.includes('Failed to load Telegram Login SDK');
+
+        if (!canFallback) {
+          throw sdkError;
+        }
+
+        console.warn('Telegram Login SDK unavailable, falling back to popup OAuth URL:', sdkError);
         loginResult = await openTelegramLoginPopup(challenge);
       }
 
