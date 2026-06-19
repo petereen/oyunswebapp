@@ -23,10 +23,31 @@ export default function App() {
   const queryParams = new URLSearchParams(window.location.search);
   const rawPath = window.location.pathname;
   const hostname = window.location.hostname.toLowerCase();
+  const allowedHosts = new Set([
+    "app.oyuns.mn",
+    "dashboard.oyuns.mn",
+    "localhost",
+    "127.0.0.1",
+    "::1",
+  ]);
+  const isAllowedHost = allowedHosts.has(hostname);
   const normalizedPath = rawPath === "/" ? "/" : rawPath.replace(/\/+$/, "");
   const requestedTab = queryParams.get("tab");
   const requestedTournament = queryParams.get("tournament");
   const requestedTournamentSection = queryParams.get("section");
+
+  if (!isAllowedHost) {
+    return (
+      <div className="min-h-screen bg-surface-50 dark:bg-dark-900 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl bg-white dark:bg-dark-800 p-6 text-center shadow-lg">
+          <h1 className="text-xl font-bold text-maroon-700 dark:text-gold-400 mb-2">Unavailable Host</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            This app is only available on app.oyuns.mn and dashboard.oyuns.mn.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Standalone tournament admin panel without Telegram auth
   const isOyunsSagsAdmin = normalizedPath === "/oyuns-sags" || normalizedPath === "/omoh-sags";
