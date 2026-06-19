@@ -135,7 +135,7 @@ function normalizeBrowserLoginError(error: unknown): string {
     return 'Allow popups and try Telegram login again';
   }
   if (message === 'telegram_login_timeout') {
-    return 'Telegram login timed out. Please try again.';
+    return `Telegram login did not return to the app. If the popup shows \"redirect_uri required\", add this exact URL in BotFather > Web Login Allowed URLs: ${window.location.origin}${window.location.pathname}`;
   }
   if (message.toLowerCase().includes('redirect_uri required')) {
     return `Telegram Login is not configured for this URL. In BotFather > Bot Settings > Web Login, add exact Allowed URL: ${window.location.origin}${window.location.pathname}`;
@@ -469,20 +469,37 @@ export function useTelegramAuth() {
       const challenge = await fetchTelegramBrowserAuthChallenge();
       let loginResult: TelegramLoginCallbackData;
 
-      try {
-        loginResult = await openTelegramLoginWithSdk(challenge);
-      } catch (sdkError) {
-        const sdkErrorMessage = sdkError instanceof Error ? sdkError.message : '';
-        const canFallback =
-          sdkErrorMessage.includes('SDK is unavailable') ||
-          sdkErrorMessage.includes('Failed to load Telegram Login SDK');
+      const preferManualFlow = Boolean(TELEGRAM_LOGIN_REDIRECT_URI);
 
-        if (!canFallback) {
-          throw sdkError;
+      if (preferManualFlow) {
+        try {
+          loginResult = await openTelegramLoginPopup(challenge);
+        } catch (manualError) {
+          const manualMessage = manualError instanceof Error ? manualError.message : '';
+          if (manualMessage === 'popup_blocked') {
+            console.warn('Manual Telegram popup blocked; trying SDK flow:', manualError);
+            loginResult = await openTelegramLoginWithSdk(challenge);
+          } else {
+            throw manualError;
+          }
         }
+      } else {
+        try {
+          loginResult = await openTelegramLoginWithSdk(challenge);
+        } catch (sdkError) {
+          const sdkErrorMessage = sdkError instanceof Error ? sdkError.message : '';
+          const canFallback =
+            sdkErrorMessage.includes('SDK is unavailable') ||
+            sdkErrorMessage.includes('Failed to load Telegram Login SDK') ||
+            sdkErrorMessage === 'popup_blocked';
 
-        console.warn('Telegram Login SDK unavailable, falling back to popup OAuth URL:', sdkError);
-        loginResult = await openTelegramLoginPopup(challenge);
+          if (!canFallback) {
+            throw sdkError;
+          }
+
+          console.warn('Telegram Login SDK unavailable/blocked, falling back to manual popup OAuth URL:', sdkError);
+          loginResult = await openTelegramLoginPopup(challenge);
+        }
       }
 
       const authData = await authenticateWithTelegramBrowserIdToken(loginResult.id_token || '');
