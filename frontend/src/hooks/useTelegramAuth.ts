@@ -34,10 +34,27 @@ interface TelegramLoginPopupMessage {
   error?: string;
 }
 
+interface TelegramLoginSdkResult {
+  id_token?: string;
+  error?: string;
+}
+
+interface TelegramLoginSdkAuthOptions {
+  client_id: number;
+  nonce?: string;
+  lang?: string;
+}
+
 // Extend Window interface for Telegram WebApp
 declare global {
   interface Window {
     Telegram?: {
+      Login?: {
+        auth: (
+          options: TelegramLoginSdkAuthOptions,
+          callback: (result: TelegramLoginSdkResult) => void,
+        ) => void;
+      };
       WebApp?: {
         initData: string;
         initDataUnsafe?: {
@@ -69,6 +86,9 @@ const LANG_STORAGE_KEY = 'oyuns_lang';
 const TELEGRAM_LOGIN_ORIGIN = 'https://oauth.telegram.org';
 const TELEGRAM_LOGIN_URL = `${TELEGRAM_LOGIN_ORIGIN}/auth`;
 const TELEGRAM_LOGIN_REDIRECT_URI = import.meta.env.VITE_TELEGRAM_LOGIN_REDIRECT_URI?.trim();
+const TELEGRAM_LOGIN_SDK_URL = 'https://oauth.telegram.org/js/telegram-login.js?25';
+
+let telegramLoginSdkPromise: Promise<void> | null = null;
 
 // When telegram-web-app.js fails to load (ERR_CONNECTION_CLOSED), the SDK never parses
 // the URL hash. Extract initData from the hash directly as a fallback.
@@ -182,6 +202,73 @@ function getTelegramLoginPopupFeatures(): string {
     'menubar=0',
     'toolbar=0',
   ].join(',');
+}
+
+function loadTelegramLoginSdk(): Promise<void> {
+  if (window.Telegram?.Login?.auth) {
+    return Promise.resolve();
+  }
+
+  if (telegramLoginSdkPromise) {
+    return telegramLoginSdkPromise;
+  }
+
+  telegramLoginSdkPromise = new Promise((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-telegram-login-sdk="true"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error('Failed to load Telegram Login SDK')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = TELEGRAM_LOGIN_SDK_URL;
+    script.async = true;
+    script.defer = true;
+    script.dataset.telegramLoginSdk = 'true';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Telegram Login SDK'));
+    document.head.appendChild(script);
+  });
+
+  return telegramLoginSdkPromise;
+}
+
+async function openTelegramLoginWithSdk(challenge: TelegramBrowserAuthChallenge): Promise<TelegramLoginCallbackData> {
+  await loadTelegramLoginSdk();
+
+  const auth = window.Telegram?.Login?.auth;
+  if (!auth) {
+    throw new Error('Telegram Login SDK is unavailable');
+  }
+
+  const clientId = Number(challenge.client_id);
+  if (!Number.isFinite(clientId) || clientId <= 0) {
+    throw new Error('Invalid Telegram client_id');
+  }
+
+  const lang = getStoredLang();
+
+  return new Promise((resolve, reject) => {
+    auth(
+      {
+        client_id: clientId,
+        nonce: challenge.nonce,
+        ...(lang ? { lang } : {}),
+      },
+      (result) => {
+        if (result?.error) {
+          reject(new Error(result.error));
+          return;
+        }
+        if (!result?.id_token) {
+          reject(new Error('Telegram login did not return an id_token'));
+          return;
+        }
+        resolve({ id_token: result.id_token });
+      },
+    );
+  });
 }
 
 function openTelegramLoginPopup(challenge: TelegramBrowserAuthChallenge): Promise<TelegramLoginCallbackData> {
@@ -356,7 +443,15 @@ export function useTelegramAuth() {
 
     try {
       const challenge = await fetchTelegramBrowserAuthChallenge();
-      const loginResult = await openTelegramLoginPopup(challenge);
+      let loginResult: TelegramLoginCallbackData;
+
+      try {
+        loginResult = await openTelegramLoginWithSdk(challenge);
+      } catch (sdkError) {
+        console.warn('Telegram Login SDK flow failed, falling back to popup OAuth URL:', sdkError);
+        loginResult = await openTelegramLoginPopup(challenge);
+      }
+
       const authData = await authenticateWithTelegramBrowserIdToken(loginResult.id_token || '');
 
       applyAuthenticatedState(authData);
