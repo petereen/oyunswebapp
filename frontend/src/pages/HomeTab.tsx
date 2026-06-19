@@ -208,7 +208,12 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
         </div>
 
         <button
-          onClick={onStartBrowserLogin}
+          onClick={() => {
+            if (!onStartBrowserLogin) {
+              return;
+            }
+            void onStartBrowserLogin();
+          }}
           className="inline-flex items-center gap-2 rounded-2xl bg-maroon-700 px-5 py-3 text-sm font-semibold text-white shadow-card transition hover:bg-maroon-600 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={!onStartBrowserLogin}
         >

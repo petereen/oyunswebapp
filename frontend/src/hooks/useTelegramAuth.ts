@@ -125,8 +125,11 @@ function createSignedOutState(overrides: Partial<AuthState> = {}): AuthState {
 
 function normalizeBrowserLoginError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Telegram browser login failed';
-  if (message === 'access_denied' || message === 'popup_closed') {
+  if (message === 'access_denied') {
     return 'Telegram login was cancelled';
+  }
+  if (message === 'popup_closed') {
+    return `Telegram login popup was closed. If it closes immediately every time, check BotFather > Web Login Allowed URLs includes: ${window.location.origin}${window.location.pathname}`;
   }
   if (message === 'popup_blocked') {
     return 'Allow popups and try Telegram login again';
@@ -491,7 +494,7 @@ export function useTelegramAuth() {
       const errorMessage = normalizeBrowserLoginError(error);
       console.error('❌ Telegram browser login failed:', errorMessage);
       requireBrowserLogin(errorMessage);
-      throw error;
+      return null;
     }
   }, [applyAuthenticatedState, requireBrowserLogin]);
 
