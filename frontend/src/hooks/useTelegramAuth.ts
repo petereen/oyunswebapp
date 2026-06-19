@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
+  authenticateWithTelegramBrowserCode,
   authenticateWithTelegramBrowserIdToken,
   authenticateWithTelegramInitData,
   fetchTelegramBrowserAuthChallenge,
@@ -25,6 +26,9 @@ interface AuthState {
 
 interface TelegramLoginCallbackData {
   id_token?: string;
+  code?: string;
+  code_verifier?: string;
+  redirect_uri?: string;
   error?: string;
 }
 
@@ -150,12 +154,46 @@ function getTelegramLoginRedirectUri(): string {
   return new URL(import.meta.env.BASE_URL || '/', window.location.origin).toString();
 }
 
-function buildTelegramLoginUrl(challenge: TelegramBrowserAuthChallenge): string {
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function randomBase64Url(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return toBase64Url(bytes);
+}
+
+async function sha256Base64Url(input: string): Promise<string> {
+  const encoded = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  return toBase64Url(new Uint8Array(digest));
+}
+
+async function createPkcePair(): Promise<{ codeVerifier: string; codeChallenge: string }> {
+  const codeVerifier = randomBase64Url(64);
+  const codeChallenge = await sha256Base64Url(codeVerifier);
+  return { codeVerifier, codeChallenge };
+}
+
+function buildTelegramLoginUrl(
+  challenge: TelegramBrowserAuthChallenge,
+  codeChallenge: string,
+  state: string,
+): { url: string; redirectUri: string } {
+  const redirectUri = getTelegramLoginRedirectUri();
   const params = new URLSearchParams({
-    response_type: 'post_message',
+    response_type: 'code',
     client_id: challenge.client_id,
-    redirect_uri: getTelegramLoginRedirectUri(),
+    redirect_uri: redirectUri,
     scope: 'openid profile',
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
   params.set('nonce', challenge.nonce);
 
@@ -164,35 +202,10 @@ function buildTelegramLoginUrl(challenge: TelegramBrowserAuthChallenge): string 
     params.set('lang', lang);
   }
 
-  return `${TELEGRAM_LOGIN_URL}?${params.toString()}`;
-}
-
-function parseTelegramLoginMessage(data: unknown): TelegramLoginCallbackData | null {
-  let parsed = data;
-  if (typeof parsed === 'string') {
-    try {
-      parsed = JSON.parse(parsed) as TelegramLoginPopupMessage;
-    } catch {
-      return null;
-    }
-  }
-
-  if (!parsed || typeof parsed !== 'object') {
-    return null;
-  }
-
-  const message = parsed as TelegramLoginPopupMessage;
-  if (message.event !== 'auth_result') {
-    return null;
-  }
-  if (message.error) {
-    return { error: message.error };
-  }
-  if (!message.result || typeof message.result !== 'string') {
-    return { error: 'missing id_token' };
-  }
-
-  return { id_token: message.result };
+  return {
+    url: `${TELEGRAM_LOGIN_URL}?${params.toString()}`,
+    redirectUri,
+  };
 }
 
 function getTelegramLoginPopupFeatures(): string {
@@ -296,13 +309,16 @@ async function openTelegramLoginWithSdk(challenge: TelegramBrowserAuthChallenge)
 }
 
 function openTelegramLoginPopup(challenge: TelegramBrowserAuthChallenge): Promise<TelegramLoginCallbackData> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+    const { codeVerifier, codeChallenge } = await createPkcePair();
+    const state = randomBase64Url(24);
+    const { url, redirectUri } = buildTelegramLoginUrl(challenge, codeChallenge, state);
+
     let popup: Window | null = null;
     let settled = false;
     let closeCheck: number | null = null;
 
     const cleanup = () => {
-      window.removeEventListener('message', handleMessage);
       if (closeCheck !== null) {
         window.clearInterval(closeCheck);
       }
@@ -324,38 +340,16 @@ function openTelegramLoginPopup(challenge: TelegramBrowserAuthChallenge): Promis
         return;
       }
 
-      if (!result?.id_token) {
-        reject(new Error('Telegram login did not return an id_token'));
+      if (!result?.code || !result.code_verifier || !result.redirect_uri) {
+        reject(new Error('Telegram login did not return an authorization code'));
         return;
       }
 
       resolve(result);
     };
 
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== TELEGRAM_LOGIN_ORIGIN) {
-        return;
-      }
-      if (popup && event.source !== popup) {
-        return;
-      }
-
-      const result = parseTelegramLoginMessage(event.data);
-      if (!result) {
-        return;
-      }
-      if (result.error) {
-        finish(undefined, new Error(result.error));
-        return;
-      }
-
-      finish(result);
-    };
-
-    window.addEventListener('message', handleMessage);
-
     popup = window.open(
-      buildTelegramLoginUrl(challenge),
+      url,
       'telegram_oidc_login',
       getTelegramLoginPopupFeatures(),
     );
@@ -368,8 +362,44 @@ function openTelegramLoginPopup(challenge: TelegramBrowserAuthChallenge): Promis
 
     popup.focus();
     closeCheck = window.setInterval(() => {
-      if (popup?.closed) {
+      if (!popup) {
+        return;
+      }
+      if (popup.closed) {
         finish(undefined, new Error('popup_closed'));
+        return;
+      }
+
+      try {
+        const popupUrl = new URL(popup.location.href);
+        if (popupUrl.origin !== window.location.origin) {
+          return;
+        }
+
+        const error = popupUrl.searchParams.get('error');
+        if (error) {
+          const errorDescription = popupUrl.searchParams.get('error_description');
+          finish(undefined, new Error(errorDescription || error));
+          return;
+        }
+
+        const authCode = popupUrl.searchParams.get('code');
+        const returnedState = popupUrl.searchParams.get('state');
+        if (!authCode) {
+          return;
+        }
+        if (returnedState && returnedState !== state) {
+          finish(undefined, new Error('Telegram login state mismatch'));
+          return;
+        }
+
+        finish({
+          code: authCode,
+          code_verifier: codeVerifier,
+          redirect_uri: redirectUri,
+        });
+      } catch {
+        // Expected while popup is still on Telegram origin.
       }
     }, 200);
   });
@@ -502,7 +532,18 @@ export function useTelegramAuth() {
         }
       }
 
-      const authData = await authenticateWithTelegramBrowserIdToken(loginResult.id_token || '');
+      let authData: AuthSession;
+      if (loginResult.id_token) {
+        authData = await authenticateWithTelegramBrowserIdToken(loginResult.id_token);
+      } else if (loginResult.code && loginResult.code_verifier && loginResult.redirect_uri) {
+        authData = await authenticateWithTelegramBrowserCode({
+          code: loginResult.code,
+          code_verifier: loginResult.code_verifier,
+          redirect_uri: loginResult.redirect_uri,
+        });
+      } else {
+        throw new Error('Telegram login returned neither id_token nor authorization code');
+      }
 
       applyAuthenticatedState(authData);
       console.log('✅ Telegram browser login successful:', authData.user);

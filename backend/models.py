@@ -40,6 +40,12 @@ class TelegramBrowserAuthRequest(BaseModel):
     id_token: str = Field(..., description="Telegram Login id_token")
 
 
+class TelegramBrowserCodeAuthRequest(BaseModel):
+    code: str = Field(..., description="Telegram OIDC authorization code")
+    code_verifier: str = Field(..., description="PKCE code_verifier used for Telegram OIDC")
+    redirect_uri: str = Field(..., description="Redirect URI used when opening Telegram OAuth")
+
+
 class RateResponse(BaseModel):
     buy_rate: Decimal
     sell_rate: Decimal

@@ -95,6 +95,28 @@ export async function authenticateWithTelegramBrowserIdToken(idToken: string): P
   return response.json();
 }
 
+export async function authenticateWithTelegramBrowserCode(payload: {
+  code: string;
+  code_verifier: string;
+  redirect_uri: string;
+}): Promise<AuthSession> {
+  const response = await fetch(
+    (import.meta.env.VITE_API_BASE || '/api') + '/auth/browser/code',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseFetchError(response));
+  }
+
+  return response.json();
+}
+
 // Fuel admin axios instance - sends API key header for browser-based admin access
 const fuelAdminApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",

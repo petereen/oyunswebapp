@@ -42,6 +42,7 @@ from models import (
     AuthResponse,
     TelegramBrowserAuthChallengeResponse,
     TelegramBrowserAuthRequest,
+    TelegramBrowserCodeAuthRequest,
     BasicRegistrationRequest,
     EmailVerificationStartRequest,
     EmailVerificationCompleteRequest,
@@ -157,6 +158,7 @@ from utils import (
     verify_jwt_token,
     verify_telegram_login_id_token,
     verify_telegram_login_challenge,
+    exchange_telegram_login_code_for_id_token,
     log_admin_action,
     debug_telegram_validation,
 )
@@ -896,6 +898,56 @@ async def authenticate_browser(payload: TelegramBrowserAuthRequest, request: Req
             path="/",
         )
         logger.warning(f"Telegram browser authentication failed: {exc}")
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/browser/code", response_model=AuthResponse)
+async def authenticate_browser_code(payload: TelegramBrowserCodeAuthRequest, request: Request, response: Response):
+    settings = get_settings()
+    client_id = (settings.telegram_login_client_id or "").strip()
+    client_secret = (settings.telegram_login_client_secret or "").strip()
+
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Telegram browser login is not configured")
+    if not client_secret:
+        raise HTTPException(status_code=503, detail="Telegram browser login client secret is not configured")
+
+    challenge_cookie = request.cookies.get(TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE)
+    if not challenge_cookie:
+        raise HTTPException(status_code=401, detail="Missing Telegram login challenge")
+
+    try:
+        expected_nonce = verify_telegram_login_challenge(challenge_cookie, settings.jwt_secret)
+        id_token = exchange_telegram_login_code_for_id_token(
+            code=payload.code,
+            client_id=client_id,
+            client_secret=client_secret,
+            code_verifier=payload.code_verifier,
+            redirect_uri=payload.redirect_uri,
+        )
+        user, received_nonce = verify_telegram_login_id_token(id_token, client_id)
+
+        if not received_nonce or received_nonce != expected_nonce:
+            raise TelegramLoginError("Telegram login nonce mismatch")
+
+        auth_response = _issue_auth_response(user, settings)
+        response.delete_cookie(
+            key=TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE,
+            httponly=True,
+            samesite="lax",
+            secure=not settings.dev_mode,
+            path="/",
+        )
+        return auth_response
+    except TelegramLoginError as exc:
+        response.delete_cookie(
+            key=TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE,
+            httponly=True,
+            samesite="lax",
+            secure=not settings.dev_mode,
+            path="/",
+        )
+        logger.warning(f"Telegram browser code authentication failed: {exc}")
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 

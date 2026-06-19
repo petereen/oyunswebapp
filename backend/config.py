@@ -25,6 +25,7 @@ class Settings:
     user_panel_url: str | None = None
     webapp_url: str | None = None  # Telegram Mini App URL
     telegram_login_client_id: str | None = None
+    telegram_login_client_secret: str | None = None
     telegram_login_nonce_ttl_seconds: int = 300
     admin_api_key: str | None = None
     storage_bucket_passports: str = "passports"
@@ -73,6 +74,7 @@ def get_settings() -> Settings:
     user_panel_url = os.getenv("USER_PANEL_URL")
     webapp_url = os.getenv("WEBAPP_URL")  # Telegram Mini App URL
     telegram_login_client_id = os.getenv("TELEGRAM_LOGIN_CLIENT_ID", "").strip().strip('"').strip("'") or None
+    telegram_login_client_secret = os.getenv("TELEGRAM_LOGIN_CLIENT_SECRET", "").strip().strip('"').strip("'") or None
     telegram_login_nonce_ttl_raw = os.getenv("TELEGRAM_LOGIN_NONCE_TTL_SECONDS", "300").strip().strip('"').strip("'")
     admin_api_key = os.getenv("ADMIN_API_KEY")
     jwt_secret = os.getenv("JWT_SECRET", "").strip().strip('"').strip("'")
@@ -172,6 +174,7 @@ def get_settings() -> Settings:
         user_panel_url=user_panel_url,
         webapp_url=webapp_url,
         telegram_login_client_id=telegram_login_client_id,
+        telegram_login_client_secret=telegram_login_client_secret,
         telegram_login_nonce_ttl_seconds=telegram_login_nonce_ttl_seconds,
         admin_api_key=admin_api_key,
         dev_mode=dev_mode,

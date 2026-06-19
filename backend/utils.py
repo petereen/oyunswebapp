@@ -222,6 +222,73 @@ def verify_telegram_login_id_token(id_token: str, client_id: str) -> tuple[Authe
     )
 
 
+def exchange_telegram_login_code_for_id_token(
+    code: str,
+    client_id: str,
+    client_secret: str,
+    code_verifier: str,
+    redirect_uri: str,
+) -> str:
+    """Exchange Telegram OAuth authorization code for id_token."""
+    if not code:
+        raise TelegramLoginError("Telegram authorization code is required")
+    if not client_id:
+        raise TelegramLoginError("Telegram browser login client_id is not configured")
+    if not client_secret:
+        raise TelegramLoginError("Telegram browser login client_secret is not configured")
+    if not code_verifier:
+        raise TelegramLoginError("Telegram PKCE code_verifier is required")
+    if not redirect_uri:
+        raise TelegramLoginError("Telegram redirect_uri is required")
+
+    token_url = f"{TELEGRAM_LOGIN_ISSUER}/token"
+    payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "code_verifier": code_verifier,
+    }
+
+    try:
+        response = requests.post(
+            token_url,
+            data=payload,
+            auth=(client_id, client_secret),
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        raise TelegramLoginError(f"Failed to exchange Telegram authorization code: {exc}") from exc
+
+    if response.status_code >= 400:
+        detail = None
+        try:
+            error_payload = response.json()
+            if isinstance(error_payload, dict):
+                detail = error_payload.get("error_description") or error_payload.get("error")
+        except ValueError:
+            detail = response.text.strip() or None
+
+        raise TelegramLoginError(
+            f"Telegram token exchange failed ({response.status_code})"
+            + (f": {detail}" if detail else "")
+        )
+
+    try:
+        token_payload = response.json()
+    except ValueError as exc:
+        raise TelegramLoginError(f"Telegram token response is not valid JSON: {exc}") from exc
+
+    if not isinstance(token_payload, dict):
+        raise TelegramLoginError("Telegram token response is invalid")
+
+    id_token = token_payload.get("id_token")
+    if not isinstance(id_token, str) or not id_token:
+        raise TelegramLoginError("Telegram token response does not include id_token")
+
+    return id_token
+
+
 def _find_telegram_login_jwk(key_id: str) -> dict[str, Any]:
     jwks = _get_telegram_login_jwks()
     key = _find_jwk_in_set(jwks, key_id)
