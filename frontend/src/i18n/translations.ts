@@ -43,6 +43,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "home.profile_load_failed": { ru: "❌ Не удалось загрузить профиль:", mn: "❌ Профайл ачаалж чадсангүй:" },
   "home.theme_toggle": { ru: "Сменить тему", mn: "Загвар солих" },
   "home.profile": { ru: "Профиль", mn: "Профайл" },
+  "home.logout": { ru: "Выйти", mn: "Гарах" },
   "home.copyright": { ru: "© 2026 OYUNS ALL-IN-ONE. All rights reserved.", mn: "© 2026 OYUNS ALL-IN-ONE. All rights reserved." },
   "home.oyuns_title": { ru: "OYUNS Plus", mn: "OYUNS Plus" },
   "home.oyuns_points": { ru: "Баллы", mn: "Оноо" },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   authenticateWithTelegramBrowserCode,
   authenticateWithTelegramBrowserIdToken,
@@ -85,6 +85,9 @@ declare global {
 const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
 const USER_STORAGE_KEY = 'oyuns_user_v2';
 const INIT_DATA_STORAGE_KEY = 'oyuns_init_data_v2'; // cached for menu-button / refresh reopens
+const LAST_ACTIVE_AT_STORAGE_KEY = 'oyuns_last_active_at_v1';
+const MAX_INACTIVITY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const ACTIVITY_WRITE_THROTTLE_MS = 60 * 1000; // write at most once per minute
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 const LANG_STORAGE_KEY = 'oyuns_lang';
 const TELEGRAM_LOGIN_ORIGIN = 'https://oauth.telegram.org';
@@ -414,15 +417,26 @@ const DEV_USER: TelegramUser = {
 };
 
 export function useTelegramAuth() {
+  const lastActivityWriteRef = useRef(0);
   const [state, setState] = useState<AuthState>({
     ...createSignedOutState(),
     isAuthenticating: true,
   });
 
+  const touchActivity = useCallback((force = false) => {
+    const now = Date.now();
+    if (!force && now - lastActivityWriteRef.current < ACTIVITY_WRITE_THROTTLE_MS) {
+      return;
+    }
+    lastActivityWriteRef.current = now;
+    localStorage.setItem(LAST_ACTIVE_AT_STORAGE_KEY, String(now));
+  }, []);
+
   const clearStoredAuth = useCallback(() => {
     localStorage.removeItem(JWT_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(INIT_DATA_STORAGE_KEY);
+    localStorage.removeItem(LAST_ACTIVE_AT_STORAGE_KEY);
   }, []);
 
   const applyAuthenticatedState = useCallback((authData: AuthSession, initData = '') => {
@@ -437,7 +451,8 @@ export function useTelegramAuth() {
       user: authData.user,
       token: authData.token,
     }));
-  }, []);
+    touchActivity(true);
+  }, [touchActivity]);
 
   const requireBrowserLogin = useCallback((authError: string | null = null) => {
     clearStoredAuth();
@@ -626,6 +641,18 @@ export function useTelegramAuth() {
       const storedUser = localStorage.getItem(USER_STORAGE_KEY);
       
       if (storedToken && storedUser) {
+        const lastActiveRaw = localStorage.getItem(LAST_ACTIVE_AT_STORAGE_KEY);
+        const lastActiveAt = lastActiveRaw ? Number(lastActiveRaw) : Date.now();
+        if (!Number.isFinite(lastActiveAt) || Date.now() - lastActiveAt > MAX_INACTIVITY_MS) {
+          console.log('⏰ Stored auth expired due to inactivity; forcing browser login');
+          clearStoredAuth();
+          setState(createSignedOutState({
+            needsBrowserLogin: true,
+            authError: 'Session expired after inactivity. Sign in again.',
+          }));
+          return;
+        }
+
         try {
           const user = JSON.parse(storedUser) as TelegramUser;
           // Don't use cached dev user (id 1932946217) in production
@@ -640,6 +667,7 @@ export function useTelegramAuth() {
                 token: storedToken,
               }),
             });
+            touchActivity(true);
             console.log('✅ Restored auth from localStorage:', user);
             return;
           }
@@ -676,13 +704,45 @@ export function useTelegramAuth() {
     };
 
     initAuth();
-  }, [authenticate]);
+  }, [authenticate, clearStoredAuth, touchActivity]);
 
   // Function to clear auth (logout)
   const clearAuth = useCallback(() => {
     clearStoredAuth();
-    setState(createSignedOutState());
+    const isInsideTelegram = Boolean(window.Telegram?.WebApp);
+    setState(createSignedOutState({
+      needsBrowserLogin: !isInsideTelegram,
+    }));
   }, [clearStoredAuth]);
+
+  useEffect(() => {
+    if (!state.token) {
+      return;
+    }
+
+    const onActivity = () => touchActivity();
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        touchActivity();
+      }
+    };
+
+    window.addEventListener('click', onActivity);
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('touchstart', onActivity);
+    window.addEventListener('mousemove', onActivity);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    touchActivity(true);
+
+    return () => {
+      window.removeEventListener('click', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('touchstart', onActivity);
+      window.removeEventListener('mousemove', onActivity);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [state.token, touchActivity]);
 
   // Function to re-authenticate (e.g., on 401 error)
   const refreshAuth = useCallback(async () => {

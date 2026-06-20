@@ -70,7 +70,7 @@ export default function App() {
     ? requestedTournamentSection
     : "schedule";
 
-  const { initData, user, isAuthenticating, authError, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
+  const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
   const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
   const [activeTab, setActiveTab] = useState(urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0);
@@ -209,6 +209,7 @@ export default function App() {
                 authError={authError}
                 needsBrowserLogin={needsBrowserLogin}
                 onStartBrowserLogin={startBrowserLogin}
+                onLogout={clearAuth}
                 onNavigateToTransaction={handleNavigateToTransaction}
                 onNavigateToProfile={handleNavigateToProfile}
                 onNavigateToFuelOrder={handleNavigateToFuelOrder}

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import oyunsIcon from "../assets/oyuns-icon.png";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Mail, LogIn } from "lucide-react";
+import { User, UserPlus, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Loader2, Clock, AlertCircle, Sun, Moon, Mail, LogIn, LogOut } from "lucide-react";
 import { Converter } from "../components/Converter";
 import { RateCard } from "../components/RateCard";
 import { RateHistoryChart } from "../components/RateHistoryChart";
@@ -25,13 +25,14 @@ interface Props {
   authError?: string | null;
   needsBrowserLogin?: boolean;
   onStartBrowserLogin?: () => void;
+  onLogout?: () => void;
   onNavigateToTransaction: (direction?: "buy" | "sell", editInvoice?: string) => void;
   onNavigateToProfile: () => void;
   onNavigateToFuelOrder?: (orderId: string) => void;
   openEmailVerify?: boolean;
 }
 
-export function HomeTab({ initData, user, isAuthenticating, authError, needsBrowserLogin = false, onStartBrowserLogin, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder, openEmailVerify = false }: Props) {
+export function HomeTab({ initData, user, isAuthenticating, authError, needsBrowserLogin = false, onStartBrowserLogin, onLogout, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder, openEmailVerify = false }: Props) {
   const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
   const { lang, setLang, t } = useLang();
@@ -153,6 +154,9 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
     return /^https?:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`;
   }, [appSettings?.home_banner_link_url]);
   const showHomeBanner = (appSettings?.home_banner_enabled ?? 0) > 0 && Boolean(homeBannerImageUrl);
+  const isTelegramWebAppContext = Boolean(window.Telegram?.WebApp);
+  const showBrowserLogout = Boolean(user?.id) && !isTelegramWebAppContext && Boolean(onLogout);
+  const showAuthDebugIssue = !user || (isTelegramWebAppContext && !initData);
 
   const handleHomeBannerClick = () => {
     if (!homeBannerLinkUrl) return;
@@ -268,6 +272,16 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
           >
             {lang === "ru" ? "MN" : "RU"}
           </button>
+          {showBrowserLogout && (
+            <button
+              onClick={onLogout}
+              className="w-11 h-11 rounded-2xl bg-white dark:bg-dark-700 shadow-card-xs border border-silver/60 dark:border-dark-600 text-dark-600 dark:text-ivory-200 flex items-center justify-center hover:shadow-card transition-all"
+              aria-label={t("home.logout")}
+              title={t("home.logout")}
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          )}
           {isBasicRegistered && oyunsPlusSummary && (
             <div className="h-11 px-3 rounded-2xl bg-maroon-700 dark:bg-maroon-900 text-gold-400 border border-maroon-500/30 flex items-center justify-center shadow-card-xs">
               <span className="text-xs font-bold">+{oyunsPlusSummary.points_balance}</span>
@@ -331,7 +345,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
       )}
 
       {/* Auth Debug Info */}
-      {!initData || !user ? (
+      {showAuthDebugIssue ? (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-xl text-sm">
           <strong>{t("home.auth_issue")}</strong>
           <div className="text-xs mt-2 space-y-1">
