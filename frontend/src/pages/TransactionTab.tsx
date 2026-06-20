@@ -142,6 +142,9 @@ export function TransactionTab({
         effectiveRate: 0,
         rubEquivalent: 0,
         adjustment: 0,
+        volumeAdjustment: 0,
+        promoDiscount: 0,
+        promoSuppressedByVolume: false,
         adjustmentSource: "none" as const,
       };
     }
@@ -157,6 +160,7 @@ export function TransactionTab({
   const appliedAdjustment = pricing.adjustment;
   const adjustmentSource = pricing.adjustmentSource;
   const isVolumeDiscountApplied = adjustmentSource === "volume";
+  const promoSuppressedByVolume = pricing.promoSuppressedByVolume;
 
   const currencyFrom = direction === "buy" ? "RUB" : "MNT";
   const currencyTo = direction === "buy" ? "MNT" : "RUB";
@@ -164,12 +168,6 @@ export function TransactionTab({
     if (!effectiveRate || !amount) return 0;
     return direction === "buy" ? amount * effectiveRate : amount / effectiveRate;
   }, [amount, effectiveRate, direction]);
-
-  useEffect(() => {
-    if (flowStep === "promo" && isVolumeDiscountApplied) {
-      setFlowStep("adminBank");
-    }
-  }, [flowStep, isVolumeDiscountApplied]);
 
   const availableAdminBanks = useMemo(() => {
     if (direction === "buy") return adminBanks.filter((b) => b.currency === "RUB" && b.is_active);
@@ -291,15 +289,8 @@ export function TransactionTab({
     setPromoMessage("");
     setPromoError("");
 
-    const nextPricing = getAppliedRateAdjustment({
-      direction: dir,
-      amount: amt,
-      baseRate: rt,
-      promoDiscount: 0,
-    });
-
     if (!invoiceId) setInvoiceId(generateInvoiceId());
-    setFlowStep(nextPricing.adjustmentSource === "volume" ? "adminBank" : "promo");
+    setFlowStep("promo");
     onResetDirection();
   };
 
@@ -313,9 +304,21 @@ export function TransactionTab({
     try {
       const res = await validatePromoCode(promoCode.trim(), direction);
       if (res.valid) {
-        setPromoDiscount(Number(res.discount_amount) || 0);
+        const nextPromoDiscount = Number(res.discount_amount) || 0;
+        const pricingWithPromo = getAppliedRateAdjustment({
+          direction,
+          amount,
+          baseRate,
+          promoDiscount: nextPromoDiscount,
+        });
+
+        setPromoDiscount(nextPromoDiscount);
         setPromoValid(true);
-        setPromoMessage(res.message || "");
+        if (pricingWithPromo.promoSuppressedByVolume) {
+          setPromoMessage(t("txn.promo_lower_than_volume_warning"));
+        } else {
+          setPromoMessage(res.message || "");
+        }
         setFlowStep("adminBank");
       } else {
         setPromoError(res.message || t("txn.promo_not_found"));
@@ -758,9 +761,9 @@ export function TransactionTab({
         <RateInfo />
 
         {isVolumeDiscountApplied && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-400 mb-3">
+          <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-700 dark:text-amber-400 mb-3">
             <Gift className="w-5 h-5" />
-            <span>{t("txn.volume_discount_skip_promo")}</span>
+            <span>{t("txn.volume_discount_active_compare")}</span>
           </div>
         )}
 
@@ -794,7 +797,13 @@ export function TransactionTab({
 
         {promoError && <div className="text-red-600 dark:text-red-400 text-sm mb-3">{promoError}</div>}
         {promoValid && promoDiscount > 0 && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-400 mb-3">
+          <div
+            className={`flex items-center gap-2 p-3 rounded-xl mb-3 ${
+              promoSuppressedByVolume
+                ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
+                : "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
+            }`}
+          >
             <Gift className="w-5 h-5" />
             <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: promoDiscount }) : t("txn.promo_sell_applied", { amount: promoDiscount }))}</span>
           </div>
@@ -818,7 +827,7 @@ export function TransactionTab({
   if (flowStep === "adminBank") {
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
-        <FlowHeader title={t("txn.select_bank")} onBack={() => setFlowStep(isVolumeDiscountApplied ? "card" : "promo")} />
+        <FlowHeader title={t("txn.select_bank")} onBack={() => setFlowStep("promo")} />
         <RateInfo />
 
         <div className="text-sm text-dark-600 dark:text-ivory-300 mb-3">

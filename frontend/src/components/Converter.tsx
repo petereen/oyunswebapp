@@ -12,22 +12,43 @@ export function Converter({ rate, onAmountChange }: Props) {
   const { t } = useLang();
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
   const [amountFrom, setAmountFrom] = useState<string>("");
-  const [amountTo, setAmountTo] = useState<number>(0);
+  const [amountTo, setAmountTo] = useState<string>("");
+  const [activeField, setActiveField] = useState<"from" | "to">("from");
 
   useEffect(() => {
-    compute(direction, amountFrom ? Number(amountFrom) : 0);
+    if (activeField === "from") {
+      computeFrom(direction, amountFrom ? Number(amountFrom) : 0);
+    } else {
+      computeTo(direction, amountTo ? Number(amountTo) : 0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [direction, rate]);
+  }, [direction, rate, activeField]);
 
   const formatNumber = (value: number) =>
     value.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 
-  const compute = (dir: "buy" | "sell", input: number) => {
-    if (!rate) return;
+  const computeFrom = (dir: "buy" | "sell", input: number) => {
+    if (!rate) {
+      setAmountTo("");
+      return;
+    }
     const fx = dir === "buy" ? rate.buy_rate : rate.sell_rate;
     const converted = dir === "buy" ? input * fx : input / fx;
-    setAmountTo(Number(converted.toFixed(2)));
-    onAmountChange?.({ amountFrom: input, amountTo: converted, direction: dir });
+    const normalized = Number.isFinite(converted) ? Number(converted.toFixed(2)) : 0;
+    setAmountTo(input > 0 ? String(normalized) : "");
+    onAmountChange?.({ amountFrom: input, amountTo: normalized, direction: dir });
+  };
+
+  const computeTo = (dir: "buy" | "sell", receiveInput: number) => {
+    if (!rate) {
+      setAmountFrom("");
+      return;
+    }
+    const fx = dir === "buy" ? rate.buy_rate : rate.sell_rate;
+    const sendAmount = dir === "buy" ? receiveInput / fx : receiveInput * fx;
+    const normalizedSend = Number.isFinite(sendAmount) ? Number(sendAmount.toFixed(2)) : 0;
+    setAmountFrom(receiveInput > 0 ? String(normalizedSend) : "");
+    onAmountChange?.({ amountFrom: normalizedSend, amountTo: receiveInput, direction: dir });
   };
 
   const fromCurrency = direction === "buy" ? { symbol: "₽", flag: "🇷🇺", code: "RUB" } : { symbol: "₮", flag: "🇲🇳", code: "MNT" };
@@ -39,7 +60,10 @@ export function Converter({ rate, onAmountChange }: Props) {
         <div className="text-sm font-bold text-dark-800 dark:text-ivory-200 tracking-wide">{t("converter.title")}</div>
         <button
           className="px-3 py-1.5 text-[11px] rounded-xl bg-surface-100 dark:bg-dark-700 text-dark-600 dark:text-ivory-300 font-medium flex items-center gap-1.5 hover:bg-surface-200 dark:hover:bg-dark-600 transition"
-          onClick={() => setDirection(direction === "buy" ? "sell" : "buy")}
+          onClick={() => {
+            setDirection(direction === "buy" ? "sell" : "buy");
+            setActiveField("from");
+          }}
         >
           <ArrowLeftRight className="w-3.5 h-3.5" /> 
           {direction === "buy" ? `RUB → MNT` : `MNT → RUB`}
@@ -57,18 +81,43 @@ export function Converter({ rate, onAmountChange }: Props) {
               placeholder="0"
               onChange={(e) => {
                 const val = e.target.value;
+                setActiveField("from");
                 setAmountFrom(val);
-                compute(direction, val ? Number(val) : 0);
+                computeFrom(direction, val ? Number(val) : 0);
               }}
+              onFocus={() => setActiveField("from")}
               className="w-full bg-transparent pl-7 text-2xl font-bold text-dark-800 dark:text-ivory-200 focus:outline-none"
             />
           </div>
         </div>
         <div className="bg-surface-50 dark:bg-dark-700 rounded-xl p-3.5">
           <div className="text-[11px] text-dark-600 dark:text-ivory-300 font-medium mb-1">{t("converter.receive")} ({toCurrency.code})</div>
-          <div className="text-2xl font-bold text-dark-800 dark:text-ivory-200 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className="text-base">{toCurrency.flag}</span>
-            {formatNumber(amountTo)}
+            <input
+              type="number"
+              min={0}
+              value={amountTo}
+              placeholder="0"
+              onFocus={() => {
+                if (activeField !== "to") {
+                  setDirection((prev) => (prev === "buy" ? "sell" : "buy"));
+                  setAmountFrom("");
+                  setAmountTo("");
+                }
+                setActiveField("to");
+              }}
+              onChange={(e) => {
+                const val = e.target.value;
+                setActiveField("to");
+                setAmountTo(val);
+                computeTo(direction, val ? Number(val) : 0);
+              }}
+              className="w-full bg-transparent text-2xl font-bold text-dark-800 dark:text-ivory-200 focus:outline-none"
+            />
+            {amountTo && !Number.isNaN(Number(amountTo)) && (
+              <span className="text-xs text-dark-600 dark:text-ivory-300 whitespace-nowrap">{formatNumber(Number(amountTo))}</span>
+            )}
           </div>
         </div>
       </div>

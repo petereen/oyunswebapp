@@ -5120,6 +5120,80 @@ def _fetch_all_user_ids() -> list:
         offset += page_size
     return all_ids
 
+def _extract_retry_after_seconds(exc: Exception) -> int | None:
+    """Extract Telegram retry-after seconds from a flood-control exception message."""
+    text = str(exc) or ""
+    match = re.search(r"retry after\s+(\d+)", text, flags=re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except Exception:
+        return None
+
+def _send_broadcast_photo_with_retry(uid: int, caption: str, max_retries: int = 3) -> tuple[bool, str | None]:
+    """Send broadcast photo with flood-limit retries. Returns (ok, error_kind)."""
+    for attempt in range(max_retries + 1):
+        try:
+            bot.send_photo(
+                uid,
+                photo=BROADCAST_IMAGE_URL,
+                caption=caption,
+                parse_mode="HTML",
+            )
+            return True, None
+        except telebot.apihelper.ApiTelegramException as exc:
+            retry_after = _extract_retry_after_seconds(exc)
+            if retry_after is not None and attempt < max_retries:
+                # Respect Telegram flood-control backoff, then retry.
+                time_module.sleep(retry_after + 1)
+                continue
+
+            error_code = getattr(exc, "error_code", None)
+            if error_code in (400, 403):
+                return False, f"telegram_{error_code}"
+            return False, "telegram_other"
+        except Exception:
+            if attempt < max_retries:
+                time_module.sleep(1)
+                continue
+            return False, "unknown"
+
+    return False, "unknown"
+
+def _run_broadcast_send_loop(user_ids: list, caption: str, context: str = "Broadcast") -> tuple[int, int]:
+    """Send broadcast with batching and retries; returns (success, failed)."""
+    # De-duplicate and sanitize user IDs to avoid repeated failures.
+    normalized_ids = []
+    seen = set()
+    for raw_uid in user_ids:
+        try:
+            uid = int(raw_uid)
+        except Exception:
+            continue
+        if uid in seen:
+            continue
+        seen.add(uid)
+        normalized_ids.append(uid)
+
+    success = 0
+    failed = 0
+    for i in range(0, len(normalized_ids), BROADCAST_BATCH_SIZE):
+        batch = normalized_ids[i : i + BROADCAST_BATCH_SIZE]
+        for uid in batch:
+            ok, error_kind = _send_broadcast_photo_with_retry(uid, caption)
+            if ok:
+                success += 1
+            else:
+                failed += 1
+                print(f"⚠️ {context}: could not send to {uid} ({error_kind})")
+
+        if i + BROADCAST_BATCH_SIZE < len(normalized_ids):
+            # Keep a global pace under Telegram's practical throughput limits.
+            time_module.sleep(BROADCAST_BATCH_DELAY)
+
+    return success, failed
+
 @bot.message_handler(commands=["broadcast"])
 def broadcast_rates(message):
     """Broadcast current exchange rates with photo to ALL users.
@@ -5176,20 +5250,8 @@ def broadcast_rates(message):
     bot.reply_to(message, f"📡 Broadcast эхэллээ... ({len(user_ids)} хэрэглэгч)")
 
     # 4. Send photo to every user
-    success = 0
-    failed = 0
-    for uid in user_ids:
-        try:
-            bot.send_photo(
-                uid,
-                photo=BROADCAST_IMAGE_URL,
-                caption=caption,
-                parse_mode="HTML",
-            )
-            success += 1
-        except Exception as e:
-            failed += 1
-            print(f"⚠️ Broadcast: could not send to {uid}: {e}")
+    # 4. Send photo to every user with retry-aware batching
+    success, failed = _run_broadcast_send_loop(user_ids, caption, context="Broadcast")
 
     bot.send_message(
         message.chat.id,
@@ -5200,8 +5262,8 @@ def broadcast_rates(message):
 
 # ── Scheduled daily broadcast (10:00–11:00 MSK, once per day, batched) ──
 _last_auto_broadcast_date = None          # tracks the date of the last auto-broadcast
-BROADCAST_BATCH_SIZE = 25                 # users per batch
-BROADCAST_BATCH_DELAY = 1.0              # seconds between batches
+BROADCAST_BATCH_SIZE = 15                 # users per batch
+BROADCAST_BATCH_DELAY = 1.0               # seconds between batches
 
 def _build_broadcast_caption() -> str | None:
     """Fetch rates and build the broadcast caption. Returns None on failure."""
@@ -5269,25 +5331,8 @@ def _auto_broadcast_loop():
                     continue
 
                 # Send in batches
-                success = 0
-                failed = 0
-                for i in range(0, len(user_ids), BROADCAST_BATCH_SIZE):
-                    batch = user_ids[i : i + BROADCAST_BATCH_SIZE]
-                    for uid in batch:
-                        try:
-                            bot.send_photo(
-                                uid,
-                                photo=BROADCAST_IMAGE_URL,
-                                caption=caption,
-                                parse_mode="HTML",
-                            )
-                            success += 1
-                        except Exception as e:
-                            failed += 1
-                            print(f"⚠️ AutoBroadcast: could not send to {uid}: {e}")
-                    # Pause between batches to respect Telegram rate limits
-                    if i + BROADCAST_BATCH_SIZE < len(user_ids):
-                        time_module.sleep(BROADCAST_BATCH_DELAY)
+                # Send in batches with retry-aware flood-control handling
+                success, failed = _run_broadcast_send_loop(user_ids, caption, context="AutoBroadcast")
 
                 print(f"✅ AutoBroadcast done: {success} sent, {failed} failed")
 
@@ -5355,20 +5400,8 @@ def test_broadcast_rates(message):
 
     bot.reply_to(message, f"🧪 Test broadcast эхэллээ... ({len(test_ids)} хүн)")
 
-    success = 0
-    failed = 0
-    for uid in test_ids:
-        try:
-            bot.send_photo(
-                uid,
-                photo=BROADCAST_IMAGE_URL,
-                caption=caption,
-                parse_mode="HTML",
-            )
-            success += 1
-        except Exception as e:
-            failed += 1
-            print(f"⚠️ TestBroadcast: could not send to {uid}: {e}")
+    # 4. Send photo to test recipients with the same retry-aware sender
+    success, failed = _run_broadcast_send_loop(test_ids, caption, context="TestBroadcast")
 
     bot.send_message(
         message.chat.id,

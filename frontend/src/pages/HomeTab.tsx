@@ -154,9 +154,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
     return /^https?:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`;
   }, [appSettings?.home_banner_link_url]);
   const showHomeBanner = (appSettings?.home_banner_enabled ?? 0) > 0 && Boolean(homeBannerImageUrl);
-  const isTelegramWebAppContext = Boolean(window.Telegram?.WebApp);
-  const showBrowserLogout = Boolean(user?.id) && !isTelegramWebAppContext && Boolean(onLogout);
-  const showAuthDebugIssue = !user || (isTelegramWebAppContext && !initData);
+  const showBrowserLogout = Boolean(user?.id) && Boolean(onLogout) && !initData;
 
   const handleHomeBannerClick = () => {
     if (!homeBannerLinkUrl) return;
@@ -343,17 +341,6 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
           </button>
         ) : homeBannerCard
       )}
-
-      {/* Auth Debug Info */}
-      {showAuthDebugIssue ? (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-xl text-sm">
-          <strong>{t("home.auth_issue")}</strong>
-          <div className="text-xs mt-2 space-y-1">
-            <div>initData: {initData ? `✅ ${initData.length} chars` : "❌ Missing"}</div>
-            <div>User ID: {user?.id ? `✅ ${user.id}` : "❌ Missing"}</div>
-          </div>
-        </div>
-      ) : null}
 
       {/* Transaction Status Trackers */}
       {user?.id && <TransactionStatusTracker userId={user.id} onEditRequest={handleEditTransaction} />}

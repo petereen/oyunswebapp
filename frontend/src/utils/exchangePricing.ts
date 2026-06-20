@@ -34,6 +34,9 @@ export type AppliedRateAdjustment = {
   effectiveRate: number;
   rubEquivalent: number;
   adjustment: number;
+  volumeAdjustment: number;
+  promoDiscount: number;
+  promoSuppressedByVolume: boolean;
   adjustmentSource: "none" | "promo" | "volume";
 };
 
@@ -49,6 +52,9 @@ export function getAppliedRateAdjustment(options: {
       effectiveRate: 0,
       rubEquivalent: 0,
       adjustment: 0,
+      volumeAdjustment: 0,
+      promoDiscount: 0,
+      promoSuppressedByVolume: false,
       adjustmentSource: "none",
     };
   }
@@ -56,14 +62,20 @@ export function getAppliedRateAdjustment(options: {
   const rubEquivalent = getRubEquivalent(options.direction, options.amount, base);
   const promoDiscount = Math.max(0, toSafeNumber(options.promoDiscount, 0));
   const volumeAdjustment = getVolumeRateAdjustment(rubEquivalent);
+  const promoCanApply = promoDiscount > 0 && isPromoAllowed(rubEquivalent);
 
   let adjustment = 0;
   let adjustmentSource: AppliedRateAdjustment["adjustmentSource"] = "none";
+  let promoSuppressedByVolume = false;
 
-  if (volumeAdjustment > 0) {
+  if (promoCanApply && promoDiscount > volumeAdjustment) {
+    adjustment = promoDiscount;
+    adjustmentSource = "promo";
+  } else if (volumeAdjustment > 0) {
     adjustment = volumeAdjustment;
     adjustmentSource = "volume";
-  } else if (promoDiscount > 0 && isPromoAllowed(rubEquivalent)) {
+    promoSuppressedByVolume = promoCanApply;
+  } else if (promoCanApply) {
     adjustment = promoDiscount;
     adjustmentSource = "promo";
   }
@@ -75,6 +87,9 @@ export function getAppliedRateAdjustment(options: {
     effectiveRate,
     rubEquivalent,
     adjustment,
+    volumeAdjustment,
+    promoDiscount,
+    promoSuppressedByVolume,
     adjustmentSource,
   };
 }

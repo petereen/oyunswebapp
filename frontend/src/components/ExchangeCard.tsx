@@ -14,6 +14,8 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
   const { t } = useLang();
   const [direction, setDirection] = useState<"buy" | "sell">(initialDirection || "buy");
   const [inputValue, setInputValue] = useState("");
+  const [receiveInputValue, setReceiveInputValue] = useState("");
+  const [activeField, setActiveField] = useState<"from" | "to">("from");
   const [swapRotation, setSwapRotation] = useState(0);
 
   // Fetch exchange limits from DB
@@ -67,6 +69,18 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
     return direction === "buy" ? amount * effectiveRate : amount / effectiveRate;
   }, [amount, effectiveRate, direction]);
 
+  useEffect(() => {
+    if (activeField === "from") {
+      return;
+    }
+    if (!inputValue || !effectiveRate) {
+      setReceiveInputValue("");
+      return;
+    }
+    setReceiveInputValue(formatInput(String(Math.round(convertedAmount))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveRate, direction]);
+
   const fromCurrency = direction === "buy"
     ? { symbol: "₽", flag: "🇷🇺", code: "RUB" }
     : { symbol: "₮", flag: "🇲🇳", code: "MNT" };
@@ -86,14 +100,40 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/,/g, "");
     if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+      setActiveField("from");
       setInputValue(raw ? formatInput(raw) : "");
+      setReceiveInputValue("");
     }
+  };
+
+  const handleReceiveInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/,/g, "");
+    if (!(raw === "" || /^\d*\.?\d*$/.test(raw))) {
+      return;
+    }
+
+    setActiveField("to");
+    setReceiveInputValue(raw ? formatInput(raw) : "");
+
+    if (!raw || !effectiveRate) {
+      setInputValue("");
+      return;
+    }
+
+    const receiveAmount = Number(raw);
+    const sendAmount = direction === "buy"
+      ? receiveAmount / effectiveRate
+      : receiveAmount * effectiveRate;
+    const normalizedSendAmount = Number.isFinite(sendAmount) ? Math.round(sendAmount) : 0;
+    setInputValue(normalizedSendAmount > 0 ? formatInput(String(normalizedSendAmount)) : "");
   };
 
   const handleSwap = () => {
     setDirection((d) => (d === "buy" ? "sell" : "buy"));
     setSwapRotation((r) => r + 180);
     setInputValue("");
+    setReceiveInputValue("");
+    setActiveField("from");
   };
 
   const isBelowMin = amount > 0 && (direction === "sell" ? convertedAmount < effectiveMinRub : amount < effectiveMinRub);
@@ -126,6 +166,7 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
               inputMode="numeric"
               value={inputValue}
               onChange={handleInputChange}
+              onFocus={() => setActiveField("from")}
               placeholder="0"
               className="text-3xl font-bold text-right w-full border-none outline-none bg-transparent text-dark-800 dark:text-ivory-200 placeholder:text-silver dark:placeholder:text-dark-600"
             />
@@ -157,9 +198,23 @@ export function ExchangeCard({ rate, initialDirection, onProceed }: Props) {
               <span className="text-lg">{toCurrency.flag}</span>
               <span>{toCurrency.code}</span>
             </div>
-            <div className="text-3xl font-bold text-right w-full text-dark-800 dark:text-ivory-200">
-              {amount > 0 ? formatDisplay(convertedAmount) : "0.00"}
-            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={activeField === "to" ? receiveInputValue : (amount > 0 ? formatDisplay(convertedAmount) : "")}
+              onFocus={() => {
+                if (activeField !== "to") {
+                  setDirection((d) => (d === "buy" ? "sell" : "buy"));
+                  setSwapRotation((r) => r + 180);
+                  setInputValue("");
+                  setReceiveInputValue("");
+                }
+                setActiveField("to");
+              }}
+              onChange={handleReceiveInputChange}
+              placeholder="0"
+              className="text-3xl font-bold text-right w-full border-none outline-none bg-transparent text-dark-800 dark:text-ivory-200 placeholder:text-silver dark:placeholder:text-dark-600"
+            />
           </div>
         </div>
       </div>

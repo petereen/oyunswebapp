@@ -132,22 +132,19 @@ function createSignedOutState(overrides: Partial<AuthState> = {}): AuthState {
 
 function normalizeBrowserLoginError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Telegram browser login failed';
-  if (message === 'access_denied') {
-    return 'Telegram login was cancelled';
-  }
-  if (message === 'popup_closed') {
-    return `Telegram login popup was closed. If it closes immediately every time, check BotFather > Web Login Allowed URLs includes: ${window.location.origin}${window.location.pathname}`;
+  if (message === 'access_denied' || message === 'popup_closed') {
+    return 'Telegram login was cancelled. Please try again.';
   }
   if (message === 'popup_blocked') {
-    return 'Allow popups and try Telegram login again';
+    return 'Please allow popups and try again.';
   }
   if (message === 'telegram_login_timeout') {
-    return `Telegram login did not return to the app. If the popup shows \"redirect_uri required\", add this exact URL in BotFather > Web Login Allowed URLs: ${window.location.origin}${window.location.pathname}`;
+    return 'Telegram login timed out. Please try again.';
   }
   if (message.toLowerCase().includes('redirect_uri required')) {
-    return `Telegram Login is not configured for this URL. In BotFather > Bot Settings > Web Login, add exact Allowed URL: ${window.location.origin}${window.location.pathname}`;
+    return 'Telegram login error. Please try again later.';
   }
-  return message;
+  return 'Login failed. Please try again.';
 }
 
 function getTelegramLoginRedirectUri(): string {
