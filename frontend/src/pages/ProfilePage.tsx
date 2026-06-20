@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import {
   ArrowLeft, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp,
   Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save, MessageCircle,
-  ShieldCheck, Users, Copy, Check,
+  ShieldCheck, Users, Copy, Check, LogOut,
 } from "lucide-react";
 import { fetchMe, fetchOyunsPlusSummary, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput, OYUNS_PLUS_LOGO_DEFAULT_URL } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone, RegistrationModal } from "../components/RegistrationModal";
@@ -28,9 +28,10 @@ const parseBankMnt = (bankStr: string | undefined) => {
 interface Props {
   userId?: number;
   onBack: () => void;
+  onLogout?: () => void;
 }
 
-export function ProfilePage({ userId, onBack }: Props) {
+export function ProfilePage({ userId, onBack, onLogout }: Props) {
   const queryClient = useQueryClient();
   const { t } = useLang();
   const [showPromos, setShowPromos] = useState(false);
@@ -397,6 +398,16 @@ export function ProfilePage({ userId, onBack }: Props) {
                   <ExternalLink className="w-3.5 h-3.5 text-dark-600 dark:text-ivory-400" />
                 </a>
               </div>
+
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-600 text-white font-semibold shadow-btn hover:bg-red-500 transition"
+                >
+                  <LogOut className="w-4 h-4" />
+                  {t("home.logout")}
+                </button>
+              )}
 
               {/* App Version */}
               <div className="text-center text-xs text-dark-600 dark:text-ivory-400 pt-2">

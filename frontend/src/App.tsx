@@ -132,6 +132,15 @@ export default function App() {
     setShowProfile(false);
   };
 
+  const handleLogout = () => {
+    clearAuth();
+    setShowProfile(false);
+    setActiveTab(0);
+    setTransactionDirection(null);
+    setFuelOrderId(null);
+    setEditInvoiceId(null);
+  };
+
   const handleNavigateToFuelOrder = (orderId: string) => {
     setFuelOrderId(orderId);
     setActiveTab(2);
@@ -198,7 +207,7 @@ export default function App() {
 
         {/* Profile Page (overlays tabs) */}
         {showProfile ? (
-          <ProfilePage userId={user?.id} onBack={handleBackFromProfile} />
+          <ProfilePage userId={user?.id} onBack={handleBackFromProfile} onLogout={handleLogout} />
         ) : (
           <>
             {effectiveActiveTab === 0 && (
@@ -209,7 +218,6 @@ export default function App() {
                 authError={authError}
                 needsBrowserLogin={needsBrowserLogin}
                 onStartBrowserLogin={startBrowserLogin}
-                onLogout={clearAuth}
                 onNavigateToTransaction={handleNavigateToTransaction}
                 onNavigateToProfile={handleNavigateToProfile}
                 onNavigateToFuelOrder={handleNavigateToFuelOrder}

@@ -614,29 +614,10 @@ export function useTelegramAuth() {
         }
       }
 
-      // PRIORITY 2: Telegram context exists but initData is EMPTY (menu button / page refresh on mobile).
-      // Replay the cached initData from the last successful real auth.
-      if (tg && (!tg.initData || tg.initData.length === 0)) {
-        const cachedInitData = localStorage.getItem(INIT_DATA_STORAGE_KEY);
-        if (cachedInitData) {
-          console.log('📲 Menu button / refresh detected (empty initData). Replaying cached initData...');
-          try {
-            await authenticate(cachedInitData);
-            return;
-          } catch {
-            // Cached initData expired or invalid — clear it and fall through
-            console.warn('⚠️ Cached initData auth failed, clearing cache');
-            localStorage.removeItem(INIT_DATA_STORAGE_KEY);
-            localStorage.removeItem(JWT_STORAGE_KEY);
-            localStorage.removeItem(USER_STORAGE_KEY);
-          }
-        }
-      }
-
-      // PRIORITY 3: Check for existing valid JWT token (no live Telegram initData available)
       const storedToken = localStorage.getItem(JWT_STORAGE_KEY);
       const storedUser = localStorage.getItem(USER_STORAGE_KEY);
-      
+
+      // PRIORITY 2: Check for existing valid JWT token (no live Telegram initData available)
       if (storedToken && storedUser) {
         const lastActiveRaw = localStorage.getItem(LAST_ACTIVE_AT_STORAGE_KEY);
         const lastActiveAt = lastActiveRaw ? Number(lastActiveRaw) : Date.now();
@@ -675,6 +656,23 @@ export function useTelegramAuth() {
         }
       }
 
+      // PRIORITY 3: Telegram context exists but initData is EMPTY (menu button / page refresh on mobile).
+      // Replay the cached initData from the last successful real auth.
+      if (tg && (!tg.initData || tg.initData.length === 0)) {
+        const cachedInitData = localStorage.getItem(INIT_DATA_STORAGE_KEY);
+        if (cachedInitData) {
+          console.log('📲 Menu button / refresh detected (empty initData). Replaying cached initData...');
+          try {
+            await authenticate(cachedInitData);
+            return;
+          } catch {
+            // Cached initData expired or invalid — clear it and fall through
+            console.warn('⚠️ Cached initData auth failed, clearing cache');
+            localStorage.removeItem(INIT_DATA_STORAGE_KEY);
+          }
+        }
+      }
+
       // PRIORITY 4: Dev mode fallback (only in dev mode, no Telegram context)
       if (DEV_MODE) {
         console.log('🔧 Dev mode: Using mock user (no Telegram context)');
@@ -706,9 +704,10 @@ export function useTelegramAuth() {
   // Function to clear auth (logout)
   const clearAuth = useCallback(() => {
     clearStoredAuth();
-    const isInsideTelegram = Boolean(window.Telegram?.WebApp);
+    const tg = window.Telegram?.WebApp;
+    const hasLiveTelegramInitData = Boolean((tg?.initData && tg.initData.length > 0) || getInitDataFromHash());
     setState(createSignedOutState({
-      needsBrowserLogin: !isInsideTelegram,
+      needsBrowserLogin: !hasLiveTelegramInitData,
     }));
   }, [clearStoredAuth]);
 
