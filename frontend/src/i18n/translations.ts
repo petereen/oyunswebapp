@@ -121,6 +121,8 @@ const translations: Record<string, Record<Lang, string>> = {
   "txn.invoice_warning_mnt": { ru: "⚠️ Укажите Invoice ID в назначении платежа:", mn: "⚠️ Гүйлгээний утга хэсэгт Invoice ID-г заавал бичнэ үү:" },
   "txn.upload_receipt": { ru: "Загрузить чек", mn: "Баримт оруулах" },
   "txn.send_amount": { ru: "Сумма отправки:", mn: "Илгээх дүн:" },
+  "txn.receive_amount_before_promo": { ru: "Сумма получения без промо:", mn: "Промо-гүй хүлээн авах дүн:" },
+  "txn.promo_bonus": { ru: "Выгода по промо:", mn: "Промоны нэмэгдэл ашиг:" },
   "txn.receive_amount": { ru: "Сумма получения:", mn: "Хүлээн авах дүн:" },
   "txn.photos_attached": { ru: "{count} фото прикреплено", mn: "{count} зураг хавсаргасан" },
   "txn.add_more_photos": { ru: "Нажмите, чтобы добавить ещё", mn: "Нэмж зураг хавсаргахын тулд энд дарна уу" },

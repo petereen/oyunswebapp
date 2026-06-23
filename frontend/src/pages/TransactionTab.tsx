@@ -172,10 +172,20 @@ export function TransactionTab({
 
   const currencyFrom = direction === "buy" ? "RUB" : "MNT";
   const currencyTo = direction === "buy" ? "MNT" : "RUB";
+  const baseConvertedAmount = useMemo(() => {
+    if (!baseRate || !amount) return 0;
+    return direction === "buy" ? amount * baseRate : amount / baseRate;
+  }, [amount, baseRate, direction]);
   const convertedAmount = useMemo(() => {
     if (!effectiveRate || !amount) return 0;
     return direction === "buy" ? amount * effectiveRate : amount / effectiveRate;
   }, [amount, effectiveRate, direction]);
+  const promoReceiveBonus = useMemo(() => {
+    if (direction !== "sell" || !promoValid || promoDiscount <= 0 || isVolumeDiscountApplied) {
+      return 0;
+    }
+    return Math.max(0, convertedAmount - baseConvertedAmount);
+  }, [baseConvertedAmount, convertedAmount, direction, isVolumeDiscountApplied, promoDiscount, promoValid]);
 
   const availableAdminBanks = useMemo(() => {
     if (direction === "buy") return adminBanks.filter((b) => b.currency === "RUB" && b.is_active);
@@ -999,6 +1009,18 @@ export function TransactionTab({
             <span>{t("txn.send_amount")}</span>
             <span className="font-bold">{amount.toLocaleString()} {currencyFrom}</span>
           </div>
+          {direction === "sell" && promoReceiveBonus > 0 && (
+            <>
+              <div className="flex justify-between text-dark-700 dark:text-ivory-300">
+                <span>{t("txn.receive_amount_before_promo")}</span>
+                <span>{baseConvertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}</span>
+              </div>
+              <div className="flex justify-between text-green-700 dark:text-green-400">
+                <span>{t("txn.promo_bonus")}</span>
+                <span>+{promoReceiveBonus.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}</span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between text-dark-800 dark:text-ivory-200">
             <span>{t("txn.receive_amount")}</span>
             <span className="font-bold">{convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {currencyTo}</span>
