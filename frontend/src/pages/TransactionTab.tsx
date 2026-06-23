@@ -39,6 +39,14 @@ function parseSavedBank(saved: string | undefined): Record<string, string> {
   return result;
 }
 
+function buildSafeReceiptPath(direction: "buy" | "sell" | null, file: File) {
+  const folder = direction || "unknown";
+  const extRaw = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const safeExt = extRaw.replace(/[^a-z0-9]/g, "") || "jpg";
+  const nonce = Math.random().toString(36).slice(2, 10);
+  return `${folder}/${Date.now()}-${nonce}.${safeExt}`;
+}
+
 export function TransactionTab({
   initData,
   user,
@@ -349,9 +357,13 @@ export function TransactionTab({
     try {
       setError("");
       setUploading(true);
-      const path = `${direction}/${Date.now()}-${file.name}`;
+      const path = buildSafeReceiptPath(direction, file);
       const presigned = await requestPresign({ bucket: "bills", path });
-      const res = await fetch(presigned.upload_url, { method: "PUT", body: file, headers: { "Content-Type": file.type } }); if (!res.ok) { const text = await res.text(); alert("UPLOAD FAIL: " + res.status + "\n" + text); throw new Error(text); }
+      const headers = file.type ? { "Content-Type": file.type } : undefined;
+      const res = await fetch(presigned.upload_url, { method: "PUT", body: file, headers });
+      if (!res.ok) {
+        throw new Error(`Upload failed with status ${res.status}`);
+      }
       setReceiptUrls((prev) => [...prev, presigned.public_url]);
     } catch {
       setError(t("txn.upload_error"));

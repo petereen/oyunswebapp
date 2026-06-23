@@ -30,6 +30,14 @@ function parseSavedBank(saved: string | undefined): Record<string, string> {
   return result;
 }
 
+function buildSafeReceiptPath(direction: "buy" | "sell" | null, file: File) {
+  const folder = direction || "unknown";
+  const extRaw = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const safeExt = extRaw.replace(/[^a-z0-9]/g, "") || "jpg";
+  const nonce = Math.random().toString(36).slice(2, 10);
+  return `${folder}/${Date.now()}-${nonce}.${safeExt}`;
+}
+
 export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedBankMnt, onBack }: Props) {
   const { t } = useLang();
   // Steps:
@@ -303,13 +311,17 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     try {
       setError("");
       setUploading(true);
-      const path = `${direction}/${Date.now()}-${file.name}`;
+      const path = buildSafeReceiptPath(direction, file);
       const presigned = await requestPresign({ bucket: "bills", path });
-      await fetch(presigned.upload_url, {
+      const headers = file.type ? { "Content-Type": file.type } : undefined;
+      const uploadRes = await fetch(presigned.upload_url, {
         method: "PUT",
         body: file,
-        headers: { "Content-Type": file.type },
+        headers,
       });
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      }
       setReceiptUrls(prev => [...prev, presigned.public_url]);
     } catch (err) {
       console.error(err);

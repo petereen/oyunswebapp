@@ -600,17 +600,13 @@ export function useTelegramAuth() {
       // PRIORITY 1: Live initData from SDK or URL hash (we are inside Telegram Mini App)
       if (liveInitData) {
         console.log('📱 Real Telegram WebApp detected! Using initData for authentication...');
-        // Clear any old dev mode tokens to force fresh auth with real user
-        localStorage.removeItem(JWT_STORAGE_KEY);
-        localStorage.removeItem(USER_STORAGE_KEY);
-        // Don't remove INIT_DATA_STORAGE_KEY here — we're about to overwrite it on success
-        
+
         try {
           await authenticate(liveInitData);
           return;
         } catch {
-          // Auth failed, error already set in state
-          return;
+          // If initData auth fails, continue with stored session fallback for browser users.
+          console.warn('⚠️ initData authentication failed, attempting stored session fallback...');
         }
       }
 
