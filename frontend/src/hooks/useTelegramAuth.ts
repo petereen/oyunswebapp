@@ -635,15 +635,49 @@ export function useTelegramAuth() {
             localStorage.removeItem(JWT_STORAGE_KEY);
             localStorage.removeItem(USER_STORAGE_KEY);
           } else {
-            setState({
-              ...createSignedOutState({
-                user,
-                token: storedToken,
-              }),
-            });
-            touchActivity(true);
-            console.log('✅ Restored auth from localStorage:', user);
-            return;
+            // Validate the stored JWT by making a lightweight request to /api/me
+            // This prevents blindly trusting an expired/invalid token
+            console.log('🔍 Validating stored JWT token before restoring session...');
+            try {
+              const apiBase = import.meta.env.VITE_API_BASE || '/api';
+              const validateRes = await fetch(`${apiBase}/me`, {
+                headers: { Authorization: `Bearer ${storedToken}` },
+                credentials: 'same-origin',
+              });
+
+              if (validateRes.ok) {
+                // Token is valid — restore session normally
+                setState({
+                  ...createSignedOutState({
+                    user,
+                    token: storedToken,
+                  }),
+                });
+                touchActivity(true);
+                console.log('✅ JWT validated, restored auth from localStorage:', user);
+                return;
+              } else {
+                // Token is invalid (expired or secret changed) — don't clear localStorage yet,
+                // just show login prompt so user can re-authenticate
+                console.warn('⚠️ Stored JWT token is invalid (server returned ' + validateRes.status + '), showing login prompt');
+                setState(createSignedOutState({
+                  needsBrowserLogin: true,
+                  authError: 'Your session has expired. Please sign in again.',
+                }));
+                return;
+              }
+            } catch {
+              // Network error — still restore session, let the interceptor handle later failures
+              console.warn('⚠️ Could not validate JWT token (network error), restoring session and retrying...');
+              setState({
+                ...createSignedOutState({
+                  user,
+                  token: storedToken,
+                }),
+              });
+              touchActivity(true);
+              return;
+            }
           }
         } catch {
           // Invalid stored data, clear and re-authenticate
@@ -747,11 +781,52 @@ export function useTelegramAuth() {
         clearAuth();
       }
     } else if (!DEV_MODE) {
+      // Browser user — verify stored token is actually invalid before forcing re-login.
+      // This handles cases where the 401 interceptor fires due to transient server errors.
+      const storedToken = localStorage.getItem(JWT_STORAGE_KEY);
+      const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+      if (storedToken && storedUser) {
+        try {
+          const apiBase = import.meta.env.VITE_API_BASE || '/api';
+          const validateRes = await fetch(`${apiBase}/me`, {
+            headers: { Authorization: `Bearer ${storedToken}` },
+            credentials: 'same-origin',
+          });
+          if (validateRes.ok) {
+            // Token is actually still valid — the 401 was transient, restore session silently
+            const user = JSON.parse(storedUser) as TelegramUser;
+            setState({
+              ...createSignedOutState({
+                user,
+                token: storedToken,
+              }),
+            });
+            touchActivity(true);
+            console.log('✅ Token still valid after 401 — session restored silently');
+            return;
+          }
+          // Token genuinely invalid — require re-login but DON'T clear storage yet
+          console.warn('⚠️ Token genuinely invalid after 401, requiring re-login');
+        } catch {
+          // Network error — still keep the session, don't force re-login
+          console.warn('⚠️ Could not validate token after 401 (network error), keeping session');
+          const user = JSON.parse(storedUser) as TelegramUser;
+          setState({
+            ...createSignedOutState({
+              user,
+              token: storedToken,
+            }),
+          });
+          touchActivity(true);
+          return;
+        }
+      }
+      // No stored token or genuinely invalid — require browser login
       requireBrowserLogin('Session expired. Sign in with Telegram again.');
     } else {
       clearAuth();
     }
-  }, [authenticate, clearAuth, requireBrowserLogin]);
+  }, [authenticate, clearAuth, requireBrowserLogin, touchActivity]);
 
   return {
     initData: state.initData,

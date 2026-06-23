@@ -203,11 +203,23 @@ api.interceptors.response.use(
         } catch (authError) {
           console.error('❌ Re-authentication failed:', authError);
         }
+      } else {
+        // Browser user (no Telegram context) — retry once with the same token
+        // in case this is a transient server error or deploy-in-progress
+        const storedToken = localStorage.getItem(JWT_STORAGE_KEY);
+        if (storedToken) {
+          console.warn('🔄 Browser 401 — retrying request once before giving up...');
+          try {
+            error.config.headers.Authorization = `Bearer ${storedToken}`;
+            return api.request(error.config);
+          } catch {
+            console.warn('⚠️ Retry also failed, dispatching auth:unauthorized');
+          }
+        }
       }
       
-      // If re-auth failed, clear stored auth and dispatch event
-      localStorage.removeItem(JWT_STORAGE_KEY);
-      localStorage.removeItem('oyuns_user_v2');
+      // Only dispatch unauthorized event — do NOT clear localStorage here.
+      // The auth hook (refreshAuth) will handle state transitions properly.
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     
