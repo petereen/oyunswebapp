@@ -1913,6 +1913,27 @@ export type ProfitSummary = {
   missing_rate_dates: string[];
 };
 
+export type ProfitTransactionItem = {
+  invoice_id: string | null;
+  transaction_type: "exchange" | "ticket";
+  timestamp: string;
+  direction: "buy" | "sell" | "ticket";
+  amount: number;
+  currency_from: string;
+  currency_to: string;
+  rate: number;
+  cost_rate: number;
+  rub_equivalent: number;
+  profit_mnt: number;
+  status: string | null;
+  note?: string | null;
+};
+
+export type ProfitTransactionsResponse = {
+  items: ProfitTransactionItem[];
+  count: number;
+};
+
 export type PlaneTicketSale = {
   id: string;
   sale_date: string;
@@ -2030,6 +2051,16 @@ export async function saveCostRate(payload: { date: string; usd_rate: number; bl
   return res.data.cost_rate as CostRate;
 }
 
+export async function saveCostRatePeriodUsd(payload: {
+  start: string;
+  end: string;
+  usd_rate: number;
+  tz?: DashboardTimeZone;
+}): Promise<{ ok: boolean; updated_count: number; start: string; end: string; usd_rate: number }> {
+  const res = await dashboardApi.post("/dashboard/cost-rates/period-usd", payload);
+  return res.data;
+}
+
 export async function fetchProfit(params: { start?: string; end?: string; tz?: DashboardTimeZone }): Promise<ProfitSummary> {
   const search = new URLSearchParams();
   if (params.start) search.set("start", params.start);
@@ -2038,6 +2069,22 @@ export async function fetchProfit(params: { start?: string; end?: string; tz?: D
   const query = search.toString();
   const res = await dashboardApi.get(`/dashboard/profit${query ? `?${query}` : ""}`);
   return res.data as ProfitSummary;
+}
+
+export async function fetchProfitTransactions(params: {
+  start?: string;
+  end?: string;
+  tz?: DashboardTimeZone;
+  include_tickets?: boolean;
+}): Promise<ProfitTransactionsResponse> {
+  const search = new URLSearchParams();
+  if (params.start) search.set("start", params.start);
+  if (params.end) search.set("end", params.end);
+  if (params.tz) search.set("tz", params.tz);
+  if (params.include_tickets != null) search.set("include_tickets", String(params.include_tickets));
+  const query = search.toString();
+  const res = await dashboardApi.get(`/dashboard/profit/transactions${query ? `?${query}` : ""}`);
+  return res.data as ProfitTransactionsResponse;
 }
 
 export async function fetchPlaneTicketSales(params: { start?: string; end?: string; tz?: DashboardTimeZone } = {}): Promise<PlaneTicketSalesResponse> {

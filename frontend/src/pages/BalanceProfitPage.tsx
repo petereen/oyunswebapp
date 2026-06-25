@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, Calculator, Calendar, Download, History, Loader2, LogOut, Plane, Plus, RefreshCw,
-  Save, Trash2, TrendingUp, UserCog, Wallet,
+  Save, Trash2, TrendingUp, UserCog, Wallet, X,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
@@ -13,8 +13,9 @@ import {
   PlaneTicketSale, PlaneTicketSalesResponse, ProfitSummary, TreasuryAccount,
   createBalanceAdjustment, createPlaneTicketSale, createTreasuryAccount,
   deleteBalanceAdjustment, deletePlaneTicketSale, deleteTreasuryAccount,
+  fetchProfitTransactions,
   fetchBalanceHistory, fetchBalanceSummary, fetchBlackRates, fetchCostRates, fetchDashboardAdminBankAccounts, fetchPlaneTicketSales,
-  fetchProfit, saveCostRate, updateTreasuryAccount,
+  fetchProfit, saveCostRate, saveCostRatePeriodUsd, updateTreasuryAccount,
   upsertBalanceDaily,
 } from "../api";
 
@@ -1338,6 +1339,7 @@ function exportBalanceHistoryCsv(rows: BalanceHistoryRow[]) {
 function ProfitSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTimeZone }) {
   const [period, setPeriod] = useState<ProfitPeriod>("today");
   const [custom, setCustom] = useState({ start: "", end: "" });
+  const [showTransactions, setShowTransactions] = useState(false);
   const range = useMemo(() => profitRange(period, custom, dashboardTimeZone), [period, custom, dashboardTimeZone]);
 
   const profitQ = useQuery({
@@ -1379,6 +1381,12 @@ function ProfitSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTime
               <input type="date" value={custom.end} onChange={(e) => setCustom((current) => ({ ...current, end: e.target.value }))} className="bg-transparent text-xs p-1 outline-none" />
             </div>
           )}
+          <button
+            onClick={() => setShowTransactions(true)}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition"
+          >
+            Жагсаалт харах
+          </button>
         </div>
       </div>
 
@@ -1403,6 +1411,93 @@ function ProfitSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTime
 
       <PlaneTicketSalesManager range={range} dashboardTimeZone={dashboardTimeZone} todayDate={todayIso(dashboardTimeZone)} onSaved={refreshProfit} />
       <CostRateManager range={range} dashboardTimeZone={dashboardTimeZone} todayDate={todayIso(dashboardTimeZone)} onSaved={refreshProfit} />
+
+      {showTransactions && (
+        <ProfitTransactionsModal
+          range={range}
+          dashboardTimeZone={dashboardTimeZone}
+          onClose={() => setShowTransactions(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProfitTransactionsModal({
+  range,
+  dashboardTimeZone,
+  onClose,
+}: {
+  range: { start?: string; end?: string };
+  dashboardTimeZone: DashboardTimeZone;
+  onClose: () => void;
+}) {
+  const txQ = useQuery({
+    queryKey: ["dashboard-profit-transactions", range.start, range.end, dashboardTimeZone],
+    queryFn: () => fetchProfitTransactions({ start: range.start, end: range.end, tz: dashboardTimeZone, include_tickets: true }),
+    staleTime: 30_000,
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="w-full max-w-6xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-dark-600">
+          <div>
+            <div className="text-sm font-bold">Ашгийн дэлгэрэнгүй жагсаалт</div>
+            <div className="text-xs text-slate-500 dark:text-ivory-400">Нийт мөр: {txQ.data?.count ?? 0}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-700 transition"
+            title="Хаах"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 overflow-auto">
+          {txQ.error ? (
+            <div className="text-sm text-red-500 py-8 text-center">Дэлгэрэнгүй жагсаалт ачаалж чадсангүй.</div>
+          ) : txQ.isLoading || !txQ.data ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-maroon-600 animate-spin" /></div>
+          ) : txQ.data.items.length === 0 ? (
+            <div className="py-8 text-center text-sm text-slate-400">Энэ хугацаанд ашиг бодогдох мөр алга.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
+                    <th className="py-2 pr-2 font-medium">Invoice/ID</th>
+                    <th className="py-2 px-2 font-medium">Огноо</th>
+                    <th className="py-2 px-2 font-medium">Чиглэл</th>
+                    <th className="py-2 px-2 font-medium text-right">Дүн</th>
+                    <th className="py-2 px-2 font-medium text-right">Rate</th>
+                    <th className="py-2 px-2 font-medium text-right">Өртөг</th>
+                    <th className="py-2 px-2 font-medium text-right">RUB</th>
+                    <th className="py-2 pl-2 font-medium text-right">Ашиг (₮)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txQ.data.items.map((row, idx) => (
+                    <tr key={`${row.invoice_id || "row"}-${idx}`} className="border-b border-slate-100 dark:border-dark-700">
+                      <td className="py-2 pr-2 font-mono">{row.invoice_id || "—"}</td>
+                      <td className="py-2 px-2 whitespace-nowrap">{row.timestamp ? row.timestamp.slice(0, 19).replace("T", " ") : "—"}</td>
+                      <td className="py-2 px-2">{row.direction === "buy" ? "Руб→төг" : row.direction === "sell" ? "Төг→руб" : "Тийз"}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{fmtNum(row.amount, 2)} {row.currency_from || ""}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{fmtRate(row.rate)}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{fmtRate(row.cost_rate)}</td>
+                      <td className="py-2 px-2 text-right tabular-nums">{fmtRub(row.rub_equivalent)}</td>
+                      <td className={`py-2 pl-2 text-right tabular-nums font-semibold ${row.profit_mnt < 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                        {fmtMnt(row.profit_mnt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1726,10 +1821,19 @@ function CostRateManager({
   const [fetchingRate, setFetchingRate] = useState(false);
   const [rateMsg, setRateMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [periodUsd, setPeriodUsd] = useState("");
+  const [savingPeriod, setSavingPeriod] = useState(false);
 
   useEffect(() => {
     setDate(todayDate);
   }, [todayDate]);
+
+  useEffect(() => {
+    if (!periodStart) setPeriodStart(range.startDate || todayDate);
+    if (!periodEnd) setPeriodEnd(range.endDate || todayDate);
+  }, [periodEnd, periodStart, range.endDate, range.startDate, todayDate]);
 
   const listRange = useMemo(() => ({
     start: range.startDate,
@@ -1794,6 +1898,28 @@ function CostRateManager({
     }
   };
 
+  const savePeriodUsd = async () => {
+    const usdRate = Number(periodUsd);
+    if (!periodStart || !periodEnd || !(usdRate > 0)) return;
+    setSavingPeriod(true);
+    setRateMsg(null);
+    try {
+      const result = await saveCostRatePeriodUsd({
+        start: periodStart,
+        end: periodEnd,
+        usd_rate: usdRate,
+        tz: dashboardTimeZone,
+      });
+      setRateMsg(`${result.updated_count} өдөрт USD ханш (${usdRate}) хадгаллаа.`);
+      await ratesQ.refetch();
+      onSaved();
+    } catch {
+      setRateMsg("Period USD ханш хадгалах үед алдаа гарлаа.");
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
   return (
     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700">
       <div className="flex items-center gap-2 mb-3">
@@ -1837,6 +1963,33 @@ function CostRateManager({
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
         </button>
+      </div>
+
+      <div className="mt-3 rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3">
+        <div className="text-[11px] text-slate-500 dark:text-ivory-400 mb-2">
+          Нэг хугацаанд ижил USD ханш оруулах
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Эхлэх огноо</div>
+            <input type="date" className={INPUT_CLASS} value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+          </label>
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">Дуусах огноо</div>
+            <input type="date" className={INPUT_CLASS} value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </label>
+          <label>
+            <div className="text-[10px] text-slate-400 mb-1">USD ханш</div>
+            <input type="number" className={INPUT_CLASS} placeholder="0" value={periodUsd} onChange={(e) => setPeriodUsd(e.target.value)} />
+          </label>
+          <button
+            onClick={savePeriodUsd}
+            disabled={!periodStart || !periodEnd || !(Number(periodUsd) > 0) || savingPeriod}
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+          >
+            {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Period USD хадгалах
+          </button>
+        </div>
       </div>
 
       {rateMsg && <div className="text-[11px] text-slate-500 dark:text-ivory-400 mt-2">{rateMsg}</div>}

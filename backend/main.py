@@ -3542,6 +3542,66 @@ def _cost_rate_for_day(client, day: str) -> float | None:
     return float(row.get("cost_rate") or 0)
 
 
+def _dashboard_day_series(start_day: str, end_day: str, max_days: int = 370) -> list[str]:
+    """Inclusive YYYY-MM-DD day series with a safety cap."""
+    try:
+        start_dt = datetime.strptime(start_day, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_day, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="start/end must be valid YYYY-MM-DD dates")
+    if end_dt < start_dt:
+        raise HTTPException(status_code=400, detail="end must be on or after start")
+    days = (end_dt - start_dt).days + 1
+    if days > max_days:
+        raise HTTPException(status_code=400, detail=f"date range is too large (max {max_days} days)")
+    return [(start_dt + timedelta(days=offset)).strftime("%Y-%m-%d") for offset in range(days)]
+
+
+def _bulk_upsert_cost_rates(client, rows: list[dict]) -> None:
+    if not rows:
+        return
+    for offset in range(0, len(rows), 400):
+        client.table("cost_rates").upsert(rows[offset:offset + 400], on_conflict="rate_date").execute()
+
+
+def _sync_black_rates_into_cost_rates(client, rates: dict[str, float | None]) -> int:
+    """Persist fetched daily black rates into cost_rates while preserving usd_rate."""
+    normalized = {
+        str(day)[:10]: float(value)
+        for day, value in (rates or {}).items()
+        if value is not None
+    }
+    if not normalized:
+        return 0
+
+    dates = sorted(normalized.keys())
+    existing_usd: dict[str, float | None] = {}
+    for offset in range(0, len(dates), 200):
+        chunk = dates[offset:offset + 200]
+        res = client.table("cost_rates").select("rate_date,usd_rate").in_("rate_date", chunk).execute()
+        for row in res.data or []:
+            day = str(row.get("rate_date") or "")[:10]
+            usd = row.get("usd_rate")
+            existing_usd[day] = float(usd) if usd is not None else None
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    upserts: list[dict] = []
+    for day in dates:
+        black_rate = normalized.get(day)
+        usd_rate = existing_usd.get(day)
+        cost_rate = (usd_rate / black_rate) if (usd_rate is not None and black_rate not in (None, 0)) else None
+        upserts.append({
+            "rate_date": day,
+            "usd_rate": usd_rate,
+            "black_rate": black_rate,
+            "cost_rate": cost_rate,
+            "updated_at": now_iso,
+        })
+
+    _bulk_upsert_cost_rates(client, upserts)
+    return len(upserts)
+
+
 def _plane_ticket_sale_row(client, payload: dict) -> dict:
     sale_date = str(payload.get("sale_date") or payload.get("date") or _moscow_today())[:10]
     try:
@@ -3929,20 +3989,30 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
     latest_date = max(rates) if rates else None
     latest_val = rates.get(latest_date) if latest_date else None
     total = len(rates)
+    persisted_count = 0
+    persist_error = None
+    try:
+        persisted_count = _sync_black_rates_into_cost_rates(get_supabase(), rates)
+    except Exception as sync_exc:
+        logger.warning(f"black-rate database sync failed: {sync_exc}")
+        persist_error = str(sync_exc)
     if total == 0:
         return {"configured": True, "rates": {}, "latest": None, "latest_date": None,
-                "count": 0, "config": cfg,
+                "count": 0, "config": cfg, "persisted_count": persisted_count,
+                "persist_error": persist_error,
                 "error": "No \"Ханш\" rows parsed. Check the tab name, that column E "
                          "contains \"Ханш\", and that the date/rate columns (B/I) are correct."}
     if date:
         return {"configured": True, "rates": {date: rates.get(date)},
-                "latest": latest_val, "latest_date": latest_date, "count": total, "config": cfg}
+                "latest": latest_val, "latest_date": latest_date, "count": total,
+                "config": cfg, "persisted_count": persisted_count, "persist_error": persist_error}
     if start or end:
         lo = start or "0000-00-00"
         hi = end or "9999-99-99"
         rates = {k: v for k, v in rates.items() if lo <= k <= hi}
     return {"configured": True, "rates": rates, "latest": latest_val,
-            "latest_date": latest_date, "count": total, "config": cfg}
+            "latest_date": latest_date, "count": total, "config": cfg,
+            "persisted_count": persisted_count, "persist_error": persist_error}
 
 
 @app.get("/api/dashboard/cost-rates")
@@ -3991,6 +4061,68 @@ async def upsert_cost_rate(payload: dict, auth=Depends(get_dashboard_auth)):
     except Exception as exc:
         raise _dashboard_db_error(exc, "Save cost rate")
     return {"ok": True, "cost_rate": (result.data or [row])[0]}
+
+
+@app.post("/api/dashboard/cost-rates/period-usd")
+async def upsert_cost_rate_period_usd(payload: dict, auth=Depends(get_dashboard_auth)):
+    """Apply one USD rate to every day in a period; keeps per-day black rates."""
+    client = get_supabase()
+    tz_key = _dashboard_timezone_key(payload.get("tz"))
+    start_day = _dashboard_local_day_from_value(payload.get("start") or payload.get("start_date"), tz_key)
+    end_day = _dashboard_local_day_from_value(payload.get("end") or payload.get("end_date"), tz_key)
+    if not start_day or not end_day:
+        raise HTTPException(status_code=400, detail="start and end are required")
+    try:
+        usd_rate = float(payload.get("usd_rate"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="usd_rate must be a number")
+    if usd_rate <= 0:
+        raise HTTPException(status_code=400, detail="usd_rate must be greater than 0")
+
+    days = _dashboard_day_series(start_day, end_day)
+    try:
+        existing_rows = (
+            client.table("cost_rates")
+            .select("rate_date,black_rate")
+            .gte("rate_date", start_day)
+            .lte("rate_date", end_day)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Load period cost rates")
+
+    black_by_day = {
+        str(row.get("rate_date") or "")[:10]: (float(row.get("black_rate")) if row.get("black_rate") is not None else None)
+        for row in existing_rows
+    }
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    upserts: list[dict] = []
+    for day in days:
+        black_rate = black_by_day.get(day)
+        cost_rate = (usd_rate / black_rate) if (black_rate not in (None, 0)) else None
+        upserts.append({
+            "rate_date": day,
+            "usd_rate": usd_rate,
+            "black_rate": black_rate,
+            "cost_rate": cost_rate,
+            "updated_at": now_iso,
+        })
+
+    try:
+        _bulk_upsert_cost_rates(client, upserts)
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Save period USD rates")
+
+    return {
+        "ok": True,
+        "updated_count": len(upserts),
+        "start": start_day,
+        "end": end_day,
+        "usd_rate": usd_rate,
+    }
 
 
 @app.get("/api/dashboard/plane-ticket-sales")
@@ -4046,6 +4178,141 @@ async def delete_plane_ticket_sale(sale_id: str, auth=Depends(get_dashboard_auth
     if not result.data:
         raise HTTPException(status_code=404, detail="Plane ticket sale not found")
     return {"ok": True}
+
+
+@app.get("/api/dashboard/profit/transactions")
+async def dashboard_profit_transactions(
+    start: str = None,
+    end: str = None,
+    tz: str = "moscow",
+    include_tickets: bool = True,
+    auth=Depends(get_dashboard_auth),
+):
+    """Detailed transaction list with per-row profit for the profit calculator window."""
+    import bisect
+
+    client = get_supabase()
+    _dashboard_timezone_key(tz)
+    MAX_ROWS, PAGE = 20000, 1000
+
+    rows: list[dict] = []
+    offset = 0
+    while offset < MAX_ROWS:
+        query = client.table("transactions").select(
+            "invoice,amount,currency_from,currency_to,status,rate,timestamp"
+        )
+        if start:
+            query = query.gte("timestamp", start)
+        if end:
+            query = query.lte("timestamp", end)
+        res = query.order("timestamp", desc=True).range(offset, offset + PAGE - 1).execute()
+        batch = res.data or []
+        rows.extend(batch)
+        if len(batch) < PAGE:
+            break
+        offset += PAGE
+
+    cr_query = client.table("cost_rates").select("rate_date,cost_rate")
+    if end:
+        cr_query = cr_query.lte("rate_date", end[:10])
+    try:
+        cr_data = cr_query.order("rate_date").execute().data or []
+    except Exception as exc:
+        raise _dashboard_db_error(exc, "Load cost rates for profit transactions")
+
+    cr_dates: list[str] = []
+    cr_values: list[float] = []
+    for cr in cr_data:
+        if cr.get("cost_rate") is None:
+            continue
+        cr_dates.append(str(cr["rate_date"])[:10])
+        cr_values.append(float(cr["cost_rate"]))
+
+    def _cost_rate_for(day: str):
+        if not cr_dates or not day:
+            return None
+        idx = bisect.bisect_right(cr_dates, day) - 1
+        return cr_values[idx] if idx >= 0 else None
+
+    items: list[dict] = []
+    for r in rows:
+        if not _is_successful_status(r.get("status")):
+            continue
+        ts = str(r.get("timestamp") or "")
+        day = ts[:10]
+        cost_rate = _cost_rate_for(day)
+        if cost_rate is None:
+            continue
+
+        amount = float(r.get("amount") or 0)
+        rate = float(r.get("rate") or 0)
+        cf = (r.get("currency_from") or "").upper()
+        ct = (r.get("currency_to") or "").upper()
+        direction = None
+        rub_amount = 0.0
+        profit = 0.0
+
+        if cf == "RUB" and ct == "MNT":
+            direction = "buy"
+            rub_amount = amount
+            profit = (cost_rate - rate) * rub_amount
+        elif cf == "MNT" and ct == "RUB":
+            direction = "sell"
+            rub_amount = amount / rate if rate else 0.0
+            profit = (rate - cost_rate) * rub_amount
+        else:
+            continue
+
+        items.append({
+            "invoice_id": r.get("invoice"),
+            "transaction_type": "exchange",
+            "timestamp": ts,
+            "direction": direction,
+            "amount": round(amount, 2),
+            "currency_from": cf,
+            "currency_to": ct,
+            "rate": round(rate, 4),
+            "cost_rate": round(cost_rate, 4),
+            "rub_equivalent": round(rub_amount, 4),
+            "profit_mnt": round(profit, 2),
+            "status": r.get("status"),
+            "note": None,
+        })
+
+    if include_tickets:
+        ticket_query = client.table("plane_ticket_sales").select(
+            "id,sale_date,sold_price_mnt,exchange_rate,cost_rate,rub_equivalent,profit_mnt,note,created_at"
+        )
+        if start:
+            ticket_query = ticket_query.gte("sale_date", start[:10])
+        if end:
+            ticket_query = ticket_query.lte("sale_date", end[:10])
+        try:
+            ticket_rows = ticket_query.order("sale_date", desc=True).execute().data or []
+        except Exception as exc:
+            raise _dashboard_db_error(exc, "Load plane ticket sales for profit transactions")
+
+        for row in ticket_rows:
+            sale_date = str(row.get("sale_date") or "")[:10]
+            ticket_id = str(row.get("id") or "")
+            items.append({
+                "invoice_id": f"TICKET-{ticket_id[:8]}" if ticket_id else "TICKET",
+                "transaction_type": "ticket",
+                "timestamp": row.get("created_at") or (f"{sale_date}T00:00:00+00:00" if sale_date else ""),
+                "direction": "ticket",
+                "amount": round(float(row.get("sold_price_mnt") or 0), 2),
+                "currency_from": "MNT",
+                "currency_to": "RUB",
+                "rate": round(float(row.get("exchange_rate") or 0), 4),
+                "cost_rate": round(float(row.get("cost_rate") or 0), 4),
+                "rub_equivalent": round(float(row.get("rub_equivalent") or 0), 4),
+                "profit_mnt": round(float(row.get("profit_mnt") or 0), 2),
+                "status": "completed",
+                "note": row.get("note"),
+            })
+
+    items.sort(key=lambda row: str(row.get("timestamp") or ""), reverse=True)
+    return {"items": items, "count": len(items)}
 
 
 @app.get("/api/dashboard/profit")
