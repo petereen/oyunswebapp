@@ -1432,11 +1432,42 @@ function ProfitTransactionsModal({
   dashboardTimeZone: DashboardTimeZone;
   onClose: () => void;
 }) {
+  const [sortBy, setSortBy] = useState<"timestamp" | "invoice_id">("timestamp");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
   const txQ = useQuery({
     queryKey: ["dashboard-profit-transactions", range.start, range.end, dashboardTimeZone],
     queryFn: () => fetchProfitTransactions({ start: range.start, end: range.end, tz: dashboardTimeZone, include_tickets: true }),
     staleTime: 30_000,
   });
+
+  const sortedItems = useMemo(() => {
+    const items = [...(txQ.data?.items || [])];
+    const factor = sortDir === "asc" ? 1 : -1;
+    items.sort((a, b) => {
+      if (sortBy === "invoice_id") {
+        const aInvoice = (a.invoice_id || "").toUpperCase();
+        const bInvoice = (b.invoice_id || "").toUpperCase();
+        if (aInvoice < bInvoice) return -1 * factor;
+        if (aInvoice > bInvoice) return 1 * factor;
+        const aTs = String(a.timestamp || "");
+        const bTs = String(b.timestamp || "");
+        return aTs.localeCompare(bTs) * -1;
+      }
+      const aTs = String(a.timestamp || "");
+      const bTs = String(b.timestamp || "");
+      const tsCmp = aTs.localeCompare(bTs);
+      if (tsCmp !== 0) return tsCmp * factor;
+      const aInvoice = (a.invoice_id || "").toUpperCase();
+      const bInvoice = (b.invoice_id || "").toUpperCase();
+      return aInvoice.localeCompare(bInvoice);
+    });
+    return items;
+  }, [txQ.data?.items, sortBy, sortDir]);
+
+  const toggleSortDir = () => {
+    setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -1456,6 +1487,32 @@ function ProfitTransactionsModal({
         </div>
 
         <div className="p-4 overflow-auto">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500 dark:text-ivory-400">Эрэмбэлэх:</span>
+            <button
+              onClick={() => setSortBy("timestamp")}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${sortBy === "timestamp"
+                ? "bg-maroon-600 text-white"
+                : "bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-300 hover:bg-slate-200 dark:hover:bg-dark-600"}`}
+            >
+              Timestamp
+            </button>
+            <button
+              onClick={() => setSortBy("invoice_id")}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${sortBy === "invoice_id"
+                ? "bg-maroon-600 text-white"
+                : "bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-300 hover:bg-slate-200 dark:hover:bg-dark-600"}`}
+            >
+              Invoice ID
+            </button>
+            <button
+              onClick={toggleSortDir}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-300 hover:bg-slate-200 dark:hover:bg-dark-600 transition"
+            >
+              {sortDir === "asc" ? "Өсөх" : "Буурах"}
+            </button>
+          </div>
+
           {txQ.error ? (
             <div className="text-sm text-red-500 py-8 text-center">Дэлгэрэнгүй жагсаалт ачаалж чадсангүй.</div>
           ) : txQ.isLoading || !txQ.data ? (
@@ -1478,7 +1535,7 @@ function ProfitTransactionsModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {txQ.data.items.map((row, idx) => (
+                  {sortedItems.map((row, idx) => (
                     <tr key={`${row.invoice_id || "row"}-${idx}`} className="border-b border-slate-100 dark:border-dark-700">
                       <td className="py-2 pr-2 font-mono">{row.invoice_id || "—"}</td>
                       <td className="py-2 px-2 whitespace-nowrap">{row.timestamp ? row.timestamp.slice(0, 19).replace("T", " ") : "—"}</td>
