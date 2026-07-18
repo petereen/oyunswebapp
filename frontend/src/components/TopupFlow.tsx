@@ -13,9 +13,11 @@ import {
   createPhoneTopup,
   fetchAdminBankAccounts,
   requestPresign,
+  logUploadIssue,
 } from "../api";
 import { toSafeNumber } from "../utils/exchangePricing";
 import { useLang } from "../i18n/useLang";
+import { prepareImageForUpload } from "../utils/imageUpload";
 
 interface Props {
   sellRate: number;
@@ -128,13 +130,34 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
     setError("");
     try {
       for (const file of Array.from(files)) {
-        const path = `phone-topup/${invoiceId || Date.now()}-${file.name}`;
+        const prepared = await prepareImageForUpload(file);
+        const path = `phone-topup/${invoiceId || Date.now()}-${prepared.extension}`;
         const presigned = await requestPresign({ bucket: "bills", path });
-        await fetch(presigned.upload_url, {
+        const uploadRes = await fetch(presigned.upload_url, {
           method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
+          body: prepared.file,
+          headers: { "Content-Type": prepared.mimeType },
         });
+        if (!uploadRes.ok) {
+          const detail = await uploadRes.text().catch(() => "");
+          await logUploadIssue({
+            issue_type: "topup_receipt_upload_failure",
+            bucket: "bills",
+            path,
+            user_id: undefined,
+            message: `Topup receipt upload failed with status ${uploadRes.status}`,
+            details: {
+              status: uploadRes.status,
+              detail,
+              originalName: prepared.originalName,
+              originalSizeBytes: prepared.originalSizeBytes,
+              finalSizeBytes: prepared.finalSizeBytes,
+              mimeType: prepared.mimeType,
+              wasCompressed: prepared.wasCompressed,
+            },
+          });
+          throw new Error(`Upload failed with status ${uploadRes.status}`);
+        }
         setReceiptUrls((prev) => [...prev, presigned.public_url]);
       }
     } catch {

@@ -22,6 +22,7 @@ import {
   createGift,
   fetchAdminBankAccounts,
   requestPresign,
+  logUploadIssue,
   fetchAppSettings,
   DEFAULT_MIN_RUB_AMOUNT,
   DEFAULT_MIN_RUB_BUY,
@@ -30,6 +31,7 @@ import {
   GiftCreateInput,
 } from "../api";
 import { useLang } from "../i18n/useLang";
+import { prepareImageForUpload } from "../utils/imageUpload";
 
 interface Props {
   buyRate: number;
@@ -208,15 +210,35 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
     try {
       setUploading(true);
       setError("");
-      const ext = file.name.split(".").pop() || "jpg";
-      const safeFilename = `gift_receipt_${Date.now()}.${ext}`;
+      const prepared = await prepareImageForUpload(file);
+      const safeFilename = `gift_receipt_${Date.now()}.${prepared.extension}`;
       const path = `gift_receipts/${safeFilename}`;
       const presigned = await requestPresign({ bucket: "bills", path });
-      await fetch(presigned.upload_url, {
+      const uploadRes = await fetch(presigned.upload_url, {
         method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+        body: prepared.file,
+        headers: { "Content-Type": prepared.mimeType },
       });
+      if (!uploadRes.ok) {
+        const detail = await uploadRes.text().catch(() => "");
+        await logUploadIssue({
+          issue_type: "gift_receipt_upload_failure",
+          bucket: "bills",
+          path,
+          user_id: undefined,
+          message: `Gift receipt upload failed with status ${uploadRes.status}`,
+          details: {
+            status: uploadRes.status,
+            detail,
+            originalName: prepared.originalName,
+            originalSizeBytes: prepared.originalSizeBytes,
+            finalSizeBytes: prepared.finalSizeBytes,
+            mimeType: prepared.mimeType,
+            wasCompressed: prepared.wasCompressed,
+          },
+        });
+        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      }
       setReceiptUrl(presigned.public_url);
     } catch (err) {
       console.error("Receipt upload error:", err);

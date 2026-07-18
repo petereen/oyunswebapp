@@ -11,6 +11,7 @@ import requests
 from decimal import Decimal, InvalidOperation
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -166,6 +167,19 @@ from utils import (
 logger = logging.getLogger("uvicorn.error")
 
 TELEGRAM_BROWSER_LOGIN_CHALLENGE_COOKIE = "oyuns_tg_browser_login_challenge_v1"
+
+
+class UploadIssueLogRequest(BaseModel):
+    issue_type: str
+    bucket: str
+    path: str
+    user_id: int | None = None
+    message: str
+    details: dict | None = None
+
+
+class UploadIssueLogResponse(BaseModel):
+    ok: bool
 
 
 VOLUME_DISCOUNT_TIERS: list[tuple[Decimal, Decimal]] = [
@@ -1882,6 +1896,36 @@ async def create_presigned_url(
     signed_url, ttl = presign_upload(client, bucket, payload.path, payload.expires_in)
     public = public_url(client, bucket, payload.path)
     return PresignResponse(upload_url=signed_url, public_url=public, expires_in=ttl, path=payload.path)
+
+
+@app.post("/api/storage/upload-issue", response_model=UploadIssueLogResponse)
+async def log_upload_issue(
+    payload: UploadIssueLogRequest,
+    request: Request,
+    user=Depends(get_jwt_authenticated_user),
+):
+    client = get_supabase()
+    try:
+        insert_payload = {
+            "issue_type": payload.issue_type,
+            "bucket": payload.bucket,
+            "path": payload.path,
+            "user_id": payload.user_id if payload.user_id is not None else getattr(user, "id", None),
+            "message": payload.message,
+            "details": payload.details or {},
+            "request_context": {
+                "user_agent": request.headers.get("user-agent"),
+                "x_forwarded_for": request.headers.get("x-forwarded-for"),
+                "remote_addr": request.client.host if request.client else None,
+            },
+        }
+        client.table("storage_upload_issues").insert(insert_payload).execute()
+    except Exception as exc:
+        logger.exception("Failed to persist upload issue to DB: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to save upload issue") from exc
+
+    logger.warning("Upload issue logged: %s - %s", payload.issue_type, payload.message)
+    return UploadIssueLogResponse(ok=True)
 
 
 @app.get("/api/active-transactions")
@@ -6933,6 +6977,36 @@ async def delete_admin_bank_account(
 
 # ============= Admin Shift Management =============
 
+
+def _notify_pending_transaction_users_about_shift_change(client, message_text: str) -> int:
+    """Notify users with pending transactions that the admin shift changed."""
+    try:
+        pending_res = client.table("transactions").select("user_id").eq("status", "pending").execute()
+    except Exception as exc:
+        logger.warning("Failed to load pending transactions for shift-change notification: %s", exc)
+        return 0
+
+    notified_user_ids: set[int] = set()
+    for row in pending_res.data or []:
+        user_id = row.get("user_id")
+        if user_id is None:
+            continue
+        try:
+            normalized_user_id = int(user_id)
+        except (TypeError, ValueError):
+            continue
+        if normalized_user_id in notified_user_ids:
+            continue
+
+        notified_user_ids.add(normalized_user_id)
+        try:
+            send_user_notification(normalized_user_id, message_text)
+        except Exception as exc:
+            logger.warning("Failed to send shift-change notification to user %s: %s", normalized_user_id, exc)
+
+    return len(notified_user_ids)
+
+
 @app.get("/api/admin/users", response_model=AdminUsersResponse)
 async def get_admin_users(admin=Depends(require_admin)):
     """Get list of admin users for shift selection."""
@@ -7013,6 +7087,12 @@ async def open_shift(payload: ShiftOpenRequest, admin=Depends(require_admin)):
         "is_automatic": False,
         "timestamp": now.isoformat()
     }).execute()
+
+    shift_change_message = (
+        "Уучлаарай, ээлж солигдож буй тул та түр хүлээнэ үү. "
+        "Таны гүйлгээг удахгүй хийх болно."
+    )
+    _notify_pending_transaction_users_about_shift_change(client, shift_change_message)
     
     return {"ok": True, "message": f"Shift opened for admin {payload.admin_id}"}
 
@@ -7069,6 +7149,12 @@ async def transfer_shift(payload: ShiftTransferRequest, admin=Depends(require_ad
         f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS ALL-IN-ONE ДОТООД СИСТЕМ</a>"
     )
     send_user_notification(payload.from_admin_id, prev_admin_notification)
+
+    shift_change_message = (
+        "Уучлаарай, ээлж солигдож буй тул та түр хүлээнэ үү. "
+        "Таны гүйлгээг удахгүй хийх болно."
+    )
+    _notify_pending_transaction_users_about_shift_change(client, shift_change_message)
     
     return {"ok": True, "message": f"Shift transferred from {payload.from_admin_id} to {payload.to_admin_id}"}
 
@@ -7114,6 +7200,12 @@ async def close_shift(payload: ShiftCloseRequest, admin=Depends(require_admin)):
         f"🔗 <a href='https://oyunsadmin.pages.dev/'>OYUNS ALL-IN-ONE ДОТООД СИСТЕМ</a>"
     )
     send_user_notification(payload.admin_id, notification_text)
+
+    shift_change_message = (
+        "Уучлаарай, ээлж солигдож буй тул та түр хүлээнэ үү. "
+        "Таны гүйлгээг удахгүй хийх болно."
+    )
+    _notify_pending_transaction_users_about_shift_change(client, shift_change_message)
     
     return {"ok": True, "message": "Shift closed"}
 

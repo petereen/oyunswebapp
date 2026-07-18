@@ -611,6 +611,34 @@ def log_admin_activity(action_type: str, performed_by_admin_id: int, target_admi
     except Exception as e:
         print(f"❌ Failed to log admin activity: {e}")
 
+def notify_pending_transaction_users_about_shift_change(message_text: str) -> int:
+    try:
+        response = supabase.table("transactions").select("user_id").eq("status", "pending").execute()
+    except Exception as e:
+        print(f"❌ Failed to fetch pending transactions for shift notification: {e}")
+        return 0
+
+    notified_user_ids = set()
+    for row in response.data or []:
+        user_id = row.get("user_id")
+        if user_id is None:
+            continue
+        try:
+            user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            continue
+        if user_id_int in notified_user_ids:
+            continue
+
+        notified_user_ids.add(user_id_int)
+        try:
+            bot.send_message(user_id_int, message_text, parse_mode="HTML")
+        except Exception as e:
+            print(f"❌ Failed to notify pending transaction user {user_id_int}: {e}")
+
+    return len(notified_user_ids)
+
+
 def set_current_admin_id(new_admin_id, performed_by_admin_id=None, is_automatic=False):
     try:
         # Get previous admin before updating
@@ -639,6 +667,12 @@ def set_current_admin_id(new_admin_id, performed_by_admin_id=None, is_automatic=
                 previous_admin_id=previous_admin_id,
                 is_automatic=is_automatic
             )
+
+        shift_change_message = (
+            "Уучлаарай, ээлж солигдож буй тул та түр хүлээнэ үү. "
+            "Таны гүйлгээг удахгүй хийх болно."
+        )
+        notify_pending_transaction_users_about_shift_change(shift_change_message)
 
         print(f"✅ Admin shift transferred to {new_admin_id}")
         return True
@@ -744,6 +778,12 @@ def close_shift_callback(call):
             call.message.chat.id,
             call.message.message_id
         )
+
+        shift_change_message = (
+            "Уучлаарай, ээлж солигдож буй тул та түр хүлээнэ үү. "
+            "Таны гүйлгээг удахгүй хийх болно."
+        )
+        notify_pending_transaction_users_about_shift_change(shift_change_message)
         # Prompt the closing admin to log their bank remainder
         if previous_admin_id:
             prompt_admin_bank_remainder(previous_admin_id, context="close")

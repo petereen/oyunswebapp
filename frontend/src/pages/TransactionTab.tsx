@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2 } from "lucide-react";
 import { ExchangeCard } from "../components/ExchangeCard";
 import {
-  fetchRates, fetchMe, createExchange, ExchangeCreateInput, requestPresign,
+  fetchRates, fetchMe, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue,
   fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes,
   UserPromoCode, fetchServiceStatus, fetchEditableExchange, resubmitExchange,
 } from "../api";
@@ -13,6 +13,7 @@ import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useLang } from "../i18n/useLang";
 import { getAppliedRateAdjustment } from "../utils/exchangePricing";
+import { prepareImageForUpload } from "../utils/imageUpload";
 
 interface Props {
   initData: string;
@@ -367,15 +368,34 @@ export function TransactionTab({
     try {
       setError("");
       setUploading(true);
-      const path = buildSafeReceiptPath(direction, file);
+      const prepared = await prepareImageForUpload(file);
+      const path = buildSafeReceiptPath(direction, prepared.file);
       const presigned = await requestPresign({ bucket: "bills", path });
-      const headers = file.type ? { "Content-Type": file.type } : undefined;
-      const res = await fetch(presigned.upload_url, { method: "PUT", body: file, headers });
+      const headers = prepared.mimeType ? { "Content-Type": prepared.mimeType } : undefined;
+      const res = await fetch(presigned.upload_url, { method: "PUT", body: prepared.file, headers });
       if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        await logUploadIssue({
+          issue_type: "receipt_upload_failure",
+          bucket: "bills",
+          path,
+          user_id: user?.id,
+          message: `Receipt upload failed with status ${res.status}`,
+          details: {
+            status: res.status,
+            detail,
+            originalName: prepared.originalName,
+            originalSizeBytes: prepared.originalSizeBytes,
+            finalSizeBytes: prepared.finalSizeBytes,
+            mimeType: prepared.mimeType,
+            wasCompressed: prepared.wasCompressed,
+          },
+        });
         throw new Error(`Upload failed with status ${res.status}`);
       }
       setReceiptUrls((prev) => [...prev, presigned.public_url]);
-    } catch {
+    } catch (err) {
+      console.error("Receipt upload error", err);
       setError(t("txn.upload_error"));
     } finally {
       setUploading(false);

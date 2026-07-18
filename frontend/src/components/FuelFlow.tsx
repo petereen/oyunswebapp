@@ -288,14 +288,34 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
     setUpl(true);
     setError("");
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `fuel/${prefix}/${invoiceId || "unknown"}_${Date.now()}.${ext}`;
+      const prepared = await prepareImageForUpload(file);
+      const path = `fuel/${prefix}/${invoiceId || "unknown"}_${Date.now()}.${prepared.extension}`;
       const presigned = await requestPresign({ bucket: "bills", path });
-      await fetch(presigned.upload_url, {
+      const uploadRes = await fetch(presigned.upload_url, {
         method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+        body: prepared.file,
+        headers: { "Content-Type": prepared.mimeType },
       });
+      if (!uploadRes.ok) {
+        const detail = await uploadRes.text().catch(() => "");
+        await logUploadIssue({
+          issue_type: "fuel_photo_upload_failure",
+          bucket: "bills",
+          path,
+          user_id: undefined,
+          message: `Fuel photo upload failed with status ${uploadRes.status}`,
+          details: {
+            status: uploadRes.status,
+            detail,
+            originalName: prepared.originalName,
+            originalSizeBytes: prepared.originalSizeBytes,
+            finalSizeBytes: prepared.finalSizeBytes,
+            mimeType: prepared.mimeType,
+            wasCompressed: prepared.wasCompressed,
+          },
+        });
+        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      }
       setUrl(presigned.public_url);
     } catch {
       setError(t("fuel.photo_error"));

@@ -9,8 +9,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { submitRegistration, RegistrationInput, requestPresign } from "../api";
+import { submitRegistration, RegistrationInput, requestPresign, logUploadIssue } from "../api";
 import { useLang } from "../i18n/useLang";
+import { prepareImageForUpload } from "../utils/imageUpload";
 
 // Bank name options
 const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
@@ -144,16 +145,35 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
     try {
       setUploading(true);
       setError("");
-      // Get file extension and generate a safe filename (avoid Cyrillic and special characters)
-      const ext = file.name.split('.').pop() || 'jpg';
-      const safeFilename = `passport_${Date.now()}.${ext}`;
+      const prepared = await prepareImageForUpload(file);
+      const safeFilename = `passport_${Date.now()}.${prepared.extension}`;
       const path = `passport/${safeFilename}`;
       const presigned = await requestPresign({ bucket: "bills", path });
-      await fetch(presigned.upload_url, {
+      const uploadRes = await fetch(presigned.upload_url, {
         method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+        body: prepared.file,
+        headers: { "Content-Type": prepared.mimeType },
       });
+      if (!uploadRes.ok) {
+        const detail = await uploadRes.text().catch(() => "");
+        await logUploadIssue({
+          issue_type: "passport_upload_failure",
+          bucket: "bills",
+          path,
+          user_id: undefined,
+          message: `Passport upload failed with status ${uploadRes.status}`,
+          details: {
+            status: uploadRes.status,
+            detail,
+            originalName: prepared.originalName,
+            originalSizeBytes: prepared.originalSizeBytes,
+            finalSizeBytes: prepared.finalSizeBytes,
+            mimeType: prepared.mimeType,
+            wasCompressed: prepared.wasCompressed,
+          },
+        });
+        throw new Error(`Upload failed with status ${uploadRes.status}`);
+      }
       setPassportUrl(presigned.public_url);
     } catch (err) {
       console.error("Passport upload error:", err);

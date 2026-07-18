@@ -514,6 +514,18 @@ export async function requestPresign(payload: PresignRequest) {
   return res.data as { upload_url: string; public_url: string; path: string };
 }
 
+export async function logUploadIssue(payload: {
+  issue_type: string;
+  bucket: string;
+  path: string;
+  user_id?: number | null;
+  message: string;
+  details?: Record<string, unknown>;
+}) {
+  const res = await api.post('/storage/upload-issue', payload);
+  return res.data as { ok: boolean };
+}
+
 export async function requestPresignAdmin(payload: PresignRequest) {
   const res = await fuelAdminApi.post('/fuel-admin/presign', payload);
   return res.data as { upload_url: string; public_url: string; path: string };

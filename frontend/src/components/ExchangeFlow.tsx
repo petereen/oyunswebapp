@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
-import { DEFAULT_MIN_RUB_AMOUNT, DEFAULT_MIN_RUB_BUY, createExchange, ExchangeCreateInput, requestPresign, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
+import { DEFAULT_MIN_RUB_AMOUNT, DEFAULT_MIN_RUB_BUY, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 import { useLang } from "../i18n/useLang";
+import { prepareImageForUpload } from "../utils/imageUpload";
 
 interface Props {
   initData: string;
@@ -311,15 +312,33 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     try {
       setError("");
       setUploading(true);
-      const path = buildSafeReceiptPath(direction, file);
+      const prepared = await prepareImageForUpload(file);
+      const path = buildSafeReceiptPath(direction, prepared.file);
       const presigned = await requestPresign({ bucket: "bills", path });
-      const headers = file.type ? { "Content-Type": file.type } : undefined;
+      const headers = prepared.mimeType ? { "Content-Type": prepared.mimeType } : undefined;
       const uploadRes = await fetch(presigned.upload_url, {
         method: "PUT",
-        body: file,
+        body: prepared.file,
         headers,
       });
       if (!uploadRes.ok) {
+        const detail = await uploadRes.text().catch(() => "");
+        await logUploadIssue({
+          issue_type: "receipt_upload_failure",
+          bucket: "bills",
+          path,
+          user_id: undefined,
+          message: `Receipt upload failed with status ${uploadRes.status}`,
+          details: {
+            status: uploadRes.status,
+            detail,
+            originalName: prepared.originalName,
+            originalSizeBytes: prepared.originalSizeBytes,
+            finalSizeBytes: prepared.finalSizeBytes,
+            mimeType: prepared.mimeType,
+            wasCompressed: prepared.wasCompressed,
+          },
+        });
         throw new Error(`Upload failed with status ${uploadRes.status}`);
       }
       setReceiptUrls(prev => [...prev, presigned.public_url]);
