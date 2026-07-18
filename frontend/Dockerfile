@@ -2,7 +2,13 @@
 FROM node:18-alpine as builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then \
+			echo "Using lockfile: running npm ci"; \
+			npm ci; \
+		else \
+			echo "No lockfile found: running npm install"; \
+			npm install --no-audit --no-fund; \
+		fi
 COPY . .
 # Set the API base URL for production to use relative path (proxied by Nginx)
 ENV VITE_API_BASE=/api
