@@ -12,6 +12,10 @@ RUN if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then \
 COPY . .
 # Set the API base URL for production to use relative path (proxied by Nginx)
 ENV VITE_API_BASE=/api
+# A release identifier is compiled into the entry bundle. It provides a safe
+# cache-busting switch for Telegram WebViews without disabling asset caching.
+ARG VITE_BUILD_ID=local
+ENV VITE_BUILD_ID=$VITE_BUILD_ID
 # Default to production mode (false) - override with --build-arg VITE_DEV_MODE=true for dev
 ARG VITE_DEV_MODE=false
 ENV VITE_DEV_MODE=$VITE_DEV_MODE

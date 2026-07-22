@@ -23,6 +23,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        VITE_BUILD_ID: ${VITE_BUILD_ID:-local}
         VITE_DEV_MODE: ${VITE_DEV_MODE:-false}
         VITE_FUEL_ADMIN_API_KEY: ${VITE_FUEL_ADMIN_API_KEY:-}
         VITE_FUEL_ADMIN_USER_IDS: ${VITE_FUEL_ADMIN_USER_IDS:-}
