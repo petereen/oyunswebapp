@@ -45,6 +45,9 @@ services:
     depends_on:
       - frontend
       - api
+    networks:
+      - default
+      - web-edge
     restart: unless-stopped
 
   certbot:
@@ -53,3 +56,9 @@ services:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+networks:
+  # Shared only by the edge proxy and the separate Oyuns Agent project.
+  # Create once on the VPS: docker network create web-edge
+  web-edge:
+    external: true
