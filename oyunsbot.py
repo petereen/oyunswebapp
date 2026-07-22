@@ -5465,6 +5465,22 @@ def handle_unknown_text(message):
 def initialize_bot():
     """Load existing referral links from database into memory cache on startup"""
 
+    # This bot receives updates through long polling (see run_bot below). Telegram
+    # will not deliver those updates while a webhook is configured, even though
+    # outgoing calls such as sendMessage/sendPhoto continue to work. Clear a
+    # stale webhook at every start so commands and callback buttons keep working
+    # after a deploy or a previous webhook-based configuration.
+    try:
+        webhook = bot.get_webhook_info()
+        if webhook.url:
+            print(f"⚠️ Removing existing Telegram webhook: {webhook.url}")
+            bot.delete_webhook(drop_pending_updates=False)
+            print("✅ Existing Telegram webhook removed; long polling is active")
+    except Exception as e:
+        # Do not prevent startup for a transient Telegram API error. infinity_polling
+        # below will continue retrying the update connection.
+        print(f"⚠️ Could not check/remove Telegram webhook: {e}")
+
     # ── Set /start command menu & web app menu button ──
     try:
         from telebot.types import BotCommand, BotCommandScopeDefault
@@ -5505,8 +5521,19 @@ def initialize_bot():
     broadcast_thread.start()
     print("✅ Auto-broadcast scheduler started (10:00–11:00 MSK daily)")
 
-# Initialize bot on startup
-print("🤖 Starting OYUNS ALL-IN-ONE Bot...")
-initialize_bot()
-print("✅ Bot initialized, starting polling...")
-bot.polling(none_stop=True)
+def run_bot() -> None:
+    """Initialize the bot and keep the incoming-update listener resilient."""
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN is not configured; refusing to start the Telegram bot")
+
+    print("🤖 Starting OYUNS ALL-IN-ONE Bot...")
+    initialize_bot()
+    print("✅ Bot initialized, starting long polling...")
+    # infinity_polling reconnects after temporary Telegram/network failures. It
+    # is required for commands and callback queries; outgoing notifications do
+    # not exercise this update connection.
+    bot.infinity_polling(timeout=30, long_polling_timeout=25)
+
+
+if __name__ == "__main__":
+    run_bot()
