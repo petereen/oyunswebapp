@@ -1,0 +1,46 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_BUILD_ID: ${VITE_BUILD_ID:-local}
+        VITE_DEV_MODE: ${VITE_DEV_MODE:-false}
+        VITE_FUEL_ADMIN_API_KEY: ${VITE_FUEL_ADMIN_API_KEY:-}
+        VITE_FUEL_ADMIN_USER_IDS: ${VITE_FUEL_ADMIN_USER_IDS:-}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+        VITE_TELEGRAM_LOGIN_REDIRECT_URI: ${VITE_TELEGRAM_LOGIN_REDIRECT_URI:-}
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile.dokploy
+    depends_on:
+      - api
+      - frontend
+    networks:
+      - default
+      - dokploy-network
+    restart: unless-stopped
+
+networks:
+  dokploy-network:
+    external: true
