@@ -9,7 +9,6 @@ __pycache__
 node_modules
 frontend/
 database/
-nginx/
 .github/
 .build
 .cache
