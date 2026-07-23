@@ -17,7 +17,9 @@ services:
       DIRECTUS_STATIC_TOKEN: ${DIRECTUS_STATIC_TOKEN}
       NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-    expose:
+    # Dokploy uses this internal port to discover and route the service.
+    # No fixed host port is published by this short Compose syntax.
+    ports:
       - "3000"
     depends_on:
       directus:
@@ -26,7 +28,7 @@ services:
   directus:
     image: directus/directus:11
     restart: unless-stopped
-    expose:
+    ports:
       - "8055"
     environment:
       KEY: ${DIRECTUS_KEY}
