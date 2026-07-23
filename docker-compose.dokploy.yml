@@ -4,6 +4,10 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     env_file: .env
+    networks:
+      default:
+        aliases:
+          - oyuns-webapp-api
     restart: unless-stopped
 
   bot:
@@ -27,6 +31,10 @@ services:
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
         VITE_TELEGRAM_LOGIN_REDIRECT_URI: ${VITE_TELEGRAM_LOGIN_REDIRECT_URI:-}
+    networks:
+      default:
+        aliases:
+          - oyuns-webapp-frontend
     restart: unless-stopped
 
   gateway:
