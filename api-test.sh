@@ -73,12 +73,13 @@ echo ""
 echo "6️⃣  Environment Check..."
 echo "Checking .env file..."
 
-if grep -q "BOT_TOKEN=8142574890:AAHzTS6tjFv6j02p0wYxOOKbSSEdapGWbso" .env; then
-    echo "❌ CRITICAL: Bot token is the OLD exposed token!"
-    echo "   Must rotate via @BotFather"
+BOT_TOKEN_VALUE=$(grep "^BOT_TOKEN=" .env | cut -d'=' -f2-)
+if [ -z "$BOT_TOKEN_VALUE" ] || [ "$BOT_TOKEN_VALUE" = "YOUR_BOT_TOKEN_HERE" ]; then
+    echo "❌ CRITICAL: BOT_TOKEN is missing or still a placeholder!"
+    echo "   Create a token with @BotFather and set it in .env"
     exit 1
 else
-    BOT_TOKEN_LENGTH=$(grep "BOT_TOKEN=" .env | cut -d'=' -f2 | wc -c)
+    BOT_TOKEN_LENGTH=$(printf %s "$BOT_TOKEN_VALUE" | wc -c)
     if [ "$BOT_TOKEN_LENGTH" -lt 30 ]; then
         echo "⚠️  Bot token seems short (length: $BOT_TOKEN_LENGTH)"
     else

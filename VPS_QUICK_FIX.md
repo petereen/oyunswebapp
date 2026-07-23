@@ -26,7 +26,7 @@ cd /path/to/oyunsbot-webapp
 grep BOT_TOKEN .env
 ```
 
-**If you see:** `8142574890:AAHzTS6tjFv6j02p0wYxOOKbSSEdapGWbso`
+**If you see a placeholder, old, or revoked token:** `YOUR_BOT_TOKEN_HERE`
 → **STOP! Follow "Bot Token Rotation" below first**
 
 ### STEP 4: Update .env File

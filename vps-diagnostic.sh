@@ -7,10 +7,10 @@ echo "=== OYUNSBOT VPS DIAGNOSTICS ==="
 echo ""
 
 echo "1️⃣  Checking Bot Token..."
-BOT_TOKEN=$(grep "BOT_TOKEN=" .env | cut -d'=' -f2)
-if [[ "$BOT_TOKEN" == "8142574890:AAHzTS6tjFv6j02p0wYxOOKbSSEdapGWbso" ]]; then
-    echo "❌ CRITICAL: Bot token is STILL the old exposed token!"
-    echo "   Must rotate via @BotFather"
+BOT_TOKEN=$(grep "^BOT_TOKEN=" .env | cut -d'=' -f2-)
+if [[ -z "$BOT_TOKEN" || "$BOT_TOKEN" == "YOUR_BOT_TOKEN_HERE" ]]; then
+    echo "❌ CRITICAL: BOT_TOKEN is missing or still a placeholder!"
+    echo "   Create a token with @BotFather and set it in .env"
 else
     echo "✅ Bot token appears to be updated"
     echo "   Token: ${BOT_TOKEN:0:20}..."
