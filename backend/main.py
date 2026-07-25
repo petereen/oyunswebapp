@@ -448,6 +448,69 @@ def _get_user_lang(user_id: int) -> str:
     return "mn"
 
 
+def _send_email_verification_notification(user_id: int) -> None:
+    """Remind a user in Telegram to finish email verification.
+
+    The email itself is sent by Supabase Auth through the configured SMTP
+    provider (Resend). Telegram is only used as a reliable in-app reminder.
+    """
+    try:
+        settings = get_settings()
+        lang = _get_user_lang(user_id)
+        if lang == "ru":
+            text = (
+                "📧 <b>Пожалуйста, подтвердите email</b>\n\n"
+                "Чтобы пользоваться денежными операциями, подтвердите email кодом из письма."
+            )
+            button_text = "✅ Подтвердить email"
+        else:
+            text = (
+                "📧 <b>Имэйлээ баталгаажуулна уу</b>\n\n"
+                "Мөнгөний гүйлгээ ашиглахын тулд имэйлээр ирсэн кодоор имэйлээ баталгаажуулна уу."
+            )
+            button_text = "✅ Имэйл баталгаажуулах"
+
+        reply_markup = None
+        panel_url = (settings.user_panel_url or settings.webapp_url or "").strip()
+        if panel_url and panel_url.startswith("https://"):
+            separator = "&" if "?" in panel_url else "?"
+            reply_markup = {
+                "inline_keyboard": [[
+                    {"text": button_text, "web_app": {"url": f"{panel_url}{separator}verify-email=1"}}
+                ]]
+            }
+
+        send_user_notification(user_id, text, reply_markup=reply_markup)
+    except Exception:
+        logger.exception("Failed to send email verification Telegram reminder to %s", user_id)
+
+
+def _require_email_verified(client, user_id: int) -> dict:
+    """Protect every money-creating endpoint with the email gate."""
+    verification_enabled = _safe_int(
+        _get_app_settings_dict(client, ["email_verification_enabled"]).get("email_verification_enabled"),
+        1,
+    ) > 0
+    user_res = (
+        client.table("users")
+        .select("id,email,verification_level,email_verification_pending,email_verified_at")
+        .eq("id", user_id)
+        .limit(1)
+        .execute()
+    )
+    record = user_res.data[0] if user_res.data else None
+    if not record:
+        raise HTTPException(status_code=403, detail="Please verify your email first")
+
+    # Turning the feature off is an explicit admin override for staged rollout.
+    if verification_enabled and (
+        bool(record.get("email_verification_pending"))
+        or not record.get("email_verified_at")
+    ):
+        raise HTTPException(status_code=403, detail="Please verify your email first")
+    return record
+
+
 def _classify_transaction_service(direction: str, bank_details: str | None) -> tuple[str, str | None, str | None]:
     if direction != "sell" or not bank_details:
         return "exchange", None, None
@@ -5113,6 +5176,7 @@ async def register_basic(
             "email": normalized_email,
         }
 
+    _send_email_verification_notification(user.id)
     return {
         "ok": True,
         "message": "Basic registration saved. Verify email to continue.",
@@ -5178,6 +5242,7 @@ async def start_email_verification(
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to start email verification")
 
+    _send_email_verification_notification(user.id)
     return {
         "ok": True,
         "email": normalized_email,
@@ -5462,6 +5527,7 @@ async def create_exchange(
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
 
     client = get_supabase()
+    _require_email_verified(client, user.id)
     _require_service_open(client)
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
     normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.admin_bank_id, "admin_bank_id") if payload.admin_bank_id else None
@@ -5749,6 +5815,7 @@ async def resubmit_exchange(
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
 
     client = get_supabase()
+    _require_email_verified(client, user.id)
     now = datetime.now(timezone.utc)
     trx_res = (
         client.table("transactions")
@@ -7680,6 +7747,7 @@ async def create_gift(
 ):
     """Create a new gift transaction"""
     client = get_supabase()
+    _require_email_verified(client, user.id)
     _require_service_open(client)
 
     settings = get_settings()
@@ -8442,6 +8510,7 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
     """Create a new fuel purchase order."""
     settings = get_settings()
     client = get_supabase()
+    _require_email_verified(client, user.id)
 
     stations = _get_fuel_stations_from_db()
     if payload.station_name not in stations:

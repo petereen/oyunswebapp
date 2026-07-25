@@ -14,7 +14,7 @@ interface Props {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function EmailVerificationModal({ emailAddress, onVerified, onClose, autoSend = false, allowEditEmail = false }: Props) {
+export function EmailVerificationPanel({ emailAddress, onVerified, onClose, autoSend = false, allowEditEmail = false }: Props) {
   const { t } = useLang();
   const [email, setEmail] = useState(emailAddress);
   const [editing, setEditing] = useState(allowEditEmail && !emailAddress.trim());
@@ -119,7 +119,6 @@ export function EmailVerificationModal({ emailAddress, onVerified, onClose, auto
   }, [isConfigured, t]);
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 overflow-auto">
       <div className="bg-white dark:bg-dark-800 rounded-2xl max-w-lg w-full shadow-2xl my-4">
         <div className="bg-gradient-to-r from-maroon-700 to-maroon-500 p-5 text-white rounded-t-2xl">
           <div className="flex items-center justify-between gap-3">
@@ -243,6 +242,13 @@ export function EmailVerificationModal({ emailAddress, onVerified, onClose, auto
           </button>
         </div>
       </div>
+  );
+}
+
+export function EmailVerificationModal(props: Props) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 overflow-auto">
+      <EmailVerificationPanel {...props} />
     </div>
   );
 }

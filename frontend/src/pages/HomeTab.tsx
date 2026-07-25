@@ -72,11 +72,21 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
 
   const userProfile = profile?.user;
   const emailVerificationPending = Boolean(userProfile?.email_verification_pending);
+  const emailNeedsVerification = Boolean(userProfile)
+    && (
+      Number(userProfile?.verification_level || 0) >= 1
+      || emailVerificationPending
+      || Boolean(userProfile?.verified)
+      || Boolean(userProfile?.ready_for_verification)
+    )
+    && !userProfile?.email_verified_at;
+  const emailGateActive = (appSettings?.email_verification_enabled ?? 1) > 0
+    && (emailVerificationPending || emailNeedsVerification);
   const verificationLevel = userProfile?.verification_level ?? (userProfile?.verified ? 2 : userProfile?.ready_for_verification ? 1 : 0);
   const isVerified = verificationLevel >= 2;
   const isBasicRegistered = verificationLevel >= 1;
   const needsRegistration = verificationLevel === 0 && !emailVerificationPending;
-  const pendingVerification = userProfile && userProfile.verified === false && userProfile.ready_for_verification === true;
+  const pendingVerification = emailGateActive || Boolean(userProfile && userProfile.verified === false && userProfile.ready_for_verification === true);
 
   const missingEmail = isVerified && !userProfile?.email?.trim();
   const getMntPhone = (bankMnt: string | undefined) => {
@@ -379,7 +389,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
         </div>
       )}
 
-      {emailVerificationPending && !isBasicRegistered && (
+      {emailGateActive && (
         <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-gold-200 dark:border-gold-800 animate-slideUp">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-14 h-14 bg-gold-50 dark:bg-gold-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
