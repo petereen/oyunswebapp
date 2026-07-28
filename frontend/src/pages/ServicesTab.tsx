@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Flame, Gift, Lock, Plane, Smartphone } from "lucide-react";
 import { GiftFlow } from "../components/GiftFlow";
 import { FuelFlow } from "../components/FuelFlow";
 import { TopupFlow } from "../components/TopupFlow";
-import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
+import { EmailVerificationModal } from "../components/EmailVerificationModal";
+import { fetchRates, fetchMe, fetchAppSettings, fetchServiceStatus } from "../api";
 import { useLang } from "../i18n/useLang";
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
 export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {}) {
   const [activeService, setActiveService] = useState<"gift" | "fuel" | "topup" | null>(null);
   const [pendingFuelOrderId, setPendingFuelOrderId] = useState<string | null>(null);
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
+  const queryClient = useQueryClient();
   const { t } = useLang();
 
   const { data: rate } = useQuery({
@@ -34,23 +37,44 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
     queryFn: fetchServiceStatus,
     refetchInterval: 60000,
   });
+  const { data: appSettings } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: fetchAppSettings,
+    retry: 1,
+  });
 
   const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : 0);
   const isVerified = verificationLevel >= 2;
   const isBasicRegistered = verificationLevel >= 1;
+  const emailVerificationPending = Boolean(profile?.user?.email_verification_pending);
+  const needsEmailVerification = (isBasicRegistered || Boolean(profile?.user?.verified) || Boolean(profile?.user?.ready_for_verification))
+    && (appSettings?.email_verification_enabled ?? 1) > 0
+    && (emailVerificationPending || !profile?.user?.email_verified_at);
   const isServiceOpen = serviceStatus?.is_open ?? true;
   const serviceBlockedMessage = serviceStatus?.message || "Үйлчилгээ түр хаалттай байна";
   const isGiftDisabled = !isVerified || !isServiceOpen;
   const isTopupDisabled = !isBasicRegistered || !isServiceOpen;
 
+  const openMoneyService = (service: "gift" | "fuel" | "topup") => {
+    if (needsEmailVerification) {
+      setShowEmailVerification(true);
+      return;
+    }
+    setActiveService(service);
+  };
+
   // Auto-open FuelFlow when navigating from status card
   useEffect(() => {
     if (initialFuelOrderId) {
       setPendingFuelOrderId(initialFuelOrderId);
-      setActiveService("fuel");
+      if (needsEmailVerification) {
+        setShowEmailVerification(true);
+      } else {
+        setActiveService("fuel");
+      }
       onFuelOrderOpened?.();
     }
-  }, [initialFuelOrderId]);
+  }, [initialFuelOrderId, needsEmailVerification, onFuelOrderOpened]);
 
   if (activeService === "gift") {
     return (
@@ -113,7 +137,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
       <div className="grid grid-cols-2 gap-3">
         {/* Gift Flow Card */}
         <button
-          onClick={() => !isGiftDisabled ? setActiveService("gift") : undefined}
+          onClick={() => !isGiftDisabled ? openMoneyService("gift") : undefined}
           className={`relative overflow-hidden bg-gradient-to-br from-violet-500 to-purple-600 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-purple-200/50 ${isGiftDisabled ? "opacity-60 cursor-not-allowed" : "hover:from-violet-600 hover:to-purple-700"}`}
           disabled={isGiftDisabled}
         >
@@ -132,7 +156,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
 
         {/* Fuel Purchase Card */}
         <button
-          onClick={() => isBasicRegistered ? setActiveService("fuel") : undefined}
+          onClick={() => isBasicRegistered ? openMoneyService("fuel") : undefined}
           className={`relative overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-amber-200/50 ${!isBasicRegistered ? "opacity-60 cursor-not-allowed" : "hover:from-amber-600 hover:to-orange-700"}`}
           disabled={!isBasicRegistered}
         >
@@ -150,7 +174,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
         </button>
 
         <button
-          onClick={() => !isTopupDisabled ? setActiveService("topup") : undefined}
+          onClick={() => !isTopupDisabled ? openMoneyService("topup") : undefined}
           className={`relative overflow-hidden bg-gradient-to-br from-sky-500 to-cyan-600 p-5 rounded-3xl text-left text-white active:scale-[0.97] transition-all shadow-lg shadow-sky-200/50 ${isTopupDisabled ? "opacity-60 cursor-not-allowed" : "hover:from-sky-600 hover:to-cyan-700"}`}
           disabled={isTopupDisabled}
         >
@@ -177,6 +201,18 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
           <div className="text-[11px] text-white/60 leading-relaxed">{t("services.ticket_desc")}</div>
         </button>
       </div>
+
+      {showEmailVerification && (
+        <EmailVerificationModal
+          emailAddress={profile?.user?.email || ""}
+          allowEditEmail
+          onClose={() => setShowEmailVerification(false)}
+          onVerified={() => {
+            setShowEmailVerification(false);
+            queryClient.invalidateQueries({ queryKey: ["me"] });
+          }}
+        />
+      )}
     </div>
   );
 }
