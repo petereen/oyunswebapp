@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { fetchMe, fetchOyunsPlusSummary, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput, OYUNS_PLUS_LOGO_DEFAULT_URL } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone, RegistrationModal } from "../components/RegistrationModal";
+import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { useLang } from "../i18n/useLang";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
@@ -39,6 +40,7 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [showKycModal, setShowKycModal] = useState(false);
+  const [showEmailVerification, setShowEmailVerification] = useState(false);
   const [copiedReferral, setCopiedReferral] = useState(false);
 
   // Bank form state
@@ -318,6 +320,9 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
                   <div className="flex items-center gap-3 px-4 py-3">
                     <div className="w-8 h-8 bg-maroon-50 dark:bg-maroon-900/30 rounded-xl flex items-center justify-center"><span className="text-maroon-600 dark:text-maroon-400 text-xs font-bold">@</span></div>
                     <div className="flex-1 min-w-0"><div className="text-[11px] text-dark-600 dark:text-ivory-400 font-medium">{t("profile.email")}</div><div className="font-medium text-sm text-dark-800 dark:text-ivory-200 truncate">{profile.email}</div></div>
+                    <button onClick={() => setShowEmailVerification(true)} className="shrink-0 px-3 py-1.5 rounded-lg bg-maroon-600 text-white text-xs font-semibold hover:bg-maroon-700 transition">
+                      {t("emailv.verify")}
+                    </button>
                   </div>
                 )}
                 {profile.phone && (
@@ -429,6 +434,18 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
         </div>
       ) : (
         <div className="text-center text-dark-600 dark:text-ivory-400 py-12">{t("profile.load_failed")}</div>
+      )}
+      {showEmailVerification && profile?.email && (
+        <EmailVerificationModal
+          emailAddress={profile.email}
+          allowEditEmail
+          isEmailVerified={Boolean(profile.email_verified_at)}
+          onClose={() => setShowEmailVerification(false)}
+          onVerified={() => {
+            queryClient.invalidateQueries({ queryKey: ["me", userId] });
+            setShowEmailVerification(false);
+          }}
+        />
       )}
     </div>
   );

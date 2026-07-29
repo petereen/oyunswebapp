@@ -780,6 +780,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationP
       {showEmailVerification && emailVerificationPending && emailAddress && (
         <EmailVerificationModal
           emailAddress={emailAddress}
+          isEmailVerified={false}
           onClose={() => setShowEmailVerification(false)}
           onVerified={handleRegistered}
         />

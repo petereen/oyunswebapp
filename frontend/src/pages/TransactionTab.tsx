@@ -575,6 +575,7 @@ export function TransactionTab({
           <EmailVerificationModal
             emailAddress={userProfile?.email || ""}
             allowEditEmail
+            isEmailVerified={Boolean(userProfile?.email_verified_at)}
             onClose={() => setShowEmailVerification(false)}
             onVerified={handleRegistered}
           />

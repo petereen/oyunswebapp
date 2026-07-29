@@ -5217,6 +5217,20 @@ async def start_email_verification(
     if not current_res.data:
         raise HTTPException(status_code=404, detail="User record not found")
 
+    current_user = current_res.data[0]
+    # Do not reset a confirmed address just because the user opens the form
+    # again. Changing to a different address below still starts a new OTP flow.
+    if (
+        current_user.get("email_verified_at")
+        and (current_user.get("email") or "").strip().lower() == normalized_email
+    ):
+        return {
+            "ok": True,
+            "email": normalized_email,
+            "email_verification_pending": False,
+            "already_verified": True,
+        }
+
     # Block reusing an email already verified by a different user.
     conflict = (
         client.table("users")
