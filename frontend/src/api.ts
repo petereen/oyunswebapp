@@ -1011,6 +1011,9 @@ export interface AdminInboxItem {
   admin_label_note?: string;
   admin_bank_id?: string;
   admin_bank_name?: string;
+  automation_managed?: boolean;
+  group_dispatch_status?: 'queued' | 'sending' | 'awaiting_proof' | 'processing' | 'completed';
+  group_dispatch_error?: string;
 }
 
 export interface AdminInboxResponse {
@@ -1020,6 +1023,24 @@ export interface AdminInboxResponse {
 export async function fetchInbox(): Promise<AdminInboxResponse> {
   const res = await api.get('/admin/inbox');
   return res.data as AdminInboxResponse;
+}
+
+export interface ExchangeGroupAutomationSettings {
+  mnt_to_rub_enabled: number;
+  rub_to_mnt_enabled: number;
+  telegram_group_id: number | null;
+}
+
+export async function fetchExchangeGroupSettings(): Promise<ExchangeGroupAutomationSettings> {
+  const res = await api.get('/admin/exchange-group-settings');
+  return res.data as ExchangeGroupAutomationSettings;
+}
+
+export async function updateExchangeGroupSettings(
+  payload: Partial<ExchangeGroupAutomationSettings>,
+): Promise<ExchangeGroupAutomationSettings> {
+  const res = await api.put('/admin/exchange-group-settings', payload);
+  return res.data as ExchangeGroupAutomationSettings;
 }
 
 // ============= Admin History =============

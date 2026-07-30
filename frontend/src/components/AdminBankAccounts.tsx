@@ -30,6 +30,9 @@ import {
   fetchAppSettings,
   updateAppSettings,
   AppSettings,
+  fetchExchangeGroupSettings,
+  updateExchangeGroupSettings,
+  ExchangeGroupAutomationSettings,
 } from "../api";
 
 type NumericAppSettingsField =
@@ -63,19 +66,33 @@ export function AdminBankAccounts() {
   const [savingLimits, setSavingLimits] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerUploadError, setBannerUploadError] = useState("");
+  const [groupSettings, setGroupSettings] = useState<ExchangeGroupAutomationSettings>({
+    mnt_to_rub_enabled: 0,
+    rub_to_mnt_enabled: 0,
+    telegram_group_id: null,
+  });
+  const [editingGroupSettings, setEditingGroupSettings] = useState<ExchangeGroupAutomationSettings>({
+    mnt_to_rub_enabled: 0,
+    rub_to_mnt_enabled: 0,
+    telegram_group_id: null,
+  });
+  const [savingGroupSettings, setSavingGroupSettings] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [accountsRes, adminsRes, settingsRes] = await Promise.all([
+      const [accountsRes, adminsRes, settingsRes, groupSettingsRes] = await Promise.all([
         fetchAllAdminBankAccounts(),
         fetchAdminUsers(),
         fetchAppSettings(),
+        fetchExchangeGroupSettings(),
       ]);
       setAccounts(accountsRes.accounts);
       setAdmins(adminsRes.admins);
       setExchangeLimits(settingsRes);
       setEditingLimits(settingsRes);
+      setGroupSettings(groupSettingsRes);
+      setEditingGroupSettings(groupSettingsRes);
       setLimitsChanged(false);
     } catch (err) {
       console.error("Failed to load bank accounts:", err);
@@ -266,6 +283,28 @@ export function AdminBankAccounts() {
     }
   };
 
+  const groupSettingsChanged =
+    groupSettings.mnt_to_rub_enabled !== editingGroupSettings.mnt_to_rub_enabled ||
+    groupSettings.telegram_group_id !== editingGroupSettings.telegram_group_id;
+
+  const handleSaveGroupSettings = async () => {
+    setSavingGroupSettings(true);
+    setError("");
+    try {
+      const result = await updateExchangeGroupSettings({
+        ...editingGroupSettings,
+        rub_to_mnt_enabled: 0,
+      });
+      setGroupSettings(result);
+      setEditingGroupSettings(result);
+    } catch (err) {
+      console.error("Failed to save exchange group settings:", err);
+      setError("Telegram группийн тохиргоо хадгалахад алдаа гарлаа");
+    } finally {
+      setSavingGroupSettings(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -302,6 +341,75 @@ export function AdminBankAccounts() {
       {error && (
         <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>
       )}
+
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-4">
+        <div>
+          <h4 className="font-semibold text-blue-800 flex items-center gap-2">
+            <Settings className="w-4 h-4" />
+            Telegram группээр гүйлгээ дуусгах
+          </h4>
+          <p className="text-xs text-blue-600 mt-1">
+            Баталсан MNT→RUB хүсэлтийн реквизит групп рүү илгээгдэж, баримтын reply-аар автоматаар дуусна.
+          </p>
+        </div>
+
+        <div>
+          <label className="text-xs text-slate-600 font-medium">Telegram group ID</label>
+          <input
+            type="number"
+            value={editingGroupSettings.telegram_group_id ?? ""}
+            onChange={(e) => setEditingGroupSettings((current) => ({
+              ...current,
+              telegram_group_id: e.target.value === "" ? null : Number(e.target.value),
+            }))}
+            placeholder="-1001234567890"
+            className="w-full mt-1 p-2 border border-blue-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-400"
+          />
+          <p className="text-[11px] text-slate-500 mt-1">Group ID нь сөрөг тоо байна. Bot группт message илгээх эрхтэй байх ёстой.</p>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg bg-white p-3 border border-blue-100">
+          <div>
+            <p className="text-sm font-semibold text-slate-700">MNT→RUB автомат горим</p>
+            <p className="text-xs text-slate-500">Pending хүсэлтэд батлах болон татгалзах үйлдэл үлдэнэ.</p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editingGroupSettings.mnt_to_rub_enabled > 0}
+              onChange={(e) => setEditingGroupSettings((current) => ({
+                ...current,
+                mnt_to_rub_enabled: e.target.checked ? 1 : 0,
+              }))}
+              className="sr-only"
+            />
+            <span className={`w-11 h-6 rounded-full transition relative ${editingGroupSettings.mnt_to_rub_enabled > 0 ? "bg-blue-600" : "bg-slate-300"}`}>
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition ${editingGroupSettings.mnt_to_rub_enabled > 0 ? "left-5" : "left-0.5"}`} />
+            </span>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg bg-slate-100 p-3 border border-slate-200 opacity-70">
+          <div>
+            <p className="text-sm font-semibold text-slate-600">RUB→MNT автомат горим</p>
+            <p className="text-xs text-slate-500">Удахгүй нэмэгдэнэ.</p>
+          </div>
+          <input type="checkbox" checked={false} disabled className="h-5 w-5" />
+        </div>
+
+        {groupSettingsChanged && (
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveGroupSettings}
+              disabled={savingGroupSettings}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm disabled:opacity-50"
+            >
+              {savingGroupSettings ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Telegram тохиргоо хадгалах
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Exchange Limits Section */}
       <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">

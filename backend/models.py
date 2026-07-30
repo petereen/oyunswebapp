@@ -80,6 +80,18 @@ class AppSettingsUpdateRequest(BaseModel):
     email_verification_enabled: Optional[int] = None
 
 
+class ExchangeGroupAutomationSettings(BaseModel):
+    mnt_to_rub_enabled: int = 0
+    rub_to_mnt_enabled: int = 0
+    telegram_group_id: Optional[int] = None
+
+
+class ExchangeGroupAutomationSettingsUpdate(BaseModel):
+    mnt_to_rub_enabled: Optional[int] = None
+    rub_to_mnt_enabled: Optional[int] = None
+    telegram_group_id: Optional[int] = None
+
+
 class ExchangeCreateRequest(BaseModel):
     direction: str = Field(..., description="buy or sell")
     amount: Decimal
@@ -220,6 +232,9 @@ class AdminInboxItem(BaseModel):
     admin_label_note: Optional[str] = None  # Admin note for the label
     admin_bank_id: Optional[str] = None
     admin_bank_name: Optional[str] = None
+    automation_managed: bool = False
+    group_dispatch_status: Optional[str] = None
+    group_dispatch_error: Optional[str] = None
 
 
 class UserLabelUpdateRequest(BaseModel):
@@ -1039,4 +1054,3 @@ class TournamentStagesResponse(BaseModel):
 class TournamentStagesUpdateRequest(BaseModel):
     groups: Optional[list[TournamentGroupInput]] = None
     knockout: Optional[list[TournamentKnockoutPhaseInput]] = None
-

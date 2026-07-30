@@ -7,10 +7,12 @@ import threading
 import time as time_module
 import os
 import io
+import json
 import string
 import random
+import sys
 from datetime import date
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from supabase import create_client, Client
 import os
@@ -23,8 +25,19 @@ from typing import Dict, List, Set
 
 from bot_translations import t
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+from exchange_group import (
+    completion_caption_matches,
+    format_requisites_message,
+    rounded_rub_payout,
+    rub_payout,
+)
+
 _admin_media_buffers: Dict[str, List[str]] = {}
 _admin_media_flush_scheduled: Set[str] = set()
+_exchange_group_media_buffers: Dict[str, List[object]] = {}
+_exchange_group_media_flush_scheduled: Set[str] = set()
+_exchange_group_media_dispatches: Dict[str, dict] = {}
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 MIN_RUB = 2000
@@ -94,6 +107,426 @@ referrer_to_invite_link: Dict[int, str] = {}
 
 # ── Language helpers ──
 _lang_cache: Dict[int, str] = {}
+
+
+def _app_setting(key: str, default: str = "") -> str:
+    try:
+        response = supabase.table("app_settings").select("value").eq("key", key).limit(1).execute()
+        if response.data:
+            return str(response.data[0].get("value") or default).strip()
+    except Exception as exc:
+        print(f"⚠️ Could not load app setting {key}: {exc}")
+    return default
+
+
+def _exchange_group_id() -> int | None:
+    raw = _app_setting("exchange_group_chat_id")
+    try:
+        value = int(raw)
+        return value if value < 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _queue_retry(dispatch_id: str, attempts: int, error: object) -> None:
+    delay_seconds = min(15 * (2 ** min(6, max(0, attempts - 1))), 15 * 60)
+    next_attempt = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+    supabase.table("exchange_group_dispatches").update({
+        "status": "queued",
+        "attempts": attempts,
+        "next_attempt_at": next_attempt.isoformat(),
+        "lease_expires_at": None,
+        "last_error": str(error)[:1000],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", dispatch_id).execute()
+
+
+def _dispatch_exchange_group_job(row: dict) -> None:
+    dispatch_id = str(row.get("id"))
+    attempts = int(row.get("attempts") or 0) + 1
+    lease_until = datetime.now(timezone.utc) + timedelta(minutes=2)
+    claimed = (
+        supabase.table("exchange_group_dispatches")
+        .update({
+            "status": "sending",
+            "attempts": attempts,
+            "lease_expires_at": lease_until.isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        .eq("id", dispatch_id)
+        .eq("status", "queued")
+        .execute()
+    )
+    if not claimed.data:
+        return
+
+    try:
+        group_id = _exchange_group_id()
+        if group_id is None:
+            raise RuntimeError("Telegram group ID is not configured")
+
+        transaction_res = (
+            supabase.table("transactions")
+            .select("invoice,amount,rate,bank_details,status,currency_from,currency_to")
+            .eq("invoice", row.get("invoice"))
+            .limit(1)
+            .execute()
+        )
+        if not transaction_res.data:
+            raise RuntimeError("Transaction no longer exists")
+        transaction = transaction_res.data[0]
+        if transaction.get("status") != "approved":
+            raise RuntimeError(f"Transaction status is {transaction.get('status')}, expected approved")
+        if (transaction.get("currency_from") or "").upper() != "MNT" or (transaction.get("currency_to") or "").upper() != "RUB":
+            raise RuntimeError("Transaction is not MNT to RUB")
+
+        text = format_requisites_message(
+            transaction.get("bank_details"),
+            transaction.get("amount"),
+            transaction.get("rate"),
+        )
+        sent = bot.send_message(group_id, text)
+        now = datetime.now(timezone.utc).isoformat()
+        supabase.table("exchange_group_dispatches").update({
+            "status": "awaiting_proof",
+            "telegram_chat_id": int(sent.chat.id),
+            "telegram_message_id": int(sent.message_id),
+            "sent_at": now,
+            "lease_expires_at": None,
+            "last_error": None,
+            "updated_at": now,
+        }).eq("id", dispatch_id).eq("status", "sending").execute()
+        print(f"✅ Group requisites sent for {row.get('invoice')} to {sent.chat.id}/{sent.message_id}")
+    except Exception as exc:
+        print(f"❌ Group dispatch failed for {row.get('invoice')}: {exc}")
+        _queue_retry(dispatch_id, attempts, exc)
+
+
+def _exchange_group_dispatch_loop() -> None:
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            # Recover a job if the bot stopped while holding its short sending lease.
+            (
+                supabase.table("exchange_group_dispatches")
+                .update({
+                    "status": "queued",
+                    "lease_expires_at": None,
+                    "next_attempt_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                })
+                .eq("status", "sending")
+                .lt("lease_expires_at", now.isoformat())
+                .execute()
+            )
+            _recover_exchange_group_completions(now)
+            due = (
+                supabase.table("exchange_group_dispatches")
+                .select("id,invoice,status,attempts,next_attempt_at")
+                .eq("status", "queued")
+                .lte("next_attempt_at", now.isoformat())
+                .order("next_attempt_at", desc=False)
+                .limit(20)
+                .execute()
+            )
+            for row in due.data or []:
+                _dispatch_exchange_group_job(row)
+        except Exception as exc:
+            print(f"⚠️ Exchange group dispatch worker error: {exc}")
+        time_module.sleep(5)
+
+
+def _recover_exchange_group_completions(now: datetime) -> None:
+    expired = (
+        supabase.table("exchange_group_dispatches")
+        .select("id,invoice,status,lease_expires_at")
+        .eq("status", "processing")
+        .lt("lease_expires_at", now.isoformat())
+        .limit(20)
+        .execute()
+    )
+    for dispatch in expired.data or []:
+        transaction_res = (
+            supabase.table("transactions")
+            .select("invoice,user_id,amount,rate,status,admin_bill_url")
+            .eq("invoice", dispatch.get("invoice"))
+            .limit(1)
+            .execute()
+        )
+        if not transaction_res.data:
+            continue
+        transaction = transaction_res.data[0]
+        if transaction.get("status") != "successful":
+            supabase.table("exchange_group_dispatches").update({
+                "status": "awaiting_proof",
+                "lease_expires_at": None,
+                "last_error": "Recovered interrupted proof processing; please reply with the proof again",
+                "updated_at": now.isoformat(),
+            }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
+            continue
+
+        try:
+            raw_urls = transaction.get("admin_bill_url")
+            parsed_urls = json.loads(raw_urls) if raw_urls else []
+            proof_urls = parsed_urls if isinstance(parsed_urls, list) else [raw_urls]
+            proof_urls = [str(url) for url in proof_urls if url]
+            if not proof_urls:
+                raise RuntimeError("Completed transaction has no stored proof URLs")
+
+            user_id = int(transaction["user_id"])
+            completion_text = t(get_user_lang(user_id), "notif_tx_completed", invoice=transaction["invoice"])
+            if len(proof_urls) == 1:
+                bot.send_photo(user_id, proof_urls[0], caption=completion_text, parse_mode="HTML")
+            else:
+                media = []
+                for index, url in enumerate(proof_urls):
+                    kwargs = {"media": url}
+                    if index == 0:
+                        kwargs.update({"caption": completion_text, "parse_mode": "HTML"})
+                    media.append(InputMediaPhoto(**kwargs))
+                bot.send_media_group(user_id, media)
+
+            _award_group_completion_points(
+                transaction,
+                rub_payout(transaction.get("amount"), transaction.get("rate")),
+            )
+            completed_at = datetime.now(timezone.utc).isoformat()
+            supabase.table("exchange_group_dispatches").update({
+                "status": "completed",
+                "proof_urls": proof_urls,
+                "completed_at": completed_at,
+                "lease_expires_at": None,
+                "last_error": None,
+                "updated_at": completed_at,
+            }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
+        except Exception as exc:
+            retry_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+            supabase.table("exchange_group_dispatches").update({
+                "lease_expires_at": retry_at.isoformat(),
+                "last_error": f"Completion recovery failed: {str(exc)[:900]}",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
+
+
+def _upload_exchange_group_proof(invoice: str, message) -> tuple[str, str]:
+    file_id = message.photo[-1].file_id
+    file_info = bot.get_file(file_id)
+    content = bot.download_file(file_info.file_path)
+    path = f"admin/group/{invoice}/{message.message_id}_{file_id[-12:]}.jpg"
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+            temp_file.write(content)
+            temp_path = temp_file.name
+        supabase.storage.from_("bills").upload(
+            path,
+            temp_path,
+            {"content-type": "image/jpeg", "x-upsert": "true"},
+        )
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+    return file_id, supabase.storage.from_("bills").get_public_url(path)
+
+
+def _award_group_completion_points(transaction: dict, rub_amount) -> None:
+    try:
+        if int(_app_setting("oyuns_plus_enabled", "1") or "1") <= 0:
+            return
+        threshold = max(1, int(_app_setting("oyuns_plus_threshold_rub", "10000") or "10000"))
+        points_per_threshold = max(1, int(_app_setting("oyuns_plus_points_per_threshold", "10") or "10"))
+        points = int((rub_amount * points_per_threshold) / threshold) if rub_amount >= threshold else 0
+        if points <= 0:
+            return
+        supabase.table("oyuns_plus_points_ledger").insert({
+            "user_id": int(transaction["user_id"]),
+            "source_type": "transaction_completed",
+            "source_id": str(transaction["invoice"]),
+            "points": points,
+            "rub_equivalent": float(rub_amount),
+            "metadata": {
+                "invoice": transaction["invoice"],
+                "status": "successful",
+                "source": "telegram_group",
+            },
+        }).execute()
+    except Exception as exc:
+        if "duplicate" not in str(exc).lower():
+            print(f"❌ Failed to award group-completion points: {exc}")
+
+
+def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
+    messages = sorted(messages, key=lambda item: item.message_id)
+    first = messages[0]
+    caption = next((item.caption for item in messages if item.caption), None)
+    invoice = str(dispatch.get("invoice"))
+
+    transaction_res = (
+        supabase.table("transactions")
+        .select("invoice,user_id,amount,rate,status,receipt_submitted_at")
+        .eq("invoice", invoice)
+        .limit(1)
+        .execute()
+    )
+    if not transaction_res.data:
+        bot.reply_to(first, "❌ Transaction not found.")
+        return
+    transaction = transaction_res.data[0]
+    if transaction.get("status") != "approved":
+        bot.reply_to(first, "⚠️ This transaction is no longer awaiting completion.")
+        return
+    if not completion_caption_matches(caption, transaction.get("amount"), transaction.get("rate")):
+        expected = rounded_rub_payout(transaction.get("amount"), transaction.get("rate"))
+        bot.reply_to(first, f"❌ Amount does not match. Expected the rounded RUB amount with ✅ ({expected:,}✅).")
+        return
+
+    now = datetime.now(timezone.utc)
+    claimed = (
+        supabase.table("exchange_group_dispatches")
+        .update({
+            "status": "processing",
+            "proof_received_at": now.isoformat(),
+            "lease_expires_at": (now + timedelta(minutes=5)).isoformat(),
+            "responder_user_id": int(first.from_user.id),
+            "responder_message_id": int(first.message_id),
+            "last_error": None,
+            "updated_at": now.isoformat(),
+        })
+        .eq("id", dispatch.get("id"))
+        .eq("status", "awaiting_proof")
+        .execute()
+    )
+    if not claimed.data:
+        return
+
+    transaction_completed = False
+    try:
+        uploaded = [_upload_exchange_group_proof(invoice, item) for item in messages]
+        file_ids = [item[0] for item in uploaded]
+        proof_urls = [item[1] for item in uploaded]
+        duration_minutes = None
+        receipt_submitted = transaction.get("receipt_submitted_at")
+        if receipt_submitted:
+            receipt_time = datetime.fromisoformat(str(receipt_submitted).replace("Z", "+00:00"))
+            if receipt_time.tzinfo is None:
+                receipt_time = receipt_time.replace(tzinfo=timezone.utc)
+            duration_minutes = max(0.0, (now - receipt_time.astimezone(timezone.utc)).total_seconds() / 60)
+
+        transaction_updates = {
+            "status": "successful",
+            "admin_bill_url": json.dumps(proof_urls),
+            "admin_bill_submitted_at": now.isoformat(),
+            "completed_at": now.isoformat(),
+            "completed_by_admin": None,
+            "timer_paused_at": None,
+        }
+        if duration_minutes is not None:
+            transaction_updates["completion_duration_minutes"] = round(duration_minutes, 2)
+        completed = (
+            supabase.table("transactions")
+            .update(transaction_updates)
+            .eq("invoice", invoice)
+            .eq("status", "approved")
+            .execute()
+        )
+        if not completed.data:
+            raise RuntimeError("Transaction was already completed or changed")
+        transaction_completed = True
+
+        rub_amount = rub_payout(transaction.get("amount"), transaction.get("rate"))
+        _award_group_completion_points(transaction, rub_amount)
+
+        user_id = int(transaction["user_id"])
+        notification_error = None
+        try:
+            completion_text = t(get_user_lang(user_id), "notif_tx_completed", invoice=invoice)
+            if len(file_ids) == 1:
+                bot.send_photo(user_id, file_ids[0], caption=completion_text, parse_mode="HTML")
+            else:
+                media = []
+                for index, file_id in enumerate(file_ids):
+                    kwargs = {"media": file_id}
+                    if index == 0:
+                        kwargs.update({"caption": completion_text, "parse_mode": "HTML"})
+                    media.append(InputMediaPhoto(**kwargs))
+                bot.send_media_group(user_id, media)
+
+            if duration_minutes and duration_minutes > 10 and rub_amount < 30000:
+                promo_code = generate_promo_code()
+                if create_promo_code_in_db(promo_code, user_id=user_id, discount=0.2, source="compensation"):
+                    bot.send_message(
+                        user_id,
+                        t(get_user_lang(user_id), "notif_compensation_promo", code=promo_code, discount="0.2"),
+                        parse_mode="HTML",
+                    )
+        except Exception as exc:
+            notification_error = f"Transaction completed, but user notification failed: {exc}"
+            print(f"❌ {notification_error}")
+
+        completed_at = datetime.now(timezone.utc).isoformat()
+        supabase.table("exchange_group_dispatches").update({
+            "status": "completed",
+            "proof_file_ids": file_ids,
+            "proof_urls": proof_urls,
+            "completed_at": completed_at,
+            "updated_at": completed_at,
+            "lease_expires_at": None,
+            "last_error": notification_error,
+        }).eq("id", dispatch.get("id")).execute()
+        bot.reply_to(first, f"✅ {invoice} completed and the proof was sent to the user.")
+    except Exception as exc:
+        print(f"❌ Could not complete group proof for {invoice}: {exc}")
+        if transaction_completed:
+            retry_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+            supabase.table("exchange_group_dispatches").update({
+                "last_error": str(exc)[:1000],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "lease_expires_at": retry_at.isoformat(),
+            }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
+            bot.reply_to(first, "⚠️ Transaction completed, but user delivery will be retried automatically.")
+        else:
+            supabase.table("exchange_group_dispatches").update({
+                "status": "awaiting_proof",
+                "last_error": str(exc)[:1000],
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "lease_expires_at": None,
+            }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
+            bot.reply_to(first, "❌ Could not complete this transaction. Please retry the photo reply.")
+
+
+def _find_exchange_group_dispatch(message) -> dict | None:
+    if not message.from_user or getattr(message.from_user, "is_bot", False):
+        return None
+    if message.chat.type not in ("group", "supergroup"):
+        return None
+    if message.media_group_id:
+        buffer_key = f"{message.chat.id}:{message.media_group_id}"
+        buffered_dispatch = _exchange_group_media_dispatches.get(buffer_key)
+        if buffered_dispatch:
+            return buffered_dispatch
+    if not message.reply_to_message:
+        return None
+    try:
+        response = (
+            supabase.table("exchange_group_dispatches")
+            .select("id,invoice,status,telegram_chat_id,telegram_message_id")
+            .eq("telegram_chat_id", int(message.chat.id))
+            .eq("telegram_message_id", int(message.reply_to_message.message_id))
+            .eq("status", "awaiting_proof")
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+    except Exception:
+        return None
+
+
+def _flush_exchange_group_album(media_group_id: str, dispatch: dict) -> None:
+    messages = _exchange_group_media_buffers.pop(media_group_id, [])
+    _exchange_group_media_flush_scheduled.discard(media_group_id)
+    _exchange_group_media_dispatches.pop(media_group_id, None)
+    if messages:
+        _complete_exchange_group_proof(dispatch, messages)
 
 def get_user_lang(user_id: int) -> str:
     """Return the user's preferred language ('mn' or 'ru'). Cached in memory."""
@@ -4272,6 +4705,34 @@ def _flush_admin_media_group(mgid: str, target_user: int, caption: str, admin_id
         t(get_user_lang(admin_id), "admin_receipt_sent", invoice=invoice),
         parse_mode="Markdown"
     )
+
+
+@bot.message_handler(
+    func=lambda message: _find_exchange_group_dispatch(message) is not None,
+    content_types=["photo"],
+)
+def handle_exchange_group_proof(message):
+    dispatch = _find_exchange_group_dispatch(message)
+    if not dispatch:
+        return
+
+    media_group_id = message.media_group_id
+    if not media_group_id:
+        _complete_exchange_group_proof(dispatch, [message])
+        return
+
+    buffer_key = f"{message.chat.id}:{media_group_id}"
+    _exchange_group_media_buffers.setdefault(buffer_key, []).append(message)
+    _exchange_group_media_dispatches[buffer_key] = dispatch
+    if buffer_key not in _exchange_group_media_flush_scheduled:
+        _exchange_group_media_flush_scheduled.add(buffer_key)
+        threading.Timer(
+            1.2,
+            _flush_exchange_group_album,
+            args=(buffer_key, dispatch),
+        ).start()
+
+
 @bot.message_handler(content_types=['photo'])
 def handle_passport_or_receipt(message):
     user_id = message.chat.id
@@ -5520,6 +5981,10 @@ def initialize_bot():
     broadcast_thread = threading.Thread(target=_auto_broadcast_loop, daemon=True)
     broadcast_thread.start()
     print("✅ Auto-broadcast scheduler started (10:00–11:00 MSK daily)")
+
+    exchange_dispatch_thread = threading.Thread(target=_exchange_group_dispatch_loop, daemon=True)
+    exchange_dispatch_thread.start()
+    print("✅ Exchange group dispatch worker started")
 
 def run_bot() -> None:
     """Initialize the bot and keep the incoming-update listener resilient."""
