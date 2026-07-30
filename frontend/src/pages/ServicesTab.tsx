@@ -206,6 +206,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
         <EmailVerificationModal
           emailAddress={profile?.user?.email || ""}
           allowEditEmail
+          isEmailVerified={Boolean(profile?.user?.email_verified_at)}
           onClose={() => setShowEmailVerification(false)}
           onVerified={() => {
             setShowEmailVerification(false);

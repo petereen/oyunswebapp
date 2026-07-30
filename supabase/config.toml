@@ -1,0 +1,4 @@
+[functions.rate-broadcast]
+# The database trigger authenticates with RATE_BROADCAST_WEBHOOK_SECRET instead
+# of a user JWT.
+verify_jwt = false

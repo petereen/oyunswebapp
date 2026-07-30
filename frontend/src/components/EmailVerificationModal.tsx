@@ -10,11 +10,12 @@ interface Props {
   onClose?: () => void;
   autoSend?: boolean;
   allowEditEmail?: boolean;
+  isEmailVerified?: boolean;
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function EmailVerificationPanel({ emailAddress, onVerified, onClose, autoSend = false, allowEditEmail = false }: Props) {
+export function EmailVerificationPanel({ emailAddress, onVerified, onClose, autoSend = false, allowEditEmail = false, isEmailVerified = false }: Props) {
   const { t } = useLang();
   const [email, setEmail] = useState(emailAddress);
   const [editing, setEditing] = useState(allowEditEmail && !emailAddress.trim());
@@ -22,6 +23,7 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
   const [requestingCode, setRequestingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [codeRequested, setCodeRequested] = useState(false);
+  const [alreadyVerified, setAlreadyVerified] = useState(isEmailVerified);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const autoSendTriggeredRef = useRef(false);
@@ -46,7 +48,11 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
       // For existing users, persist the (possibly edited) email and mark it
       // pending before requesting a code so the backend will accept the OTP.
       if (allowEditEmail) {
-        await startEmailVerification(targetEmail);
+        const result = await startEmailVerification(targetEmail);
+        if (result.already_verified) {
+          setAlreadyVerified(true);
+          return;
+        }
         setEmail(targetEmail);
         setEditing(false);
       }
@@ -107,16 +113,38 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
   };
 
   useEffect(() => {
-    if (!autoSend || !isConfigured || autoSendTriggeredRef.current) return;
+    if (isEmailVerified || !autoSend || !isConfigured || autoSendTriggeredRef.current) return;
     autoSendTriggeredRef.current = true;
     void handleRequestCode();
-  }, [autoSend, isConfigured]);
+  }, [autoSend, isConfigured, isEmailVerified]);
 
   useEffect(() => {
     if (!isConfigured) {
       setError(t("emailv.not_configured"));
     }
   }, [isConfigured, t]);
+
+  if (isEmailVerified || alreadyVerified) {
+    return (
+      <div className="bg-white dark:bg-dark-800 rounded-2xl max-w-lg w-full shadow-2xl my-4">
+        <div className="bg-gradient-to-r from-maroon-700 to-maroon-500 p-5 text-white rounded-t-2xl">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center"><ShieldCheck className="w-6 h-6" /></div>
+              <div><h2 className="text-xl font-bold">{t("emailv.title")}</h2></div>
+            </div>
+            {onClose && <button onClick={onClose} className="p-2 rounded-full hover:bg-white/20 transition" aria-label={t("common.close")}><X className="w-5 h-5" /></button>}
+          </div>
+        </div>
+        <div className="p-6 text-center space-y-4">
+          <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" />
+          <div className="text-lg font-bold text-dark-800 dark:text-ivory-200">{t("emailv.already_verified")}</div>
+          <div className="text-sm text-dark-600 dark:text-ivory-300">{emailAddress}</div>
+          {onClose && <button onClick={onClose} className="w-full py-3 rounded-xl bg-maroon-600 text-white font-semibold hover:bg-maroon-700 transition">{t("common.close")}</button>}
+        </div>
+      </div>
+    );
+  }
 
   return (
       <div className="bg-white dark:bg-dark-800 rounded-2xl max-w-lg w-full shadow-2xl my-4">

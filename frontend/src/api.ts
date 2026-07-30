@@ -306,6 +306,7 @@ export type EmailVerificationStartResponse = {
   ok: boolean;
   email: string;
   email_verification_pending: boolean;
+  already_verified?: boolean;
 };
 
 export type EmailVerificationCompleteInput = {

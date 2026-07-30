@@ -48,6 +48,8 @@ In the Supabase project used by this app:
 Supabase Auth remains the source of truth for the OTP. Resend only delivers the
 message, so no Resend token or email code is stored in the OYUNS database.
 
+## ########
+
 ## 3. Apply the database migration
 
 Run [database/add_phone_verification_state.sql](database/add_phone_verification_state.sql)

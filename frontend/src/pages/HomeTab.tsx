@@ -515,6 +515,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
         <EmailVerificationModal
           emailAddress={userProfile?.email || ""}
           allowEditEmail
+          isEmailVerified={Boolean(userProfile?.email_verified_at)}
           onVerified={handleRegistered}
           onClose={() => setShowEmailVerification(false)}
         />
