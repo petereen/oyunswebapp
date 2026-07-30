@@ -351,6 +351,7 @@ export function AdminInbox() {
       console.log("Items after reload:", items);
     } catch (err) {
       console.error("Approval error:", err);
+      setError("Гүйлгээг баталж, Telegram дараалалд оруулахад алдаа гарлаа");
     }
   };
 
@@ -595,6 +596,17 @@ export function AdminInbox() {
       return { label: "BUY", color: "bg-green-100 text-green-700" };
     }
     return { label: "SELL", color: "bg-orange-100 text-orange-700" };
+  };
+
+  const getDispatchLabel = (status?: InboxItem["group_dispatch_status"]) => {
+    switch (status) {
+      case "queued": return "Илгээх дараалалд";
+      case "sending": return "Групп рүү илгээж байна";
+      case "awaiting_proof": return "Группийн баримт хүлээж байна";
+      case "processing": return "Баримт боловсруулж байна";
+      case "completed": return "Автоматаар дууссан";
+      default: return "Дараалал үүсгэж байна";
+    }
   };
 
   return (
@@ -854,7 +866,7 @@ export function AdminInbox() {
             return (
               <div
                 key={item.invoice}
-                onClick={() => openConfirmModal(item)}
+                onClick={() => item.automation_managed ? setDetailModal(item) : openConfirmModal(item)}
                 className={`border rounded-xl bg-white p-3 cursor-pointer transition ${topupRequest ? "border-sky-200 hover:bg-sky-50/70" : "border-green-200 hover:bg-green-50"}`}
               >
                 <div className="flex items-center gap-3">
@@ -884,32 +896,45 @@ export function AdminInbox() {
                   <span className="font-bold text-green-800">{Number(transferAmt).toLocaleString()} {transferCur}</span>
                 </div>
                 <div className="mt-1 text-xs text-slate-400 font-mono truncate">#{item.invoice}</div>
-                <div className="mt-2 flex justify-end">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRevertToPending(item.invoice);
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg transition font-medium border border-amber-200"
-                    title="Хүлээгдэж буй төлөвт буцаах"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Буцаах
-                  </button>
-                  {!topupRequest && (
+                {item.automation_managed ? (
+                  <div className="mt-2 space-y-1">
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700">
+                      {getDispatchLabel(item.group_dispatch_status)}
+                    </div>
+                    {item.group_dispatch_error && (
+                      <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                        {item.group_dispatch_error}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 flex justify-end">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleSetWaitingEdit(item.invoice);
+                        handleRevertToPending(item.invoice);
                       }}
-                      className="ml-2 flex items-center gap-1 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition font-medium border border-red-200"
-                      title="Хэрэглэгчээс засвар авч дахин илгээх"
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg transition font-medium border border-amber-200"
+                      title="Хүлээгдэж буй төлөвт буцаах"
                     >
-                      <Pause className="w-3 h-3" />
-                      Засвар хүлээх
+                      <RefreshCw className="w-3 h-3" />
+                      Буцаах
                     </button>
-                  )}
-                </div>
+                    {!topupRequest && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSetWaitingEdit(item.invoice);
+                        }}
+                        className="ml-2 flex items-center gap-1 px-2 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition font-medium border border-red-200"
+                        title="Хэрэглэгчээс засвар авч дахин илгээх"
+                      >
+                        <Pause className="w-3 h-3" />
+                        Засвар хүлээх
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1290,13 +1315,14 @@ export function AdminInbox() {
                           await load();
                         } catch (err) {
                           console.error("Pre-approval error:", err);
+                          setError("Гүйлгээг баталж, Telegram дараалалд оруулахад алдаа гарлаа");
                         }
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 text-white py-3 font-semibold hover:bg-green-700"
                     >
                       <ShieldCheck className="w-5 h-5" /> Урьдчилан батлах
                     </button>
-                    {!topupRequest && (
+                    {!topupRequest && !item.automation_managed && (
                       <button
                         onClick={() => handleSetWaitingEdit(item.invoice)}
                         className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
@@ -1318,31 +1344,44 @@ export function AdminInbox() {
 
                 {/* Actions for Approved - Open confirm modal to finalize */}
                 {item.status === "approved" && (
-                  <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
-                    <button
-                      onClick={() => openConfirmModal(item)}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"
-                    >
-                      <Upload className="w-5 h-5" /> Гүйлгээ дуусгах
-                    </button>
-                    {!topupRequest && (
+                  item.automation_managed ? (
+                    <div className="space-y-2">
+                      <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-3 text-sm font-medium text-blue-700">
+                        {getDispatchLabel(item.group_dispatch_status)}
+                      </div>
+                      {item.group_dispatch_error && (
+                        <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-3 text-sm text-red-700">
+                          {item.group_dispatch_error}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
                       <button
-                        onClick={() => handleSetWaitingEdit(item.invoice)}
-                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
+                        onClick={() => openConfirmModal(item)}
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"
                       >
-                        <Pause className="w-5 h-5" /> Засвар шаардах
+                        <Upload className="w-5 h-5" /> Гүйлгээ дуусгах
                       </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setRejectModal(item.invoice);
-                        setDetailModal(null);
-                      }}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-100 text-red-700 py-3 font-semibold hover:bg-red-200"
-                    >
-                      <XCircle className="w-5 h-5" /> Татгалзах
-                    </button>
-                  </div>
+                      {!topupRequest && (
+                        <button
+                          onClick={() => handleSetWaitingEdit(item.invoice)}
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
+                        >
+                          <Pause className="w-5 h-5" /> Засвар шаардах
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setRejectModal(item.invoice);
+                          setDetailModal(null);
+                        }}
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-100 text-red-700 py-3 font-semibold hover:bg-red-200"
+                      >
+                        <XCircle className="w-5 h-5" /> Татгалзах
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             </div>

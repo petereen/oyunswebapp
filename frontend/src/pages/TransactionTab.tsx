@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2, Mail } from "lucide-react";
 import { ExchangeCard } from "../components/ExchangeCard";
 import {
-  fetchRates, fetchMe, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue,
+  fetchRates, fetchMe, fetchAppSettings, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue,
   fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes,
   UserPromoCode, fetchServiceStatus, fetchEditableExchange, resubmitExchange,
 } from "../api";
@@ -69,9 +69,24 @@ export function TransactionTab({
     enabled: Boolean(user?.id),
     staleTime: 0,
   });
+  const { data: appSettings } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: fetchAppSettings,
+    retry: 1,
+  });
 
   const userProfile = profile?.user;
   const emailVerificationPending = Boolean(userProfile?.email_verification_pending);
+  const emailNeedsVerification = Boolean(userProfile)
+    && (
+      Number(userProfile?.verification_level || 0) >= 1
+      || emailVerificationPending
+      || Boolean(userProfile?.verified)
+      || Boolean(userProfile?.ready_for_verification)
+    )
+    && !userProfile?.email_verified_at;
+  const emailGateActive = (appSettings?.email_verification_enabled ?? 1) > 0
+    && (emailVerificationPending || emailNeedsVerification);
   const verificationLevel = userProfile?.verification_level ?? (userProfile?.verified ? 2 : userProfile?.ready_for_verification ? 1 : 0);
   const isVerified = verificationLevel >= 2;
   const isBasicRegistered = verificationLevel >= 1;
@@ -532,7 +547,43 @@ export function TransactionTab({
     setShowEmailVerification(false);
   };
 
-  // Not verified: show message + register button
+  // Email must be verified before any money transaction flow can start.
+  if (emailGateActive) {
+    return (
+      <>
+        <div className="flex flex-col items-center justify-center py-16 gap-5 animate-fadeIn">
+          <div className="w-20 h-20 bg-gold-50 dark:bg-gold-900/30 rounded-full flex items-center justify-center">
+            <Mail className="w-10 h-10 text-gold-600 dark:text-gold-400" />
+          </div>
+          <div className="text-center space-y-2">
+            <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">
+              {t("emailv.transaction_block_title")}
+            </div>
+            <div className="text-sm text-dark-600 dark:text-ivory-300 max-w-sm">
+              {t("emailv.transaction_block_desc")}
+            </div>
+          </div>
+          <button
+            onClick={() => setShowEmailVerification(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gold-500 hover:bg-gold-400 text-dark-900 font-semibold shadow-card transition-all"
+          >
+            <Mail className="w-5 h-5" />
+            {t("emailv.verify")}
+          </button>
+        </div>
+        {showEmailVerification && (
+          <EmailVerificationModal
+            emailAddress={userProfile?.email || ""}
+            allowEditEmail
+            onClose={() => setShowEmailVerification(false)}
+            onVerified={handleRegistered}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Not fully KYC verified: show message + registration button.
   if (!isVerified) {
     return (
       <>
@@ -542,18 +593,18 @@ export function TransactionTab({
           </div>
           <div className="text-center space-y-2">
             <div className="text-lg font-semibold text-dark-800 dark:text-ivory-200">
-              {emailVerificationPending ? t("emailv.pending_title") : isBasicRegistered ? t("txn.complete_kyc_required") : t("txn.register_required")}
+              {isBasicRegistered ? t("txn.complete_kyc_required") : t("txn.register_required")}
             </div>
             <div className="text-sm text-dark-600 dark:text-ivory-300">
-              {emailVerificationPending ? t("emailv.pending_desc") : isBasicRegistered ? t("txn.complete_kyc_desc") : t("txn.register_desc")}
+              {isBasicRegistered ? t("txn.complete_kyc_desc") : t("txn.register_desc")}
             </div>
           </div>
           <button
-            onClick={() => emailVerificationPending ? setShowEmailVerification(true) : isBasicRegistered ? setShowRegistration(true) : setShowQuickRegistration(true)}
+            onClick={() => isBasicRegistered ? setShowRegistration(true) : setShowQuickRegistration(true)}
             className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-maroon-600 hover:bg-maroon-700 text-white font-semibold shadow-card transition-all"
           >
             <UserPlus className="w-5 h-5" />
-            {emailVerificationPending ? t("emailv.verify") : isBasicRegistered ? t("txn.complete_kyc") : t("txn.register")}
+            {isBasicRegistered ? t("txn.complete_kyc") : t("txn.register")}
           </button>
         </div>
         {showQuickRegistration && (
@@ -566,13 +617,6 @@ export function TransactionTab({
           <RegistrationModal
             onClose={() => setShowRegistration(false)}
             onRegistered={handleRegistered}
-          />
-        )}
-        {showEmailVerification && emailVerificationPending && userProfile?.email && (
-          <EmailVerificationModal
-            emailAddress={userProfile.email}
-            onClose={() => setShowEmailVerification(false)}
-            onVerified={handleRegistered}
           />
         )}
       </>

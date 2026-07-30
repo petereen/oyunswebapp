@@ -52,6 +52,8 @@ from models import (
     ExchangeCreateRequest,
     ExchangeCreateResponse,
     ExchangeResubmitRequest,
+    ExchangeGroupAutomationSettings,
+    ExchangeGroupAutomationSettingsUpdate,
     HealthResponse,
     HistoryItem,
     HistoryResponse,
@@ -446,6 +448,69 @@ def _get_user_lang(user_id: int) -> str:
     except Exception:
         pass
     return "mn"
+
+
+def _send_email_verification_notification(user_id: int) -> None:
+    """Remind a user in Telegram to finish email verification.
+
+    The email itself is sent by Supabase Auth through the configured SMTP
+    provider (Resend). Telegram is only used as a reliable in-app reminder.
+    """
+    try:
+        settings = get_settings()
+        lang = _get_user_lang(user_id)
+        if lang == "ru":
+            text = (
+                "📧 <b>Пожалуйста, подтвердите email</b>\n\n"
+                "Чтобы пользоваться денежными операциями, подтвердите email кодом из письма."
+            )
+            button_text = "✅ Подтвердить email"
+        else:
+            text = (
+                "📧 <b>Имэйлээ баталгаажуулна уу</b>\n\n"
+                "Мөнгөний гүйлгээ ашиглахын тулд имэйлээр ирсэн кодоор имэйлээ баталгаажуулна уу."
+            )
+            button_text = "✅ Имэйл баталгаажуулах"
+
+        reply_markup = None
+        panel_url = (settings.user_panel_url or settings.webapp_url or "").strip()
+        if panel_url and panel_url.startswith("https://"):
+            separator = "&" if "?" in panel_url else "?"
+            reply_markup = {
+                "inline_keyboard": [[
+                    {"text": button_text, "web_app": {"url": f"{panel_url}{separator}verify-email=1"}}
+                ]]
+            }
+
+        send_user_notification(user_id, text, reply_markup=reply_markup)
+    except Exception:
+        logger.exception("Failed to send email verification Telegram reminder to %s", user_id)
+
+
+def _require_email_verified(client, user_id: int) -> dict:
+    """Protect every money-creating endpoint with the email gate."""
+    verification_enabled = _safe_int(
+        _get_app_settings_dict(client, ["email_verification_enabled"]).get("email_verification_enabled"),
+        1,
+    ) > 0
+    user_res = (
+        client.table("users")
+        .select("id,email,verification_level,email_verification_pending,email_verified_at")
+        .eq("id", user_id)
+        .limit(1)
+        .execute()
+    )
+    record = user_res.data[0] if user_res.data else None
+    if not record:
+        raise HTTPException(status_code=403, detail="Please verify your email first")
+
+    # Turning the feature off is an explicit admin override for staged rollout.
+    if verification_enabled and (
+        bool(record.get("email_verification_pending"))
+        or not record.get("email_verified_at")
+    ):
+        raise HTTPException(status_code=403, detail="Please verify your email first")
+    return record
 
 
 def _classify_transaction_service(direction: str, bank_details: str | None) -> tuple[str, str | None, str | None]:
@@ -1042,6 +1107,12 @@ APP_SETTINGS_KEYS = [
     "home_banner_image_url",
     "home_banner_link_url",
     "email_verification_enabled",
+]
+
+EXCHANGE_GROUP_SETTING_KEYS = [
+    "exchange_group_mnt_rub_enabled",
+    "exchange_group_rub_mnt_enabled",
+    "exchange_group_chat_id",
 ]
 
 
@@ -1802,6 +1873,59 @@ async def update_app_settings(
         ).execute()
 
     return await get_app_settings()
+
+
+def _get_exchange_group_settings(client) -> ExchangeGroupAutomationSettings:
+    values = _get_app_settings_dict(client, EXCHANGE_GROUP_SETTING_KEYS)
+    raw_group_id = (values.get("exchange_group_chat_id") or "").strip()
+    try:
+        group_id = int(raw_group_id) if raw_group_id else None
+    except (TypeError, ValueError):
+        group_id = None
+    return ExchangeGroupAutomationSettings(
+        mnt_to_rub_enabled=1 if _safe_int(values.get("exchange_group_mnt_rub_enabled"), 0) > 0 else 0,
+        # Reserved until the RUB -> MNT message contract is implemented.
+        rub_to_mnt_enabled=0,
+        telegram_group_id=group_id,
+    )
+
+
+@app.get("/api/admin/exchange-group-settings", response_model=ExchangeGroupAutomationSettings)
+async def get_exchange_group_settings(admin=Depends(require_admin)):
+    return _get_exchange_group_settings(get_supabase())
+
+
+@app.put("/api/admin/exchange-group-settings", response_model=ExchangeGroupAutomationSettings)
+async def update_exchange_group_settings(
+    payload: ExchangeGroupAutomationSettingsUpdate,
+    admin=Depends(require_admin),
+):
+    client = get_supabase()
+    current = _get_exchange_group_settings(client)
+    next_enabled = current.mnt_to_rub_enabled if payload.mnt_to_rub_enabled is None else payload.mnt_to_rub_enabled
+    next_group_id = (
+        payload.telegram_group_id
+        if "telegram_group_id" in payload.model_fields_set
+        else current.telegram_group_id
+    )
+
+    if next_enabled not in (0, 1):
+        raise HTTPException(status_code=400, detail="mnt_to_rub_enabled must be 0 or 1")
+    if payload.rub_to_mnt_enabled not in (None, 0):
+        raise HTTPException(status_code=400, detail="RUB to MNT group mode is not implemented yet")
+    if next_group_id is not None and next_group_id >= 0:
+        raise HTTPException(status_code=400, detail="telegram_group_id must be a negative Telegram group ID")
+    if next_enabled == 1 and next_group_id is None:
+        raise HTTPException(status_code=400, detail="telegram_group_id is required when MNT to RUB group mode is enabled")
+
+    updates = {
+        "exchange_group_mnt_rub_enabled": str(next_enabled),
+        "exchange_group_rub_mnt_enabled": "0",
+        "exchange_group_chat_id": str(next_group_id or ""),
+    }
+    for key, value in updates.items():
+        client.table("app_settings").upsert({"key": key, "value": value}, on_conflict="key").execute()
+    return _get_exchange_group_settings(client)
 
 
 def moscow_to_ub_hour(moscow_hour: int) -> int:
@@ -5113,6 +5237,7 @@ async def register_basic(
             "email": normalized_email,
         }
 
+    _send_email_verification_notification(user.id)
     return {
         "ok": True,
         "message": "Basic registration saved. Verify email to continue.",
@@ -5178,6 +5303,7 @@ async def start_email_verification(
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to start email verification")
 
+    _send_email_verification_notification(user.id)
     return {
         "ok": True,
         "email": normalized_email,
@@ -5462,6 +5588,7 @@ async def create_exchange(
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
 
     client = get_supabase()
+    _require_email_verified(client, user.id)
     _require_service_open(client)
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
     normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.admin_bank_id, "admin_bank_id") if payload.admin_bank_id else None
@@ -5749,6 +5876,7 @@ async def resubmit_exchange(
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
 
     client = get_supabase()
+    _require_email_verified(client, user.id)
     now = datetime.now(timezone.utc)
     trx_res = (
         client.table("transactions")
@@ -5946,6 +6074,76 @@ async def admin_action(
     
     logger.info(f"Admin action: invoice={payload.invoice}, new_status={payload.status}, current_status={trx.get('status')}")
 
+    direction = "buy" if (trx.get("currency_from") or "").upper() == "RUB" else "sell"
+    service_kind, _, _ = _classify_transaction_service(direction, trx.get("bank_details"))
+    group_settings = _get_exchange_group_settings(client)
+    is_mnt_rub_exchange = (
+        service_kind == "exchange"
+        and (trx.get("currency_from") or "").upper() == "MNT"
+        and (trx.get("currency_to") or "").upper() == "RUB"
+    )
+    dispatch_exists = False
+    if is_mnt_rub_exchange:
+        try:
+            dispatch_res = (
+                client.table("exchange_group_dispatches")
+                .select("id")
+                .eq("invoice", payload.invoice)
+                .limit(1)
+                .execute()
+            )
+            dispatch_exists = bool(dispatch_res.data)
+        except Exception:
+            dispatch_exists = False
+    automation_managed = dispatch_exists or (
+        group_settings.mnt_to_rub_enabled > 0
+        and (trx.get("status") or "").lower() == "pending"
+        and is_mnt_rub_exchange
+    )
+    group_approval_performed = False
+
+    if automation_managed:
+        current_status = (trx.get("status") or "").lower()
+        if current_status == "pending" and payload.status not in {"approved", "rejected"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Automated MNT to RUB requests can only be approved or rejected while pending",
+            )
+        if current_status == "approved":
+            if payload.status == "approved":
+                # A repeated click is idempotent and must not notify the user twice.
+                return {"ok": True, "queued": True}
+            raise HTTPException(
+                status_code=400,
+                detail="Approved automated MNT to RUB requests are completed only from the Telegram group",
+            )
+        if current_status != "pending":
+            raise HTTPException(status_code=400, detail="Transaction is no longer actionable")
+
+        if payload.status == "approved":
+            parts = [part.strip() for part in (trx.get("bank_details") or "").split(",")]
+            if len(parts) != 4 or not all(parts):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Russian requisites must include bank, phone, card number, and owner name",
+                )
+            if _to_decimal(trx.get("rate")) <= 0:
+                raise HTTPException(status_code=400, detail="Transaction has an invalid exchange rate")
+            try:
+                rpc_result = client.rpc(
+                    "approve_mnt_rub_group_exchange",
+                    {"p_invoice": payload.invoice},
+                ).execute()
+            except Exception as exc:
+                logger.error("Could not queue Telegram group dispatch for %s: %s", payload.invoice, exc)
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not queue Telegram group dispatch. Apply the exchange group database migration.",
+                ) from exc
+            if not rpc_result.data:
+                raise HTTPException(status_code=500, detail="Telegram group dispatch was not queued")
+            group_approval_performed = True
+
     if payload.status == "waiting_edit":
         bank_details = (trx.get("bank_details") or "").strip()
         parts = [part.strip() for part in bank_details.split(",") if part.strip()]
@@ -6056,20 +6254,21 @@ async def admin_action(
 
     logger.info(f"Update payload: {update_payload}")
     
-    # Execute the update
-    try:
-        update_result = client.table("transactions").update(update_payload).eq("invoice", payload.invoice).execute()
-        logger.info(f"Update result data: {update_result.data}")
-        
-        # Verify the update worked
-        if not update_result.data:
-            logger.error("Update returned no data - possible RLS issue")
-            # Try to fetch again to see current state
-            verify = client.table("transactions").select("status").eq("invoice", payload.invoice).execute()
-            logger.info(f"Verify after update: {verify.data}")
-    except Exception as e:
-        logger.error(f"Update error: {e}")
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+    # Execute the update. Group approval was already applied atomically by RPC.
+    if not group_approval_performed:
+        try:
+            update_result = client.table("transactions").update(update_payload).eq("invoice", payload.invoice).execute()
+            logger.info(f"Update result data: {update_result.data}")
+
+            # Verify the update worked
+            if not update_result.data:
+                logger.error("Update returned no data - possible RLS issue")
+                # Try to fetch again to see current state
+                verify = client.table("transactions").select("status").eq("invoice", payload.invoice).execute()
+                logger.info(f"Verify after update: {verify.data}")
+        except Exception as e:
+            logger.error(f"Update error: {e}")
+            raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 
     # notify user based on status
     user_id = trx.get("user_id")
@@ -6249,12 +6448,13 @@ async def admin_action(
             }
         )
 
-    return {"ok": True}
+    return {"ok": True, "queued": group_approval_performed}
 
 
 @app.get("/api/admin/inbox", response_model=AdminInboxResponse)
 async def admin_inbox(admin=Depends(require_admin)):
     client = get_supabase()
+    group_settings = _get_exchange_group_settings(client)
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
     select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment"
     if admin_bank_supported:
@@ -6267,6 +6467,24 @@ async def admin_inbox(admin=Depends(require_admin)):
         .limit(100)
         .execute()
     )
+
+    invoices = [str(row.get("invoice")) for row in (res.data or []) if row.get("invoice")]
+    dispatches: dict[str, dict] = {}
+    if invoices:
+        try:
+            dispatch_res = (
+                client.table("exchange_group_dispatches")
+                .select("invoice,status,last_error,telegram_message_id")
+                .in_("invoice", invoices)
+                .execute()
+            )
+            dispatches = {
+                str(row.get("invoice")): row
+                for row in (dispatch_res.data or [])
+                if row.get("invoice")
+            }
+        except Exception as exc:
+            logger.warning("Exchange group dispatch metadata is unavailable: %s", exc)
     
     # Get all unique user IDs to fetch their saved bank info
     user_ids = list(set(row.get("user_id") for row in res.data or [] if row.get("user_id")))
@@ -6296,6 +6514,17 @@ async def admin_inbox(admin=Depends(require_admin)):
         direction = "buy" if (row.get("currency_from") or "").upper() == "RUB" else "sell"
         bank_details = row.get("bank_details") or ""
         service_kind, topup_phone, topup_telecom = _classify_transaction_service(direction, bank_details)
+        dispatch = dispatches.get(str(row.get("invoice"))) or {}
+        automation_managed = (
+            bool(dispatch)
+            or (
+                group_settings.mnt_to_rub_enabled > 0
+                and (row.get("status") or "").lower() == "pending"
+                and service_kind == "exchange"
+                and (row.get("currency_from") or "").upper() == "MNT"
+                and (row.get("currency_to") or "").upper() == "RUB"
+            )
+        )
         
         # Check for bank mismatch
         user_id = row.get("user_id")
@@ -6367,6 +6596,9 @@ async def admin_inbox(admin=Depends(require_admin)):
             admin_label_note=user_label_note,
             admin_bank_id=str(row.get("admin_bank_id")) if row.get("admin_bank_id") else None,
             admin_bank_name=admin_banks.get(str(row.get("admin_bank_id"))) if row.get("admin_bank_id") else None,
+            automation_managed=automation_managed,
+            group_dispatch_status=dispatch.get("status"),
+            group_dispatch_error=dispatch.get("last_error"),
         ))
     return AdminInboxResponse(items=items)
 
@@ -7680,6 +7912,7 @@ async def create_gift(
 ):
     """Create a new gift transaction"""
     client = get_supabase()
+    _require_email_verified(client, user.id)
     _require_service_open(client)
 
     settings = get_settings()
@@ -8442,6 +8675,7 @@ async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_au
     """Create a new fuel purchase order."""
     settings = get_settings()
     client = get_supabase()
+    _require_email_verified(client, user.id)
 
     stations = _get_fuel_stations_from_db()
     if payload.station_name not in stations:
