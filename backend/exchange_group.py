@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 
+RUB_COMPLETION_TOLERANCE = 10
+
 
 def decimal_value(value: object) -> Decimal:
     try:
@@ -50,4 +52,7 @@ def parse_completion_caption(caption: str | None) -> int | None:
 
 def completion_caption_matches(caption: str | None, amount_mnt: object, rate: object) -> bool:
     parsed = parse_completion_caption(caption)
-    return parsed is not None and parsed == rounded_rub_payout(amount_mnt, rate)
+    if parsed is None:
+        return False
+    expected = rounded_rub_payout(amount_mnt, rate)
+    return abs(parsed - expected) <= RUB_COMPLETION_TOLERANCE

@@ -68,6 +68,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip().replace('"', '').replace("'", "")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://app.oyuns.mn")
 bot = telebot.TeleBot(BOT_TOKEN)
 
+def _is_private_chat(message) -> bool:
+    """User-facing bot commands and flows are private-chat only."""
+    return getattr(getattr(message, "chat", None), "type", None) == "private"
+
+def _is_group_chat(message) -> bool:
+    return getattr(getattr(message, "chat", None), "type", None) in ("group", "supergroup")
+
 
 SUPABASE_URL = "https://ldolpsylyatkxqsgxhkn.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxkb2xwc3lseWF0a3hxc2d4aGtuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Mjc1OTg4MSwiZXhwIjoyMDU4MzM1ODgxfQ.LgsjFKhMoLc5mDeb_3jg9b745JaEavdBBBOjPXlds7o"
@@ -373,6 +380,8 @@ def _award_group_completion_points(transaction: dict, rub_amount) -> None:
 def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
     messages = sorted(messages, key=lambda item: item.message_id)
     first = messages[0]
+    if not _is_group_chat(first):
+        return
     caption = next((item.caption for item in messages if item.caption), None)
     invoice = str(dispatch.get("invoice"))
 
@@ -853,7 +862,7 @@ def handle_terms_accept(call):
 
     threading.Thread(target=delayed_start).start()
 
-@bot.message_handler(commands=['geree'])
+@bot.message_handler(commands=['geree'], func=_is_private_chat)
 def terms_handler(message):
   lang = get_user_lang(message.chat.id)
   markup = InlineKeyboardMarkup()
@@ -885,7 +894,7 @@ def compute_converted(txn) -> tuple[float, str]:
 
 
 
-@bot.message_handler(commands=["shift_status"])
+@bot.message_handler(commands=["shift_status"], func=_is_private_chat)
 def show_current_shift_admin(message):
     if message.from_user.id not in ALLOWED_ADMINS:
         return
@@ -1129,7 +1138,7 @@ def set_current_admin_id(new_admin_id, performed_by_admin_id=None, is_automatic=
         return False
 
 
-@bot.message_handler(commands=["eelj"])
+@bot.message_handler(commands=["eelj"], func=_is_private_chat)
 def shift_control(message):
     if message.from_user.id not in ALLOWED_ADMINS:
         return
@@ -1495,7 +1504,7 @@ def contact_support_handler(call):
 
 # ✅ Start Command
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start'], func=_is_private_chat)
 def handle_start(message):
     user_id = message.chat.id
 
@@ -4449,7 +4458,7 @@ def collect_rejection_reason(message):
     clear_state(MODERATOR_ID)
     
 
-@bot.message_handler(func=lambda m: m.text and m.text.startswith('/promocode'))
+@bot.message_handler(func=lambda m: _is_private_chat(m) and m.text and m.text.startswith('/promocode'))
 def admin_award_referral_command(message):
     """Admin-only command: /promocode <user_id>
     Manually trigger awarding referral promo codes for a user.
@@ -4555,7 +4564,7 @@ def reject_file_receipts(message):
         bot.send_message(user_id, "📁 Энэ файлыг одоогоор хүлээн авах боломжгүй байна.")
 
 
-@bot.message_handler(commands=['batalgaajuulah'])
+@bot.message_handler(commands=['batalgaajuulah'], func=_is_private_chat)
 def cmd_reconfirm(message):
     admin_id = message.chat.id
     if admin_id not in ALLOWED_ADMINS:
@@ -4610,7 +4619,7 @@ def cmd_reconfirm(message):
     bot.send_message(admin_id, caption, parse_mode="Markdown")
 
 # ✅ Admin command to show transaction status and manage it
-@bot.message_handler(commands=['status'])
+@bot.message_handler(commands=['status'], func=_is_private_chat)
 def cmd_status(message):
     admin_id = message.chat.id
     if admin_id not in ALLOWED_ADMINS:
@@ -4723,7 +4732,7 @@ def _flush_admin_media_group(mgid: str, target_user: int, caption: str, admin_id
 
 
 @bot.message_handler(
-    func=lambda message: _find_exchange_group_dispatch(message) is not None,
+    func=lambda message: _is_group_chat(message) and _find_exchange_group_dispatch(message) is not None,
     content_types=["photo"],
 )
 def handle_exchange_group_proof(message):
@@ -4750,6 +4759,8 @@ def handle_exchange_group_proof(message):
 
 @bot.message_handler(content_types=['photo'])
 def handle_passport_or_receipt(message):
+    if _is_group_chat(message):
+        return
     user_id = message.chat.id
     photo_id = message.photo[-1].file_id
     state = get_state(user_id)
@@ -5193,7 +5204,7 @@ def save_text_feedback(message):
 
 #REGISTRATION FORM
 
-@bot.message_handler(commands=['register'])
+@bot.message_handler(commands=['register'], func=_is_private_chat)
 def register(message):
     user_id = message.chat.id
     if not has_agreed_terms(user_id):
@@ -5212,7 +5223,7 @@ def register(message):
 
 
 
-@bot.message_handler(commands=['hereglegch'])
+@bot.message_handler(commands=['hereglegch'], func=_is_private_chat)
 def show_pending_users(message):
     try:
         user_id = message.from_user.id
@@ -5350,7 +5361,7 @@ def build_transaction_caption_and_markup(user_id, invoice, amount, currency_from
     )
 
     return caption, markup
-@bot.message_handler(commands=['guilgee'])
+@bot.message_handler(commands=['guilgee'], func=_is_private_chat)
 def show_pending_transactions(message):
     if message.from_user.id not in ALLOWED_ADMINS:
         bot.send_message(message.chat.id, t(get_user_lang(message.from_user.id), "admin_cmd_unauthorized"))
@@ -5414,7 +5425,7 @@ def show_pending_transactions(message):
                 bot.send_message(message.chat.id, caption + t(get_user_lang(message.from_user.id), "admin_receipt_not_exist"), parse_mode="Markdown", reply_markup=markup)
 
 
-@bot.message_handler(commands=["haih"])
+@bot.message_handler(commands=["haih"], func=_is_private_chat)
 def find_user_or_invoice(message):
     admin_id = message.from_user.id
     if admin_id not in ALLOWED_ADMINS:
@@ -5544,7 +5555,7 @@ def find_user_or_invoice(message):
         # neither invoice nor pure-digit
         return bot.reply_to(message, t(get_user_lang(admin_id), "admin_haih_format_err"))
 
-@bot.message_handler(commands=["message"])
+@bot.message_handler(commands=["message"], func=_is_private_chat)
 def send_message_to_user(message):
     """Admin command to send a message to a user by their Telegram user_id.
     Usage: /message [user_id] [message]
@@ -5710,7 +5721,7 @@ def _run_broadcast_send_loop(user_ids: list, caption: str, context: str = "Broad
 
     return success, failed
 
-@bot.message_handler(commands=["broadcast"])
+@bot.message_handler(commands=["broadcast"], func=_is_private_chat)
 def broadcast_rates(message):
     """Broadcast current exchange rates with photo to ALL users.
     Only admins (ALLOWED_ADMINS) and the moderator (MODERATOR_ID) can use this.
@@ -5861,7 +5872,7 @@ def _auto_broadcast_loop():
 
         time_module.sleep(60)
 
-@bot.message_handler(commands=["testbroadcast"])
+@bot.message_handler(commands=["testbroadcast"], func=_is_private_chat)
 def test_broadcast_rates(message):
     """Test broadcast – sends the rate photo only to admins and the moderator."""
     sender_id = message.from_user.id
@@ -5921,6 +5932,8 @@ def test_broadcast_rates(message):
 
 @bot.message_handler(func=lambda m: True, content_types=['text'])
 def handle_unknown_text(message):
+    if _is_group_chat(message):
+        return
     # only fire when we're not in the middle of a flow
     if get_state(message.chat.id):
         return

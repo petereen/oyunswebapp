@@ -37,14 +37,23 @@ class ExchangeGroupFormattingTests(unittest.TestCase):
         self.assertEqual(rounded_rub_payout("100645.5", "1"), 100646)
 
     def test_accepts_flexible_grouping_with_checkmark(self):
+        self.assertEqual(parse_completion_caption("100,000✅"), 100000)
+        self.assertEqual(parse_completion_caption("100 000✅"), 100000)
+        self.assertEqual(parse_completion_caption("100.000✅"), 100000)
         self.assertEqual(parse_completion_caption("100.646✅"), 100646)
         self.assertEqual(parse_completion_caption("100,646 ✅"), 100646)
         self.assertEqual(parse_completion_caption("100 646✅️"), 100646)
 
-    def test_rejects_extra_text_or_wrong_amount(self):
+    def test_accepts_amount_within_ten_rubles(self):
+        self.assertTrue(completion_caption_matches("100.636✅", "37238709.2", "370"))
+        self.assertTrue(completion_caption_matches("100.656✅", "37238709.2", "370"))
+        self.assertFalse(completion_caption_matches("100.635✅", "37238709.2", "370"))
+        self.assertFalse(completion_caption_matches("100.657✅", "37238709.2", "370"))
+
+    def test_rejects_extra_text_or_invalid_amount(self):
         self.assertIsNone(parse_completion_caption("paid 100.646✅"))
         self.assertIsNone(parse_completion_caption("100.646"))
-        self.assertFalse(completion_caption_matches("100.645✅", "37238709.2", "370"))
+        self.assertFalse(completion_caption_matches("100.635✅", "37238709.2", "370"))
         self.assertTrue(completion_caption_matches("100.646✅", "37238709.2", "370"))
 
 
