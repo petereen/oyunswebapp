@@ -5633,12 +5633,20 @@ def _format_rate(value) -> str:
     return f"{num:,.2f}"
 
 def _fetch_all_user_ids() -> list:
-    """Fetch ALL user IDs from the users table, paginating past Supabase's 1000-row limit."""
+    """Fetch all direct-user Telegram IDs, never group or channel chat IDs."""
     all_ids = []
     page_size = 1000
     offset = 0
     while True:
-        resp = supabase.table("users").select("id").range(offset, offset + page_size - 1).execute()
+        # Telegram user chat IDs are positive; groups, supergroups, and channels
+        # use negative chat IDs. Keep group recipients out of the query entirely.
+        resp = (
+            supabase.table("users")
+            .select("id")
+            .gt("id", 0)
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
         if not resp.data:
             break
         all_ids.extend(u["id"] for u in resp.data)
@@ -5697,6 +5705,11 @@ def _run_broadcast_send_loop(user_ids: list, caption: str, context: str = "Broad
         try:
             uid = int(raw_uid)
         except Exception:
+            continue
+        # Never send a rate update to a Telegram group, supergroup, or channel.
+        # The final guard protects against callers passing IDs from another source.
+        if uid <= 0:
+            print(f"⚠️ {context}: skipping non-user chat ID {uid}")
             continue
         if uid in seen:
             continue
