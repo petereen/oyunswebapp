@@ -275,7 +275,7 @@ def _recover_exchange_group_completions(now: datetime) -> None:
             supabase.table("exchange_group_dispatches").update({
                 "status": "awaiting_proof",
                 "lease_expires_at": None,
-                "last_error": "Recovered interrupted proof processing; please reply with the proof again",
+                "last_error": "Восстановлено прерванное обработка доказательств; пожалуйста, отправьте доказательство снова",
                 "updated_at": now.isoformat(),
             }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
             continue
@@ -384,15 +384,15 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
         .execute()
     )
     if not transaction_res.data:
-        bot.reply_to(first, "❌ Transaction not found.")
+        bot.reply_to(first, "❌ Транзакция не найдена.")
         return
     transaction = transaction_res.data[0]
     if transaction.get("status") != "approved":
-        bot.reply_to(first, "⚠️ This transaction is no longer awaiting completion.")
+        bot.reply_to(first, "⚠️ Эта транзакция больше не ожидает завершения.")
         return
     if not completion_caption_matches(caption, transaction.get("amount"), transaction.get("rate")):
         expected = rounded_rub_payout(transaction.get("amount"), transaction.get("rate"))
-        bot.reply_to(first, f"❌ Amount does not match. Expected the rounded RUB amount with ✅ ({expected:,}✅).")
+        bot.reply_to(first, f"❌ Сумма не совпадает. Ожидается округленная сумма в RUB с ✅ ({expected:,}✅).")
         return
 
     now = datetime.now(timezone.utc)
@@ -445,7 +445,7 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
             .execute()
         )
         if not completed.data:
-            raise RuntimeError("Transaction was already completed or changed")
+            raise RuntimeError("Транзакция не может быть завершена, так как ее статус изменился.")
         transaction_completed = True
 
         rub_amount = rub_payout(transaction.get("amount"), transaction.get("rate"))
@@ -475,7 +475,7 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
                         parse_mode="HTML",
                     )
         except Exception as exc:
-            notification_error = f"Transaction completed, but user notification failed: {exc}"
+            notification_error = f"Транзакция завершена, но уведомление пользователя не удалось отправить: {exc}"
             print(f"❌ {notification_error}")
 
         completed_at = datetime.now(timezone.utc).isoformat()
@@ -488,9 +488,9 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
             "lease_expires_at": None,
             "last_error": notification_error,
         }).eq("id", dispatch.get("id")).execute()
-        bot.reply_to(first, f"✅ {invoice} completed and the proof was sent to the user.")
+        bot.reply_to(first, f"✅ {invoice} успешно завершен. Пользователь уведомлен." if not notification_error else f"✅ {invoice} успешно завершен, но возникла ошибка при уведомлении пользователя: {notification_error}")
     except Exception as exc:
-        print(f"❌ Could not complete group proof for {invoice}: {exc}")
+        print(f"❌ Не удалось завершить {invoice}: {exc}")
         if transaction_completed:
             retry_at = datetime.now(timezone.utc) + timedelta(minutes=1)
             supabase.table("exchange_group_dispatches").update({
@@ -498,7 +498,7 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "lease_expires_at": retry_at.isoformat(),
             }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
-            bot.reply_to(first, "⚠️ Transaction completed, but user delivery will be retried automatically.")
+            bot.reply_to(first, "⚠️ Транзакция завершена, но уведомление пользователя не удалось отправить.")
         else:
             supabase.table("exchange_group_dispatches").update({
                 "status": "awaiting_proof",
@@ -506,7 +506,7 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "lease_expires_at": None,
             }).eq("id", dispatch.get("id")).eq("status", "processing").execute()
-            bot.reply_to(first, "❌ Could not complete this transaction. Please retry the photo reply.")
+            bot.reply_to(first, "❌ Не удалось завершить эту транзакцию. Пожалуйста, повторите попытку отправки фото.")
 
 
 def _find_exchange_group_dispatch(message) -> dict | None:
