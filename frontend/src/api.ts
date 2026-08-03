@@ -1097,6 +1097,7 @@ export async function kycAction(payload: { user_id: number; action: 'approve' | 
 export async function adminAction(payload: { 
   invoice: string; 
   status: string; 
+  processing_mode?: 'traditional' | 'group';
   rejection_comment?: string; 
   admin_comment?: string;
   admin_bill_url?: string;

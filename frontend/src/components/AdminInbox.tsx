@@ -344,7 +344,7 @@ export function AdminInbox() {
   const handleApprove = async (invoice: string) => {
     try {
       console.log("Approving invoice:", invoice);
-      const result = await adminAction({ invoice, status: "approved" });
+      const result = await adminAction({ invoice, status: "approved", processing_mode: "traditional" });
       console.log("Approval result:", result);
       setDetailModal(null);
       await load();
@@ -1302,26 +1302,47 @@ export function AdminInbox() {
 
                 {/* Actions for Pending - Pre-approve or Reject */}
                 {item.status === "pending" && (
-                  <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
+                  <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-4"} gap-2`}>
                     <button
                       onClick={async () => {
                         try {
-                          // Pre-approve: move to "approved" status
                           await adminAction({ 
                             invoice: item.invoice, 
-                            status: "approved"
+                            status: "approved",
+                            processing_mode: "traditional",
                           });
                           setDetailModal(null);
                           await load();
                         } catch (err) {
-                          console.error("Pre-approval error:", err);
-                          setError("Гүйлгээг баталж, Telegram дараалалд оруулахад алдаа гарлаа");
+                          console.error("Traditional approval error:", err);
+                          setError("Гүйлгээг батлахад алдаа гарлаа");
                         }
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 text-white py-3 font-semibold hover:bg-green-700"
                     >
-                      <ShieldCheck className="w-5 h-5" /> Урьдчилан батлах
+                      <ShieldCheck className="w-5 h-5" /> Батлах
                     </button>
+                    {item.service_kind === "exchange" && item.currency_from.toUpperCase() === "MNT" && item.currency_to.toUpperCase() === "RUB" && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await adminAction({
+                              invoice: item.invoice,
+                              status: "approved",
+                              processing_mode: "group",
+                            });
+                            setDetailModal(null);
+                            await load();
+                          } catch (err) {
+                            console.error("Group dispatch error:", err);
+                            setError("Гүйлгээг Telegram групп рүү илгээхэд алдаа гарлаа");
+                          }
+                        }}
+                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white py-3 font-semibold hover:bg-blue-700"
+                      >
+                        <Upload className="w-5 h-5" /> Групп рүү илгээх
+                      </button>
+                    )}
                     {!topupRequest && !item.automation_managed && (
                       <button
                         onClick={() => handleSetWaitingEdit(item.invoice)}

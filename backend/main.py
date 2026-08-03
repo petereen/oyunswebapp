@@ -1883,7 +1883,9 @@ def _get_exchange_group_settings(client) -> ExchangeGroupAutomationSettings:
     except (TypeError, ValueError):
         group_id = None
     return ExchangeGroupAutomationSettings(
-        mnt_to_rub_enabled=1 if _safe_int(values.get("exchange_group_mnt_rub_enabled"), 0) > 0 else 0,
+        # Group completion is now selected per request. Retain this response
+        # field only for compatibility with older admin clients.
+        mnt_to_rub_enabled=0,
         # Reserved until the RUB -> MNT message contract is implemented.
         rub_to_mnt_enabled=0,
         telegram_group_id=group_id,
@@ -1902,22 +1904,20 @@ async def update_exchange_group_settings(
 ):
     client = get_supabase()
     current = _get_exchange_group_settings(client)
-    next_enabled = current.mnt_to_rub_enabled if payload.mnt_to_rub_enabled is None else payload.mnt_to_rub_enabled
+    # Retire the global automatic-routing switch without requiring a migration.
+    next_enabled = 0
     next_group_id = (
         payload.telegram_group_id
         if "telegram_group_id" in payload.model_fields_set
         else current.telegram_group_id
     )
 
-    if next_enabled not in (0, 1):
-        raise HTTPException(status_code=400, detail="mnt_to_rub_enabled must be 0 or 1")
+    if payload.mnt_to_rub_enabled not in (None, 0):
+        raise HTTPException(status_code=400, detail="Automatic group routing has been retired; use Send to group per request")
     if payload.rub_to_mnt_enabled not in (None, 0):
         raise HTTPException(status_code=400, detail="RUB to MNT group mode is not implemented yet")
     if next_group_id is not None and next_group_id >= 0:
         raise HTTPException(status_code=400, detail="telegram_group_id must be a negative Telegram group ID")
-    if next_enabled == 1 and next_group_id is None:
-        raise HTTPException(status_code=400, detail="telegram_group_id is required when MNT to RUB group mode is enabled")
-
     updates = {
         "exchange_group_mnt_rub_enabled": str(next_enabled),
         "exchange_group_rub_mnt_enabled": "0",
@@ -6109,54 +6109,54 @@ async def admin_action(
             dispatch_exists = bool(dispatch_res.data)
         except Exception:
             dispatch_exists = False
-    automation_managed = dispatch_exists or (
-        group_settings.mnt_to_rub_enabled > 0
-        and (trx.get("status") or "").lower() == "pending"
-        and is_mnt_rub_exchange
-    )
+    group_dispatch_requested = payload.processing_mode == "group"
     group_approval_performed = False
 
-    if automation_managed:
+    # Dispatch records remain group-managed even after automatic routing is
+    # retired. They cannot be completed through the traditional admin flow.
+    if dispatch_exists:
         current_status = (trx.get("status") or "").lower()
-        if current_status == "pending" and payload.status not in {"approved", "rejected"}:
-            raise HTTPException(
-                status_code=400,
-                detail="Automated MNT to RUB requests can only be approved or rejected while pending",
-            )
         if current_status == "approved":
-            if payload.status == "approved":
+            if payload.status == "approved" and group_dispatch_requested:
                 # A repeated click is idempotent and must not notify the user twice.
                 return {"ok": True, "queued": True}
             raise HTTPException(
                 status_code=400,
-                detail="Approved automated MNT to RUB requests are completed only from the Telegram group",
+                detail="Group-managed MNT to RUB requests are completed only from the Telegram group",
             )
-        if current_status != "pending":
-            raise HTTPException(status_code=400, detail="Transaction is no longer actionable")
+        raise HTTPException(status_code=400, detail="Transaction is no longer actionable")
 
-        if payload.status == "approved":
-            parts = [part.strip() for part in (trx.get("bank_details") or "").split(",")]
-            if len(parts) != 4 or not all(parts):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Russian requisites must include bank, phone, card number, and owner name",
-                )
-            if _to_decimal(trx.get("rate")) <= 0:
-                raise HTTPException(status_code=400, detail="Transaction has an invalid exchange rate")
-            try:
-                rpc_result = client.rpc(
-                    "approve_mnt_rub_group_exchange",
-                    {"p_invoice": payload.invoice},
-                ).execute()
-            except Exception as exc:
-                logger.error("Could not queue Telegram group dispatch for %s: %s", payload.invoice, exc)
-                raise HTTPException(
-                    status_code=500,
-                    detail="Could not queue Telegram group dispatch. Apply the exchange group database migration.",
-                ) from exc
-            if not rpc_result.data:
-                raise HTTPException(status_code=500, detail="Telegram group dispatch was not queued")
-            group_approval_performed = True
+    if group_dispatch_requested:
+        if payload.status != "approved":
+            raise HTTPException(status_code=400, detail="Send to group is only available when approving a transaction")
+        if not is_mnt_rub_exchange:
+            raise HTTPException(status_code=400, detail="Telegram group completion is only supported for MNT to RUB exchanges")
+        if (trx.get("status") or "").lower() != "pending":
+            raise HTTPException(status_code=400, detail="Transaction is no longer actionable")
+        if group_settings.telegram_group_id is None:
+            raise HTTPException(status_code=400, detail="Configure a Telegram group ID before sending a transaction to the group")
+        parts = [part.strip() for part in (trx.get("bank_details") or "").split(",")]
+        if len(parts) != 4 or not all(parts):
+            raise HTTPException(
+                status_code=400,
+                detail="Russian requisites must include bank, phone, card number, and owner name",
+            )
+        if _to_decimal(trx.get("rate")) <= 0:
+            raise HTTPException(status_code=400, detail="Transaction has an invalid exchange rate")
+        try:
+            rpc_result = client.rpc(
+                "approve_mnt_rub_group_exchange",
+                {"p_invoice": payload.invoice},
+            ).execute()
+        except Exception as exc:
+            logger.error("Could not queue Telegram group dispatch for %s: %s", payload.invoice, exc)
+            raise HTTPException(
+                status_code=500,
+                detail="Could not queue Telegram group dispatch. Apply the exchange group database migration.",
+            ) from exc
+        if not rpc_result.data:
+            raise HTTPException(status_code=500, detail="Telegram group dispatch was not queued")
+        group_approval_performed = True
 
     if payload.status == "waiting_edit":
         bank_details = (trx.get("bank_details") or "").strip()
@@ -6468,7 +6468,6 @@ async def admin_action(
 @app.get("/api/admin/inbox", response_model=AdminInboxResponse)
 async def admin_inbox(admin=Depends(require_admin)):
     client = get_supabase()
-    group_settings = _get_exchange_group_settings(client)
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
     select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment"
     if admin_bank_supported:
@@ -6529,16 +6528,7 @@ async def admin_inbox(admin=Depends(require_admin)):
         bank_details = row.get("bank_details") or ""
         service_kind, topup_phone, topup_telecom = _classify_transaction_service(direction, bank_details)
         dispatch = dispatches.get(str(row.get("invoice"))) or {}
-        automation_managed = (
-            bool(dispatch)
-            or (
-                group_settings.mnt_to_rub_enabled > 0
-                and (row.get("status") or "").lower() == "pending"
-                and service_kind == "exchange"
-                and (row.get("currency_from") or "").upper() == "MNT"
-                and (row.get("currency_to") or "").upper() == "RUB"
-            )
-        )
+        automation_managed = bool(dispatch)
         
         # Check for bank mismatch
         user_id = row.get("user_id")

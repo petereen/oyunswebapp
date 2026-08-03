@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -146,6 +146,8 @@ class AdminActionRequest(BaseModel):
     admin_comment: Optional[str] = None
     admin_bill_url: Optional[str] = None  # Admin's transaction proof
     completed_by_admin: Optional[int] = None
+    # Omitted means the existing admin-managed completion flow.
+    processing_mode: Literal["traditional", "group"] = "traditional"
 
 
 class PresignRequest(BaseModel):

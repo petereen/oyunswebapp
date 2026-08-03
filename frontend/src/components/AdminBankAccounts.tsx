@@ -283,16 +283,16 @@ export function AdminBankAccounts() {
     }
   };
 
-  const groupSettingsChanged =
-    groupSettings.mnt_to_rub_enabled !== editingGroupSettings.mnt_to_rub_enabled ||
-    groupSettings.telegram_group_id !== editingGroupSettings.telegram_group_id;
+  const groupSettingsChanged = groupSettings.telegram_group_id !== editingGroupSettings.telegram_group_id;
 
   const handleSaveGroupSettings = async () => {
     setSavingGroupSettings(true);
     setError("");
     try {
       const result = await updateExchangeGroupSettings({
-        ...editingGroupSettings,
+        telegram_group_id: editingGroupSettings.telegram_group_id,
+        // Clear the retired automatic-routing setting when this is next saved.
+        mnt_to_rub_enabled: 0,
         rub_to_mnt_enabled: 0,
       });
       setGroupSettings(result);
@@ -349,7 +349,7 @@ export function AdminBankAccounts() {
             Telegram группээр гүйлгээ дуусгах
           </h4>
           <p className="text-xs text-blue-600 mt-1">
-            Баталсан MNT→RUB хүсэлтийн реквизит групп рүү илгээгдэж, баримтын reply-аар автоматаар дуусна.
+            Inbox дээрх “Групп рүү илгээх” товчоор сонгосон MNT→RUB хүсэлтийн реквизит групп рүү илгээгдэж, баримтын reply-аар автоматаар дуусна.
           </p>
         </div>
 
@@ -366,35 +366,6 @@ export function AdminBankAccounts() {
             className="w-full mt-1 p-2 border border-blue-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-400"
           />
           <p className="text-[11px] text-slate-500 mt-1">Group ID нь сөрөг тоо байна. Bot группт message илгээх эрхтэй байх ёстой.</p>
-        </div>
-
-        <div className="flex items-center justify-between rounded-lg bg-white p-3 border border-blue-100">
-          <div>
-            <p className="text-sm font-semibold text-slate-700">MNT→RUB автомат горим</p>
-            <p className="text-xs text-slate-500">Pending хүсэлтэд батлах болон татгалзах үйлдэл үлдэнэ.</p>
-          </div>
-          <label className="inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={editingGroupSettings.mnt_to_rub_enabled > 0}
-              onChange={(e) => setEditingGroupSettings((current) => ({
-                ...current,
-                mnt_to_rub_enabled: e.target.checked ? 1 : 0,
-              }))}
-              className="sr-only"
-            />
-            <span className={`w-11 h-6 rounded-full transition relative ${editingGroupSettings.mnt_to_rub_enabled > 0 ? "bg-blue-600" : "bg-slate-300"}`}>
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition ${editingGroupSettings.mnt_to_rub_enabled > 0 ? "left-5" : "left-0.5"}`} />
-            </span>
-          </label>
-        </div>
-
-        <div className="flex items-center justify-between rounded-lg bg-slate-100 p-3 border border-slate-200 opacity-70">
-          <div>
-            <p className="text-sm font-semibold text-slate-600">RUB→MNT автомат горим</p>
-            <p className="text-xs text-slate-500">Удахгүй нэмэгдэнэ.</p>
-          </div>
-          <input type="checkbox" checked={false} disabled className="h-5 w-5" />
         </div>
 
         {groupSettingsChanged && (
