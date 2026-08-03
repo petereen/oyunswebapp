@@ -149,6 +149,25 @@ def _queue_retry(dispatch_id: str, attempts: int, error: object) -> None:
     }).eq("id", dispatch_id).execute()
 
 
+def _mark_exchange_group_dispatch_failed(dispatch_id: str, error: object) -> None:
+    """Stop retrying permanent Telegram destination errors."""
+    now = datetime.now(timezone.utc).isoformat()
+    supabase.table("exchange_group_dispatches").update({
+        "status": "failed",
+        "lease_expires_at": None,
+        "last_error": str(error)[:1000],
+        "updated_at": now,
+    }).eq("id", dispatch_id).eq("status", "sending").execute()
+
+
+def _is_permanent_group_destination_error(error: Exception) -> bool:
+    return (
+        isinstance(error, telebot.apihelper.ApiTelegramException)
+        and getattr(error, "error_code", None) == 400
+        and "chat not found" in str(error).lower()
+    )
+
+
 def _dispatch_exchange_group_job(row: dict) -> None:
     dispatch_id = str(row.get("id"))
     attempts = int(row.get("attempts") or 0) + 1
@@ -207,7 +226,14 @@ def _dispatch_exchange_group_job(row: dict) -> None:
         print(f"✅ Group requisites sent for {row.get('invoice')} to {sent.chat.id}/{sent.message_id}")
     except Exception as exc:
         print(f"❌ Group dispatch failed for {row.get('invoice')}: {exc}")
-        _queue_retry(dispatch_id, attempts, exc)
+        if _is_permanent_group_destination_error(exc):
+            _mark_exchange_group_dispatch_failed(
+                dispatch_id,
+                "Telegram group not found. Check that the bot is a member of the group and that the current "
+                "supergroup ID (usually starting with -100) is configured.",
+            )
+        else:
+            _queue_retry(dispatch_id, attempts, exc)
 
 
 def _exchange_group_dispatch_loop() -> None:

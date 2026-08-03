@@ -1013,7 +1013,7 @@ export interface AdminInboxItem {
   admin_bank_id?: string;
   admin_bank_name?: string;
   automation_managed?: boolean;
-  group_dispatch_status?: 'queued' | 'sending' | 'awaiting_proof' | 'processing' | 'completed';
+  group_dispatch_status?: 'queued' | 'sending' | 'awaiting_proof' | 'processing' | 'completed' | 'failed';
   group_dispatch_error?: string;
 }
 

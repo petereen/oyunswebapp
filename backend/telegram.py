@@ -7,6 +7,38 @@ from config import get_settings
 logger = logging.getLogger("uvicorn.error")
 
 
+class TelegramChatValidationError(RuntimeError):
+    """The configured Telegram destination cannot be used by this bot."""
+
+
+def validate_telegram_group_chat(chat_id: int) -> dict:
+    """Resolve a group through Telegram before accepting work for it."""
+    settings = get_settings()
+    response = requests.get(
+        f"https://api.telegram.org/bot{settings.bot_token}/getChat",
+        params={"chat_id": chat_id},
+        timeout=10,
+    )
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise TelegramChatValidationError("Telegram returned an invalid response while checking the group") from exc
+
+    if response.status_code != 200 or not payload.get("ok"):
+        description = str(payload.get("description") or "Telegram rejected the group")
+        if "chat not found" in description.lower():
+            raise TelegramChatValidationError(
+                "Telegram group not found. Check that the bot is a member of the group and that the current "
+                "supergroup ID (usually starting with -100) is configured."
+            )
+        raise TelegramChatValidationError(f"Telegram could not access the configured group: {description}")
+
+    chat = payload.get("result") or {}
+    if chat.get("type") not in {"group", "supergroup"}:
+        raise TelegramChatValidationError("The configured Telegram chat is not a group or supergroup")
+    return chat
+
+
 def send_admin_notification(text: str, photo_url: str | None = None, reply_markup: dict | None = None) -> None:
     settings = get_settings()
     # Send to all configured admin chat IDs

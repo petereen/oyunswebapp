@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.exchange_group_dispatches (
     invoice TEXT NOT NULL UNIQUE,
     direction TEXT NOT NULL CHECK (direction IN ('mnt_to_rub', 'rub_to_mnt')),
     status TEXT NOT NULL DEFAULT 'queued'
-        CHECK (status IN ('queued', 'sending', 'awaiting_proof', 'processing', 'completed')),
+        CHECK (status IN ('queued', 'sending', 'awaiting_proof', 'processing', 'completed', 'failed')),
     attempts INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     lease_expires_at TIMESTAMPTZ,
@@ -29,6 +29,14 @@ CREATE TABLE IF NOT EXISTS public.exchange_group_dispatches (
     proof_received_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ
 );
+
+-- Keep existing installations compatible when the worker moves a permanent
+-- Telegram destination error to the terminal `failed` state.
+ALTER TABLE public.exchange_group_dispatches
+    DROP CONSTRAINT IF EXISTS exchange_group_dispatches_status_check;
+ALTER TABLE public.exchange_group_dispatches
+    ADD CONSTRAINT exchange_group_dispatches_status_check
+    CHECK (status IN ('queued', 'sending', 'awaiting_proof', 'processing', 'completed', 'failed'));
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_exchange_group_dispatch_message
     ON public.exchange_group_dispatches (telegram_chat_id, telegram_message_id)
@@ -84,7 +92,15 @@ BEGIN
     INSERT INTO public.exchange_group_dispatches (invoice, direction)
     VALUES (p_invoice, 'mnt_to_rub')
     ON CONFLICT (invoice) DO UPDATE
-       SET updated_at = NOW()
+       SET status = 'queued',
+           attempts = 0,
+           next_attempt_at = NOW(),
+           lease_expires_at = NULL,
+           last_error = NULL,
+           telegram_chat_id = NULL,
+           telegram_message_id = NULL,
+           sent_at = NULL,
+           updated_at = NOW()
     RETURNING id INTO v_dispatch_id;
 
     RETURN QUERY SELECT (v_status = 'pending'), v_dispatch_id;
@@ -95,4 +111,3 @@ REVOKE ALL ON FUNCTION public.approve_mnt_rub_group_exchange(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.approve_mnt_rub_group_exchange(TEXT) FROM anon;
 REVOKE ALL ON FUNCTION public.approve_mnt_rub_group_exchange(TEXT) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.approve_mnt_rub_group_exchange(TEXT) TO service_role;
-

@@ -299,7 +299,8 @@ export function AdminBankAccounts() {
       setEditingGroupSettings(result);
     } catch (err) {
       console.error("Failed to save exchange group settings:", err);
-      setError("Telegram группийн тохиргоо хадгалахад алдаа гарлаа");
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setError(typeof detail === "string" && detail.trim() ? detail : "Telegram группийн тохиргоо хадгалахад алдаа гарлаа");
     } finally {
       setSavingGroupSettings(false);
     }

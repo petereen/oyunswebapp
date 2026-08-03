@@ -611,6 +611,7 @@ export function AdminInbox() {
       case "awaiting_proof": return "Группийн баримт хүлээж байна";
       case "processing": return "Баримт боловсруулж байна";
       case "completed": return "Автоматаар дууссан";
+      case "failed": return "Telegram групп рүү илгээж чадсангүй";
       default: return "Дараалал үүсгэж байна";
     }
   };

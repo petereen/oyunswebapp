@@ -145,7 +145,14 @@ from models import (
     TournamentVoteStatus,
 )
 from storage import presign_upload, public_url
-from telegram import send_admin_notification, send_user_notification, send_user_photo, send_user_photos
+from telegram import (
+    TelegramChatValidationError,
+    send_admin_notification,
+    send_user_notification,
+    send_user_photo,
+    send_user_photos,
+    validate_telegram_group_chat,
+)
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, "/shared")
@@ -1918,6 +1925,13 @@ async def update_exchange_group_settings(
         raise HTTPException(status_code=400, detail="RUB to MNT group mode is not implemented yet")
     if next_group_id is not None and next_group_id >= 0:
         raise HTTPException(status_code=400, detail="telegram_group_id must be a negative Telegram group ID")
+    if next_group_id is not None:
+        try:
+            validate_telegram_group_chat(next_group_id)
+        except TelegramChatValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=503, detail="Could not reach the Telegram API while checking the group") from exc
     updates = {
         "exchange_group_mnt_rub_enabled": str(next_enabled),
         "exchange_group_rub_mnt_enabled": "0",
@@ -6097,18 +6111,21 @@ async def admin_action(
         and (trx.get("currency_to") or "").upper() == "RUB"
     )
     dispatch_exists = False
+    dispatch_status = None
     if is_mnt_rub_exchange:
         try:
             dispatch_res = (
                 client.table("exchange_group_dispatches")
-                .select("id")
+                .select("id,status")
                 .eq("invoice", payload.invoice)
                 .limit(1)
                 .execute()
             )
             dispatch_exists = bool(dispatch_res.data)
+            dispatch_status = (dispatch_res.data[0].get("status") if dispatch_res.data else None)
         except Exception:
             dispatch_exists = False
+            dispatch_status = None
     group_dispatch_requested = payload.processing_mode == "group"
     group_approval_performed = False
 
@@ -6118,6 +6135,24 @@ async def admin_action(
         current_status = (trx.get("status") or "").lower()
         if current_status == "approved":
             if payload.status == "approved" and group_dispatch_requested:
+                if dispatch_status == "failed":
+                    if group_settings.telegram_group_id is None:
+                        raise HTTPException(status_code=400, detail="Configure a Telegram group ID before retrying the group dispatch")
+                    try:
+                        validate_telegram_group_chat(group_settings.telegram_group_id)
+                        retry_result = client.rpc(
+                            "approve_mnt_rub_group_exchange",
+                            {"p_invoice": payload.invoice},
+                        ).execute()
+                    except TelegramChatValidationError as exc:
+                        raise HTTPException(status_code=400, detail=str(exc)) from exc
+                    except requests.RequestException as exc:
+                        raise HTTPException(status_code=503, detail="Could not reach the Telegram API while checking the group") from exc
+                    except Exception as exc:
+                        logger.error("Could not requeue Telegram group dispatch for %s: %s", payload.invoice, exc)
+                        raise HTTPException(status_code=500, detail="Could not requeue Telegram group dispatch") from exc
+                    if not retry_result.data:
+                        raise HTTPException(status_code=500, detail="Telegram group dispatch was not requeued")
                 # A repeated click is idempotent and must not notify the user twice.
                 return {"ok": True, "queued": True}
             raise HTTPException(
@@ -6135,6 +6170,12 @@ async def admin_action(
             raise HTTPException(status_code=400, detail="Transaction is no longer actionable")
         if group_settings.telegram_group_id is None:
             raise HTTPException(status_code=400, detail="Configure a Telegram group ID before sending a transaction to the group")
+        try:
+            validate_telegram_group_chat(group_settings.telegram_group_id)
+        except TelegramChatValidationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except requests.RequestException as exc:
+            raise HTTPException(status_code=503, detail="Could not reach the Telegram API while checking the group") from exc
         parts = [part.strip() for part in (trx.get("bank_details") or "").split(",")]
         if len(parts) != 4 or not all(parts):
             raise HTTPException(
