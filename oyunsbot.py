@@ -5776,32 +5776,23 @@ def broadcast_rates(message):
     print(f"✅ Broadcast by {sender_id}: {success} sent, {failed} failed")
 
 
-# ── Manual rate broadcast commands ──
-# Automatic broadcasts are handled by the Supabase `rate-broadcast` Edge
-# Function, invoked by the `bot_rates` database trigger.
+# ── Scheduled daily broadcast (10:00–11:00 MSK, once per day, batched) ──
+_last_auto_broadcast_date = None          # tracks the date of the last auto-broadcast
 BROADCAST_BATCH_SIZE = 15                 # users per batch
 BROADCAST_BATCH_DELAY = 1.0               # seconds between batches
 
-def _build_broadcast_caption(rate: dict | None = None) -> str | None:
-    """Build a rate broadcast caption, optionally using an already fetched row."""
+def _build_broadcast_caption() -> str | None:
+    """Fetch the latest rates and build the scheduled broadcast caption."""
     try:
-        if rate is None:
-            rate_resp = (
-                supabase.table("bot_rates")
-                .select("id, buy_rate, sell_rate, updated_at")
-                .order("updated_at", desc=True)
-                .order("id", desc=True)
-                .limit(1)
-                .execute()
-            )
-            if not rate_resp.data:
-                print("❌ RateBroadcast: no rates found")
-                return None
-            rate = rate_resp.data[0]
+        rate_resp = supabase.table("bot_rates").select("buy_rate, sell_rate").order("updated_at", desc=True).limit(1).execute()
+        if not rate_resp.data:
+            print("❌ AutoBroadcast: no rates found")
+            return None
+        rate = rate_resp.data[0]
         buy_rate = _format_rate(rate["buy_rate"])
         sell_rate = _format_rate(rate["sell_rate"])
     except Exception as e:
-        print(f"❌ RateBroadcast: failed to fetch rates: {e}")
+        print(f"❌ AutoBroadcast: failed to fetch rates: {e}")
         return None
 
     now = datetime.now(UB_TZ)
@@ -5823,6 +5814,52 @@ def _build_broadcast_caption(rate: dict | None = None) -> str | None:
         f"\n"
         f"Өдрийг сайхан өнгөрүүлээрэй ☀️"
     )
+
+def _auto_broadcast_loop():
+    """Background thread: send once between 10:00 and 11:00 MSK each day."""
+    global _last_auto_broadcast_date
+    while True:
+        try:
+            now_msk = datetime.now(MOSCOW_TZ)
+            today = now_msk.date()
+
+            if 10 <= now_msk.hour < 11 and _last_auto_broadcast_date != today:
+                _last_auto_broadcast_date = today
+                print(f"📡 AutoBroadcast triggered at {now_msk.strftime('%H:%M')} MSK")
+
+                caption = _build_broadcast_caption()
+                if not caption:
+                    time_module.sleep(60)
+                    continue
+
+                try:
+                    user_ids = _fetch_all_user_ids()
+                except Exception as e:
+                    print(f"❌ AutoBroadcast: failed to fetch users: {e}")
+                    time_module.sleep(60)
+                    continue
+
+                if not user_ids:
+                    print("⚠️ AutoBroadcast: no users found")
+                    time_module.sleep(60)
+                    continue
+
+                success, failed = _run_broadcast_send_loop(user_ids, caption, context="AutoBroadcast")
+                print(f"✅ AutoBroadcast done: {success} sent, {failed} failed")
+
+                try:
+                    bot.send_message(
+                        1932946217,
+                        f"📡 Автомат broadcast дууслаа ({now_msk.strftime('%H:%M')} MSK)\n"
+                        f"📤 Амжилттай: {success}\n❌ Алдаатай: {failed}",
+                    )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            print(f"❌ AutoBroadcast loop error: {e}")
+
+        time_module.sleep(60)
 
 @bot.message_handler(commands=["testbroadcast"])
 def test_broadcast_rates(message):
