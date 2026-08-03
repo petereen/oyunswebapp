@@ -38,6 +38,7 @@ _admin_media_flush_scheduled: Set[str] = set()
 _exchange_group_media_buffers: Dict[str, List[object]] = {}
 _exchange_group_media_flush_scheduled: Set[str] = set()
 _exchange_group_media_dispatches: Dict[str, dict] = {}
+_exchange_group_dispatch_thread: threading.Thread | None = None
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 MIN_RUB = 2000
@@ -234,6 +235,20 @@ def _exchange_group_dispatch_loop() -> None:
         except Exception as exc:
             print(f"⚠️ Exchange group dispatch worker error: {exc}")
         time_module.sleep(5)
+
+
+def _start_exchange_group_dispatch_worker() -> None:
+    """Start the durable group sender before optional bot initialization work."""
+    global _exchange_group_dispatch_thread
+    if _exchange_group_dispatch_thread and _exchange_group_dispatch_thread.is_alive():
+        return
+    _exchange_group_dispatch_thread = threading.Thread(
+        target=_exchange_group_dispatch_loop,
+        name="exchange-group-dispatch",
+        daemon=True,
+    )
+    _exchange_group_dispatch_thread.start()
+    print("✅ Exchange group dispatch worker started")
 
 
 def _recover_exchange_group_completions(now: datetime) -> None:
@@ -5938,16 +5953,15 @@ def initialize_bot():
     broadcast_thread.start()
     print("✅ Auto-broadcast scheduler started (10:00–11:00 MSK daily)")
 
-    exchange_dispatch_thread = threading.Thread(target=_exchange_group_dispatch_loop, daemon=True)
-    exchange_dispatch_thread.start()
-    print("✅ Exchange group dispatch worker started")
-
 def run_bot() -> None:
     """Initialize the bot and keep the incoming-update listener resilient."""
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN is not configured; refusing to start the Telegram bot")
 
     print("🤖 Starting OYUNS ALL-IN-ONE Bot...")
+    # Start the outbound queue worker first. It must not wait for optional
+    # command-menu/webhook/referral initialization to finish.
+    _start_exchange_group_dispatch_worker()
     initialize_bot()
     print("✅ Bot initialized, starting long polling...")
     # infinity_polling reconnects after temporary Telegram/network failures. It

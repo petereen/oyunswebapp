@@ -97,6 +97,12 @@ function getTimeAgo(dateStr: string, nowMs: number): string {
   return `${diffDays} өдөр ${diffHours % 24} цаг өмнө`;
 }
 
+function getAdminActionError(error: unknown, fallback: string): string {
+  const response = (error as { response?: { data?: { detail?: unknown } } })?.response;
+  const detail = response?.data?.detail;
+  return typeof detail === "string" && detail.trim() ? detail : fallback;
+}
+
 // No props needed - auth is removed
 export function AdminInbox() {
   const [items, setItems] = useState<InboxItem[]>([]);
@@ -1313,9 +1319,9 @@ export function AdminInbox() {
                           });
                           setDetailModal(null);
                           await load();
-                        } catch (err) {
-                          console.error("Traditional approval error:", err);
-                          setError("Гүйлгээг батлахад алдаа гарлаа");
+                          } catch (err) {
+                            console.error("Traditional approval error:", err);
+                            setError(getAdminActionError(err, "Гүйлгээг батлахад алдаа гарлаа"));
                         }
                       }}
                       className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 text-white py-3 font-semibold hover:bg-green-700"
@@ -1335,7 +1341,7 @@ export function AdminInbox() {
                             await load();
                           } catch (err) {
                             console.error("Group dispatch error:", err);
-                            setError("Гүйлгээг Telegram групп рүү илгээхэд алдаа гарлаа");
+                            setError(getAdminActionError(err, "Гүйлгээг Telegram групп рүү илгээхэд алдаа гарлаа"));
                           }
                         }}
                         className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white py-3 font-semibold hover:bg-blue-700"
