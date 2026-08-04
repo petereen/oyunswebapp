@@ -523,7 +523,11 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
             "lease_expires_at": None,
             "last_error": notification_error,
         }).eq("id", dispatch.get("id")).execute()
-        bot.reply_to(first, f"✅ {invoice} успешно завершен. Пользователь уведомлен." if not notification_error else f"✅ {invoice} успешно завершен, но возникла ошибка при уведомлении пользователя: {notification_error}")
+        if notification_error:
+            bot.reply_to(
+                first,
+                f"✅ {invoice} успешно завершен, но возникла ошибка при уведомлении пользователя: {notification_error}",
+            )
     except Exception as exc:
         print(f"❌ Не удалось завершить {invoice}: {exc}")
         if transaction_completed:

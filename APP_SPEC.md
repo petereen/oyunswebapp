@@ -1,8 +1,4 @@
 # OYUNS ALL-IN-ONE — Rebuild Specification
-App should aim to work natively as possible, meaning pictures/images/icons used in the app should be packed as one apk. Server side financial functions should work safely without any financial/security risks.
-
-
-
 > Native-mobile rebuild target derived from the repository as it exists on 2026-08-03. Existing financial behavior remains authoritative, but all messenger-platform authentication, SDK, bot, chat-group, and notification behavior is intentionally excluded. The replacement application is a first-class iOS/Android client using Supabase Auth, native navigation, secure credential storage, universal/app links, APNs/FCM push delivery, and an internal operator work queue. “Declared” identifies legacy checked-in SQL; “target” identifies the schema and behavior that the mobile rebuild must implement.
 
 ## 1. Product Summary & Core Goals
@@ -11,20 +7,20 @@ App should aim to work natively as possible, meaning pictures/images/icons used 
 
 OYUNS ALL-IN-ONE is a Mongolian/Russian bilingual native iOS/Android application for an operator-assisted financial service. It lets an authenticated mobile user:
 
-- exchange RUB to MNT (`direction=buy`, user gives RUB and receives MNT) or MNT to RUB (`direction=sell`, user gives MNT and receives RUB);
+- exchange RUB to MNT (`direction=buy`, user gives RUB and receives MNT) or MNT to RUB (`directffion=sell`, user gives MNT and receives RUB);
 - submit proof of payment, receive operator proof, track the request, and correct a request returned as `waiting_edit`;
 - register in two stages, verify email through Supabase Auth OTP, and submit bank/passport data for manual KYC;
 - buy a gift transfer for another registered user, buy discounted fuel, request Russian mobile-phone top-up, or contact the operator for airline tickets;
-- earn OYUNS+ points and referral rewards, and inspect points/history;
+- earn OYUNS+ points and referral rewards, inspect points/history, and vote in a basketball tournament;
 - inspect exchange history, volume analytics, and the current rate.
 
-The customer app has no operator/admin screens. Exchange/KYC operations, fuel operations, and finance/management are companion surfaces: they may remain in the existing operations/Telegram app or be rebuilt as separate role-specific native apps/web applications. Their APIs, data, permissions, calculations, and workflows remain specified in §§2, 4, and 6, but are not compiled into or navigable from the customer app; the customer app itself contains no Telegram SDK or messenger logic.
+The customer app has no operator/admin screens. Exchange/KYC operations, fuel operations, tournament management, and finance/management are companion surfaces: they may remain in the existing operations/Telegram app or be rebuilt as separate role-specific native apps/web applications. Their APIs, data, permissions, calculations, and workflows remain specified in §§2, 4, and 6, but are not compiled into or navigable from the customer app; the customer app itself contains no Telegram SDK or messenger logic.
 
 The backend is a FastAPI service backed by Supabase/Postgres, Supabase Auth, and Supabase Storage. A durable worker processes notifications, reminders, rates, and internal operator jobs. APNs and FCM deliver customer push notifications; operator queue notifications are delivered only to the separate operations surface.
 
 #### Native customer-app scope boundary
 
-The customer application contains Home, Activity, Exchange, Services, OYUNS+, Rewards, Profile, KYC submission, receipt/proof upload, fuel-order tracking, gift confirmation, notifications, and support. It does **not** contain the exchange admin panel, finance dashboard, fuel admin panel, staff queue, KYC approval controls, bank/station CRUD, treasury/profit tools, rate imports, or operator shift controls. A role-bearing user opens those capabilities in a separately distributed operations app or retained operations client; no customer-app route or role gate exposes them.
+The customer application contains Home, Activity, Exchange, Services, OYUNS+, Rewards, Profile, KYC submission, receipt/proof upload, fuel-order tracking, gift confirmation, notifications, and support. It does **not** contain the exchange admin panel, finance dashboard, fuel admin panel, tournament admin panel, staff queue, KYC approval controls, bank/station/team CRUD, treasury/profit tools, rate imports, or operator shift controls. A role-bearing user opens those capabilities in a separately distributed operations app or retained operations client; no customer-app route or role gate exposes them.
 
 ### 1.2 Primary end-to-end workflows
 
@@ -91,14 +87,15 @@ Choose/history/track order → choose station and optional dispenser → capture
 
 Phone top-up collects RUB credit amount, Russian phone, telecom, MNT receiving bank, and receipt. It is stored as an ordinary MNT→RUB transaction with `bank_details="phone, telecom"`; dashboard/admin classification detects the two-part form. Ticket booking opens a configurable `mailto:`, `tel:`, HTTPS support page, or in-app support screen through the native linking API. Finance staff separately record ticket sales in the dashboard for profit accounting.
 
-#### OYUNS+ loyalty
+#### OYUNS+ and basketball tournament
 
-Completed exchange volume produces idempotent points ledger entries. Referral codes have a configurable maximum use count and award points. The OYUNS+ screen shows balance, referral link/code, ledger history, and points history.
+Completed exchange volume produces idempotent points ledger entries. Referral codes have a configurable maximum use count and award points. The OYUNS+ screen shows balance, referral link/code, ledger history, tournament schedule, groups/knockout stages, leaderboard, and one team vote per user/category. The vote API requires an authenticated Supabase session and tournament enablement, but does not enforce a verification level. Tournament team/game/stage CRUD remains in the separate tournament operations app.
 
 #### Companion operator workflows (not included in the customer app)
 
 - Separate exchange operations app: authenticate as staff; open/transfer/close shift; configure working hours, exchange limits, internal processing, banner, OYUNS+ settings, and bank rotation; claim/triage transactions; set user labels; return requests for correction; finish/reject with proof; manage KYC, users, bank accounts, gifts, and history.
 - Separate fuel operations app: authenticate as staff; operate shift/notification assignment; manage stations and banks; approve/reject orders; upload approval image; chat; review history.
+- Separate tournament operations app: authenticate as staff; CRUD teams/games; edit schedule/stages; toggle and brand the tournament.
 - Separate finance app/dashboard: authenticate as finance staff; filter/export transaction analytics; maintain treasury accounts and daily entered balances; add tagged adjustments; import black rates from Sheets; enter USD cost rates; record ticket sales; inspect transaction and aggregate profit.
 
 ### 1.3 Native mobile capabilities
@@ -108,10 +105,10 @@ Completed exchange volume produces idempotent points ledger entries. Referral co
 | Supabase native Auth SDK | Email OTP/magic-link authentication, access-token refresh, sign-out, and recovery. |
 | Keychain / Android Keystore | OS-protected storage for refresh credentials; never store tokens in ordinary preferences. |
 | APNs / FCM | Customer transaction, gift, fuel, KYC, correction, and reminder push notifications. Push is advisory; in-app notification state remains authoritative. Operator queue notifications belong to the separate operations app. |
-| Universal Links / Android App Links | Open exchange correction, gift confirmation, fuel tracking, and support destinations in the customer app. Staff-task links are handled only by the separate operations app. |
+| Universal Links / Android App Links | Open exchange correction, gift confirmation, fuel tracking, tournament, and support destinations in the customer app. Staff-task links are handled only by the separate operations app. |
 | Native navigation and back gestures | Stack/tab navigation, modal dismissal, state restoration, and platform back behavior. |
 | Native haptics | Success/warning/error feedback for submission, copy, validation, and status changes; respect reduced-motion/haptic settings. |
-| Camera, photo picker, and image pipeline | Passport, receipt, proof, pump, banner, and approval-image selection; strip metadata where appropriate and compress before signed upload. |
+| Camera, photo picker, and image pipeline | Passport, receipt, proof, pump, banner, team-logo, and approval-image selection; strip metadata where appropriate and compress before signed upload. |
 | Location services | Fuel-station GPS capture with explicit permission states and manual-address fallback. |
 | Secure clipboard/share/linking APIs | Copy account data, share referral links, and open configured phone/email/HTTPS support targets. |
 | Appearance and localization | System light/dark mode with optional override; Mongolian/Russian resources and locale-safe number/date formatting. |
@@ -194,7 +191,7 @@ CREATE TABLE promo_codes (
 
 CREATE TABLE admin_users (
   id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('exchange_admin','fuel_admin','finance_admin','super_admin')),
+  name TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('exchange_admin','fuel_admin','tournament_admin','finance_admin','super_admin')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 CREATE TABLE admin_shifts (
@@ -284,6 +281,9 @@ Required `app_settings` keys and defaults are:
 | `home_banner_enabled`, `home_banner_image_url`, `home_banner_link_url` | `0`, empty, empty. |
 | `support_url`, `support_email`, `support_phone` | Native linking targets; at least one must be configured for ticket/support contact. |
 | `operator_queue_enabled` | `1`; enables creation of internal exchange processing tasks. |
+| `oyuns_tournament_enabled` | `1`. |
+| `oyuns_tournament_logo_url` | Optional; frontend has a public fallback URL. |
+| `oyuns_tournament_groups_json`, `oyuns_tournament_knockout_json` | Serialized arrays. |
 
 ### 2.4 Gift schema
 
@@ -380,7 +380,7 @@ CREATE TABLE fuel_admin_shift (
 
 Seed stations are Rosneft, Bashneft, TNK, Gazpromneft, Lukoil, Tatneft, Topline (13%), and NNK (10%); the last three require a dispenser number.
 
-### 2.6 Internal operator queue and loyalty
+### 2.6 Internal operator queue, loyalty, and tournament
 
 ```sql
 CREATE TABLE exchange_processing_jobs (
@@ -405,6 +405,34 @@ CREATE TABLE oyuns_plus_points_ledger (
   UNIQUE(user_id, source_type, source_id)
 );
 
+CREATE TABLE oyuns_tournament_teams (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name TEXT NOT NULL,
+  short_name TEXT, logo_url TEXT, category VARCHAR(16) NOT NULL CHECK (category IN ('men','women')),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE oyuns_tournament_games (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category VARCHAR(16) NOT NULL CHECK (category IN ('men','women')),
+  venue VARCHAR(16) NOT NULL CHECK (venue IN ('a_hall','b_hall')),
+  home_team_id UUID NOT NULL REFERENCES oyuns_tournament_teams(id) ON DELETE RESTRICT,
+  away_team_id UUID NOT NULL REFERENCES oyuns_tournament_teams(id) ON DELETE RESTRICT,
+  starts_at TIMESTAMPTZ NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled','live','completed','cancelled')),
+  home_score INTEGER NOT NULL DEFAULT 0 CHECK (home_score >= 0),
+  away_score INTEGER NOT NULL DEFAULT 0 CHECK (away_score >= 0),
+  is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  ,CHECK (home_team_id <> away_team_id)
+);
+CREATE TABLE oyuns_tournament_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  team_id UUID NOT NULL REFERENCES oyuns_tournament_teams(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('men','women')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, category)
+);
 ```
 
 ### 2.7 Finance dashboard schema
@@ -467,6 +495,7 @@ erDiagram
   USERS ||--o{ GIFTS : receives
   USERS ||--o{ FUEL_ORDERS : creates
   USERS ||--o{ OYUNS_PLUS_POINTS_LEDGER : earns
+  USERS ||--o{ OYUNS_TOURNAMENT_VOTES : votes
   USERS ||--o{ DEVICE_PUSH_TOKENS : registers
   USERS ||--o{ NOTIFICATIONS : receives
   NOTIFICATIONS ||--|| NOTIFICATION_OUTBOX : delivers
@@ -478,6 +507,9 @@ erDiagram
   TREASURY_ACCOUNTS ||--o{ DASHBOARD_BALANCE_ADJUSTMENTS : adjusted
   TRANSACTIONS ||--o| EXCHANGE_PROCESSING_JOBS : processing_job
   FUEL_ORDERS ||--o{ FUEL_CHAT_MESSAGES : has
+  OYUNS_TOURNAMENT_TEAMS ||--o{ OYUNS_TOURNAMENT_GAMES : home_restrict_delete
+  OYUNS_TOURNAMENT_TEAMS ||--o{ OYUNS_TOURNAMENT_GAMES : away_restrict_delete
+  OYUNS_TOURNAMENT_TEAMS ||--o{ OYUNS_TOURNAMENT_VOTES : receives
 ```
 
 ### 2.9 RLS, functions, triggers, and storage
@@ -492,7 +524,8 @@ Target RLS must be fail-closed and use `auth.uid()`; mobile clients never receiv
 | `fuel_chat_messages` | User may SELECT messages only when the parent order belongs to `auth.uid()` and INSERT only user messages for that order; staff access is role-based. |
 | `device_push_tokens` | User may SELECT/INSERT/UPDATE/DELETE only rows where `user_id=auth.uid()`; API additionally binds installation ownership. |
 | `notifications` | User may SELECT own rows and UPDATE only `read_at`; creation/deletion is service-only. |
-| Public reference data | Authenticated clients may SELECT active banks, cards, stations, public settings, and rates. No public writes. |
+| `oyuns_tournament_votes` | User may SELECT own votes; inserts go through API to enforce feature/category/team rules. |
+| Public reference data | Authenticated clients may SELECT active banks, cards, stations, tournament data, public settings, and rates. No public writes. |
 | `admin_users` and all admin/finance/queue/audit tables | Access requires an active `admin_users` row and the precise role checked by a `SECURITY DEFINER has_staff_role(required_roles text[])` helper; otherwise service-role only. |
 
 Functions/triggers:
@@ -504,7 +537,7 @@ Functions/triggers:
 - `complete_exchange_processing_job(...)` locks the job and transaction, verifies claimant/role/status, stores proof, completes the transaction once, writes points/promos/audit/notification rows, and commits atomically.
 - An outbox trigger or explicit transaction writes `notification_outbox` work whenever a durable `notifications` row is created; a worker delivers APNs/FCM and records attempts without coupling push success to the business transaction.
 
-Storage buckets are `passports`, `bills`, and `gift_card`; logical paths include exchange direction folders, `gift_receipts`, fuel receipts/pump/approval images, and home banners. Passport/receipt/proof objects are private. Rows store canonical object paths, and the API returns short-lived signed read URLs only after ownership/role checks. Public branding assets may use a dedicated public bucket. Historical absolute URLs must be migrated to paths before launch.
+Storage buckets are `passports`, `bills`, and `gift_card`; logical paths include exchange direction folders, `gift_receipts`, fuel receipts/pump/approval images, tournament logos, and home banners. Passport/receipt/proof objects are private. Rows store canonical object paths, and the API returns short-lived signed read URLs only after ownership/role checks. Public branding assets may use a dedicated public bucket. Historical absolute URLs must be migrated to paths before launch.
 
 ### 2.10 Database drift and rebuild hazards
 
@@ -544,9 +577,10 @@ Email is verified as part of Supabase sign-in, so the separate email-verificatio
 
 | Role | Capabilities |
 |---|---|
-| Authenticated user | Own profile, exchanges, gifts involving the user, fuel orders/chat, loyalty entries, uploads, devices, and notifications. |
+| Authenticated user | Own profile, exchanges, gifts involving the user, fuel orders/chat, loyalty entries, votes, uploads, devices, and notifications. |
 | `exchange_admin` | Exchange queue, KYC, users, exchange banks/settings/shifts, gifts, proof and status actions. |
 | `fuel_admin` | Fuel queue, stations, fuel banks, fuel shift/chat/actions. |
+| `tournament_admin` | Teams, games, stages, voting aggregates, tournament settings. |
 | `finance_admin` | Dashboard transactions, balances, treasury, rates, tickets, imports, exports, profit. |
 | `super_admin` | Union of staff permissions plus staff membership management. |
 
@@ -589,7 +623,7 @@ Headers/auth abbreviations used in the endpoint inventory:
 
 - **Public**: no auth dependency.
 - **User**: verified Supabase access token.
-- **Exchange staff**, **Fuel staff**, **Finance staff**: the same access token plus active server-side role membership.
+- **Exchange staff**, **Fuel staff**, **Tournament staff**, **Finance staff**: the same access token plus active server-side role membership.
 - **Service**: private service identity used only by worker-to-API calls where direct database work is inappropriate.
 
 Canonical TypeScript reconstruction of the principal wire contracts:
@@ -602,7 +636,7 @@ type Money = DecimalString;
 
 interface AuthenticatedUser { id: UUID; email: string; first_name?: string; last_name?: string }
 interface AuthBootstrapResponse { user: AuthenticatedUser; profile_complete: boolean; verification_level: 0|1|2 }
-interface StaffBootstrapResponse { actor: AuthenticatedUser; roles: ('exchange_admin'|'fuel_admin'|'finance_admin'|'super_admin')[] }
+interface StaffBootstrapResponse { actor: AuthenticatedUser; roles: ('exchange_admin'|'fuel_admin'|'tournament_admin'|'finance_admin'|'super_admin')[] }
 interface Notification {
   id: UUID; type: string; title: string; body: string; data: Record<string, unknown>;
   deep_link?: string; read_at?: ISODateTime; created_at: ISODateTime;
@@ -650,6 +684,17 @@ interface FuelOrder {
   rejection_comment?: string; admin_comment?: string; completed_by_admin?: UUID;
   created_at: ISODateTime; updated_at?: ISODateTime; completed_at?: ISODateTime;
 }
+interface TournamentTeam {
+  id: UUID; name: string; short_name?: string; logo_url?: string; category: 'men'|'women';
+  is_active: boolean; display_order: number; votes_count: number;
+}
+interface TournamentGame {
+  id: UUID; category: 'men'|'women'; venue: 'a_hall'|'b_hall'; starts_at: ISODateTime;
+  home_team_id: UUID; away_team_id: UUID;
+  home_score: number; away_score: number; status: 'scheduled'|'live'|'completed'|'cancelled';
+  is_featured: boolean; home_team_name?: string; away_team_name?: string;
+  home_team_logo_url?: string; away_team_logo_url?: string;
+}
 ```
 
 Additional exact interfaces for dashboard accounting are specified in §5.6 and §6.8. Pydantic request models reject absent required fields but, under default Pydantic behavior, generally ignore undeclared extra fields.
@@ -694,12 +739,46 @@ Additional exact interfaces for dashboard accounting are specified in §5.6 and 
 | `GET /api/exchange/editable?invoice=` | JWT | invoice query | `{invoice,direction,amount,currency_from,currency_to,rate,base_rate,promo_discount,bank_details,receipt_urls,admin_bank_id?,can_edit}`; ownership and `waiting_edit` required. |
 | `POST /api/exchange/resubmit` | JWT | `{invoice,amount,rate,bank_details,receipt_path?,receipt_paths?,admin_bank_id?}` | `ExchangeCreateResponse`; preserves/recomputes pricing, consumes paused duration, clears admin outcome fields, returns to pending. |
 
-### 4.5 OYUNS+ loyalty endpoints
+### 4.5 OYUNS+ and tournament endpoints
+
+The customer app consumes only the public tournament overview, personal vote status, and vote submission rows. The `oyuns-sags/admin/*` rows are retained for the separate tournament operations app and are never exposed in customer-app navigation.
 
 | Method and path | Auth | Request | Response |
 |---|---|---|---|
 | `GET /api/oyuns-plus/summary` | JWT | none | Enable flag, points balance, point value `1 RUB`, thresholds, referral code/use counts and invited totals. |
 | `GET /api/oyuns-plus/history` | JWT | none | `{entries:[{id,source_type,source_id,points,rub_equivalent,created_at}]}` newest first. |
+| `GET /api/tournament/overview?category=&venue=&status=` | Public | optional validated filters | `{enabled,logo_url,teams,games,groups,knockout,votes}`; inactive teams excluded; `votes` is currently empty because personal votes use a separate route. DB errors become `enabled:false` with empty content. |
+| `GET /api/tournament/my-votes` | JWT | none | Two `TournamentVoteStatus` objects, `[{category:'men',team_id?,voted},{category:'women',team_id?,voted}]`; when disabled both are unvoted. |
+| `POST /api/tournament/vote` | JWT | `{category:'men'|'women',team_id:UUID}` | `{ok,message,vote:{category,team_id,voted:true}}`; enabled tournament and active matching-category team required. A second vote in that category returns 409. |
+| `GET /api/oyuns-sags/admin/teams?category=&include_inactive=` | Tournament staff | query | `{items:TournamentTeam[]}`. |
+| `POST /api/oyuns-sags/admin/teams` | Tournament staff | `{name,short_name?,logo_url?,category,is_active?,display_order?}` | Created `TournamentTeam`; `votes_count` is derived as zero. |
+| `PUT /api/oyuns-sags/admin/teams/{team_id}` | Tournament staff | partial team fields | Updated team; 404 missing. |
+| `DELETE /api/oyuns-sags/admin/teams/{team_id}` | Tournament staff | none | `{ok:true}`; soft-deletes by setting `is_active=false`, preserving games and votes. |
+| `GET /api/oyuns-sags/admin/games?category=&venue=&status=` | Tournament staff | query filters | `{items:TournamentGame[]}`. |
+| `POST /api/oyuns-sags/admin/games` | Tournament staff | `{category,venue,home_team_id,away_team_id,starts_at,status?,home_score?,away_score?,is_featured?}` | Created game; all five identity/scheduling fields are required; validates distinct, same-category teams and normalizes enums. |
+| `PUT /api/oyuns-sags/admin/games/{game_id}` | Tournament staff | partial game fields | Updated game. |
+| `DELETE /api/oyuns-sags/admin/games/{game_id}` | Tournament staff | none | `{ok:true}`. |
+| `GET /api/oyuns-sags/admin/stages` | Tournament staff | none | `{groups,knockout}` from JSON settings with generated defaults. |
+| `PUT /api/oyuns-sags/admin/stages` | Tournament staff | `{groups?:TournamentGroupInput[],knockout?:TournamentKnockoutPhaseInput[]}` | Fully serialized/replaced stages. |
+| `GET /api/oyuns-sags/admin/votes` | Tournament staff | none | `{items:teams-with-votes_count,total_votes}`. |
+| `GET /api/oyuns-sags/admin/settings` | Tournament staff | none | `{oyuns_tournament_enabled,oyuns_plus_logo_url}`. |
+| `PUT /api/oyuns-sags/admin/settings` | Tournament staff | partial prior object | Same normalized settings; rejects a request with no supported field. Stages use their own endpoint. |
+
+Stage contracts:
+
+```ts
+interface TournamentGroupInput {
+  id?: string; category: 'men'|'women'; name: string; team_ids: UUID[]; display_order?: number;
+}
+interface TournamentKnockoutMatchInput {
+  id: string; round_key: string; title: string; home_team_id?: UUID; away_team_id?: UUID;
+  home_label?: string; away_label?: string; home_score?: number; away_score?: number;
+  status?: 'scheduled'|'live'|'completed'|'cancelled';
+}
+interface TournamentKnockoutPhaseInput {
+  category: 'men'|'women'; team_count?: number; matches: TournamentKnockoutMatchInput[];
+}
+```
 
 ### 4.6 Main admin endpoints
 
@@ -852,6 +931,7 @@ The canonical link origin is `https://links.oyuns.mn`. iOS Universal Links and A
 |---|---|
 | `/home` | Authenticated tab shell: Home, Exchange, Services, OYUNS+, Stats, Profile. |
 | `/oyuns-plus` | Opens the OYUNS+ tab. |
+| `/tournament/basketball/{schedule|stages|leaderboard}` | Opens basketball and selected subsection; invalid section defaults to schedule. |
 | `/exchange/{invoice}/edit` | Loads an owned `waiting_edit` transaction; API ownership/status is rechecked. |
 | `/fuel/orders/{uuid}` | Opens Services/Fuel tracking for an owned order. |
 | `/gifts/{uuid}/confirm` | Opens an incoming gift confirmation after ownership check. |
@@ -860,7 +940,7 @@ The canonical link origin is `https://links.oyuns.mn`. iOS Universal Links and A
 
 Deep-link dispatch is centralized, allowlisted, and typed. It never executes arbitrary URLs or trusts role/resource data from the link itself.
 
-The following are deliberately **not** customer-app routes: `/staff/fuel`, `/dashboard`, `dashboard.oyuns.mn`, exchange-admin surfaces, KYC approval surfaces, and treasury/profit paths. They are owned by the separate operations applications documented in §4.
+The following are deliberately **not** customer-app routes: `/staff/fuel`, `/staff/tournament`, `/dashboard`, `dashboard.oyuns.mn`, exchange-admin surfaces, KYC approval surfaces, and treasury/profit paths. They are owned by the separate operations applications documented in §4.
 
 ### 5.3 Main user screen inventory
 
@@ -907,7 +987,7 @@ Grid cards: Gift, Fuel, Phone Top-up, Plane ticket. Gift requires level 2 and op
 
 #### OYUNS+ (`OyunsPlusTab`)
 
-Shows points, referral metrics, referral link/code, and points ledger. The feature displays profile/KYC prompts when the user is ineligible.
+Shows points/referral metrics and ledger; internal section switches between loyalty content and basketball. Basketball inner tabs are schedule, stages, and leaderboard. Team voting is separated by men/women and invalidates overview/my-votes queries. The feature displays verification/email prompts when the user is ineligible.
 
 #### Stats (`StatsTab`)
 
@@ -929,6 +1009,7 @@ This inventory preserves the required operator logic and screens for separate di
 - `AdminHistory`: status filter, 20-row pages, transaction detail.
 - `AdminGifts`: filter and process gift queue.
 - `FuelAdminPanel` (separate fuel operations app): tabs inbox/history/banks/stations/shift. Inbox refreshes, acts, uploads approval image, and displays chat/unread state. History has status/pagination. Bank/station panels perform CRUD. Shift selects active and always-notify admin.
+- `OyunsSagsAdminPanel` (separate tournament operations app): role gate; cached teams, games, stages, votes, settings; forms and mutations invalidate relevant resources; group and knockout editor.
 - `DashboardPanel` (separate finance web/native app): finance-role gate; top-level `balance` and `stats` pages. Stats supports today/7d/30d/90d/month/year/custom, status/admin/search filters, charts, top users/admin performance, table, and CSV export.
 - `BalanceProfitPage` (separate finance app): Moscow/Ulaanbaatar timezone, admin scope, balance summary/history, per-account editing, bank linkage, tagged adjustments, profit summary/detail/export, ticket manager, cost-rate manager, and Google Sheets black-rate fetch.
 
@@ -944,8 +1025,8 @@ State is divided as follows:
 | Auth session controller | Supabase session, refresh mutex, authentication/error state, app lifecycle, sign-out, installation registration. |
 | Appearance settings | `system|light|dark`; initialized from platform appearance plus optional encrypted/local preference. |
 | Locale settings | `mn|ru`; persisted locally and to profile/device metadata so pushes can be localized. |
-| Repository/cache layer | Rates, settings, profile, notifications, status/history/analytics, promotions, and loyalty resources. Companion operations apps own separate admin/dashboard caches. |
-| Flow-local state | Step/view, form fields, upload/progress/error, selected banks/cards/orders, lightboxes and modal state. |
+| Repository/cache layer | Rates, settings, profile, notifications, status/history/analytics, promotions, loyalty, and customer-facing tournament resources. Companion operations apps own separate admin/dashboard caches. |
+| Flow-local state | Step/view, form fields, upload/progress/error, selected banks/cards/teams/orders, lightboxes and modal state. |
 
 Local persistence contract:
 
@@ -971,6 +1052,7 @@ Required cache behavior:
 - fuel tracking also performs local interval/poll fetches while an order is active;
 - profile always revalidates on foreground; rates retry twice; settings retry once;
 - rate history is fresh for five minutes;
+- tournament mutations invalidate teams/games/stages/votes/settings resources;
 - registration, verification, bank update, and gift confirmation invalidate `/me`-related queries.
 
 Companion operations apps independently cache admin inbox/fuel panels, dashboard transactions, balances, profit, cost rates, and ticket data; those refresh rules do not create customer-app state.
@@ -1052,7 +1134,7 @@ Do not show empty marketing banners above the balance or force users through a c
 
 #### Navigation and feature surfaces
 
-Use a five-item bottom navigation with labeled icons: `Home`, `Activity`, `Services`, `Rewards`, `Profile`. Keep the selected tab persistent across launches. Activity owns exchange history, active requests, receipts, and status timelines; it is not hidden inside Stats. Services uses a two-column icon grid with short descriptions. Rewards contains OYUNS+, referrals, and points history. Staff tools do not appear in this navigation; they are owned by separate companion applications.
+Use a five-item bottom navigation with labeled icons: `Home`, `Activity`, `Services`, `Rewards`, `Profile`. Keep the selected tab persistent across launches. Activity owns exchange history, active requests, receipts, and status timelines; it is not hidden inside Stats. Services uses a two-column icon grid with short descriptions. Rewards contains OYUNS+, referrals, tournament, and points history. Staff tools do not appear in this navigation; they are owned by separate companion applications.
 
 #### Exchange and confirmation UI
 
@@ -1076,7 +1158,7 @@ The review sheet must prevent accidental submission, use an idempotency key, and
 
 #### Separate staff and finance UI (not part of the customer app)
 
-The separate exchange, fuel, and finance applications use a dense-but-readable queue: filter chips, search, SLA age, status badge, amount, user, and one claim/action button per row. Claimed work displays a lease countdown and proof upload area. Destructive/reversal actions require a confirmation sheet with the exact affected invoice and reason. Finance screens use summary metric cards, a date-range control, a chart/table toggle, export action, and explicit missing-rate/setup warnings; avoid exposing raw database terminology to operators. None of these screens is bundled with or linked from the customer app.
+The separate exchange, fuel, tournament, and finance applications use a dense-but-readable queue: filter chips, search, SLA age, status badge, amount, user, and one claim/action button per row. Claimed work displays a lease countdown and proof upload area. Destructive/reversal actions require a confirmation sheet with the exact affected invoice and reason. Finance screens use summary metric cards, a date-range control, a chart/table toggle, export action, and explicit missing-rate/setup warnings; avoid exposing raw database terminology to operators. None of these screens is bundled with or linked from the customer app.
 
 #### Fintech UI acceptance criteria
 
@@ -1235,7 +1317,11 @@ ticket profit MNT = (exchange_rate - cost_rate) × ticket rub_equivalent
 
 Only settled exchange rows count. Rows lacking any earlier cost rate are skipped and their dates returned in `missing_rate_dates`. Ticket rows store the cost/exchange/profit snapshot when created.
 
-### 6.9 Error handling, fallbacks, and retries
+### 6.9 Tournament rules
+
+Categories normalize strictly to `men|women`, venues to `a_hall|b_hall`, statuses to scheduled/live/completed/cancelled. Relational games require two distinct non-null teams of the same category; score values are nonnegative and `is_featured` is stored. The admin “delete team” endpoint only deactivates it, avoiding `ON DELETE RESTRICT`; an actual SQL delete would be blocked by games and would cascade votes. A user has at most one vote per category; the API inserts once and returns 409 on a later attempt. Team vote totals are counted server-side. Groups and knockout phases are settings JSON rather than relational tables; a team can appear in only one group/category, knockout size is 4 or 8, serializers validate category-matching team IDs, and admin reads can supply default brackets when absent.
+
+### 6.10 Error handling, fallbacks, and retries
 
 Backend:
 
@@ -1326,7 +1412,7 @@ The standalone `copy_storage_urls_to_minio.py` accepts equivalent endpoint/acces
 - Backend target retains Python 3.11+, FastAPI, Pydantic, Supabase/Postgres, requests/httpx, JOSE/cryptography, Google Auth, and adds supported APNs/FCM HTTP v1 clients. Remove the messenger SDK dependency.
 - iOS target uses current stable Xcode/Swift, SwiftUI, async/await networking, Supabase Swift, Keychain, UserNotifications, PhotosUI, Core Location, and XCTest.
 - Android target uses current stable Android Studio/Kotlin, Jetpack Compose, Navigation Compose, coroutines/Flow, Supabase Kotlin, encrypted Keystore-backed session storage, Firebase Messaging, Activity Result photo contracts, Location Services, and JUnit/instrumentation tests.
-- Customer iOS/Android targets have separate bundle/application IDs from optional Operations iOS/Android targets. Operations targets may contain exchange, fuel, and finance tools; customer targets must not link or compile those modules.
+- Customer iOS/Android targets have separate bundle/application IDs from optional Operations iOS/Android targets. Operations targets may contain exchange, fuel, tournament, and finance tools; customer targets must not link or compile those modules.
 - Retained React admin/dashboard assets remain behind the gateway and use bearer sessions/roles, never shared API keys.
 - `supabase/config.toml` only contains an orphaned `verify_jwt=false` fragment/comment and no local project/function declaration. It does not configure FastAPI.
 - `.dockerignore`/frontend `.dockerignore` keep local env, VCS, dependencies and output out of builds; `.gitignore` excludes environment/secrets/build/cache. Secret JSON is intended in a read-only `secrets` mount.
@@ -1364,7 +1450,7 @@ This catalog records legacy repository inputs only so financial behavior can be 
 | `backend/__init__.py` | Empty package marker. Runtime imports mostly add backend directory to module path and use top-level module names. |
 | `backend/config.py` | Cached environment parser and defaults. |
 | `backend/db.py` | Cached Supabase client factory. |
-| `backend/models.py` | Customer Pydantic request/response contracts, constants, and fuel fallback models; removed-feature models are excluded from the target. |
+| `backend/models.py` | All Pydantic request/response contracts, constants, fuel fallback and tournament models. |
 | `backend/utils.py` | Retain invoice/audit helpers; replace its identity validation with Supabase JWKS verification. |
 | `backend/storage.py` | Supabase signed upload and public URL helpers. |
 | `backend/telegram.py` | **Exclude.** Replace with durable notification/outbox plus APNs/FCM providers. |
@@ -1405,12 +1491,12 @@ This catalog records legacy repository inputs only so financial behavior can be 
 | `pages/HomeTab.tsx` | Auth/registration/status/rates home. |
 | `pages/TransactionTab.tsx` | Current exchange/new/edit state machine. |
 | `pages/ServicesTab.tsx` | Gift/fuel/top-up/ticket launcher and email gate. |
-| `pages/OyunsPlusTab.tsx` | Loyalty/referrals/points history; removed-feature UI is excluded from the target. |
+| `pages/OyunsPlusTab.tsx` | Loyalty/referrals/tournament/voting. |
 | `pages/StatsTab.tsx` | User analytics/history tabs. |
 | `pages/ProfilePage.tsx` | Current full-screen profile. |
 | `pages/AdminPanel.tsx` | Screen/workflow reference only; replace local key gate with staff-role navigation. |
 | `pages/FuelAdminPanel.tsx` | Screen/workflow reference only; replace local key gate with fuel staff role. |
-| `pages/OyunsSagsAdminPanel.tsx` | Excluded removed-feature admin artifact; do not port. |
+| `pages/OyunsSagsAdminPanel.tsx` | Standalone tournament admin CRUD/editor. |
 | `pages/DashboardPanel.tsx` | Analytics/balance reference; replace local key gate with finance staff role. |
 | `pages/BalanceProfitPage.tsx` | Balance, adjustments, cost, ticket, profit UI. |
 | `pages/Dashboard.tsx` | Legacy unused user dashboard. |
@@ -1442,7 +1528,7 @@ This catalog records legacy repository inputs only so financial behavior can be 
 | `database/admin_actions_table.sql` | Admin audit table. |
 | `database/add_email_column.sql`, `add_lang_column.sql`, `add_phone_mnt_column.sql`, `add_phone_intl.sql`, `add_verification_level.sql`, `add_phone_verification_state.sql`, `add_user_label_columns.sql` | Incremental users columns; email unique constraint intentionally commented out; old phone-verification fields are dropped/replaced by email fields. |
 | `database/add_oyuns_plus_referral.sql` | Direct referral fields/FK/indexes, loyalty ledger and setting seeds. |
-| `database/add_oyuns_tournament.sql`, `add_tournament_stage_settings.sql` | Excluded removed-feature migrations; do not apply to the target schema. |
+| `database/add_oyuns_tournament.sql`, `add_tournament_stage_settings.sql` | Tournament relational tables/indexes/settings and JSON stages. |
 | `database/gifts_table.sql` | Gift/gift-card schema and public image seeds; missing preapproval changes. |
 | `database/fuel_tables.sql`, `fuel_admin_shift.sql`, `update_fuel_status_constraint.sql` | Fuel core schema/RLS/seeds/triggers, shift/admin ownership and expanded status constraint. |
 | `database/add_approval_image_column.sql`, `add_bank_snapshot_to_fuel_orders.sql` | Fuel approval image and bank snapshots. |
@@ -1486,7 +1572,7 @@ A new-framework implementation is behaviorally complete only when it can:
 
 1. provision every table/constraint/index/RLS/function in §2, including explicit resolutions for documented drift;
 2. pass native Supabase Auth OTP, secure refresh, logout, account switching, device registration, and session-revocation tests from §3;
-3. expose every target endpoint and contract in §4 with UUID identity and fail-closed role authorization; customer endpoints are available to the customer app, while admin/fuel/finance endpoints are available only to their companion applications;
+3. expose every target endpoint and contract in §4 with UUID identity and fail-closed role authorization; customer endpoints are available to the customer app, while admin/fuel/tournament/finance endpoints are available only to their companion applications;
 4. render every customer-native screen/deep link and state machine in §5 on iOS and Android in Mongolian/Russian, including secure persistence, accessibility, and lifecycle restoration; operator screens are validated in their separate app builds;
 5. reproduce all formulas, timezones, thresholds, state transitions, point idempotency, timing pauses and forward-filled cost-rate behavior in §6;
 6. support namespaced direct-to-storage uploads, durable customer in-app/APNs/FCM notifications, internal processing-job recovery, native Supabase Auth, and Sheets import through the separate finance companion;
