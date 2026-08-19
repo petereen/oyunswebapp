@@ -2271,6 +2271,101 @@ def _is_successful_status(status: str) -> bool:
     return (status or "").lower() in ("completed", "successful")
 
 
+def _rank_rub_bank_accounts_by_usage(
+    accounts: list[AdminBankAccount],
+    usage_rows: list[dict] | None,
+) -> list[AdminBankAccount]:
+    """Rank RUB accounts by recent utilization while preserving stable ties.
+
+    Priority accounts are always grouped first. Within each priority group,
+    utilization is an equally weighted average of normalized transaction count
+    and normalized MNT volume. The input order is retained for equal scores.
+    """
+    account_ids = {str(account.id) for account in accounts}
+    usage: dict[str, dict[str, float]] = {
+        account_id: {"count": 0.0, "mnt_volume": 0.0}
+        for account_id in account_ids
+    }
+
+    for row in usage_rows or []:
+        account_id = row.get("admin_bank_id")
+        if account_id is None:
+            continue
+        account_id = str(account_id)
+        if account_id not in usage:
+            continue
+        if (row.get("currency_from") or "").upper() != "RUB":
+            continue
+        if (row.get("currency_to") or "").upper() != "MNT":
+            continue
+        if not _is_successful_status(row.get("status") or ""):
+            continue
+
+        usage[account_id]["count"] += 1
+        try:
+            amount = float(row.get("amount") or 0)
+            rate = float(row.get("rate") or 0)
+            if amount > 0 and rate > 0:
+                usage[account_id]["mnt_volume"] += amount * rate
+        except (TypeError, ValueError):
+            # A malformed amount/rate should not make the account endpoint fail.
+            continue
+
+    max_count = max((metrics["count"] for metrics in usage.values()), default=0.0)
+    max_volume = max((metrics["mnt_volume"] for metrics in usage.values()), default=0.0)
+
+    scored: list[tuple[AdminBankAccount, float]] = []
+    for account in accounts:
+        metrics = usage[str(account.id)]
+        count_score = metrics["count"] / max_count if max_count else 0.0
+        volume_score = metrics["mnt_volume"] / max_volume if max_volume else 0.0
+        score = 0.5 * count_score + 0.5 * volume_score
+        scored.append((account, score))
+
+    # Python's sort is stable, so configured display/creation order remains the
+    # deterministic tie-breaker after priority and utilization are applied.
+    scored.sort(key=lambda item: (0 if item[0].is_priority else 1, item[1]))
+    return [account for account, _score in scored]
+
+
+def _load_recent_rub_bank_usage(client, account_ids: list[str]) -> list[dict] | None:
+    """Load successful RUB->MNT usage for active accounts over the last 30 days.
+
+    ``None`` signals that the legacy schema/query cannot provide usage data;
+    callers can then retain deterministic priority/display ordering.
+    """
+    if not account_ids:
+        return []
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    page_size = 1000
+    offset = 0
+    rows: list[dict] = []
+    try:
+        while True:
+            query = (
+                client.table("transactions")
+                .select("admin_bank_id,amount,rate,currency_from,currency_to,status,timestamp")
+                .in_("admin_bank_id", account_ids)
+                .eq("currency_from", "RUB")
+                .eq("currency_to", "MNT")
+                .in_("status", ["completed", "successful"])
+                .gte("timestamp", cutoff)
+                .order("timestamp", desc=False)
+                .range(offset, offset + page_size - 1)
+            )
+            batch = query.execute().data or []
+            rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+    except Exception as exc:
+        logger.warning("Unable to load recent RUB bank usage; preserving account order: %s", exc)
+        return None
+
+    return rows
+
+
 def _completion_duration_minutes(row: dict):
     """Minutes from receipt submission to completion, minus paused (waiting-edit) time.
 
@@ -7039,8 +7134,8 @@ async def get_admin_bank_accounts(currency: str = None):
     Get list of active admin bank accounts for the admin currently on shift.
     Users need to see these to know where to send their money.
     Optional currency filter: RUB or MNT
-    For RUB accounts: implements priority rotation — alternates between
-    the priority card and a random non-priority card.
+    RUB accounts are returned in priority-group order, then by the lowest
+    successful RUB->MNT utilization over the previous rolling 30 days.
     """
     client = get_supabase()
     
@@ -7092,35 +7187,14 @@ async def get_admin_bank_accounts(currency: str = None):
         for row in res.data or []
     ]
 
-    # RUB priority rotation: alternate priority card with random non-priority
-    rub_accounts = [a for a in all_accounts if a.currency == "RUB"]
-    non_rub_accounts = [a for a in all_accounts if a.currency != "RUB"]
-    priority_rub = [a for a in rub_accounts if a.is_priority]
-    non_priority_rub = [a for a in rub_accounts if not a.is_priority]
-
-    if priority_rub and non_priority_rub:
-        import random
-        # Get and increment rotation counter from app_settings
-        try:
-            counter_res = client.table("app_settings").select("value").eq("key", "rub_bank_rotation_counter").single().execute()
-            counter = int(counter_res.data["value"]) if counter_res.data else 0
-        except Exception:
-            counter = 0
-
-        next_counter = counter + 1
-        try:
-            client.table("app_settings").upsert({"key": "rub_bank_rotation_counter", "value": str(next_counter)}).execute()
-        except Exception:
-            pass
-
-        if counter % 2 == 0:
-            # Even: show priority card
-            selected_rub = [priority_rub[0]]
-        else:
-            # Odd: show random non-priority card
-            selected_rub = [random.choice(non_priority_rub)]
-        
-        accounts = selected_rub + non_rub_accounts
+    # Preserve the endpoint's existing order slots while replacing only the
+    # RUB accounts in those slots with their utilization-ranked equivalents.
+    rub_accounts = [account for account in all_accounts if account.currency == "RUB"]
+    if currency_filter in (None, "RUB") and len(rub_accounts) > 1:
+        usage_rows = _load_recent_rub_bank_usage(client, [str(account.id) for account in rub_accounts])
+        ranked_rub_accounts = _rank_rub_bank_accounts_by_usage(rub_accounts, usage_rows)
+        ranked_iter = iter(ranked_rub_accounts)
+        accounts = [next(ranked_iter) if account.currency == "RUB" else account for account in all_accounts]
     else:
         accounts = all_accounts
 
