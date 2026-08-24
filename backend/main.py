@@ -52,6 +52,9 @@ from models import (
     ExchangeCreateRequest,
     ExchangeCreateResponse,
     ExchangeResubmitRequest,
+    ManualTransactionCreateRequest,
+    ManualTransactionCreateResponse,
+    ManualTransactionUserResponse,
     ExchangeGroupAutomationSettings,
     ExchangeGroupAutomationSettingsUpdate,
     HealthResponse,
@@ -825,13 +828,19 @@ async def get_jwt_authenticated_user(
     return await get_authenticated_user(authorization)
 
 
-async def require_admin(request: Request):
-    """No admin key required in no-auth mode"""
-    return True
+async def require_admin(user=Depends(get_jwt_authenticated_user)):
+    """Require a valid JWT belonging to a configured Telegram administrator."""
+    settings = get_settings()
+    if user.id not in settings.admin_user_ids:
+        raise HTTPException(status_code=403, detail="Administrator access required")
+    return user
 
 
 async def require_admin_user(user=Depends(get_jwt_authenticated_user)):
-    """No admin check in no-auth mode - all users are admins"""
+    """Strict admin dependency for endpoints that need the authenticated admin identity."""
+    settings = get_settings()
+    if user.id not in settings.admin_user_ids:
+        raise HTTPException(status_code=403, detail="Administrator access required")
     return user
 
 
@@ -6176,7 +6185,7 @@ async def admin_action(
     logger = logging.getLogger("uvicorn.error")
     
     # Get admin user ID from request headers if available (for logging)
-    admin_user_id = None
+    admin_user_id = getattr(admin, "id", None)
     try:
         init_data = request.headers.get("X-Telegram-Init-Data") if request else None
         if init_data:
@@ -6605,7 +6614,7 @@ async def admin_action(
 async def admin_inbox(admin=Depends(require_admin)):
     client = get_supabase()
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
-    select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment"
+    select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,is_manual,manual_created_by_admin_id,manual_created_at"
     if admin_bank_supported:
         select_fields += ",admin_bank_id"
     res = (
@@ -6739,6 +6748,9 @@ async def admin_inbox(admin=Depends(require_admin)):
             automation_managed=automation_managed,
             group_dispatch_status=dispatch.get("status"),
             group_dispatch_error=dispatch.get("last_error"),
+            is_manual=bool(row.get("is_manual")),
+            manual_created_by_admin_id=row.get("manual_created_by_admin_id"),
+            manual_created_at=row.get("manual_created_at"),
         ))
     return AdminInboxResponse(items=items)
 
@@ -6779,7 +6791,7 @@ async def admin_history(
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
     
     # Build query
-    select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,completed_by_admin"
+    select_fields = "invoice,user_id,amount,currency_from,currency_to,status,timestamp,rate,bank_details,receipt_id,bill_url,admin_bill_url,rejection_comment,completed_by_admin,is_manual,manual_created_by_admin_id,manual_created_at"
     if admin_bank_supported:
         select_fields += ",admin_bank_id"
     query = client.table("transactions").select(select_fields, count="exact")
@@ -6851,6 +6863,9 @@ async def admin_history(
             completed_by_admin=row.get("completed_by_admin"),
             admin_bank_id=str(row.get("admin_bank_id")) if row.get("admin_bank_id") else None,
             admin_bank_name=admin_banks.get(str(row.get("admin_bank_id"))) if row.get("admin_bank_id") else None,
+            is_manual=bool(row.get("is_manual")),
+            manual_created_by_admin_id=row.get("manual_created_by_admin_id"),
+            manual_created_at=row.get("manual_created_at"),
         ))
     
     return AdminHistoryResponse(items=items, total=res.count or len(items))
@@ -7064,6 +7079,292 @@ async def admin_kyc_action(
     
     else:
         raise HTTPException(status_code=400, detail="Invalid action. Use 'approve' or 'reject'")
+
+
+# ============= Manual transaction recovery =============
+
+def _log_required_admin_action(
+    client,
+    *,
+    admin_user_id: int,
+    action_type: str,
+    target_type: str,
+    target_id: str,
+    details: dict,
+    created_at: datetime,
+) -> None:
+    """Write a required audit record and surface failures to the caller."""
+    try:
+        result = client.table("admin_actions").insert({
+            "admin_user_id": admin_user_id,
+            "action_type": action_type,
+            "target_type": target_type,
+            "target_id": target_id,
+            "details": details,
+            "created_at": created_at.isoformat(),
+        }).execute()
+        if not result.data:
+            raise RuntimeError("Audit insert returned no row")
+    except Exception as exc:
+        logger.exception("Required admin audit failed for %s: %s", target_id, exc)
+        raise
+
+
+def _manual_receiver_bank_details(payload: ManualTransactionCreateRequest) -> str:
+    bank = payload.receiver_bank_name.strip()
+    owner = payload.receiver_owner_name.strip()
+    if not bank or not owner:
+        raise HTTPException(status_code=400, detail="Receiver bank and owner name are required")
+    if payload.direction == "buy":
+        account = (payload.receiver_account_number or "").strip()
+        if not account:
+            raise HTTPException(status_code=400, detail="MNT receiver account number is required")
+        return f"{bank},{account},{owner}"
+
+    phone = (payload.receiver_phone or "").strip()
+    card = (payload.receiver_card_number or "").strip()
+    if not phone or not card:
+        raise HTTPException(status_code=400, detail="RUB receiver phone and card number are required")
+    return f"{bank},{phone},{card},{owner}"
+
+
+def _notify_manual_transaction_created(
+    client,
+    *,
+    user_id: int,
+    invoice: str,
+    direction: str,
+    amount: Decimal,
+    rate: Decimal,
+    currency_from: str,
+    currency_to: str,
+    converted_amount: Decimal,
+) -> None:
+    """Mirror the normal request notifications after persistence succeeds."""
+    settings = get_settings()
+    admin_sends_currency = currency_to
+    direction_text = "🟢 ТӨГРӨГ АВАХ" if direction == "buy" else "🟠 РУБ АВАХ"
+    notification_text = (
+        f"🔔 <b>Шинэ хүсэлт ирлээ!</b>\n\n"
+        f"📋 Invoice: <code>{invoice}</code>\n"
+        f"👤 Хэрэглэгчийн ID: <code>{user_id}</code>\n"
+        f"🔄 Чиглэл: {direction_text}\n\n"
+        f"💰 Хэрэглэгч илгээх: <b>{amount}</b> {currency_from}\n"
+        f"💸 Админ шилжүүлэх: <b>{converted_amount}</b> {admin_sends_currency}\n"
+        f"📊 Ханш: {rate}\n"
+        f"🛠️ <b>Гараар сэргээсэн хүсэлт</b>"
+    )
+
+    reply_markup = None
+    if settings.admin_panel_url and settings.admin_panel_url.startswith("https://"):
+        separator = "&" if "?" in settings.admin_panel_url else "?"
+        reply_markup = {
+            "inline_keyboard": [[{
+                "text": "🔗 Админ хэсэгт харах",
+                "web_app": {"url": f"{settings.admin_panel_url}{separator}invoice={invoice}"},
+            }]]
+        }
+
+    try:
+        shift_res = (
+            client.table("admin_shifts")
+            .select("current_admin_id")
+            .eq("id", 1)
+            .limit(1)
+            .execute()
+        )
+        shift_admin_id = (shift_res.data[0].get("current_admin_id") if shift_res.data else None)
+        if shift_admin_id:
+            send_user_notification(int(shift_admin_id), notification_text, reply_markup=reply_markup)
+        else:
+            logger.warning("No shift admin found for manual transaction notification %s", invoice)
+    except Exception:
+        logger.exception("Failed to notify shift admin about manual transaction %s", invoice)
+
+    try:
+        user_lang = _get_user_lang(user_id)
+        user_direction_text = "Төгрөг авах (RUB → MNT)" if direction == "buy" else "Рубль авах (MNT → RUB)"
+        user_notification = (
+            f"{tb(user_lang, 'notif_exchange_received', invoice=invoice, amount=f'{amount:,.0f}', from_=currency_from, to=currency_to, rate=rate)}\n\n"
+            f"🔄 {user_direction_text}\n"
+            f"💰 {amount:,.0f} {currency_from} → {converted_amount:,.0f} {currency_to}"
+        )
+        send_user_notification(user_id, user_notification)
+    except Exception:
+        logger.exception("Failed to notify user %s about manual transaction %s", user_id, invoice)
+
+
+@app.get("/api/admin/transactions/manual/users/{telegram_id}", response_model=ManualTransactionUserResponse)
+async def manual_transaction_user_lookup(
+    telegram_id: int,
+    admin=Depends(require_admin_user),
+):
+    if telegram_id <= 0:
+        raise HTTPException(status_code=400, detail="Telegram ID must be positive")
+    client = get_supabase()
+    result = (
+        client.table("users")
+        .select("id,first_name,last_name,email,phone,phone_intl,verified,verification_level,bank_rub,bank_mnt,lang")
+        .eq("id", telegram_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return ManualTransactionUserResponse(found=False, user=None)
+    return ManualTransactionUserResponse(found=True, user=result.data[0])
+
+
+@app.post("/api/admin/transactions/manual", response_model=ManualTransactionCreateResponse)
+async def create_manual_transaction(
+    payload: ManualTransactionCreateRequest,
+    admin=Depends(require_admin_user),
+):
+    from zoneinfo import ZoneInfo
+
+    client = get_supabase()
+    now = datetime.now(timezone.utc)
+    direction = payload.direction
+    currency_from = "RUB" if direction == "buy" else "MNT"
+    currency_to = "MNT" if direction == "buy" else "RUB"
+
+    if payload.transaction_at is not None:
+        if payload.transaction_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="transaction_at must include a timezone")
+        transaction_at = payload.transaction_at.astimezone(timezone.utc)
+        if transaction_at > now + timedelta(minutes=5):
+            raise HTTPException(status_code=400, detail="transaction_at cannot be in the future")
+    else:
+        transaction_at = now
+
+    receiver_bank_details = _manual_receiver_bank_details(payload)
+    receipt_paths = list(dict.fromkeys(path.strip() for path in payload.receipt_paths if path and path.strip()))
+    if not receipt_paths:
+        raise HTTPException(status_code=400, detail="At least one receipt image is required")
+
+    bank_result = (
+        client.table("admin_bank_accounts")
+        .select("id,currency")
+        .eq("id", str(payload.admin_bank_id).strip())
+        .limit(1)
+        .execute()
+    )
+    if not bank_result.data:
+        raise HTTPException(status_code=400, detail="Selected OYUNS bank account was not found")
+    if (bank_result.data[0].get("currency") or "").upper() != currency_from:
+        raise HTTPException(status_code=400, detail=f"Selected OYUNS bank account must accept {currency_from}")
+
+    user_result = (
+        client.table("users")
+        .select("id")
+        .eq("id", payload.telegram_id)
+        .limit(1)
+        .execute()
+    )
+    stub_created = not bool(user_result.data)
+    if stub_created:
+        try:
+            client.table("users").insert({"id": payload.telegram_id, "updated_at": now.isoformat()}).execute()
+        except Exception as exc:
+            logger.exception("Failed to create manual transaction user stub %s: %s", payload.telegram_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to create user record") from exc
+
+    invoice = generate_invoice(now.astimezone(ZoneInfo("Europe/Moscow")))
+    converted_amount = (
+        payload.amount * payload.exchange_rate
+        if direction == "buy"
+        else payload.amount / payload.exchange_rate
+    )
+    converted_amount = converted_amount.quantize(Decimal("0.01"))
+    bill_url_value = json.dumps(receipt_paths)
+    insert_payload = {
+        "user_id": payload.telegram_id,
+        "invoice": invoice,
+        "amount": str(payload.amount),
+        "currency_from": currency_from,
+        "currency_to": currency_to,
+        "rate": str(payload.exchange_rate),
+        "status": "pending",
+        "timestamp": transaction_at.isoformat(),
+        "bill_url": bill_url_value,
+        "receipt_id": receipt_paths[0],
+        "bank_details": receiver_bank_details,
+        "admin_bank_id": str(payload.admin_bank_id).strip(),
+        "receipt_submitted_at": now.isoformat(),
+        "is_manual": True,
+        "manual_created_by_admin_id": admin.id,
+        "manual_created_at": now.isoformat(),
+    }
+    if direction == "buy":
+        insert_payload["buy_rate"] = str(payload.exchange_rate)
+    else:
+        insert_payload["sell_rate"] = str(payload.exchange_rate)
+
+    try:
+        transaction_result = client.table("transactions").insert(insert_payload).execute()
+        if not transaction_result.data:
+            raise RuntimeError("Transaction insert returned no row")
+        transaction = transaction_result.data[0]
+    except Exception as exc:
+        if stub_created:
+            try:
+                client.table("users").delete().eq("id", payload.telegram_id).execute()
+            except Exception:
+                logger.exception("Failed to clean up user stub %s", payload.telegram_id)
+        logger.exception("Failed to create manual transaction: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create transaction") from exc
+
+    try:
+        _log_required_admin_action(
+            client,
+            admin_user_id=admin.id,
+            action_type="transaction_manual_create",
+            target_type="transaction",
+            target_id=invoice,
+            details={
+                "manual": True,
+                "user_id": payload.telegram_id,
+                "direction": direction,
+                "rate": str(payload.exchange_rate),
+                "amount": str(payload.amount),
+                "transaction_at": transaction_at.isoformat(),
+                "receipt_count": len(receipt_paths),
+                "user_stub_created": stub_created,
+            },
+            created_at=now,
+        )
+    except Exception as exc:
+        try:
+            client.table("transactions").delete().eq("id", transaction.get("id")).execute()
+            if stub_created:
+                client.table("users").delete().eq("id", payload.telegram_id).execute()
+        except Exception:
+            logger.exception("Failed to roll back manual transaction %s after audit failure", invoice)
+        raise HTTPException(status_code=500, detail="Failed to record transaction audit") from exc
+
+    _notify_manual_transaction_created(
+        client,
+        user_id=payload.telegram_id,
+        invoice=invoice,
+        direction=direction,
+        amount=payload.amount,
+        rate=payload.exchange_rate,
+        currency_from=currency_from,
+        currency_to=currency_to,
+        converted_amount=converted_amount,
+    )
+
+    return ManualTransactionCreateResponse(
+        id=str(transaction.get("id")),
+        invoice=invoice,
+        status="pending",
+        currency_from=currency_from,
+        currency_to=currency_to,
+        amount=payload.amount,
+        rate=payload.exchange_rate,
+        converted_amount=converted_amount,
+        timestamp=transaction_at,
+        is_manual=True,
+    )
 
 
 # ============= User Search for Admin =============

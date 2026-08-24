@@ -175,6 +175,7 @@ export function AdminHistory() {
                     <span className="text-xs font-mono text-slate-500">
                       {item.invoice}
                     </span>
+                    {item.is_manual && <span className="rounded bg-[#2D62EC]/10 px-2 py-0.5 text-[10px] font-bold text-[#2D62EC]">Manual</span>}
                     <button
                       onClick={() => copyToClipboard(item.invoice, `inv-${item.invoice}`)}
                       className="text-slate-400 hover:text-slate-600"
@@ -263,6 +264,12 @@ export function AdminHistory() {
                         {item.currency_from} → {item.currency_to}
                       </div>
                     </div>
+                    {item.is_manual && (
+                      <div>
+                        <span className="text-slate-500">Manual үүсгэсэн админ:</span>
+                        <div className="mt-1 font-medium">{item.manual_created_by_admin_id || "—"}</div>
+                      </div>
+                    )}
                     <div>
                       <span className="text-slate-500">Хэрэглэгчийн авах дүн:</span>
                       <div className="mt-1 font-semibold">

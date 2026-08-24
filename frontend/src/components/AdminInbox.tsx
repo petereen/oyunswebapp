@@ -817,6 +817,7 @@ export function AdminInbox() {
                   <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
                     {dirInfo.label}
                   </span>
+                  {item.is_manual && <span className="rounded bg-[#2D62EC]/10 px-2 py-1 text-xs font-bold text-[#2D62EC]">Manual</span>}
                   <div className="flex-1">
                     <span className="font-semibold text-maroon-700">
                       {Number(item.amount).toLocaleString()} {item.currency_from}
@@ -880,6 +881,7 @@ export function AdminInbox() {
                   <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
                     {dirInfo.label}
                   </span>
+                  {item.is_manual && <span className="rounded bg-[#2D62EC]/10 px-2 py-1 text-xs font-bold text-[#2D62EC]">Manual</span>}
                   <div className="flex-1">
                     <span className="font-semibold text-maroon-700">
                       {Number(item.amount).toLocaleString()} {item.currency_from}

@@ -1015,6 +1015,9 @@ export interface AdminInboxItem {
   automation_managed?: boolean;
   group_dispatch_status?: 'queued' | 'sending' | 'awaiting_proof' | 'processing' | 'completed' | 'failed';
   group_dispatch_error?: string;
+  is_manual?: boolean;
+  manual_created_by_admin_id?: number;
+  manual_created_at?: string;
 }
 
 export interface AdminInboxResponse {
@@ -1067,6 +1070,9 @@ export interface AdminHistoryItem {
   completed_by_admin?: number;
   admin_bank_id?: string;
   admin_bank_name?: string;
+  is_manual?: boolean;
+  manual_created_by_admin_id?: number;
+  manual_created_at?: string;
 }
 
 export interface AdminHistoryResponse {
@@ -1082,6 +1088,63 @@ export async function fetchAdminHistory(status?: string, limit: number = 100, of
   
   const res = await api.get(`/admin/history?${params.toString()}`);
   return res.data as AdminHistoryResponse;
+}
+
+export interface ManualTransactionUser {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  phone_intl?: string;
+  verified?: boolean;
+  verification_level?: number;
+  bank_rub?: string;
+  bank_mnt?: string;
+  lang?: string;
+}
+
+export interface ManualTransactionLookupResponse {
+  found: boolean;
+  user: ManualTransactionUser | null;
+}
+
+export interface ManualTransactionCreateInput {
+  telegram_id: number;
+  direction: "buy" | "sell";
+  amount: number;
+  exchange_rate: number;
+  admin_bank_id: string;
+  receiver_bank_name: string;
+  receiver_account_number?: string;
+  receiver_phone?: string;
+  receiver_card_number?: string;
+  receiver_owner_name: string;
+  receipt_paths: string[];
+  transaction_at?: string;
+}
+
+export interface ManualTransactionCreateResponse {
+  id: string;
+  invoice: string;
+  status: string;
+  currency_from: string;
+  currency_to: string;
+  amount: number;
+  rate: number;
+  converted_amount: number;
+  timestamp: string;
+  is_manual: boolean;
+}
+
+export async function lookupManualTransactionUser(telegramId: number): Promise<ManualTransactionLookupResponse> {
+  const res = await api.get(`/admin/transactions/manual/users/${telegramId}`);
+  return res.data as ManualTransactionLookupResponse;
+}
+
+export async function createManualTransaction(payload: ManualTransactionCreateInput): Promise<ManualTransactionCreateResponse> {
+  const res = await api.post('/admin/transactions/manual', payload);
+  return res.data as ManualTransactionCreateResponse;
 }
 
 export async function fetchKycPending(): Promise<{ items: KycItem[] }> {

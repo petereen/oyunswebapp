@@ -114,6 +114,39 @@ class ExchangeCreateResponse(BaseModel):
     created_at: datetime
 
 
+class ManualTransactionCreateRequest(BaseModel):
+    telegram_id: int = Field(..., gt=0)
+    direction: Literal["buy", "sell"]
+    amount: Decimal = Field(..., gt=0)
+    exchange_rate: Decimal = Field(..., gt=0)
+    admin_bank_id: str = Field(..., min_length=1)
+    receiver_bank_name: str = Field(..., min_length=1)
+    receiver_account_number: Optional[str] = None
+    receiver_phone: Optional[str] = None
+    receiver_card_number: Optional[str] = None
+    receiver_owner_name: str = Field(..., min_length=1)
+    receipt_paths: list[str] = Field(..., min_length=1)
+    transaction_at: Optional[datetime] = None
+
+
+class ManualTransactionCreateResponse(BaseModel):
+    id: str
+    invoice: str
+    status: str
+    currency_from: str
+    currency_to: str
+    amount: Decimal
+    rate: Decimal
+    converted_amount: Decimal
+    timestamp: datetime
+    is_manual: bool = True
+
+
+class ManualTransactionUserResponse(BaseModel):
+    found: bool
+    user: Optional[dict] = None
+
+
 class ExchangeResubmitRequest(BaseModel):
     invoice: str
     amount: Decimal
@@ -237,6 +270,9 @@ class AdminInboxItem(BaseModel):
     automation_managed: bool = False
     group_dispatch_status: Optional[str] = None
     group_dispatch_error: Optional[str] = None
+    is_manual: bool = False
+    manual_created_by_admin_id: Optional[int] = None
+    manual_created_at: Optional[datetime] = None
 
 
 class UserLabelUpdateRequest(BaseModel):
@@ -531,6 +567,9 @@ class AdminHistoryItem(BaseModel):
     completed_by_admin: Optional[int] = None
     admin_bank_id: Optional[str] = None
     admin_bank_name: Optional[str] = None
+    is_manual: bool = False
+    manual_created_by_admin_id: Optional[int] = None
+    manual_created_at: Optional[datetime] = None
 
 
 class AdminHistoryResponse(BaseModel):

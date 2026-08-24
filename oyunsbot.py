@@ -97,7 +97,7 @@ MODERATOR_ID = 1920453419  # Moderator for referral confirmations
 OPERATOR_CHAT_ID = None
 BANK_DETAILS_RUB = None
 BANK_DETAILS_MNT = None
-CONTACT_SUPPORT = "📞 Холбоо барих: +976 7230 3060\n +7 (977) 801-91-43\n [https://t.me/oyuns_finance]"
+CONTACT_SUPPORT = "📞 Холбоо барих: +976 7200 0013\n +7 (977) 801-91-43\n [https://t.me/oyuns_finance]"
 REFERRAL_REQUIRED_COUNT = 5  # Number of friends needed to invite
 
 # Target referral destination (channel / group)

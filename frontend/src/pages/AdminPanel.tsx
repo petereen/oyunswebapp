@@ -1,102 +1,25 @@
-import { useState, useEffect } from "react";
-import { Shield, FileText, Inbox, Users, Lock, Eye, EyeOff, CreditCard, History, Gift } from "lucide-react";
+import { useState } from "react";
+import { Shield, FileText, Inbox, Users, CreditCard, History, Gift, Wrench } from "lucide-react";
 import { AdminInbox } from "../components/AdminInbox";
 import { AdminKyc } from "../components/AdminKyc";
 import { AdminUserSearch } from "../components/AdminUserSearch";
 import { AdminBankAccounts } from "../components/AdminBankAccounts";
 import { AdminHistory } from "../components/AdminHistory";
 import { AdminGifts } from "../components/AdminGifts";
+import { AdminManualTransaction } from "../components/AdminManualTransaction";
 
-type Tab = "inbox" | "kyc" | "users" | "banks" | "history" | "gifts";
+type Tab = "inbox" | "kyc" | "users" | "banks" | "history" | "gifts" | "manual";
 
-const ADMIN_API_KEY = "oyuns-admin-key-07012026";
-const STORAGE_KEY = "admin_authenticated";
+interface Props {
+  onExit?: () => void;
+}
 
-export function AdminPanel() {
+export function AdminPanel({ onExit }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("inbox");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [error, setError] = useState("");
-
-  // Check if already authenticated on mount
-  useEffect(() => {
-    const storedAuth = localStorage.getItem(STORAGE_KEY);
-    if (storedAuth === "true") {
-      setIsAuthenticated(true);
-    }
-  }, []);
-
-  const handleLogin = () => {
-    if (apiKey === ADMIN_API_KEY) {
-      setIsAuthenticated(true);
-      localStorage.setItem(STORAGE_KEY, "true");
-      setError("");
-    } else {
-      setError("Буруу API түлхүүр");
-    }
-  };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem(STORAGE_KEY);
-    setApiKey("");
+    onExit?.();
   };
-
-  // Show login screen if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-maroon-700">
-          <Shield className="w-5 h-5" /> Админ самбар
-        </div>
-
-        <div className="bg-white rounded-2xl p-8 shadow-sm max-w-md mx-auto">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-maroon-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-maroon-600" />
-            </div>
-            <h2 className="text-xl font-bold text-slate-800">Админ нэвтрэлт</h2>
-            <p className="text-sm text-slate-500 mt-1">API түлхүүр оруулна уу</p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="relative">
-              <input
-                type={showKey ? "text" : "password"}
-                value={apiKey}
-                onChange={(e) => {
-                  setApiKey(e.target.value);
-                  setError("");
-                }}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                placeholder="API түлхүүр"
-                className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-
-            {error && (
-              <div className="text-red-500 text-sm text-center">{error}</div>
-            )}
-
-            <button
-              onClick={handleLogin}
-              className="w-full bg-maroon-600 text-white py-3 rounded-xl font-semibold hover:bg-maroon-700 transition"
-            >
-              Нэвтрэх
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -170,6 +93,17 @@ export function AdminPanel() {
           Түүх
         </button>
         <button
+          onClick={() => setActiveTab("manual")}
+          className={`flex-1 min-w-[130px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+            activeTab === "manual"
+              ? "bg-[#2D62EC] text-white"
+              : "bg-[#2D62EC]/10 text-[#2D62EC] hover:bg-[#2D62EC]/20"
+          }`}
+        >
+          <Wrench className="w-4 h-4" />
+          Гараар үүсгэх
+        </button>
+        <button
           onClick={() => setActiveTab("gifts")}
           className={`flex-1 min-w-[100px] flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
             activeTab === "gifts"
@@ -185,6 +119,8 @@ export function AdminPanel() {
       {/* Tab Content */}
       {activeTab === "inbox" ? (
         <AdminInbox />
+      ) : activeTab === "manual" ? (
+        <AdminManualTransaction onOpenInbox={() => setActiveTab("inbox")} />
       ) : activeTab === "kyc" ? (
         <AdminKyc />
       ) : activeTab === "users" ? (

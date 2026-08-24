@@ -182,7 +182,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <AdminPanel />
+          <AdminPanel onExit={() => setView("client")} />
         </div>
         <DevToolbar />
       </div>
