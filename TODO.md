@@ -1,6 +1,9 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Implement dashboard black-rate fetching from Transactions2 rows where E is Ханш (backend/config.py, backend/google_sheets.py, frontend/src/pages/BalanceProfitPage.tsx, .env.example)
+- [x] Verify frontend production build and clean diff
+- [ ] Run focused backend black-rate test (local Python runtime/dependencies are unavailable)
 - [x] Fix dashboard plane-ticket sale 400 handling and validation (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
 - [ ] Run backend tests (local environment is missing Python dependency `requests`)
 - [x] Add manual transaction recovery schema migration (database/add_manual_transactions.sql)

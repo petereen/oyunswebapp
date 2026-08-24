@@ -10,10 +10,12 @@ Configuration (environment variables):
     GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE
                                                                 path to the service-account JSON key file
   BLACK_RATE_SPREADSHEET_ID    the long id from the sheet URL (.../d/<ID>/edit)
-  BLACK_RATE_SHEET_NAME        tab name (default "Sheet1")
-  BLACK_RATE_DATE_COLUMN       column letter holding dates (default "A")
-  BLACK_RATE_RATE_COLUMN       column letter holding rates (default "B")
+  BLACK_RATE_SHEET_NAME        tab name (default "Transactions2")
+  BLACK_RATE_DATE_COLUMN       column letter holding dates (default "B")
+  BLACK_RATE_RATE_COLUMN       column letter holding rates (default "I")
   BLACK_RATE_HEADER_ROWS       number of header rows to skip (default 1)
+  BLACK_RATE_STATUS_COLUMN     row filter column (default "E")
+  BLACK_RATE_STATUS_VALUE      row filter value (default "Ханш")
 """
 from __future__ import annotations
 
@@ -21,10 +23,6 @@ import re
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-
-import requests
-from google.auth.transport.requests import AuthorizedSession
-from google.oauth2 import service_account
 
 from config import get_settings
 
@@ -72,7 +70,13 @@ def _resolve_service_account_file(raw_path: str) -> Path:
 
 
 @lru_cache(maxsize=4)
-def _get_authorized_session(raw_path: str) -> AuthorizedSession:
+def _get_authorized_session(raw_path: str):
+    # Import Google Auth only when the integration is actually used. This keeps
+    # the rest of the backend importable for local tooling and unit tests that
+    # mock the Sheets session.
+    from google.auth.transport.requests import AuthorizedSession
+    from google.oauth2 import service_account
+
     credentials = service_account.Credentials.from_service_account_file(
         str(_resolve_service_account_file(raw_path)),
         scopes=_SCOPES,
@@ -136,20 +140,23 @@ def fetch_black_rates() -> dict[str, float]:
     if not is_black_rate_configured():
         raise RuntimeError("Google Sheets black-rate integration is not configured")
 
-    sheet = s.black_rate_sheet_name or "Sheet1"
-    date_col = (s.black_rate_date_column or "A").upper()
-    rate_col = (s.black_rate_rate_column or "B").upper()
+    sheet = s.black_rate_sheet_name or "Transactions2"
+    date_col = (s.black_rate_date_column or "B").upper()
+    rate_col = (s.black_rate_rate_column or "I").upper()
     header_rows = max(0, int(s.black_rate_header_rows or 0))
     status_col = (s.black_rate_status_column or "").upper().strip() or None
     status_val = (s.black_rate_status_value or "").strip().lower()
 
+    # Quote the tab name so the A1 ranges remain valid even if the configured
+    # tab is later renamed to contain spaces or apostrophes.
+    sheet_a1 = "'" + sheet.replace("'", "''") + "'"
     url = f"{_API_BASE}/{s.black_rate_spreadsheet_id}/values:batchGet"
     params = [
-        ("ranges", f"{sheet}!{date_col}:{date_col}"),
-        ("ranges", f"{sheet}!{rate_col}:{rate_col}"),
+        ("ranges", f"{sheet_a1}!{date_col}:{date_col}"),
+        ("ranges", f"{sheet_a1}!{rate_col}:{rate_col}"),
     ]
     if status_col:
-        params.append(("ranges", f"{sheet}!{status_col}:{status_col}"))
+        params.append(("ranges", f"{sheet_a1}!{status_col}:{status_col}"))
     params += [
         ("majorDimension", "COLUMNS"),
         ("valueRenderOption", "FORMATTED_VALUE"),

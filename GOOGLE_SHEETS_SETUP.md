@@ -67,7 +67,7 @@ https://docs.google.com/spreadsheets/d/1AbCDeFGhIJkLmNoPQRstUVwxyz0123456789/edi
 ```env
 GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE=./secrets/oyuns-finance-f04dd10e19d5.json
 BLACK_RATE_SPREADSHEET_ID=1AbCDeFGhIJkLmNoPQRstUVwxyz0123456789
-BLACK_RATE_SHEET_NAME=Sheet1     # the tab name
+BLACK_RATE_SHEET_NAME=Transactions2     # the tab name
 BLACK_RATE_DATE_COLUMN=B
 BLACK_RATE_RATE_COLUMN=I
 BLACK_RATE_HEADER_ROWS=1
@@ -90,9 +90,9 @@ Restart the backend after changing these.
 ## 6. How the app uses it
 
 - Dashboard → **Баланс ба Ашиг** page → **Өртөг ханш** section.
-- Pick a date and press the refresh button next to "А ханш" — the backend
-  calls `GET /api/dashboard/black-rate?date=YYYY-MM-DD`, which fetches the
-  cell for that date from the sheet.
+- Pick a date — the dashboard calls `GET /api/dashboard/black-rate?date=YYYY-MM-DD`,
+  which fetches the row whose column E is `Ханш`, reads its rate from column I,
+  and uses column B as the rate date. The refresh button can re-fetch the row.
 - Enter the **USD ханш** for that date. The app computes
   **өртөг ханш = USD ханш ÷ а ханш** and stores it (`cost_rates` table).
 - The profit calculator then joins each transaction to the cost rate of its
@@ -105,14 +105,14 @@ service-account JSON key:
 
 ```
 GET https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values:batchGet
-    ?ranges=Sheet1!B:B          # dates
-    &ranges=Sheet1!I:I          # rates
-    &ranges=Sheet1!E:E          # status (Төлөв), used to keep only "Ханш" rows
+    ?ranges='Transactions2'!B:B # dates
+    &ranges='Transactions2'!I:I # rates
+    &ranges='Transactions2'!E:E # status (Төлөв), used to keep only "Ханш" rows
     &majorDimension=COLUMNS
     &valueRenderOption=FORMATTED_VALUE
 Authorization: Bearer {SERVICE_ACCOUNT_ACCESS_TOKEN}
 ```
 
 To read a single fixed cell instead of a column you would request a range
-like `Sheet1!B2` — but for per-date history the date+rate columns are read so
+like `'Transactions2'!B2` — but for per-date history the date+rate columns are read so
 any date can be looked up. See `backend/google_sheets.py`.

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, Calculator, Calendar, Download, History, Loader2, LogOut, Plane, Plus, RefreshCw,
@@ -1882,6 +1882,7 @@ function CostRateManager({
   const [periodEnd, setPeriodEnd] = useState("");
   const [periodUsd, setPeriodUsd] = useState("");
   const [savingPeriod, setSavingPeriod] = useState(false);
+  const blackRateRequestId = useRef(0);
 
   useEffect(() => {
     setDate(todayDate);
@@ -1910,33 +1911,43 @@ function CostRateManager({
     return usdRate / blackRate;
   }, [usd, black]);
 
-  const fetchBlack = async () => {
+  const fetchBlack = useCallback(async () => {
+    const requestedDate = date;
+    const requestId = ++blackRateRequestId.current;
     setFetchingRate(true);
     setRateMsg(null);
     try {
-      const res = await fetchBlackRates({ date });
+      const res = await fetchBlackRates({ date: requestedDate });
+      if (requestId !== blackRateRequestId.current) return;
       if (!res.configured) {
+        setBlack("");
         setRateMsg("Google Sheets тохируулагдаагүй байна (.env-ийг шалгана уу).");
       } else if (res.error) {
+        setBlack("");
         setRateMsg(`Алдаа: ${res.error}`);
       } else {
-        const exact = res.rates?.[date];
+        const exact = res.rates?.[requestedDate];
         if (exact != null) {
           setBlack(String(exact));
           setRateMsg(`Татаж авлаа: ${exact}`);
-        } else if (res.latest != null) {
-          setBlack(String(res.latest));
-          setRateMsg(`${date}-нд бичилт алга — хамгийн сүүлийн black ханш${res.latest_date ? ` (${res.latest_date})` : ""}: ${res.latest}`);
         } else {
-          setRateMsg(`${date}-ний black ханш Google Sheets-д олдсонгүй.`);
+          // Never use another date's latest value for the selected date.
+          setBlack("");
+          setRateMsg(`${requestedDate}-ний Ханш мөр Google Sheets-д олдсонгүй.`);
         }
       }
     } catch {
+      if (requestId !== blackRateRequestId.current) return;
+      setBlack("");
       setRateMsg("Black ханш татахад алдаа гарлаа.");
     } finally {
-      setFetchingRate(false);
+      if (requestId === blackRateRequestId.current) setFetchingRate(false);
     }
-  };
+  }, [date]);
+
+  useEffect(() => {
+    if (date) void fetchBlack();
+  }, [date, fetchBlack]);
 
   const save = async () => {
     const usdRate = Number(usd);
@@ -1987,7 +1998,7 @@ function CostRateManager({
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
         <label>
           <div className="text-[10px] text-slate-400 mb-1">Огноо</div>
-          <input type="date" className={INPUT_CLASS} value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="date" className={INPUT_CLASS} value={date} onChange={(e) => { setDate(e.target.value); setBlack(""); setRateMsg(null); }} />
         </label>
         <label>
           <div className="text-[10px] text-slate-400 mb-1">Black ханш (Sheets)</div>

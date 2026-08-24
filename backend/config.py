@@ -43,7 +43,7 @@ class Settings:
     # Google Sheets black-rate (а ханш) integration for the profit calculator
     google_sheets_service_account_file: str | None = None
     black_rate_spreadsheet_id: str | None = None
-    black_rate_sheet_name: str = "Sheet1"
+    black_rate_sheet_name: str = "Transactions2"
     black_rate_date_column: str = "B"
     black_rate_rate_column: str = "I"
     black_rate_header_rows: int = 1
@@ -95,7 +95,7 @@ def get_settings() -> Settings:
         or None
     )
     black_rate_spreadsheet_id = os.getenv("BLACK_RATE_SPREADSHEET_ID", "").strip().strip('"').strip("'") or None
-    black_rate_sheet_name = os.getenv("BLACK_RATE_SHEET_NAME", "Sheet1").strip().strip('"').strip("'") or "Sheet1"
+    black_rate_sheet_name = os.getenv("BLACK_RATE_SHEET_NAME", "Transactions2").strip().strip('"').strip("'") or "Transactions2"
     black_rate_date_column = os.getenv("BLACK_RATE_DATE_COLUMN", "B").strip().strip('"').strip("'") or "B"
     black_rate_rate_column = os.getenv("BLACK_RATE_RATE_COLUMN", "I").strip().strip('"').strip("'") or "I"
     try:
