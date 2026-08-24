@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle, Calculator, Calendar, Download, History, Loader2, LogOut, Plane, Plus, RefreshCw,
+  AlertTriangle, Calculator, Calendar, Download, History, Loader2, LogOut, Pencil, Plane, Plus, RefreshCw,
   Save, Trash2, TrendingUp, UserCog, Wallet, X,
 } from "lucide-react";
 import {
@@ -1883,6 +1883,7 @@ function CostRateManager({
   const [periodUsd, setPeriodUsd] = useState("");
   const [savingPeriod, setSavingPeriod] = useState(false);
   const [historicalUsd, setHistoricalUsd] = useState<Record<string, string>>({});
+  const [editingUsdDate, setEditingUsdDate] = useState<string | null>(null);
   const [savingHistoricalDate, setSavingHistoricalDate] = useState<string | null>(null);
   const blackRateRequestId = useRef(0);
 
@@ -1913,17 +1914,28 @@ function CostRateManager({
     staleTime: 30_000,
   });
 
-  const savedRatesByDate = useMemo(
-    () => new Map((ratesQ.data || []).map((rate) => [rate.rate_date, rate])),
-    [ratesQ.data],
-  );
-
   const historicalBlackRates = useMemo(
     () => Object.entries(historicalBlackRatesQ.data?.rates || {})
       .filter(([, blackRate]) => blackRate != null && Number(blackRate) > 0)
       .sort(([left], [right]) => right.localeCompare(left)),
     [historicalBlackRatesQ.data?.rates],
   );
+
+  const listingRates = useMemo(() => {
+    const byDate = new Map<string, CostRate>();
+    (ratesQ.data || []).forEach((rate) => byDate.set(rate.rate_date, rate));
+    historicalBlackRates.forEach(([rateDate, rawBlackRate]) => {
+      const existing = byDate.get(rateDate);
+      byDate.set(rateDate, {
+        ...existing,
+        rate_date: rateDate,
+        usd_rate: existing?.usd_rate ?? null,
+        black_rate: Number(rawBlackRate),
+        cost_rate: existing?.cost_rate ?? null,
+      });
+    });
+    return Array.from(byDate.values()).sort((left, right) => right.rate_date.localeCompare(left.rate_date));
+  }, [historicalBlackRates, ratesQ.data]);
 
   useEffect(() => {
     if (!ratesQ.data) return;
@@ -2031,6 +2043,7 @@ function CostRateManager({
       await saveCostRate({ date: rateDate, usd_rate: usdRate, black_rate: blackRate });
       await ratesQ.refetch();
       onSaved();
+      setEditingUsdDate(null);
       setRateMsg(`${rateDate}-ны USD ханш хадгалагдлаа. Өртөг ханш: ${(usdRate / blackRate).toFixed(4)}`);
     } catch (error) {
       setRateMsg(getApiErrorDetail(error, `${rateDate}-ны USD ханш хадгалах үед алдаа гарлаа.`));
@@ -2111,85 +2124,58 @@ function CostRateManager({
         </div>
       </div>
 
-      <div className="mt-3 rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4">
-        <div className="flex flex-col gap-1 mb-3">
-          <div className="text-[11px] font-semibold text-slate-600 dark:text-ivory-300">Түүхэн black ханш дээр USD ханш оруулах</div>
-          <div className="text-[11px] text-slate-500 dark:text-ivory-400">
-            Сонгосон хугацааны Google Sheets-ийн black ханш бүр дээр USD ханшийг гараар оруулж, тухайн өдрийн өртөг ханшийг хадгална.
-          </div>
-        </div>
-
-        {historicalBlackRatesQ.isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-5 text-xs text-slate-400">
-            <Loader2 className="w-4 h-4 animate-spin" /> Түүхэн black ханш ачаалж байна…
-          </div>
-        ) : historicalBlackRatesQ.error ? (
-          <div className="py-4 text-center text-xs text-rose-500">Түүхэн black ханш ачаалж чадсангүй.</div>
-        ) : historicalBlackRates.length === 0 ? (
-          <div className="py-4 text-center text-xs text-slate-400">Сонгосон хугацаанд Google Sheets-ийн Ханш мөр алга.</div>
-        ) : (
-          <div className="space-y-2">
-            {historicalBlackRates.map(([rateDate, rawBlackRate]) => {
-              const blackRate = Number(rawBlackRate);
-              const usdRate = Number(historicalUsd[rateDate]);
-              const preview = usdRate > 0 ? usdRate / blackRate : null;
-              const saved = savedRatesByDate.get(rateDate);
-              const isSaving = savingHistoricalDate === rateDate;
-              return (
-                <div key={rateDate} className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
-                  <Metric label="Огноо" value={rateDate} />
-                  <Metric label="Black ханш (Sheets)" value={fmtNum(blackRate, 2)} />
-                  <label>
-                    <div className="text-[10px] text-slate-400 mb-1">USD ханш (гараар)</div>
-                    <input
-                      type="number"
-                      min="0.0001"
-                      step="0.01"
-                      className={INPUT_CLASS}
-                      placeholder="0"
-                      value={historicalUsd[rateDate] || ""}
-                      onChange={(e) => setHistoricalUsd((current) => ({ ...current, [rateDate]: e.target.value }))}
-                    />
-                  </label>
-                  <div className="flex items-end gap-2">
-                    <div className="min-w-24">
-                      <div className="text-[10px] text-slate-400 mb-1">Өртөг ханш</div>
-                      <div className={`${INPUT_CLASS} flex items-center font-semibold ${preview == null ? "text-slate-300" : "text-maroon-600 dark:text-gold-400"}`}>
-                        {preview == null ? "—" : preview.toFixed(4)}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => void saveHistoricalRate(rateDate, blackRate)}
-                      disabled={!(usdRate > 0) || isSaving}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
-                    >
-                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
-                    </button>
-                  </div>
-                  {saved?.usd_rate != null && (
-                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 md:col-span-4">
-                      Хадгалсан USD: {fmtNum(saved.usd_rate, 2)} · Өртөг ханш: {saved.cost_rate == null ? "—" : saved.cost_rate.toFixed(4)}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {rateMsg && <div className="text-[11px] text-slate-500 dark:text-ivory-400 mt-2">{rateMsg}</div>}
 
       <div className="mt-4 grid gap-3 md:hidden">
-        {(ratesQ.data || []).map((rate) => (
+        {listingRates.map((rate) => {
+          const blackRate = Number(rate.black_rate || 0);
+          const usdDraft = historicalUsd[rate.rate_date] ?? (rate.usd_rate == null ? "" : String(rate.usd_rate));
+          const usdValue = Number(usdDraft);
+          const preview = usdValue > 0 && blackRate > 0 ? usdValue / blackRate : rate.cost_rate;
+          const isEditing = editingUsdDate === rate.rate_date;
+          const isSaving = savingHistoricalDate === rate.rate_date;
+          return (
           <div key={rate.rate_date} className="rounded-2xl border border-slate-200 dark:border-dark-600 p-4 bg-slate-50/80 dark:bg-dark-700/40 grid grid-cols-2 gap-3 text-sm">
             <Metric label="Огноо" value={rate.rate_date} />
-            <Metric label="Өртөг ханш" value={rate.cost_rate != null ? rate.cost_rate.toFixed(4) : "—"} />
-            <Metric label="USD ханш" value={fmtNum(rate.usd_rate, 2)} />
-            <Metric label="Black ханш" value={fmtNum(rate.black_rate, 2)} />
+            <Metric label="Black ханш" value={rate.black_rate == null ? "—" : fmtNum(rate.black_rate, 2)} />
+            <div>
+              <div className="text-[10px] text-slate-400">USD ханш</div>
+              {isEditing ? (
+                <div className="flex items-center gap-1 mt-1">
+                  <input
+                    autoFocus
+                    type="number"
+                    min="0.0001"
+                    step="0.01"
+                    className={`${INPUT_CLASS} min-w-0`}
+                    value={usdDraft}
+                    onChange={(e) => setHistoricalUsd((current) => ({ ...current, [rate.rate_date]: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === "Enter") void saveHistoricalRate(rate.rate_date, blackRate); }}
+                  />
+                  <button
+                    onClick={() => void saveHistoricalRate(rate.rate_date, blackRate)}
+                    disabled={!(usdValue > 0) || !(blackRate > 0) || isSaving}
+                    className="p-2 rounded-xl bg-maroon-600 text-white disabled:opacity-40"
+                    title="Хадгалах"
+                  >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setHistoricalUsd((current) => ({ ...current, [rate.rate_date]: usdDraft })); setEditingUsdDate(rate.rate_date); }}
+                  className="mt-1 inline-flex items-center gap-1 font-semibold text-left hover:text-maroon-600 dark:hover:text-gold-400"
+                  title="USD ханшийг гараар оруулах"
+                >
+                  {rate.usd_rate == null ? "—" : fmtNum(rate.usd_rate, 2)} <Pencil className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <Metric label="Өртөг ханш" value={preview != null ? preview.toFixed(4) : "—"} />
           </div>
-        ))}
-        {(!ratesQ.data || ratesQ.data.length === 0) && (
+          );
+        })}
+        {listingRates.length === 0 && (
           <div className="py-5 text-center text-sm text-slate-400">Энэ хугацаанд хадгалсан өртөг ханш алга.</div>
         )}
       </div>
@@ -2205,15 +2191,54 @@ function CostRateManager({
             </tr>
           </thead>
           <tbody>
-            {(ratesQ.data || []).map((rate: CostRate) => (
+            {listingRates.map((rate: CostRate) => {
+              const blackRate = Number(rate.black_rate || 0);
+              const usdDraft = historicalUsd[rate.rate_date] ?? (rate.usd_rate == null ? "" : String(rate.usd_rate));
+              const usdValue = Number(usdDraft);
+              const preview = usdValue > 0 && blackRate > 0 ? usdValue / blackRate : rate.cost_rate;
+              const isEditing = editingUsdDate === rate.rate_date;
+              const isSaving = savingHistoricalDate === rate.rate_date;
+              return (
               <tr key={rate.rate_date} className="border-b border-slate-100 dark:border-dark-700">
                 <td className="py-2 pr-2 font-mono">{rate.rate_date}</td>
-                <td className="py-2 px-2 text-right tabular-nums">{fmtNum(rate.usd_rate, 2)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">
+                  {isEditing ? (
+                    <div className="flex items-center justify-end gap-1">
+                      <input
+                        autoFocus
+                        type="number"
+                        min="0.0001"
+                        step="0.01"
+                        className={`${INPUT_CLASS} w-28 py-1 text-right`}
+                        value={usdDraft}
+                        onChange={(e) => setHistoricalUsd((current) => ({ ...current, [rate.rate_date]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") void saveHistoricalRate(rate.rate_date, blackRate); }}
+                      />
+                      <button
+                        onClick={() => void saveHistoricalRate(rate.rate_date, blackRate)}
+                        disabled={!(usdValue > 0) || !(blackRate > 0) || isSaving}
+                        className="p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-40"
+                        title="Хадгалах"
+                      >
+                        {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setHistoricalUsd((current) => ({ ...current, [rate.rate_date]: usdDraft })); setEditingUsdDate(rate.rate_date); }}
+                      className="inline-flex items-center gap-1 hover:text-maroon-600 dark:hover:text-gold-400"
+                      title="USD ханшийг гараар оруулах"
+                    >
+                      {rate.usd_rate == null ? "—" : fmtNum(rate.usd_rate, 2)} <Pencil className="w-3 h-3" />
+                    </button>
+                  )}
+                </td>
                 <td className="py-2 px-2 text-right tabular-nums">{fmtNum(rate.black_rate, 2)}</td>
-                <td className="py-2 pl-2 text-right tabular-nums font-semibold text-maroon-600 dark:text-gold-400">{rate.cost_rate != null ? rate.cost_rate.toFixed(4) : "—"}</td>
+                <td className="py-2 pl-2 text-right tabular-nums font-semibold text-maroon-600 dark:text-gold-400">{preview != null ? preview.toFixed(4) : "—"}</td>
               </tr>
-            ))}
-            {(!ratesQ.data || ratesQ.data.length === 0) && (
+              );
+            })}
+            {listingRates.length === 0 && (
               <tr><td colSpan={4} className="py-5 text-center text-slate-400">Энэ хугацаанд хадгалсан өртөг ханш алга.</td></tr>
             )}
           </tbody>
