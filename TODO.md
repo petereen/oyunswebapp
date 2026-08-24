@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Fix dashboard plane-ticket sale 400 handling and validation (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
 - [ ] Run backend tests (local environment is missing Python dependency `requests`)
 - [x] Add manual transaction recovery schema migration (database/add_manual_transactions.sql)
 - [x] Add strict admin lookup/create API and manual transaction metadata (backend/main.py, backend/models.py)

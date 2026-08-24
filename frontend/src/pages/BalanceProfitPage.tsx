@@ -1673,7 +1673,7 @@ function PlaneTicketSalesManager({
       onSaved();
       setMessage("Тийзийн борлуулалтыг хадгаллаа.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Тийз хадгалах үед алдаа гарлаа.");
+      setMessage(getApiErrorDetail(error, error instanceof Error ? error.message : "Тийз хадгалах үед алдаа гарлаа."));
     } finally {
       setSaving(false);
     }

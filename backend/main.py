@@ -3891,10 +3891,14 @@ def _sync_black_rates_into_cost_rates(client, rates: dict[str, float | None]) ->
 def _plane_ticket_sale_row(client, payload: dict) -> dict:
     sale_date = str(payload.get("sale_date") or payload.get("date") or _moscow_today())[:10]
     try:
+        datetime.strptime(sale_date, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="sale_date must be a valid YYYY-MM-DD date")
+    try:
         sold_price_mnt = float(payload.get("sold_price_mnt") or payload.get("sold_price") or 0)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="sold_price_mnt must be a number")
-    if sold_price_mnt <= 0:
+    if not math.isfinite(sold_price_mnt) or sold_price_mnt <= 0:
         raise HTTPException(status_code=400, detail="sold_price_mnt must be greater than 0")
 
     raw_exchange_rate = payload.get("exchange_rate")
@@ -3908,11 +3912,11 @@ def _plane_ticket_sale_row(client, payload: dict) -> dict:
         exchange_rate = float(raw_exchange_rate)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="exchange_rate must be a number")
-    if exchange_rate <= 0:
+    if not math.isfinite(exchange_rate) or exchange_rate <= 0:
         raise HTTPException(status_code=400, detail="exchange_rate must be greater than 0")
 
     cost_rate = _cost_rate_for_day(client, sale_date)
-    if cost_rate is None or cost_rate <= 0:
+    if cost_rate is None or not math.isfinite(cost_rate) or cost_rate <= 0:
         raise HTTPException(status_code=400, detail=f"No cost rate is available on or before {sale_date}")
 
     rub_equivalent = sold_price_mnt / exchange_rate if exchange_rate else 0.0
