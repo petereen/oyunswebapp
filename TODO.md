@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Add manual USD inputs for historical black rates in dashboard cost-rate manager (frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Implement dashboard black-rate fetching from Transactions2 rows where E is Ханш (backend/config.py, backend/google_sheets.py, frontend/src/pages/BalanceProfitPage.tsx, .env.example)
 - [x] Verify frontend production build and clean diff
 - [ ] Run focused backend black-rate test (local Python runtime/dependencies are unavailable)

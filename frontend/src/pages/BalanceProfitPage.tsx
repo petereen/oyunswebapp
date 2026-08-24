@@ -1882,6 +1882,8 @@ function CostRateManager({
   const [periodEnd, setPeriodEnd] = useState("");
   const [periodUsd, setPeriodUsd] = useState("");
   const [savingPeriod, setSavingPeriod] = useState(false);
+  const [historicalUsd, setHistoricalUsd] = useState<Record<string, string>>({});
+  const [savingHistoricalDate, setSavingHistoricalDate] = useState<string | null>(null);
   const blackRateRequestId = useRef(0);
 
   useEffect(() => {
@@ -1903,6 +1905,38 @@ function CostRateManager({
     queryFn: () => fetchCostRates({ ...listRange, tz: dashboardTimeZone }),
     staleTime: 30_000,
   });
+
+  const historicalBlackRatesQ = useQuery({
+    queryKey: ["dashboard-historical-black-rates", listRange.start, listRange.end],
+    queryFn: () => fetchBlackRates({ start: listRange.start, end: listRange.end }),
+    enabled: Boolean(listRange.start && listRange.end),
+    staleTime: 30_000,
+  });
+
+  const savedRatesByDate = useMemo(
+    () => new Map((ratesQ.data || []).map((rate) => [rate.rate_date, rate])),
+    [ratesQ.data],
+  );
+
+  const historicalBlackRates = useMemo(
+    () => Object.entries(historicalBlackRatesQ.data?.rates || {})
+      .filter(([, blackRate]) => blackRate != null && Number(blackRate) > 0)
+      .sort(([left], [right]) => right.localeCompare(left)),
+    [historicalBlackRatesQ.data?.rates],
+  );
+
+  useEffect(() => {
+    if (!ratesQ.data) return;
+    setHistoricalUsd((current) => {
+      const next = { ...current };
+      ratesQ.data.forEach((rate) => {
+        if (rate.usd_rate != null && next[rate.rate_date] == null) {
+          next[rate.rate_date] = String(rate.usd_rate);
+        }
+      });
+      return next;
+    });
+  }, [ratesQ.data]);
 
   const costPreview = useMemo(() => {
     const usdRate = Number(usd);
@@ -1988,6 +2022,23 @@ function CostRateManager({
     }
   };
 
+  const saveHistoricalRate = async (rateDate: string, blackRate: number) => {
+    const usdRate = Number(historicalUsd[rateDate]);
+    if (!(usdRate > 0) || !(blackRate > 0)) return;
+    setSavingHistoricalDate(rateDate);
+    setRateMsg(null);
+    try {
+      await saveCostRate({ date: rateDate, usd_rate: usdRate, black_rate: blackRate });
+      await ratesQ.refetch();
+      onSaved();
+      setRateMsg(`${rateDate}-ны USD ханш хадгалагдлаа. Өртөг ханш: ${(usdRate / blackRate).toFixed(4)}`);
+    } catch (error) {
+      setRateMsg(getApiErrorDetail(error, `${rateDate}-ны USD ханш хадгалах үед алдаа гарлаа.`));
+    } finally {
+      setSavingHistoricalDate(null);
+    }
+  };
+
   return (
     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700">
       <div className="flex items-center gap-2 mb-3">
@@ -2058,6 +2109,73 @@ function CostRateManager({
             {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Period USD хадгалах
           </button>
         </div>
+      </div>
+
+      <div className="mt-3 rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3 md:p-4">
+        <div className="flex flex-col gap-1 mb-3">
+          <div className="text-[11px] font-semibold text-slate-600 dark:text-ivory-300">Түүхэн black ханш дээр USD ханш оруулах</div>
+          <div className="text-[11px] text-slate-500 dark:text-ivory-400">
+            Сонгосон хугацааны Google Sheets-ийн black ханш бүр дээр USD ханшийг гараар оруулж, тухайн өдрийн өртөг ханшийг хадгална.
+          </div>
+        </div>
+
+        {historicalBlackRatesQ.isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-5 text-xs text-slate-400">
+            <Loader2 className="w-4 h-4 animate-spin" /> Түүхэн black ханш ачаалж байна…
+          </div>
+        ) : historicalBlackRatesQ.error ? (
+          <div className="py-4 text-center text-xs text-rose-500">Түүхэн black ханш ачаалж чадсангүй.</div>
+        ) : historicalBlackRates.length === 0 ? (
+          <div className="py-4 text-center text-xs text-slate-400">Сонгосон хугацаанд Google Sheets-ийн Ханш мөр алга.</div>
+        ) : (
+          <div className="space-y-2">
+            {historicalBlackRates.map(([rateDate, rawBlackRate]) => {
+              const blackRate = Number(rawBlackRate);
+              const usdRate = Number(historicalUsd[rateDate]);
+              const preview = usdRate > 0 ? usdRate / blackRate : null;
+              const saved = savedRatesByDate.get(rateDate);
+              const isSaving = savingHistoricalDate === rateDate;
+              return (
+                <div key={rateDate} className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
+                  <Metric label="Огноо" value={rateDate} />
+                  <Metric label="Black ханш (Sheets)" value={fmtNum(blackRate, 2)} />
+                  <label>
+                    <div className="text-[10px] text-slate-400 mb-1">USD ханш (гараар)</div>
+                    <input
+                      type="number"
+                      min="0.0001"
+                      step="0.01"
+                      className={INPUT_CLASS}
+                      placeholder="0"
+                      value={historicalUsd[rateDate] || ""}
+                      onChange={(e) => setHistoricalUsd((current) => ({ ...current, [rateDate]: e.target.value }))}
+                    />
+                  </label>
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-24">
+                      <div className="text-[10px] text-slate-400 mb-1">Өртөг ханш</div>
+                      <div className={`${INPUT_CLASS} flex items-center font-semibold ${preview == null ? "text-slate-300" : "text-maroon-600 dark:text-gold-400"}`}>
+                        {preview == null ? "—" : preview.toFixed(4)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => void saveHistoricalRate(rateDate, blackRate)}
+                      disabled={!(usdRate > 0) || isSaving}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
+                    >
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
+                    </button>
+                  </div>
+                  {saved?.usd_rate != null && (
+                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 md:col-span-4">
+                      Хадгалсан USD: {fmtNum(saved.usd_rate, 2)} · Өртөг ханш: {saved.cost_rate == null ? "—" : saved.cost_rate.toFixed(4)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {rateMsg && <div className="text-[11px] text-slate-500 dark:text-ivory-400 mt-2">{rateMsg}</div>}
