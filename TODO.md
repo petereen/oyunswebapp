@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Fix orphaned group dispatch retries and defer forbidden broadcast recipients for 30 days (oyunsbot.py, supabase/migrations/20260826000000_add_broadcast_delivery_state.sql)
 - [x] Add inline pencil editing for manual USD rates in historical black-rate listing (frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Implement dashboard black-rate fetching from Transactions2 rows where E is Ханш (backend/config.py, backend/google_sheets.py, frontend/src/pages/BalanceProfitPage.tsx, .env.example)
 - [x] Verify frontend production build and clean diff

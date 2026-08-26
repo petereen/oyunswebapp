@@ -160,6 +160,17 @@ def _mark_exchange_group_dispatch_failed(dispatch_id: str, error: object) -> Non
     }).eq("id", dispatch_id).eq("status", "sending").execute()
 
 
+def _mark_missing_transaction_dispatch_failed(dispatch_id: str, invoice: object) -> None:
+    """Permanently stop dispatch jobs whose transaction was deleted."""
+    now = datetime.now(timezone.utc).isoformat()
+    supabase.table("exchange_group_dispatches").update({
+        "status": "failed",
+        "lease_expires_at": None,
+        "last_error": f"Transaction no longer exists for invoice {invoice}",
+        "updated_at": now,
+    }).eq("id", dispatch_id).eq("status", "sending").execute()
+
+
 def _is_permanent_group_destination_error(error: Exception) -> bool:
     return (
         isinstance(error, telebot.apihelper.ApiTelegramException)
@@ -200,7 +211,12 @@ def _dispatch_exchange_group_job(row: dict) -> None:
             .execute()
         )
         if not transaction_res.data:
-            raise RuntimeError("Transaction no longer exists")
+            _mark_missing_transaction_dispatch_failed(dispatch_id, row.get("invoice"))
+            print(
+                f"⚠️ Group dispatch permanently failed for {row.get('invoice')}: "
+                "transaction no longer exists"
+            )
+            return
         transaction = transaction_res.data[0]
         if transaction.get("status") != "approved":
             raise RuntimeError(f"Transaction status is {transaction.get('status')}, expected approved")
@@ -5672,18 +5688,58 @@ def _fetch_all_user_ids() -> list:
         # use negative chat IDs. Keep group recipients out of the query entirely.
         resp = (
             supabase.table("users")
-            .select("id")
+            .select("id,broadcast_active,broadcast_retry_at")
             .gt("id", 0)
             .range(offset, offset + page_size - 1)
             .execute()
         )
         if not resp.data:
             break
-        all_ids.extend(u["id"] for u in resp.data)
+        now = datetime.now(timezone.utc)
+        for user in resp.data:
+            if user.get("broadcast_active", True):
+                all_ids.append(user["id"])
+                continue
+            retry_at = user.get("broadcast_retry_at")
+            if retry_at:
+                try:
+                    retry_dt = datetime.fromisoformat(str(retry_at).replace("Z", "+00:00"))
+                    if retry_dt <= now:
+                        all_ids.append(user["id"])
+                except ValueError:
+                    print(f"⚠️ Broadcast: invalid retry timestamp for user {user.get('id')}: {retry_at}")
         if len(resp.data) < page_size:
             break
         offset += page_size
     return all_ids
+
+
+BROADCAST_RETRY_DAYS = 30
+
+
+def _mark_broadcast_user_active(uid: int) -> None:
+    """Clear a temporary broadcast pause after a successful delivery."""
+    try:
+        supabase.table("users").update({
+            "broadcast_active": True,
+            "broadcast_retry_at": None,
+            "broadcast_last_error": None,
+        }).eq("id", uid).execute()
+    except Exception as exc:
+        print(f"⚠️ Broadcast: could not reactivate {uid}: {exc}")
+
+
+def _defer_broadcast_user(uid: int, exc: Exception) -> None:
+    """Temporarily disable a user after Telegram reports a forbidden destination."""
+    retry_at = datetime.now(timezone.utc) + timedelta(days=BROADCAST_RETRY_DAYS)
+    try:
+        supabase.table("users").update({
+            "broadcast_active": False,
+            "broadcast_retry_at": retry_at.isoformat(),
+            "broadcast_last_error": str(exc)[:1000],
+        }).eq("id", uid).execute()
+    except Exception as update_exc:
+        print(f"⚠️ Broadcast: could not defer {uid}: {update_exc}; original error: {exc}")
 
 def _extract_retry_after_seconds(exc: Exception) -> int | None:
     """Extract Telegram retry-after seconds from a flood-control exception message."""
@@ -5706,6 +5762,7 @@ def _send_broadcast_photo_with_retry(uid: int, caption: str, max_retries: int = 
                 caption=caption,
                 parse_mode="HTML",
             )
+            _mark_broadcast_user_active(uid)
             return True, None
         except telebot.apihelper.ApiTelegramException as exc:
             retry_after = _extract_retry_after_seconds(exc)
@@ -5716,12 +5773,17 @@ def _send_broadcast_photo_with_retry(uid: int, caption: str, max_retries: int = 
 
             error_code = getattr(exc, "error_code", None)
             if error_code in (400, 403):
+                print(f"⚠️ Broadcast: Telegram error for {uid}: {exc!r}")
+                if error_code == 403:
+                    _defer_broadcast_user(uid, exc)
                 return False, f"telegram_{error_code}"
+            print(f"⚠️ Broadcast: Telegram error for {uid}: {exc!r}")
             return False, "telegram_other"
-        except Exception:
+        except Exception as exc:
             if attempt < max_retries:
                 time_module.sleep(1)
                 continue
+            print(f"⚠️ Broadcast: unexpected error for {uid}: {exc!r}")
             return False, "unknown"
 
     return False, "unknown"
