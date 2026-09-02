@@ -3816,16 +3816,44 @@ def _rollover_treasury_accounts(client, admin_id: int | None = None, tz_key: str
 def _cost_rate_for_day(client, day: str) -> float | None:
     res = (
         client.table("cost_rates")
-        .select("rate_date,cost_rate")
+        .select("rate_date,usd_rate,black_rate")
         .lte("rate_date", day)
-        .order("rate_date", desc=True)
-        .limit(1)
+        .order("rate_date")
         .execute()
     )
-    row = (res.data or [None])[0]
-    if not row or row.get("cost_rate") is None:
+    usd_rate = black_rate = None
+    for row in res.data or []:
+        if row.get("usd_rate") is not None:
+            usd_rate = float(row["usd_rate"])
+        if row.get("black_rate") is not None:
+            black_rate = float(row["black_rate"])
+    if usd_rate is None or black_rate in (None, 0):
         return None
-    return float(row.get("cost_rate") or 0)
+    return usd_rate / black_rate
+
+
+def _effective_cost_rate_rows(client, start: str | None = None, end: str | None = None) -> list[dict]:
+    """Return effective USD/black/cost values, carrying each input forward independently."""
+    query = client.table("cost_rates").select("rate_date,usd_rate,black_rate")
+    if end:
+        query = query.lte("rate_date", end)
+    rows = query.order("rate_date").execute().data or []
+    usd_rate = black_rate = None
+    effective = []
+    for row in rows:
+        day = str(row.get("rate_date") or "")[:10]
+        if not day:
+            continue
+        if row.get("usd_rate") is not None:
+            usd_rate = float(row["usd_rate"])
+        if row.get("black_rate") is not None:
+            black_rate = float(row["black_rate"])
+        cost_rate = usd_rate / black_rate if usd_rate is not None and black_rate not in (None, 0) else None
+        if start and day < start:
+            continue
+        effective.append({"rate_date": day, "usd_rate": usd_rate, "black_rate": black_rate, "cost_rate": cost_rate,
+                          "updated_at": row.get("updated_at")})
+    return effective
 
 
 def _dashboard_day_series(start_day: str, end_day: str, max_days: int = 370) -> list[str]:
@@ -3861,20 +3889,22 @@ def _sync_black_rates_into_cost_rates(client, rates: dict[str, float | None]) ->
         return 0
 
     dates = sorted(normalized.keys())
-    existing_usd: dict[str, float | None] = {}
-    for offset in range(0, len(dates), 200):
-        chunk = dates[offset:offset + 200]
-        res = client.table("cost_rates").select("rate_date,usd_rate").in_("rate_date", chunk).execute()
-        for row in res.data or []:
-            day = str(row.get("rate_date") or "")[:10]
-            usd = row.get("usd_rate")
-            existing_usd[day] = float(usd) if usd is not None else None
+    existing_rows = (client.table("cost_rates").select("rate_date,usd_rate")
+                     .lte("rate_date", dates[-1]).order("rate_date").execute().data or [])
+    usd_events: list[tuple[str, float]] = []
+    for row in existing_rows:
+        if row.get("usd_rate") is not None:
+            usd_events.append((str(row.get("rate_date") or "")[:10], float(row["usd_rate"])))
 
     now_iso = datetime.now(timezone.utc).isoformat()
     upserts: list[dict] = []
+    usd_rate = None
+    usd_index = 0
     for day in dates:
+        while usd_index < len(usd_events) and usd_events[usd_index][0] <= day:
+            usd_rate = usd_events[usd_index][1]
+            usd_index += 1
         black_rate = normalized.get(day)
-        usd_rate = existing_usd.get(day)
         cost_rate = (usd_rate / black_rate) if (usd_rate is not None and black_rate not in (None, 0)) else None
         upserts.append({
             "rate_date": day,
@@ -4293,7 +4323,9 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
                 "error": "No \"Ханш\" rows parsed. Check the tab name, that column E "
                          "contains \"Ханш\", and that the date/rate columns (B/I) are correct."}
     if date:
-        return {"configured": True, "rates": {date: rates.get(date)},
+        effective_dates = [day for day in rates if day <= date]
+        effective_date = max(effective_dates) if effective_dates else None
+        return {"configured": True, "rates": {date: rates.get(effective_date) if effective_date else None},
                 "latest": latest_val, "latest_date": latest_date, "count": total,
                 "config": cfg, "persisted_count": persisted_count, "persist_error": persist_error}
     if start or end:
@@ -4312,16 +4344,11 @@ async def list_cost_rates(start: str = None, end: str = None, tz: str = "moscow"
     tz_key = _dashboard_timezone_key(tz)
     start = _dashboard_local_day_from_value(start, tz_key)
     end = _dashboard_local_day_from_value(end, tz_key)
-    query = client.table("cost_rates").select("*")
-    if start:
-        query = query.gte("rate_date", start)
-    if end:
-        query = query.lte("rate_date", end)
     try:
-        res = query.order("rate_date", desc=True).execute()
+        rows = _effective_cost_rate_rows(client, start=start, end=end)
     except Exception as exc:
         raise _dashboard_db_error(exc, "List cost rates")
-    return {"cost_rates": res.data or []}
+    return {"cost_rates": list(reversed(rows))}
 
 
 @app.post("/api/dashboard/cost-rates")
@@ -4332,12 +4359,16 @@ async def upsert_cost_rate(payload: dict, auth=Depends(get_dashboard_auth)):
     if not date_str:
         raise HTTPException(status_code=400, detail="Missing required field: date")
     try:
-        usd_rate = float(payload.get("usd_rate"))
-        black_rate = float(payload.get("black_rate"))
+        effective = _effective_cost_rate_rows(client, end=date_str)[-1:]
+        previous = effective[0] if effective else {}
+        usd_rate = float(payload.get("usd_rate")) if payload.get("usd_rate") not in (None, "") else previous.get("usd_rate")
+        black_rate = float(payload.get("black_rate")) if payload.get("black_rate") not in (None, "") else previous.get("black_rate")
+        usd_rate = float(usd_rate)
+        black_rate = float(black_rate)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="usd_rate and black_rate must be numbers")
-    if black_rate == 0:
-        raise HTTPException(status_code=400, detail="black_rate must not be zero")
+    if usd_rate <= 0 or black_rate <= 0:
+        raise HTTPException(status_code=400, detail="usd_rate and black_rate must be greater than 0")
     cost_rate = usd_rate / black_rate
     row = {
         "rate_date": date_str,
@@ -4371,27 +4402,22 @@ async def upsert_cost_rate_period_usd(payload: dict, auth=Depends(get_dashboard_
 
     days = _dashboard_day_series(start_day, end_day)
     try:
-        existing_rows = (
-            client.table("cost_rates")
-            .select("rate_date,black_rate")
-            .gte("rate_date", start_day)
-            .lte("rate_date", end_day)
-            .execute()
-            .data
-            or []
-        )
+        existing_rows = (client.table("cost_rates").select("rate_date,black_rate")
+                         .lte("rate_date", end_day).order("rate_date").execute().data or [])
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load period cost rates")
 
-    black_by_day = {
-        str(row.get("rate_date") or "")[:10]: (float(row.get("black_rate")) if row.get("black_rate") is not None else None)
-        for row in existing_rows
-    }
+    black_by_day = {}
+    black_rate = None
+    for row in existing_rows:
+        if row.get("black_rate") is not None:
+            black_rate = float(row["black_rate"])
+        black_by_day[str(row.get("rate_date") or "")[:10]] = black_rate
 
     now_iso = datetime.now(timezone.utc).isoformat()
     upserts: list[dict] = []
     for day in days:
-        black_rate = black_by_day.get(day)
+        black_rate = black_by_day.get(day, black_rate)
         cost_rate = (usd_rate / black_rate) if (black_rate not in (None, 0)) else None
         upserts.append({
             "rate_date": day,
@@ -4502,11 +4528,8 @@ async def dashboard_profit_transactions(
             break
         offset += PAGE
 
-    cr_query = client.table("cost_rates").select("rate_date,cost_rate")
-    if end:
-        cr_query = cr_query.lte("rate_date", end[:10])
     try:
-        cr_data = cr_query.order("rate_date").execute().data or []
+        cr_data = _effective_cost_rate_rows(client, end=end[:10] if end else None)
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load cost rates for profit transactions")
 
@@ -4637,16 +4660,11 @@ async def dashboard_profit(start: str = None, end: str = None, tz: str = "moscow
             break
         offset += PAGE
 
-    # Cost rates up to the end of the window, oldest→newest. We forward-fill:
-    # a transaction whose date has no cost rate uses the most recent earlier
-    # rate (carried forward until a newer rate appears). No lower bound, so a
-    # rate set before the window can carry into it.
+    # Cost-rate inputs are carried forward independently: a USD change keeps
+    # the current black rate, and a black-rate change keeps the current USD rate.
     import bisect
-    cr_query = client.table("cost_rates").select("rate_date,cost_rate")
-    if end:
-        cr_query = cr_query.lte("rate_date", end[:10])
     try:
-        cr_data = cr_query.order("rate_date").execute().data or []
+        cr_data = _effective_cost_rate_rows(client, end=end[:10] if end else None)
     except Exception as exc:
         raise _dashboard_db_error(exc, "Load cost rates for profit")
     cr_dates: list[str] = []

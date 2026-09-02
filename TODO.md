@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Carry forward the last effective USD and black rates in cost-rate calculations (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Fix orphaned group dispatch retries and defer forbidden broadcast recipients for 30 days (oyunsbot.py, supabase/migrations/20260826000000_add_broadcast_delivery_state.sql)
 - [x] Add inline pencil editing for manual USD rates in historical black-rate listing (frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Implement dashboard black-rate fetching from Transactions2 rows where E is Ханш (backend/config.py, backend/google_sheets.py, frontend/src/pages/BalanceProfitPage.tsx, .env.example)
@@ -16,6 +17,7 @@
 - [x] Run frontend production build
 
 ## Completed Tasks
+- [x] Carry forward the last effective USD and black rates in cost-rate calculations (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Rank active Russian bank accounts by recent transaction utilization (backend/main.py)
 - [x] Add coverage for Russian bank account utilization ordering (backend/tests/test_admin_bank_accounts.py)
 - [x] Run backend tests and frontend production build

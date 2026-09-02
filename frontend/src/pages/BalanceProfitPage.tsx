@@ -1926,12 +1926,14 @@ function CostRateManager({
     (ratesQ.data || []).forEach((rate) => byDate.set(rate.rate_date, rate));
     historicalBlackRates.forEach(([rateDate, rawBlackRate]) => {
       const existing = byDate.get(rateDate);
+      const usdRate = existing?.usd_rate ?? null;
+      const blackRate = Number(rawBlackRate);
       byDate.set(rateDate, {
         ...existing,
         rate_date: rateDate,
-        usd_rate: existing?.usd_rate ?? null,
-        black_rate: Number(rawBlackRate),
-        cost_rate: existing?.cost_rate ?? null,
+        usd_rate: usdRate,
+        black_rate: blackRate,
+        cost_rate: usdRate != null && blackRate > 0 ? usdRate / blackRate : null,
       });
     });
     return Array.from(byDate.values()).sort((left, right) => right.rate_date.localeCompare(left.rate_date));
@@ -1949,6 +1951,13 @@ function CostRateManager({
       return next;
     });
   }, [ratesQ.data]);
+
+  useEffect(() => {
+    const effectiveRate = (ratesQ.data || [])
+      .filter((rate) => rate.rate_date <= date && rate.usd_rate != null)
+      .sort((left, right) => right.rate_date.localeCompare(left.rate_date))[0];
+    setUsd(effectiveRate?.usd_rate != null ? String(effectiveRate.usd_rate) : "");
+  }, [date, ratesQ.data]);
 
   const costPreview = useMemo(() => {
     const usdRate = Number(usd);
