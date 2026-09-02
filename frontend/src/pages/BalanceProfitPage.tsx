@@ -1906,6 +1906,7 @@ function CostRateManager({
     queryFn: () => fetchCostRates({ ...listRange, tz: dashboardTimeZone }),
     staleTime: 30_000,
   });
+  const refetchRates = ratesQ.refetch;
 
   const historicalBlackRatesQ = useQuery({
     queryKey: ["dashboard-historical-black-rates", listRange.start, listRange.end],
@@ -2003,6 +2004,24 @@ function CostRateManager({
   useEffect(() => {
     if (date) void fetchBlack();
   }, [date, fetchBlack]);
+
+  useEffect(() => {
+    const usdRate = Number(usd);
+    const blackRate = Number(black);
+    if (!date || !(usdRate > 0) || !(blackRate > 0)) return undefined;
+
+    const timer = window.setTimeout(() => {
+      void saveCostRate({ date, usd_rate: usdRate, black_rate: blackRate })
+        .then(() => {
+          void refetchRates();
+          onSaved();
+        })
+        .catch(() => {
+          // The manual save action remains available if an automatic save fails.
+        });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [black, date, onSaved, refetchRates, usd]);
 
   const save = async () => {
     const usdRate = Number(usd);

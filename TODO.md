@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Automatically persist cost rates and refresh same-day black-rate changes (frontend/src/pages/BalanceProfitPage.tsx, backend/main.py)
 - [x] Carry forward the last effective USD and black rates in cost-rate calculations (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Fix orphaned group dispatch retries and defer forbidden broadcast recipients for 30 days (oyunsbot.py, supabase/migrations/20260826000000_add_broadcast_delivery_state.sql)
 - [x] Add inline pencil editing for manual USD rates in historical black-rate listing (frontend/src/pages/BalanceProfitPage.tsx)
@@ -17,6 +18,8 @@
 - [x] Run frontend production build
 
 ## Completed Tasks
+- [x] Limit black-rate refresh to dashboard open/date selection instead of periodic polling (frontend/src/pages/BalanceProfitPage.tsx)
+- [x] Automatically persist cost rates and refresh same-day black-rate changes (frontend/src/pages/BalanceProfitPage.tsx, backend/main.py)
 - [x] Carry forward the last effective USD and black rates in cost-rate calculations (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Rank active Russian bank accounts by recent transaction utilization (backend/main.py)
 - [x] Add coverage for Russian bank account utilization ordering (backend/tests/test_admin_bank_accounts.py)
