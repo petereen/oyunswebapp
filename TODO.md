@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Fix legacy Telegram transaction approval status transition (oyunsbot.py)
+- [x] Show the approved state in the legacy Telegram status command (oyunsbot.py, bot_translations.py)
 - [x] Automatically persist cost rates and refresh same-day black-rate changes (frontend/src/pages/BalanceProfitPage.tsx, backend/main.py)
 - [x] Carry forward the last effective USD and black rates in cost-rate calculations (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Fix orphaned group dispatch retries and defer forbidden broadcast recipients for 30 days (oyunsbot.py, supabase/migrations/20260826000000_add_broadcast_delivery_state.sql)
@@ -18,6 +20,8 @@
 - [x] Run frontend production build
 
 ## Completed Tasks
+- [x] Display approved transaction status in the legacy Telegram status command (oyunsbot.py, bot_translations.py)
+- [x] Make legacy Telegram Confirm approve transactions and require approved status before proof-photo completion (oyunsbot.py)
 - [x] Limit black-rate refresh to dashboard open/date selection instead of periodic polling (frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Automatically persist cost rates and refresh same-day black-rate changes (frontend/src/pages/BalanceProfitPage.tsx, backend/main.py)
 - [x] Carry forward the last effective USD and black rates in cost-rate calculations (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)

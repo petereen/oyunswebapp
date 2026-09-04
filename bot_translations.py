@@ -1144,6 +1144,10 @@ _translations = {
         "mn": "Хүлээгдэж буй",
         "ru": "Ожидание",
     },
+    "admin_status_approved": {
+        "mn": "Баталгаажсан",
+        "ru": "Подтверждено",
+    },
     "admin_status_successful": {
         "mn": "Амжилттай",
         "ru": "Успешно",

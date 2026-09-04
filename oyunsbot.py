@@ -3483,9 +3483,11 @@ def handle_transaction_action(call):
     now_moscow = datetime.now(MOSCOW_TZ).isoformat()
     if is_confirmed:
         updates = {
-            "status":       "successful",
-            "completed_at": now_moscow,
-            "completed_by_admin": call.from_user.id,
+            # Confirming the request approves it. Completion happens only
+            # after the admin sends the payout proof photo below.
+            "status": "approved",
+            "completed_at": None,
+            "completed_by_admin": None,
         }
     elif is_waiting_edit:
         updates = {
@@ -3514,10 +3516,6 @@ def handle_transaction_action(call):
             .update(updates) \
             .eq("invoice", invoice) \
             .execute()
-
-    # 🎁 Award gift for transactions >= 10,000 RUB
-    if is_confirmed:
-        award_gift_for_transaction(user_id, amount, currency_from, currency_to, rate)
 
     # 4️⃣ Notify user
     lang_admin = get_user_lang(call.from_user.id)
@@ -4689,6 +4687,7 @@ def cmd_status(message):
     # Build status message
     status_emoji = {
         "pending": "⏳",
+        "approved": "👍",
         "successful": "✅", 
         "rejected": "❌"
     }
@@ -4696,6 +4695,7 @@ def cmd_status(message):
     lang_admin = get_user_lang(message.from_user.id)
     status_text = {
         "pending": t(lang_admin, "admin_status_pending"),
+        "approved": t(lang_admin, "admin_status_approved"),
         "successful": t(lang_admin, "admin_status_successful"),
         "rejected": t(lang_admin, "admin_status_rejected"),
     }
@@ -5026,7 +5026,7 @@ def handle_passport_or_receipt(message):
 
             # 3) Lookup transaction data including user_id, amount, currency, and receipt_submitted_at
             resp = supabase.table("transactions") \
-                          .select("user_id, amount, currency_from, currency_to, rate, receipt_submitted_at") \
+                          .select("user_id, amount, currency_from, currency_to, rate, status, receipt_submitted_at") \
                           .eq("invoice", invoice) \
                           .limit(1) \
                           .execute()
@@ -5034,6 +5034,13 @@ def handle_passport_or_receipt(message):
                 bot.send_message(message.chat.id, f"❌ `{invoice}` гүйлгээ олдсонгүй. Invoice ID-г шалгана уу.", parse_mode="Markdown")
                 return
             txn_data = resp.data[0]
+            if txn_data.get("status") != "approved":
+                bot.send_message(
+                    message.chat.id,
+                    f"⚠️ `{invoice}` гүйлгээг эхлээд батална уу. Одоогийн төлөв: `{txn_data.get('status')}`",
+                    parse_mode="Markdown",
+                )
+                return
             target_user = txn_data["user_id"]
             amount = float(txn_data["amount"])
             currency_from = txn_data["currency_from"]
@@ -5056,7 +5063,23 @@ def handle_passport_or_receipt(message):
             }
             if comment:
                 updates["admin_comment"] = comment
-            supabase.table("transactions").update(updates).eq("invoice", invoice).execute()
+            completion_result = (
+                supabase.table("transactions")
+                .update(updates)
+                .eq("invoice", invoice)
+                .eq("status", "approved")
+                .execute()
+            )
+            if not completion_result.data:
+                bot.send_message(
+                    message.chat.id,
+                    f"⚠️ `{invoice}` гүйлгээний төлөв өөрчлөгдсөн тул баримтыг хадгалсангүй.",
+                    parse_mode="Markdown",
+                )
+                return
+
+            # 🎁 Award gift for transactions >= 10,000 RUB after completion.
+            award_gift_for_transaction(target_user, amount, currency_from, currency_to, rate)
 
             # 5) Calculate transaction completion duration and generate promo code if needed
             promo_code_generated = None
