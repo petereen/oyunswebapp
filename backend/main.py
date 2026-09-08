@@ -2280,6 +2280,20 @@ def _is_successful_status(status: str) -> bool:
     return (status or "").lower() in ("completed", "successful")
 
 
+def _manual_group_confirmation_error(
+    transaction_status: str,
+    dispatch_exists: bool,
+    dispatch_status: str | None,
+) -> str | None:
+    if not dispatch_exists:
+        return "Transaction is not managed by a Telegram group dispatch"
+    if (transaction_status or "").lower() not in ("approved", "successful"):
+        return "Transaction is no longer actionable"
+    if (dispatch_status or "").lower() == "completed":
+        return "Group transaction is already completed"
+    return None
+
+
 def _rank_rub_bank_accounts_by_usage(
     accounts: list[AdminBankAccount],
     usage_rows: list[dict] | None,
@@ -6253,11 +6267,29 @@ async def admin_action(
             dispatch_exists = False
             dispatch_status = None
     group_dispatch_requested = payload.processing_mode == "group"
+    manual_group_confirmation_requested = payload.processing_mode == "group_manual"
     group_approval_performed = False
+
+    if manual_group_confirmation_requested:
+        if payload.status not in ["completed", "successful"]:
+            raise HTTPException(status_code=400, detail="Manual group confirmation must complete the transaction")
+        if not is_mnt_rub_exchange:
+            raise HTTPException(status_code=400, detail="Manual group confirmation is only supported for MNT to RUB exchanges")
+        manual_error = _manual_group_confirmation_error(
+            transaction_status=trx.get("status"),
+            dispatch_exists=dispatch_exists,
+            dispatch_status=dispatch_status,
+        )
+        if manual_error:
+            raise HTTPException(status_code=400, detail=manual_error)
+    manual_group_transaction_already_successful = (
+        manual_group_confirmation_requested
+        and (trx.get("status") or "").lower() == "successful"
+    )
 
     # Dispatch records remain group-managed even after automatic routing is
     # retired. They cannot be completed through the traditional admin flow.
-    if dispatch_exists:
+    if dispatch_exists and not manual_group_confirmation_requested:
         current_status = (trx.get("status") or "").lower()
         if current_status == "approved":
             if payload.status == "approved" and group_dispatch_requested:
@@ -6436,9 +6468,12 @@ async def admin_action(
     logger.info(f"Update payload: {update_payload}")
     
     # Execute the update. Group approval was already applied atomically by RPC.
-    if not group_approval_performed:
+    if not group_approval_performed and not manual_group_transaction_already_successful:
         try:
-            update_result = client.table("transactions").update(update_payload).eq("invoice", payload.invoice).execute()
+            transaction_update = client.table("transactions").update(update_payload).eq("invoice", payload.invoice)
+            if manual_group_confirmation_requested:
+                transaction_update = transaction_update.eq("status", "approved").select("invoice,status")
+            update_result = transaction_update.execute()
             logger.info(f"Update result data: {update_result.data}")
 
             # Verify the update worked
@@ -6447,9 +6482,36 @@ async def admin_action(
                 # Try to fetch again to see current state
                 verify = client.table("transactions").select("status").eq("invoice", payload.invoice).execute()
                 logger.info(f"Verify after update: {verify.data}")
+            if manual_group_confirmation_requested and not update_result.data:
+                raise HTTPException(status_code=409, detail="Transaction was already completed or changed by another admin")
         except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
             logger.error(f"Update error: {e}")
             raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+
+    if manual_group_confirmation_requested:
+        proof_urls = []
+        if payload.admin_bill_url:
+            try:
+                parsed_bill_urls = json.loads(payload.admin_bill_url)
+                proof_urls = parsed_bill_urls if isinstance(parsed_bill_urls, list) else [payload.admin_bill_url]
+            except (json.JSONDecodeError, TypeError):
+                proof_urls = [payload.admin_bill_url]
+        try:
+            dispatch_update = client.table("exchange_group_dispatches").update({
+                "status": "completed",
+                "proof_urls": proof_urls,
+                "completed_at": now.isoformat(),
+                "lease_expires_at": None,
+                "last_error": None,
+                "updated_at": now.isoformat(),
+            }).eq("invoice", payload.invoice).select("id").execute()
+            if not dispatch_update.data:
+                raise RuntimeError("Group dispatch was not found while completing the transaction")
+        except Exception as exc:
+            logger.error("Could not close manually completed group dispatch %s: %s", payload.invoice, exc)
+            raise HTTPException(status_code=500, detail="Transaction completed but group dispatch could not be closed") from exc
 
     # notify user based on status
     user_id = trx.get("user_id")

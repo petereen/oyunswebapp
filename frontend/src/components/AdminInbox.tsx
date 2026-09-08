@@ -582,16 +582,22 @@ export function AdminInbox() {
       alert("Гүйлгээг дуусгасан админыг сонгоно уу");
       return;
     }
-    await adminAction({
-      invoice: confirmModal.invoice,
-      status: "successful",
-      admin_bill_url: adminBillUrls.length > 0 ? JSON.stringify(adminBillUrls) : undefined,
-      completed_by_admin: completingAdminId,
-    });
-    setConfirmModal(null);
-    setAdminBillUrls([]);
-    setConfirmCompletedByAdminId(null);
-    await load();
+    try {
+      await adminAction({
+        invoice: confirmModal.invoice,
+        status: "successful",
+        processing_mode: confirmModal.automation_managed ? "group_manual" : "traditional",
+        admin_bill_url: adminBillUrls.length > 0 ? JSON.stringify(adminBillUrls) : undefined,
+        completed_by_admin: completingAdminId,
+      });
+      setConfirmModal(null);
+      setAdminBillUrls([]);
+      setConfirmCompletedByAdminId(null);
+      await load();
+    } catch (err) {
+      console.error("Confirmation error:", err);
+      setError(getAdminActionError(err, "Гүйлгээг дуусгахад алдаа гарлаа"));
+    }
   };
 
   const getDirectionLabel = (item: InboxItem) => {
@@ -1384,6 +1390,12 @@ export function AdminInbox() {
                           {item.group_dispatch_error}
                         </div>
                       )}
+                      <button
+                        onClick={() => openConfirmModal(item)}
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"
+                      >
+                        <Upload className="w-5 h-5" /> Группийн гүйлгээг гараар дуусгах
+                      </button>
                     </div>
                   ) : (
                     <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2`}>
@@ -1620,7 +1632,9 @@ export function AdminInbox() {
         return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-5 max-w-md w-full max-h-[90vh] overflow-auto">
-            <div className="font-semibold text-maroon-700 mb-3">Гүйлгээг дуусгах</div>
+            <div className="font-semibold text-maroon-700 mb-3">
+              {confirmModal.automation_managed ? "Группийн гүйлгээг гараар дуусгах" : "Гүйлгээг дуусгах"}
+            </div>
 
             {/* Invoice ID - Copyable */}
             <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -1834,7 +1848,7 @@ export function AdminInbox() {
 
             {/* Upload Admin's Bills - Multiple photos support */}
             <div className="mb-4">
-              <div className="text-sm text-slate-600 mb-2">Админы гүйлгээний баримтыг оруулна уу (заавал биш, олон зураг):</div>
+              <div className="text-sm text-slate-600 mb-2">Дуусгасан баримтын зургийг оруулна уу (заавал биш, олон зураг):</div>
               
               {/* Show uploaded photos */}
               {adminBillUrls.length > 0 && (
@@ -1914,7 +1928,7 @@ export function AdminInbox() {
                 disabled={uploading || !(confirmCompletedByAdminId ?? currentShift?.current_admin_id)}
                 className="flex-1 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
               >
-                Дуусгах
+                {confirmModal.automation_managed ? "Гараар дуусгах" : "Дуусгах"}
               </button>
             </div>
           </div>
