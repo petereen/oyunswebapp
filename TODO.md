@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Make admin transaction request details vertically usable with a bounded, independently scrollable dialog (frontend/src/components/AdminInbox.tsx)
 - [x] Redesign exchange-flow promo code control as a compact blue dropdown with manual entry (frontend/src/components/ExchangeFlow.tsx)
 - [x] Clear stale promo discount state when a code is edited or changed (frontend/src/components/ExchangeFlow.tsx)
 - [x] Remove light-mode navbar black distortion artifacts while preserving a translucent white surface (frontend/src/index.css)

@@ -751,10 +751,15 @@ export function AdminInbox() {
         const dirInfo = getDirectionLabel(item);
         
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-auto">
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:items-center sm:p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Гүйлгээний дэлгэрэнгүй"
+              className="flex max-h-[calc(100dvh-1rem)] w-full max-w-lg min-h-0 flex-col overflow-hidden rounded-xl bg-white sm:max-h-[calc(100dvh-2rem)]"
+            >
               {/* Header */}
-              <div className="sticky top-0 bg-white border-b border-maroon-100 p-4 flex items-center justify-between">
+              <div className="flex shrink-0 items-center justify-between border-b border-maroon-100 bg-white p-4">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
                     {dirInfo.label}
@@ -771,7 +776,7 @@ export function AdminInbox() {
                 </button>
               </div>
               
-              <div className="p-4 space-y-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">
                 {/* Invoice & User Info */}
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Гүйлгээний дугаар: <span className="font-mono">{item.invoice}</span></span>
