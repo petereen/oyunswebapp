@@ -12,6 +12,7 @@ from exchange_group import (
     rounded_rub_payout,
     rub_payout,
 )
+from main import _manual_group_confirmation_error
 
 
 class ExchangeGroupFormattingTests(unittest.TestCase):
@@ -55,6 +56,46 @@ class ExchangeGroupFormattingTests(unittest.TestCase):
         self.assertIsNone(parse_completion_caption("100.646"))
         self.assertFalse(completion_caption_matches("100.635✅", "37238709.2", "370"))
         self.assertTrue(completion_caption_matches("100.646✅", "37238709.2", "370"))
+
+
+class ManualGroupConfirmationTests(unittest.TestCase):
+    def test_allows_approved_group_dispatch_that_is_not_completed(self):
+        self.assertIsNone(
+            _manual_group_confirmation_error(
+                transaction_status="approved",
+                dispatch_exists=True,
+                dispatch_status="awaiting_proof",
+            )
+        )
+
+    def test_rejects_missing_group_dispatch(self):
+        self.assertEqual(
+            _manual_group_confirmation_error(
+                transaction_status="approved",
+                dispatch_exists=False,
+                dispatch_status=None,
+            ),
+            "Transaction is not managed by a Telegram group dispatch",
+        )
+
+    def test_rejects_already_completed_group_dispatch(self):
+        self.assertEqual(
+            _manual_group_confirmation_error(
+                transaction_status="approved",
+                dispatch_exists=True,
+                dispatch_status="completed",
+            ),
+            "Group transaction is already completed",
+        )
+
+    def test_allows_retry_after_transaction_update_succeeded(self):
+        self.assertIsNone(
+            _manual_group_confirmation_error(
+                transaction_status="successful",
+                dispatch_exists=True,
+                dispatch_status="processing",
+            )
+        )
 
 
 if __name__ == "__main__":

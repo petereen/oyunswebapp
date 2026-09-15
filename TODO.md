@@ -32,6 +32,11 @@
 - [x] Add manual transaction visibility to admin inbox/history
 - [x] Add backend coverage for authorization, validation, audit, and notifications
 - [x] Run frontend production build
+- [x] Diagnose transaction-to-group proof recovery message and trigger (oyunsbot.py)
+- [x] Add authorized manual confirmation API for group-managed transactions with proof URLs
+- [x] Add admin-panel manual confirm button and proof image attachment flow
+- [x] Add regression coverage for manual group confirmation
+- [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
 - [x] Preserve side-effectful calls and fallible input/date/configuration evaluation while removing unused bindings; retain public exports and operational scripts

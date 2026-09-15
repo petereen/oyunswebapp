@@ -180,7 +180,7 @@ class AdminActionRequest(BaseModel):
     admin_bill_url: Optional[str] = None  # Admin's transaction proof
     completed_by_admin: Optional[int] = None
     # Omitted means the existing admin-managed completion flow.
-    processing_mode: Literal["traditional", "group"] = "traditional"
+    processing_mode: Literal["traditional", "group", "group_manual"] = "traditional"
 
 
 class PresignRequest(BaseModel):
