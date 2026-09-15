@@ -1,6 +1,9 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Reorganize admin navigation into nested transaction actions and collapsible settings (frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx)
+- [x] Move shift, working-hours, and bank account controls into the collapsible settings area (frontend/src/components/admin/AdminShiftBar.tsx)
+- [x] Update admin navigation regression coverage for the new hierarchy (frontend/src/pages/AdminPanel.test.tsx)
 - [x] Refactor main admin navigation with persistent tabs and settings/users sections (frontend/src/pages/AdminPanel.tsx)
 - [x] Extract shared shift and working-hours controls into persistent admin bar (frontend/src/components/admin/AdminShiftBar.tsx)
 - [x] Split bank account CRUD from system settings (frontend/src/components/AdminBankAccounts.tsx, frontend/src/components/admin/AdminSettings.tsx)
@@ -39,6 +42,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Polish nested admin controls with focus-visible states and native collapsible system settings (frontend/src/components/admin/AdminSettings.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/pages/AdminPanel.tsx)
 - [x] Preserve side-effectful calls and fallible input/date/configuration evaluation while removing unused bindings; retain public exports and operational scripts
 - [x] Remove unused @headlessui/react and classnames dependencies and synchronize the lockfile (frontend/package.json, frontend/package-lock.json)
 - [x] Prune verified unused implementation (oyunsbot.py)

@@ -23,7 +23,11 @@ import { useAdminShiftContext } from "../../hooks/useAdminShift";
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
-export function AdminShiftBar() {
+interface Props {
+  mode?: "all" | "shift" | "working-hours";
+}
+
+export function AdminShiftBar({ mode = "all" }: Props) {
   const queryClient = useQueryClient();
   const { data: shiftContext, isLoading: shiftLoading } = useAdminShiftContext();
   const { data: workingHours, isLoading: workingHoursLoading } = useQuery<WorkingHoursConfig>({
@@ -97,6 +101,8 @@ export function AdminShiftBar() {
   const admins = shiftContext?.admins || [];
   const selectedAdmin = admins.find((admin) => admin.id === selectedAdminId);
   const mutationLoading = shiftMutation.isPending;
+  const showShift = mode === "all" || mode === "shift";
+  const showWorkingHours = mode === "all" || mode === "working-hours";
 
   const handleCloseShift = () => {
     if (!shift?.current_admin_id || !confirm("Ээлж хаахдаа итгэлтэй байна уу?")) return;
@@ -114,7 +120,7 @@ export function AdminShiftBar() {
 
   return (
     <div className="space-y-2" aria-label="Ээлж ба ажлын цаг">
-      <div className={`p-3 rounded-xl border ${shift?.is_shift_active ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800" : "bg-slate-50 border-slate-200 dark:bg-dark-800 dark:border-dark-600"}`}>
+      {showShift && <div className={`p-3 rounded-xl border ${shift?.is_shift_active ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800" : "bg-slate-50 border-slate-200 dark:bg-dark-800 dark:border-dark-600"}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${shift?.is_shift_active ? "bg-green-500 animate-pulse" : "bg-slate-400"}`} />
@@ -140,9 +146,9 @@ export function AdminShiftBar() {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
-      <div className={`p-3 rounded-xl border ${workingHours?.is_enabled ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800" : "bg-slate-50 border-slate-200 dark:bg-dark-800 dark:border-dark-600"}`}>
+      {showWorkingHours && <div className={`p-3 rounded-xl border ${workingHours?.is_enabled ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800" : "bg-slate-50 border-slate-200 dark:bg-dark-800 dark:border-dark-600"}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-600 dark:text-blue-300" />
@@ -156,9 +162,9 @@ export function AdminShiftBar() {
             <Settings className="w-3 h-3" /> Тохируулах
           </button>
         </div>
-      </div>
+      </div>}
 
-      {showShiftModal && (
+      {showShift && showShiftModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label={shift?.is_shift_active ? "Ээлж шилжүүлэх" : "Ээлж эхлүүлэх"}>
           <div className="bg-white dark:bg-dark-800 rounded-xl p-5 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
@@ -179,7 +185,7 @@ export function AdminShiftBar() {
         </div>
       )}
 
-      {showWorkingHoursModal && (
+      {showWorkingHours && showWorkingHoursModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Ажлын цаг тохируулах">
           <div className="bg-white dark:bg-dark-800 rounded-xl p-5 max-w-md w-full">
             <div className="flex items-center justify-between mb-4"><div className="font-semibold text-maroon-700 dark:text-gold-400 flex items-center gap-2"><Clock className="w-5 h-5" />Ажлын цаг тохируулах</div><button onClick={() => setShowWorkingHoursModal(false)} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-dark-700"><X className="w-5 h-5 text-slate-500" /></button></div>

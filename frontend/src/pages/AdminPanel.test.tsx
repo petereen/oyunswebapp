@@ -13,18 +13,21 @@ vi.mock("../components/admin/AdminSettings", () => ({ AdminSettings: () => <div>
 vi.mock("../components/AdminManualTransaction", () => ({ AdminManualTransaction: ({ onOpenInbox }: { onOpenInbox: () => void }) => <div><span>manual-panel</span><button onClick={onOpenInbox}>manual back to inbox</button></div> }));
 
 describe("AdminPanel", () => {
-  it("exposes the new seven-tab hierarchy and keeps visited panels mounted", () => {
+  it("exposes the nested transaction hierarchy and keeps visited panels mounted", () => {
     const { container } = render(<AdminPanel />);
-    expect(screen.getByTestId("admin-shift-bar")).toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(7);
+    expect(screen.getByRole("tab", { name: "Гүйлгээ" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Хайлт" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Данс" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Түүх" }));
+    expect(screen.getByText("history-panel")).toBeVisible();
+    fireEvent.click(screen.getByRole("tab", { name: "Тохиргоо" }));
+    expect(screen.getAllByTestId("admin-shift-bar")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /Данс/ }));
     expect(screen.getByText("accounts-panel")).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "Гүйлгээ" }));
     expect(screen.getByText("inbox-panel")).toBeVisible();
-    expect(container.querySelector("#admin-panel-accounts")).toHaveAttribute("hidden");
-    expect(screen.getByTestId("admin-shift-bar")).toBeInTheDocument();
+    expect(container.querySelector("#admin-panel-settings")).toHaveAttribute("hidden");
   });
 
   it("returns from manual creation to the inbox without losing the inbox panel", () => {
