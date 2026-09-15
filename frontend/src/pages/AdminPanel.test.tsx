@@ -18,6 +18,7 @@ describe("AdminPanel", () => {
     expect(screen.getAllByRole("tab")).toHaveLength(7);
     expect(screen.getByRole("tab", { name: "Гүйлгээ" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Хайлт" })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-slot="transaction-tabs"]')).toHaveClass("grid-cols-4");
 
     fireEvent.click(screen.getByRole("tab", { name: "Түүх" }));
     expect(screen.getByText("history-panel")).toBeVisible();

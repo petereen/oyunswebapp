@@ -83,7 +83,7 @@ export function AdminPanel({ onExit }: Props) {
       case "inbox":
         return (
           <div className="space-y-4">
-            <div data-slot="transaction-tabs" className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="Гүйлгээний хэсгүүд">
+            <div data-slot="transaction-tabs" className="grid grid-cols-4 gap-2" role="tablist" aria-label="Гүйлгээний хэсгүүд">
               {ADMIN_TRANSACTION_TABS.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
@@ -94,7 +94,7 @@ export function AdminPanel({ onExit }: Props) {
                   aria-controls={`admin-transaction-panel-${key}`}
                   onClick={() => selectTransactionTab(key)}
                   data-slot="transaction-tab"
-                  className={`flex min-h-[4.25rem] flex-col items-center justify-center gap-1 rounded-[1.35rem] px-2 py-3 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400 sm:text-sm ${activeTransactionTab === key ? "bg-maroon-600 text-white shadow-btn" : "bg-white/70 text-maroon-700 hover:bg-maroon-100 dark:bg-dark-800 dark:text-gold-400 dark:hover:bg-dark-700"}`}
+                  className={`flex min-h-[4.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-[1.35rem] px-1 py-3 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400 sm:px-2 sm:text-sm ${activeTransactionTab === key ? "bg-maroon-600 text-white shadow-btn" : "bg-white/70 text-maroon-700 hover:bg-maroon-100 dark:bg-dark-800 dark:text-gold-400 dark:hover:bg-dark-700"}`}
                 >
                   <Icon className="h-4 w-4" />
                   {label}

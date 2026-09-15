@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus,
   Edit2,
@@ -38,6 +38,38 @@ export function AdminBankAccounts() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingAccount, setEditingAccount] = useState<EditingAccount | null>(null);
   const [error, setError] = useState("");
+
+  const adminNames = useMemo(
+    () => new Map(admins.map((admin) => [admin.id, admin.name])),
+    [admins],
+  );
+
+  const groupedAccounts = useMemo(() => {
+    const groups = new Map<string, { adminId?: number; adminName: string; accounts: AdminBankAccountFull[] }>();
+
+    accounts.forEach((account) => {
+      const key = account.admin_id == null ? "unassigned" : String(account.admin_id);
+      const group = groups.get(key);
+      if (group) {
+        group.accounts.push(account);
+        return;
+      }
+
+      groups.set(key, {
+        adminId: account.admin_id,
+        adminName: account.admin_id == null
+          ? "Админ оноогоогүй"
+          : adminNames.get(account.admin_id) || `ID: ${account.admin_id}`,
+        accounts: [account],
+      });
+    });
+
+    return Array.from(groups.values()).sort((left, right) => {
+      if (left.adminId == null) return 1;
+      if (right.adminId == null) return -1;
+      return left.adminName.localeCompare(right.adminName, "mn");
+    });
+  }, [accounts, adminNames]);
 
   const loadData = async () => {
     setLoading(true);
@@ -121,12 +153,6 @@ export function AdminBankAccounts() {
     }
   };
 
-  const getAdminName = (adminId?: number) => {
-    if (!adminId) return "Тодорхойгүй";
-    const admin = admins.find((a) => a.id === adminId);
-    return admin?.name || `ID: ${adminId}`;
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -136,7 +162,7 @@ export function AdminBankAccounts() {
   }
 
   return (
-    <div className="space-y-4">
+    <div data-slot="admin-bank-accounts" className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
@@ -145,14 +171,17 @@ export function AdminBankAccounts() {
         </h3>
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={loadData}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
+            aria-label="Данс шинэчлэх"
+            className="flex size-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="size-5" />
           </button>
           <button
+            type="button"
             onClick={handleAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-maroon-600 text-white rounded-lg hover:bg-maroon-700 transition"
+            className="flex min-h-10 items-center gap-2 rounded-lg bg-maroon-600 px-4 py-2 text-white transition hover:bg-maroon-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
           >
             <Plus className="w-4 h-4" />
             Данс нэмэх
@@ -180,7 +209,7 @@ export function AdminBankAccounts() {
       )}
 
       {/* Accounts List */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-4">
         {accounts.length === 0 && !editingId && (
           <div className="text-center py-12 bg-white/50 rounded-xl border border-maroon-100">
             <CreditCard className="w-12 h-12 mx-auto text-slate-300 mb-2" />
@@ -188,103 +217,130 @@ export function AdminBankAccounts() {
           </div>
         )}
 
-        {accounts.map((account) => (
-          <div
-            key={account.id}
-            className={`p-4 rounded-xl border ${
-              account.is_active
-                ? "bg-white border-maroon-100"
-                : "bg-slate-50 border-slate-200 opacity-75"
-            }`}
-          >
-            {editingId === account.id && editingAccount ? (
-              <AccountForm
-                account={editingAccount}
-                admins={admins}
-                onChange={setEditingAccount}
-                onSave={handleSave}
-                onCancel={handleCancel}
-                saving={saving}
-              />
-            ) : (
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    {account.logo_url && (
-                      <img src={account.logo_url} alt="" className="w-6 h-6 rounded object-contain" />
-                    )}
-                    <span
-                      className={`px-2 py-0.5 text-xs font-semibold rounded ${
-                        account.currency === "RUB"
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-green-100 text-green-700"
-                      }`}
-                    >
-                      {account.currency}
-                    </span>
-                    <span className="font-semibold text-slate-800">
-                      {account.bank_name}
-                    </span>
-                    {account.is_priority && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-700">
-                        ⭐ PRIORITY
-                      </span>
-                    )}
-                    {account.is_active ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
+        {groupedAccounts.map((group) => {
+          const activeCount = group.accounts.filter((account) => account.is_active).length;
 
-                  <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                    <div className="flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      {account.owner_name}
-                    </div>
-                    {account.account_number && (
-                      <div className="flex items-center gap-1">
-                        <Building className="w-3 h-3" />
-                        {account.account_number}
-                      </div>
-                    )}
-                    {account.card_number && (
-                      <div className="flex items-center gap-1">
-                        <CreditCard className="w-3 h-3" />
-                        {account.card_number}
-                      </div>
-                    )}
-                    {account.phone && (
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        {account.phone}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-slate-500">
-                    Админ: {getAdminName(account.admin_id)}
-                  </div>
+          return (
+            <section key={group.adminId ?? "unassigned"} data-slot="admin-bank-account-group" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 px-1 pb-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-maroon-50 text-maroon-700">
+                    <User className="size-4" />
+                  </span>
+                  <h4 className="truncate font-semibold text-slate-800">{group.adminName}</h4>
                 </div>
-
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handleEdit(account)}
-                    className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(account.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+                <span className="shrink-0 text-xs font-medium text-slate-500">
+                  {activeCount}/{group.accounts.length} идэвхтэй
+                </span>
               </div>
-            )}
-          </div>
-        ))}
+
+              <div className="flex flex-col gap-3">
+                {group.accounts.map((account) => (
+                  <div
+                    key={account.id}
+                    data-slot="admin-bank-account-card"
+                    className={`rounded-xl border p-4 transition-colors ${
+                      account.is_active
+                        ? "border-maroon-200 bg-white shadow-card-xs ring-1 ring-maroon-100"
+                        : "border-slate-200 bg-slate-50/70 text-slate-500 opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    {editingId === account.id && editingAccount ? (
+                      <AccountForm
+                        account={editingAccount}
+                        admins={admins}
+                        onChange={setEditingAccount}
+                        onSave={handleSave}
+                        onCancel={handleCancel}
+                        saving={saving}
+                      />
+                    ) : (
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {account.logo_url && (
+                              <img src={account.logo_url} alt="" className="size-6 rounded object-contain" />
+                            )}
+                            <span
+                              className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                                account.currency === "RUB"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-green-100 text-green-700"
+                              }`}
+                            >
+                              {account.currency}
+                            </span>
+                            <span className="font-semibold text-slate-800">
+                              {account.bank_name}
+                            </span>
+                            {account.is_priority && (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                ⭐ PRIORITY
+                              </span>
+                            )}
+                            {account.is_active ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+                                <CheckCircle2 className="size-4" /> Идэвхтэй
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                                <XCircle className="size-4" /> Идэвхгүй
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                            <div className="flex min-w-0 items-center gap-1">
+                              <User className="size-3 shrink-0" />
+                              <span className="truncate">{account.owner_name}</span>
+                            </div>
+                            {account.account_number && (
+                              <div className="flex min-w-0 items-center gap-1">
+                                <Building className="size-3 shrink-0" />
+                                <span className="truncate">{account.account_number}</span>
+                              </div>
+                            )}
+                            {account.card_number && (
+                              <div className="flex min-w-0 items-center gap-1">
+                                <CreditCard className="size-3 shrink-0" />
+                                <span className="truncate">{account.card_number}</span>
+                              </div>
+                            )}
+                            {account.phone && (
+                              <div className="flex min-w-0 items-center gap-1">
+                                <Phone className="size-3 shrink-0" />
+                                <span className="truncate">{account.phone}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(account)}
+                            aria-label={`${account.bank_name} данс засах`}
+                            className="flex size-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
+                          >
+                            <Edit2 className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(account.id)}
+                            aria-label={`${account.bank_name} данс устгах`}
+                            className="flex size-10 items-center justify-center rounded-lg text-red-600 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </div>
   );

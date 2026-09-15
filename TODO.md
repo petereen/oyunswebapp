@@ -42,6 +42,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Group admin bank accounts by admin, clarify active/inactive states, and keep transaction actions in a single four-button row (frontend/src/components/AdminBankAccounts.tsx, frontend/src/pages/AdminPanel.tsx)
 - [x] Polish nested admin controls with focus-visible states and native collapsible system settings (frontend/src/components/admin/AdminSettings.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/pages/AdminPanel.tsx)
 - [x] Preserve side-effectful calls and fallible input/date/configuration evaluation while removing unused bindings; retain public exports and operational scripts
 - [x] Remove unused @headlessui/react and classnames dependencies and synchronize the lockfile (frontend/package.json, frontend/package-lock.json)
