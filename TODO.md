@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Apply the compact blue promo dropdown to the active TransactionTab exchange flow (frontend/src/pages/TransactionTab.tsx)
 - [x] Make admin transaction request details vertically usable with a bounded, independently scrollable dialog (frontend/src/components/AdminInbox.tsx)
 - [x] Redesign exchange-flow promo code control as a compact blue dropdown with manual entry (frontend/src/components/ExchangeFlow.tsx)
 - [x] Clear stale promo discount state when a code is edited or changed (frontend/src/components/ExchangeFlow.tsx)

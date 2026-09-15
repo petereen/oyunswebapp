@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2, Mail } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, Copy, Upload, Edit3, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2, Mail } from "lucide-react";
 import { ExchangeCard } from "../components/ExchangeCard";
 import {
   fetchRates, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue,
@@ -75,6 +75,7 @@ export function TransactionTab({
   const [promoError, setPromoError] = useState("");
   const [promoValid, setPromoValid] = useState(false);
   const [promoMessage, setPromoMessage] = useState("");
+  const [showPromoOptions, setShowPromoOptions] = useState(false);
   // Shared cached supporting data. Admin bank data intentionally remains
   // mount-fresh because it is operational input to a transaction.
   const { data: adminBankData, isLoading: adminBanksLoading } = useQuery({
@@ -285,6 +286,7 @@ export function TransactionTab({
     setPromoValid(false);
     setPromoMessage("");
     setPromoError("");
+    setShowPromoOptions(false);
 
     if (!invoiceId) setInvoiceId(generateInvoiceId());
     setFlowStep("promo");
@@ -479,6 +481,7 @@ export function TransactionTab({
     setPromoValid(false);
     setPromoMessage("");
     setPromoError("");
+    setShowPromoOptions(false);
     setSelectedAdminBank(null);
     setSelectedMntAdminBank(null);
     setReceiptUrls([]);
@@ -831,45 +834,91 @@ export function TransactionTab({
           </div>
         )}
 
-        {userPromoCodes.length > 0 && (
-          <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800 rounded-xl mb-3">
-            <div className="text-sm font-medium text-purple-700 dark:text-purple-400 mb-2 flex items-center gap-2">
-              <Gift className="w-4 h-4" /> {t("txn.your_promos")}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {userPromoCodes.map((promo) => (
-                <button
-                  key={promo.code}
-                  onClick={() => { setPromoCode(promo.code); setPromoError(""); }}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                    promoCode === promo.code ? "bg-purple-600 text-white" : "bg-white dark:bg-dark-700 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/30"
-                  }`}
-                >
-                  {promo.code} ({promo.discount > 0 ? `+${promo.discount}` : promo.discount})
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          aria-expanded={showPromoOptions}
+          onClick={() => setShowPromoOptions((open) => !open)}
+          className={`mb-3 flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+            showPromoOptions || promoValid
+              ? "border-maroon-300 bg-maroon-50/80 dark:border-maroon-600 dark:bg-maroon-900/20"
+              : "border-silver bg-white/70 hover:border-maroon-200 hover:bg-maroon-50/50 dark:border-dark-600 dark:bg-dark-700/70 dark:hover:border-maroon-700"
+          }`}
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-maroon-100 text-maroon-600 dark:bg-maroon-900/40 dark:text-maroon-300">
+            <Gift className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-dark-800 dark:text-ivory-200">{t("txn.promo_code")}</span>
+            <span className="block truncate text-xs text-dark-600 dark:text-ivory-400">
+              {promoValid ? promoCode : t("txn.promo_placeholder")}
+            </span>
+          </span>
+          {promoValid && <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />}
+          <ChevronDown className={`h-4 w-4 shrink-0 text-maroon-600 transition-transform dark:text-maroon-300 ${showPromoOptions ? "rotate-180" : ""}`} />
+        </button>
 
-        <input
-          value={promoCode}
-          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-          className="w-full rounded-xl border border-silver dark:border-dark-600 bg-white dark:bg-dark-700 text-dark-800 dark:text-ivory-200 p-3 text-lg uppercase mb-3"
-          placeholder={t("txn.promo_placeholder")}
-        />
+        {showPromoOptions && (
+          <div className="mb-3 animate-fadeIn rounded-xl border border-maroon-200 bg-maroon-50/50 p-3 dark:border-maroon-800 dark:bg-maroon-900/10">
+            {userPromoCodes.length > 0 && (
+              <div className="mb-3">
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-maroon-700 dark:text-maroon-300">
+                  <Gift className="h-3.5 w-3.5" /> {t("txn.your_promos")}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {userPromoCodes.map((promo) => (
+                    <button
+                      key={promo.code}
+                      type="button"
+                      onClick={() => {
+                        setPromoCode(promo.code);
+                        setPromoDiscount(0);
+                        setPromoValid(false);
+                        setPromoMessage("");
+                        setPromoError("");
+                      }}
+                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                        promoCode === promo.code
+                          ? "border-maroon-600 bg-maroon-600 text-white"
+                          : "border-maroon-200 bg-white text-maroon-700 hover:bg-maroon-100 dark:border-maroon-700 dark:bg-dark-700 dark:text-maroon-300 dark:hover:bg-maroon-900/30"
+                      }`}
+                    >
+                      {promo.code} ({promo.discount > 0 ? `+${promo.discount}` : promo.discount})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        {promoError && <div className="text-red-600 dark:text-red-400 text-sm mb-3">{promoError}</div>}
-        {promoValid && promoDiscount > 0 && (
-          <div
-            className={`flex items-center gap-2 p-3 rounded-xl mb-3 ${
-              promoSuppressedByVolume
-                ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
-                : "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
-            }`}
-          >
-            <Gift className="w-5 h-5" />
-            <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: promoDiscount }) : t("txn.promo_sell_applied", { amount: promoDiscount }))}</span>
+            <div className="flex gap-2">
+              <input
+                value={promoCode}
+                onChange={(e) => {
+                  setPromoCode(e.target.value.toUpperCase());
+                  setPromoDiscount(0);
+                  setPromoValid(false);
+                  setPromoMessage("");
+                  setPromoError("");
+                }}
+                className="min-w-0 flex-1 rounded-lg border border-maroon-200 bg-white px-3 py-2 text-sm uppercase text-dark-800 outline-none transition placeholder:text-dark-600 focus:border-maroon-500 focus:ring-2 focus:ring-maroon-100 dark:border-maroon-700 dark:bg-dark-700 dark:text-ivory-200 dark:placeholder:text-ivory-400"
+                placeholder={t("txn.promo_placeholder")}
+                aria-label={t("txn.promo_placeholder")}
+              />
+              <button
+                type="button"
+                onClick={handleValidatePromo}
+                disabled={promoValidating || !promoCode.trim()}
+                className="shrink-0 rounded-lg bg-maroon-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-maroon-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {promoValidating ? "…" : t("txn.activate_proceed")}
+              </button>
+            </div>
+            {promoError && <div className="mt-2 text-xs text-red-600 dark:text-red-400">{promoError}</div>}
+            {promoValid && promoDiscount > 0 && (
+              <div className={`mt-2 flex items-center gap-2 text-xs font-medium ${promoSuppressedByVolume ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
+                <CheckCircle2 className="h-4 w-4" />
+                <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: promoDiscount }) : t("txn.promo_sell_applied", { amount: promoDiscount }))}</span>
+              </div>
+            )}
           </div>
         )}
 
