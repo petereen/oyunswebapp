@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Refine client liquid-glass navbar and neutral light background (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Recreate the mobile bottom navigation as an accessible liquid-glass control (frontend/src/components/BottomNavBar.tsx, frontend/src/index.css)
 - [x] Apply the OYUNS liquid-glass material system to appropriate mobile bars and cards without reducing contrast (frontend/src/App.tsx, frontend/src/pages, frontend/src/components, frontend/src/index.css)
 - [x] Add and configure liquid-glass-react with graceful browser and reduced-transparency fallbacks (frontend/package.json, frontend/package-lock.json)

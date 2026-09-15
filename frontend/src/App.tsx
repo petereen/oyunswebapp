@@ -204,10 +204,6 @@ export default function App() {
   // Client view - Tab-based
   return (
     <div className="client-shell min-h-screen bg-surface-50 dark:bg-dark-900">
-      <div className="client-ambient" aria-hidden="true">
-        <span className="client-ambient__orb client-ambient__orb--blue" />
-        <span className="client-ambient__orb client-ambient__orb--pink" />
-      </div>
       <main className="client-content max-w-lg mx-auto p-4 pb-32">
         {/* Admin toggle for admins */}
         {isAdmin && (
