@@ -751,15 +751,15 @@ export function AdminInbox() {
         const dirInfo = getDirectionLabel(item);
         
         return (
-          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-2 sm:items-center sm:p-4">
+          <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 p-2 sm:p-4">
             <div
               role="dialog"
               aria-modal="true"
               aria-label="Гүйлгээний дэлгэрэнгүй"
-              className="flex max-h-[90vh] w-full max-w-lg min-h-0 flex-col overflow-hidden rounded-xl bg-white sm:max-h-[calc(100dvh-2rem)]"
+              className="mx-auto my-0 w-full max-w-lg rounded-xl bg-white sm:my-8"
             >
               {/* Header */}
-              <div className="flex shrink-0 items-center justify-between border-b border-maroon-100 bg-white p-4">
+              <div className="flex items-center justify-between border-b border-maroon-100 bg-white p-4">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
                     {dirInfo.label}
@@ -776,7 +776,7 @@ export function AdminInbox() {
                 </button>
               </div>
               
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 pb-6">
+              <div className="space-y-4 p-4 pb-6">
                 {/* Invoice & User Info */}
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Гүйлгээний дугаар: <span className="font-mono">{item.invoice}</span></span>
@@ -1100,7 +1100,7 @@ export function AdminInbox() {
 
                 {/* Actions for Pending - Pre-approve or Reject */}
                 {item.status === "pending" && (
-                  <div className={`sticky bottom-0 z-10 -mx-4 grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-4"} gap-2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm`}>
+                  <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-4"} gap-2 border-t border-slate-200 pt-4`}>
                     <button
                       onClick={async () => {
                         try {
@@ -1164,7 +1164,7 @@ export function AdminInbox() {
                 {/* Actions for Approved - Open confirm modal to finalize */}
                 {item.status === "approved" && (
                   item.automation_managed ? (
-                    <div className="sticky bottom-0 z-10 -mx-4 space-y-2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm">
+                    <div className="space-y-2 border-t border-slate-200 pt-4">
                       <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-3 text-sm font-medium text-blue-700">
                         {getDispatchLabel(item.group_dispatch_status)}
                       </div>
@@ -1181,7 +1181,7 @@ export function AdminInbox() {
                       </button>
                     </div>
                   ) : (
-                    <div className={`sticky bottom-0 z-10 -mx-4 grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm`}>
+                    <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2 border-t border-slate-200 pt-4`}>
                       <button
                         onClick={() => openConfirmModal(item)}
                         className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"

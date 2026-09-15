@@ -75,7 +75,6 @@ export function TransactionTab({
   const [promoError, setPromoError] = useState("");
   const [promoValid, setPromoValid] = useState(false);
   const [promoMessage, setPromoMessage] = useState("");
-  const [showPromoOptions, setShowPromoOptions] = useState(false);
   // Shared cached supporting data. Admin bank data intentionally remains
   // mount-fresh because it is operational input to a transaction.
   const { data: adminBankData, isLoading: adminBanksLoading } = useQuery({
@@ -290,7 +289,6 @@ export function TransactionTab({
     setPromoValid(false);
     setPromoMessage("");
     setPromoError("");
-    setShowPromoOptions(false);
 
     if (!invoiceId) setInvoiceId(generateInvoiceId());
     setFlowStep("promo");
@@ -485,7 +483,6 @@ export function TransactionTab({
     setPromoValid(false);
     setPromoMessage("");
     setPromoError("");
-    setShowPromoOptions(false);
     setSelectedAdminBank(null);
     setSelectedMntAdminBank(null);
     setReceiptUrls([]);
@@ -838,31 +835,7 @@ export function TransactionTab({
           </div>
         )}
 
-        <button
-          type="button"
-          aria-expanded={showPromoOptions}
-          onClick={() => setShowPromoOptions((open) => !open)}
-          className={`mb-3 flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
-            showPromoOptions || promoValid
-              ? "border-maroon-300 bg-maroon-50/80 dark:border-maroon-600 dark:bg-maroon-900/20"
-              : "border-silver bg-white/70 hover:border-maroon-200 hover:bg-maroon-50/50 dark:border-dark-600 dark:bg-dark-700/70 dark:hover:border-maroon-700"
-          }`}
-        >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-maroon-100 text-maroon-600 dark:bg-maroon-900/40 dark:text-maroon-300">
-            <Gift className="h-4 w-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-dark-800 dark:text-ivory-200">{t("txn.promo_code")}</span>
-            <span className="block truncate text-xs text-dark-600 dark:text-ivory-400">
-              {promoValid ? promoCode : t("txn.promo_placeholder")}
-            </span>
-          </span>
-          {promoValid && <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />}
-          <ChevronDown className={`h-4 w-4 shrink-0 text-maroon-600 transition-transform dark:text-maroon-300 ${showPromoOptions ? "rotate-180" : ""}`} />
-        </button>
-
-        {showPromoOptions && (
-          <div className="mb-3 animate-fadeIn rounded-xl border border-maroon-200 bg-maroon-50/50 p-3 dark:border-maroon-800 dark:bg-maroon-900/10">
+        <div className="mb-3 rounded-xl border border-maroon-200 bg-maroon-50/50 p-3 dark:border-maroon-800 dark:bg-maroon-900/10">
             {sortedUserPromoCodes.length > 0 && (
               <div className="mb-3">
                 <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-maroon-700 dark:text-maroon-300">
@@ -915,8 +888,7 @@ export function TransactionTab({
                 <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: promoDiscount }) : t("txn.promo_sell_applied", { amount: promoDiscount }))}</span>
               </div>
             )}
-          </div>
-        )}
+        </div>
 
         <div className="flex gap-2">
           <button onClick={() => { setPromoCode(""); setPromoDiscount(0); setPromoValid(false); setFlowStep("adminBank"); }}
