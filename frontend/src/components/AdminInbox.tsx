@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ShieldCheck,
   XCircle,
@@ -15,6 +16,9 @@ import {
   Pause,
   RefreshCw,
   AlertCircle,
+  ExternalLink,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { 
   AdminInboxItem as InboxItem,
@@ -39,6 +43,36 @@ function getLabelStyle(label: string | undefined) {
 
 type SortOption = "oldest" | "newest" | "amount_asc" | "amount_desc";
 type FilterOption = "all" | "buy" | "sell";
+
+const FOCUSABLE_ELEMENTS = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function keepFocusInside(event: KeyboardEvent, container: HTMLElement | null) {
+  if (event.key !== "Tab" || !container) return;
+  const focusable = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_ELEMENTS));
+  if (focusable.length === 0) {
+    event.preventDefault();
+    container.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey && (active === first || !container.contains(active))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || !container.contains(active))) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 // Format date to Moscow/UB timezone
 function formatToTimezone(dateStr: string, tz: string): string {
@@ -102,7 +136,9 @@ export function AdminInbox() {
 
   // UI state - Changed from expandedInvoice to detailModal for popup
   const [detailModal, setDetailModal] = useState<InboxItem | null>(null);
+  const [detailBillIndex, setDetailBillIndex] = useState(0);
   const [photoModal, setPhotoModal] = useState<string | null>(null);
+  const [photoZoom, setPhotoZoom] = useState(1);
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [rejectBillUrls, setRejectBillUrls] = useState<string[]>([]);
@@ -120,6 +156,10 @@ export function AdminInbox() {
   const [labelSaving, setLabelSaving] = useState(false);
   const [expandedLabel, setExpandedLabel] = useState<number | null>(null);
   const [, setCopied] = useState(false);
+  const detailDialogRef = useRef<HTMLDivElement>(null);
+  const photoViewerRef = useRef<HTMLDivElement>(null);
+  const confirmDialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Helper function to parse bill_url (can be JSON array or single URL string)
   const parseBillUrls = (billUrl?: string): string[] => {
@@ -178,6 +218,66 @@ export function AdminInbox() {
       setConfirmCompletedByAdminId(currentShift.current_admin_id);
     }
   }, [confirmModal, confirmCompletedByAdminId, currentShift?.current_admin_id]);
+
+  useEffect(() => {
+    const hasOpenDialog = Boolean(detailModal || photoModal || rejectModal || confirmModal || labelModal);
+    if (!hasOpenDialog) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Tab") {
+        const activeDialog = photoModal
+          ? photoViewerRef.current
+          : confirmModal
+            ? confirmDialogRef.current
+            : detailModal
+              ? detailDialogRef.current
+              : null;
+        keepFocusInside(event, activeDialog);
+        return;
+      }
+      if (event.key !== "Escape") return;
+
+      if (photoModal) {
+        setPhotoModal(null);
+      } else if (labelModal) {
+        setLabelModal(null);
+      } else if (confirmModal) {
+        setConfirmModal(null);
+        setAdminBillUrls([]);
+        setConfirmCompletedByAdminId(null);
+      } else if (rejectModal) {
+        setRejectModal(null);
+      } else if (detailModal) {
+        setDetailModal(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [confirmModal, detailModal, labelModal, photoModal, rejectModal]);
+
+  useEffect(() => {
+    if (photoModal) {
+      photoViewerRef.current?.focus();
+    } else if (confirmModal) {
+      confirmDialogRef.current?.focus();
+    } else if (detailModal) {
+      detailDialogRef.current?.focus();
+    } else if (previousFocusRef.current?.isConnected) {
+      previousFocusRef.current.focus();
+      previousFocusRef.current = null;
+    }
+  }, [confirmModal, detailModal, photoModal]);
+
+  useEffect(() => {
+    setPhotoZoom(1);
+  }, [photoModal]);
 
   // Sort and filter items
   const displayItems = useMemo(() => {
@@ -436,6 +536,12 @@ export function AdminInbox() {
     setConfirmCompletedByAdminId(currentShift?.current_admin_id ?? null);
   };
 
+  const openDetailModal = (item: InboxItem) => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDetailBillIndex(0);
+    setDetailModal(item);
+  };
+
   const handleConfirmTransaction = async () => {
     if (!confirmModal) return;
     const completingAdminId = confirmCompletedByAdminId ?? currentShift?.current_admin_id ?? null;
@@ -594,7 +700,7 @@ export function AdminInbox() {
             return (
               <div
                 key={item.invoice}
-                onClick={() => setDetailModal(item)}
+                onClick={() => openDetailModal(item)}
                 className={`border rounded-xl bg-white p-3 cursor-pointer transition ${topupRequest ? "border-sky-200 hover:bg-sky-50/70" : "border-amber-200 hover:bg-amber-50"}`}
               >
                 <div className="flex items-center gap-3">
@@ -658,7 +764,7 @@ export function AdminInbox() {
             return (
               <div
                 key={item.invoice}
-                onClick={() => item.automation_managed ? setDetailModal(item) : openConfirmModal(item)}
+                onClick={() => openDetailModal(item)}
                 className={`border rounded-xl bg-white p-3 cursor-pointer transition ${topupRequest ? "border-sky-200 hover:bg-sky-50/70" : "border-green-200 hover:bg-green-50"}`}
               >
                 <div className="flex items-center gap-3">
@@ -749,34 +855,112 @@ export function AdminInbox() {
           : (Number(item.amount) / Number(item.rate)).toFixed(2);
         const transferCurrency = isBuy ? "₮" : "₽";
         const dirInfo = getDirectionLabel(item);
+        const receiptUrls = parseBillUrls(item.bill_url);
+        const selectedReceiptUrl = receiptUrls[detailBillIndex] ?? receiptUrls[0];
         
-        return (
-          <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 p-2 sm:p-4">
+        return createPortal((
+          <div
+            data-slot="transaction-review-overlay"
+            className="fixed inset-0 z-[60] bg-[#0B172A]/80 lg:p-5"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setDetailModal(null);
+            }}
+          >
             <div
+              ref={detailDialogRef}
+              data-slot="transaction-review-dialog"
               role="dialog"
               aria-modal="true"
-              aria-label="Гүйлгээний дэлгэрэнгүй"
-              className="mx-auto my-0 w-full max-w-lg rounded-xl bg-white sm:my-8"
+              aria-labelledby="transaction-review-title"
+              tabIndex={-1}
+              className="mx-auto flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl outline-none lg:h-[calc(100dvh-2.5rem)] lg:max-w-[90rem] lg:rounded-3xl"
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-maroon-100 bg-white p-4">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold px-2 py-1 rounded ${dirInfo.color}`}>
+              <div data-slot="transaction-review-header" className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-bold ${dirInfo.color}`}>
                     {dirInfo.label}
                   </span>
-                  <span className="font-semibold text-maroon-700">
-                    {Number(item.amount).toLocaleString()} {item.currency_from} → {item.currency_to}
-                  </span>
+                  <div className="min-w-0">
+                    <h2 id="transaction-review-title" className="truncate text-sm font-bold text-[#231F20] sm:text-base">Гүйлгээ шалгах</h2>
+                    <p className="truncate text-xs text-slate-500 sm:text-sm">
+                      {Number(item.amount).toLocaleString()} {item.currency_from} → {item.currency_to}
+                    </p>
+                  </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setDetailModal(null)}
-                  className="p-2 hover:bg-slate-100 rounded-full"
+                  className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-[#231F20] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D62EC]"
+                  aria-label="Гүйлгээний цонхыг хаах"
                 >
-                  <X className="w-5 h-5" />
+                  <span className="hidden sm:inline">Хаах</span>
+                  <X className="size-5" />
                 </button>
               </div>
-              
-              <div className="space-y-4 p-4 pb-6">
+
+              <div className="grid min-h-0 flex-1 grid-rows-[minmax(11rem,40dvh)_minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(0,3fr)_minmax(24rem,2fr)] lg:grid-rows-1">
+                <section data-slot="receipt-inspection-stage" aria-label="Хэрэглэгчийн баримт" className="flex min-h-0 flex-col overflow-hidden bg-[#0B172A]">
+                  <div className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 text-white lg:px-5">
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <Image className="size-4 text-[#93AAFD]" />
+                      Хэрэглэгчийн баримт
+                    </div>
+                    {receiptUrls.length > 0 && <span className="text-xs text-white/60">{detailBillIndex + 1} / {receiptUrls.length}</span>}
+                  </div>
+
+                  <div className="grid min-h-0 flex-1 place-items-center overflow-hidden p-3 sm:p-5">
+                    {selectedReceiptUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setPhotoModal(selectedReceiptUrl)}
+                        className="group grid size-full min-h-0 place-items-center overflow-hidden rounded-xl bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#93AAFD]"
+                        aria-label="Баримтыг бүтэн дэлгэцээр нээх"
+                      >
+                        <img
+                          src={selectedReceiptUrl}
+                          alt={`Хэрэглэгчийн баримт ${detailBillIndex + 1}`}
+                          className="max-h-full max-w-full object-contain transition-transform duration-200 group-hover:scale-[1.01] motion-reduce:transition-none"
+                        />
+                      </button>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 px-6 text-center text-white/55">
+                        <div className="grid size-14 place-items-center rounded-2xl border border-white/10 bg-white/5">
+                          <Image className="size-6" />
+                        </div>
+                        <p className="text-sm font-medium">Баримтын зураг оруулаагүй байна</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {receiptUrls.length > 0 && (
+                    <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-white/10 px-4 py-3">
+                      {receiptUrls.map((url, idx) => (
+                        <button
+                          key={url}
+                          type="button"
+                          onClick={() => setDetailBillIndex(idx)}
+                          aria-label={`${idx + 1}-р баримтыг харах`}
+                          aria-pressed={detailBillIndex === idx}
+                          className={`size-14 shrink-0 overflow-hidden rounded-lg border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#93AAFD] ${detailBillIndex === idx ? "border-[#2D62EC]" : "border-transparent opacity-65 hover:opacity-100"}`}
+                        >
+                          <img src={url} alt="" className="size-full object-cover" />
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => selectedReceiptUrl && setPhotoModal(selectedReceiptUrl)}
+                        className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#93AAFD]"
+                      >
+                        Бүтэн дэлгэц
+                        <ExternalLink className="size-4" />
+                      </button>
+                    </div>
+                  )}
+                </section>
+
+                <section data-slot="transaction-review-details" className="flex min-h-0 flex-col bg-slate-50">
+                  <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4 lg:p-6">
                 {/* Invoice & User Info */}
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>Гүйлгээний дугаар: <span className="font-mono">{item.invoice}</span></span>
@@ -885,28 +1069,6 @@ export function AdminInbox() {
                   <div>МСК: {formatToTimezone(item.timestamp, "Europe/Moscow")}</div>
                   <div className="text-slate-400">{getTimeAgo(item.timestamp, relativeNowMs)}</div>
                 </div>
-
-                {/* User's Receipt Photos - Support multiple */}
-                {item.bill_url && parseBillUrls(item.bill_url).length > 0 && (
-                  <div>
-                    <div className="text-xs text-slate-500 mb-2">📸 Хэрэглэгчийн баримт ({parseBillUrls(item.bill_url).length}):</div>
-                    <div className="flex flex-wrap gap-2">
-                      {parseBillUrls(item.bill_url).map((url, idx) => (
-                        <div 
-                          key={idx}
-                          className="relative rounded-lg overflow-hidden cursor-pointer border border-maroon-200"
-                          onClick={() => setPhotoModal(url)}
-                        >
-                          <img 
-                            src={url} 
-                            alt={`Receipt ${idx + 1}`} 
-                            className="w-24 h-24 object-cover bg-slate-50"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* Transfer Amount - What admin needs to send */}
                 <div className="p-3 bg-gradient-to-r from-maroon-50 to-sky-50 rounded-lg border border-maroon-200">
@@ -1097,10 +1259,12 @@ export function AdminInbox() {
                     <span className="text-sm font-semibold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded">{item.admin_bank_name}</span>
                   </div>
                 )}
+                  </div>
 
+                <footer data-slot="transaction-review-actions" className="max-h-[42dvh] shrink-0 overflow-y-auto border-t border-slate-200 bg-white p-3 sm:p-4">
                 {/* Actions for Pending - Pre-approve or Reject */}
                 {item.status === "pending" && (
-                  <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-4"} gap-2 border-t border-slate-200 pt-4`}>
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={async () => {
                         try {
@@ -1116,9 +1280,9 @@ export function AdminInbox() {
                             setError(getAdminActionError(err, "Гүйлгээг батлахад алдаа гарлаа"));
                         }
                       }}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 text-white py-3 font-semibold hover:bg-green-700"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#00C885] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#00AF75] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00C885] focus-visible:ring-offset-2"
                     >
-                      <ShieldCheck className="w-5 h-5" /> Батлах
+                      <ShieldCheck className="size-5" /> Батлах
                     </button>
                     {item.service_kind === "exchange" && item.currency_from.toUpperCase() === "MNT" && item.currency_to.toUpperCase() === "RUB" && (
                       <button
@@ -1136,17 +1300,17 @@ export function AdminInbox() {
                             setError(getAdminActionError(err, "Гүйлгээг Telegram групп рүү илгээхэд алдаа гарлаа"));
                           }
                         }}
-                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 text-white py-3 font-semibold hover:bg-blue-700"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2D62EC] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D62EC] focus-visible:ring-offset-2"
                       >
-                        <Upload className="w-5 h-5" /> Групп рүү илгээх
+                        <Upload className="size-5" /> Групп рүү илгээх
                       </button>
                     )}
                     {!topupRequest && !item.automation_managed && (
                       <button
                         onClick={() => handleSetWaitingEdit(item.invoice)}
-                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-100 px-3 py-3 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
                       >
-                        <Pause className="w-5 h-5" /> Засвар шаардах
+                        <Pause className="size-5" /> Засвар шаардах
                       </button>
                     )}
                     <button
@@ -1154,9 +1318,9 @@ export function AdminInbox() {
                         setRejectModal(item.invoice);
                         setDetailModal(null);
                       }}
-                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-100 text-red-700 py-3 font-semibold hover:bg-red-200"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FF3B57]/10 px-3 py-3 text-sm font-semibold text-[#C81E3A] transition-colors hover:bg-[#FF3B57]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF3B57] focus-visible:ring-offset-2"
                     >
-                      <XCircle className="w-5 h-5" /> Татгалзах
+                      <XCircle className="size-5" /> Татгалзах
                     </button>
                   </div>
                 )}
@@ -1164,7 +1328,7 @@ export function AdminInbox() {
                 {/* Actions for Approved - Open confirm modal to finalize */}
                 {item.status === "approved" && (
                   item.automation_managed ? (
-                    <div className="space-y-2 border-t border-slate-200 pt-4">
+                    <div className="flex flex-col gap-2">
                       <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-3 text-sm font-medium text-blue-700">
                         {getDispatchLabel(item.group_dispatch_status)}
                       </div>
@@ -1175,25 +1339,25 @@ export function AdminInbox() {
                       )}
                       <button
                         onClick={() => openConfirmModal(item)}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2D62EC] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D62EC] focus-visible:ring-offset-2"
                       >
-                        <Upload className="w-5 h-5" /> Группийн гүйлгээг гараар дуусгах
+                        <Upload className="size-5" /> Группийн гүйлгээг гараар дуусгах
                       </button>
                     </div>
                   ) : (
-                    <div className={`grid grid-cols-1 ${topupRequest ? "sm:grid-cols-2" : "sm:grid-cols-3"} gap-2 border-t border-slate-200 pt-4`}>
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => openConfirmModal(item)}
-                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-maroon-600 text-white py-3 font-semibold hover:bg-maroon-700"
+                        className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2D62EC] px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D62EC] focus-visible:ring-offset-2"
                       >
-                        <Upload className="w-5 h-5" /> Гүйлгээ дуусгах
+                        <Upload className="size-5" /> Гүйлгээ дуусгах
                       </button>
                       {!topupRequest && (
                         <button
                           onClick={() => handleSetWaitingEdit(item.invoice)}
-                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-100 text-amber-700 py-3 font-semibold hover:bg-amber-200"
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-100 px-3 py-3 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
                         >
-                          <Pause className="w-5 h-5" /> Засвар шаардах
+                          <Pause className="size-5" /> Засвар шаардах
                         </button>
                       )}
                       <button
@@ -1201,33 +1365,87 @@ export function AdminInbox() {
                           setRejectModal(item.invoice);
                           setDetailModal(null);
                         }}
-                        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-red-100 text-red-700 py-3 font-semibold hover:bg-red-200"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FF3B57]/10 px-3 py-3 text-sm font-semibold text-[#C81E3A] transition-colors hover:bg-[#FF3B57]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF3B57] focus-visible:ring-offset-2"
                       >
-                        <XCircle className="w-5 h-5" /> Татгалзах
+                        <XCircle className="size-5" /> Татгалзах
                       </button>
                     </div>
                   )
                 )}
+                </footer>
+                </section>
               </div>
             </div>
           </div>
-        );
+        ), document.body);
       })()}
 
       {/* Photo Modal */}
-      {photoModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="relative max-w-2xl max-h-[90vh] bg-white rounded-xl overflow-hidden">
+      {photoModal && createPortal((
+        <div ref={photoViewerRef} tabIndex={-1} data-slot="receipt-viewer" className="fixed inset-0 z-[70] flex flex-col bg-[#0B172A] outline-none" role="dialog" aria-modal="true" aria-label="Баримтын зураг бүтэн дэлгэцээр">
+          <div data-slot="receipt-viewer-header" className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#0B172A] px-3 py-2 text-white sm:px-5">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">Баримтын зураг</div>
+              <div className="hidden text-xs text-white/55 sm:block">Зургийг томруулж, дээш доош гүйлгэн шалгана уу</div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-center rounded-xl border border-white/15 bg-white/10 p-1" aria-label="Зургийн хэмжээ">
+                <button
+                  type="button"
+                  onClick={() => setPhotoZoom((zoom) => Math.max(0.75, zoom - 0.25))}
+                  disabled={photoZoom <= 0.75}
+                  className="grid size-9 place-items-center rounded-lg transition-colors hover:bg-white/10 disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#93AAFD]"
+                  aria-label="Зургийг багасгах"
+                >
+                  <Minus className="size-4" />
+                </button>
+                <span className="min-w-14 text-center text-xs font-semibold tabular-nums">{Math.round(photoZoom * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setPhotoZoom((zoom) => Math.min(2, zoom + 0.25))}
+                  disabled={photoZoom >= 2}
+                  className="grid size-9 place-items-center rounded-lg transition-colors hover:bg-white/10 disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#93AAFD]"
+                  aria-label="Зургийг томруулах"
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
+              <a
+                href={photoModal}
+                target="_blank"
+                rel="noreferrer"
+                className="hidden min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 text-xs font-semibold transition-colors hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#93AAFD] sm:inline-flex"
+              >
+                Шинэ таб
+                <ExternalLink className="size-4" />
+              </a>
             <button
+              type="button"
               onClick={() => setPhotoModal(null)}
-              className="absolute top-2 right-2 p-2 bg-white/80 rounded-full hover:bg-white"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-[#231F20] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#93AAFD]"
+                aria-label="Баримтын зургийг хаах"
             >
-              <X className="w-5 h-5" />
+                <span className="hidden sm:inline">Хаах</span>
+                <X className="size-5" />
             </button>
-            <img src={photoModal} alt="Receipt" className="max-w-full max-h-[85vh] object-contain" />
+            </div>
+          </div>
+          <div
+            data-slot="receipt-viewer-canvas"
+            className="min-h-0 flex-1 overflow-auto overscroll-contain p-3 sm:p-6"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setPhotoModal(null);
+            }}
+          >
+            <img
+              src={photoModal}
+              alt="Баримтын дэлгэрэнгүй зураг"
+              className="mx-auto block h-auto origin-top rounded-lg bg-white shadow-2xl"
+              style={{ width: `${photoZoom * 100}%`, maxWidth: photoZoom <= 1 ? "100%" : "none" }}
+            />
           </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* Reject Modal */}
       {rejectModal && (
@@ -1412,17 +1630,45 @@ export function AdminInbox() {
           : (Number(confirmModal.amount) / Number(confirmModal.rate)).toFixed(2);
         const transferCurrency = isBuy ? "₮" : "₽";
         
-        return (
-        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 p-2 sm:p-4">
+        return createPortal((
+        <div
+          className="fixed inset-0 z-[65] flex items-end justify-center bg-[#0B172A]/80 sm:items-center sm:p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setConfirmModal(null);
+              setAdminBillUrls([]);
+              setConfirmCompletedByAdminId(null);
+            }
+          }}
+        >
           <div
+            ref={confirmDialogRef}
+            tabIndex={-1}
+            data-slot="transaction-completion-dialog"
             role="dialog"
             aria-modal="true"
             aria-label={confirmModal.automation_managed ? "Группийн гүйлгээг гараар дуусгах" : "Гүйлгээг дуусгах"}
-            className="mx-auto my-0 w-full max-w-md rounded-xl bg-white p-5 sm:my-8"
+            className="flex max-h-[100dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl outline-none sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl"
           >
-            <div className="font-semibold text-maroon-700 mb-3">
-              {confirmModal.automation_managed ? "Группийн гүйлгээг гараар дуусгах" : "Гүйлгээг дуусгах"}
+            <div data-slot="transaction-completion-header" className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 sm:px-5">
+              <div className="font-semibold text-[#231F20]">
+                {confirmModal.automation_managed ? "Группийн гүйлгээг гараар дуусгах" : "Гүйлгээг дуусгах"}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmModal(null);
+                  setAdminBillUrls([]);
+                  setConfirmCompletedByAdminId(null);
+                }}
+                className="grid size-11 shrink-0 place-items-center rounded-xl border border-slate-200 text-[#231F20] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D62EC]"
+                aria-label="Гүйлгээ дуусгах цонхыг хаах"
+              >
+                <X className="size-5" />
+              </button>
             </div>
+
+            <div data-slot="transaction-completion-content" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
 
             {/* Invoice ID - Copyable */}
             <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
@@ -1700,28 +1946,30 @@ export function AdminInbox() {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            </div>
+
+            <div data-slot="transaction-completion-actions" className="flex shrink-0 gap-2 border-t border-slate-200 bg-white p-4 sm:p-5">
               <button
                 onClick={() => {
                   setConfirmModal(null);
                   setAdminBillUrls([]);
                   setConfirmCompletedByAdminId(null);
                 }}
-                className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
+                className="min-h-11 flex-1 rounded-xl bg-slate-100 px-3 py-2 font-semibold text-slate-700 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D62EC]"
               >
                 Цуцлах
               </button>
               <button
                 onClick={handleConfirmTransaction}
                 disabled={uploading || !(confirmCompletedByAdminId ?? currentShift?.current_admin_id)}
-                className="flex-1 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                className="min-h-11 flex-1 rounded-xl bg-[#00C885] px-3 py-2 font-semibold text-white transition-colors hover:bg-[#00AF75] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00C885] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {confirmModal.automation_managed ? "Гараар дуусгах" : "Дуусгах"}
               </button>
             </div>
           </div>
         </div>
-        );
+        ), document.body);
       })()}
 
     </div>

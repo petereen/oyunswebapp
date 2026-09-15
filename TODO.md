@@ -1,6 +1,10 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Redesign pending and approved transaction review as a viewport-sized, responsive inspection workspace (frontend/src/components/AdminInbox.tsx)
+- [x] Keep dialog close controls and transaction actions reachable for tall receipt images, including keyboard and backdrop dismissal (frontend/src/components/AdminInbox.tsx)
+- [x] Add a full-screen receipt viewer with bounded scrolling and zoom controls (frontend/src/components/AdminInbox.tsx)
+- [x] Add transaction review interaction regression coverage and verify TypeScript/build (frontend/src/components/AdminInbox.test.tsx)
 - [x] Remove the outer promo disclosure and show the dropdown plus manual entry directly (frontend/src/pages/TransactionTab.tsx)
 - [x] Replace promo chips with a highest-discount-first dropdown and remove duplicate activation action (frontend/src/pages/TransactionTab.tsx)
 - [x] Apply the compact blue promo dropdown to the active TransactionTab exchange flow (frontend/src/pages/TransactionTab.tsx)
