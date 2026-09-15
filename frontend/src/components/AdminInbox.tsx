@@ -586,7 +586,7 @@ export function AdminInbox() {
           </h3>
           <p className="text-xs text-amber-600">Шалгаж баталгаажуулна уу</p>
         </div>
-        <div className="flex flex-col gap-2 p-3 max-h-[250px] overflow-auto bg-amber-50/30">
+        <div className="flex flex-col gap-2 bg-amber-50/30 p-3">
           {pendingItems.map((item) => {
             const dirInfo = getDirectionLabel(item);
             const topup = getTopupDetails(item);
@@ -644,7 +644,7 @@ export function AdminInbox() {
           </h3>
           <p className="text-xs text-green-600">Гүйлгээ хийж, баримт оруулан баталгаажуулна уу</p>
         </div>
-        <div className="flex flex-col gap-2 p-3 max-h-[250px] overflow-auto bg-green-50/30">
+        <div className="flex flex-col gap-2 bg-green-50/30 p-3">
           {approvedItems.map((item) => {
             const dirInfo = getDirectionLabel(item);
             const isBuy = item.direction === "buy" || item.currency_from.toUpperCase() === "RUB";
