@@ -1413,8 +1413,13 @@ export function AdminInbox() {
         const transferCurrency = isBuy ? "₮" : "₽";
         
         return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-5 max-w-md w-full max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 p-2 sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={confirmModal.automation_managed ? "Группийн гүйлгээг гараар дуусгах" : "Гүйлгээг дуусгах"}
+            className="mx-auto my-0 w-full max-w-md rounded-xl bg-white p-5 sm:my-8"
+          >
             <div className="font-semibold text-maroon-700 mb-3">
               {confirmModal.automation_managed ? "Группийн гүйлгээг гараар дуусгах" : "Гүйлгээг дуусгах"}
             </div>
