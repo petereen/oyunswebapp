@@ -1,6 +1,9 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Redesign exchange-flow promo code control as a compact blue dropdown with manual entry (frontend/src/components/ExchangeFlow.tsx)
+- [x] Clear stale promo discount state when a code is edited or changed (frontend/src/components/ExchangeFlow.tsx)
+- [x] Remove light-mode navbar black distortion artifacts while preserving a translucent white surface (frontend/src/index.css)
 - [x] Align active navbar highlight corners with the navbar and match the Telegram light-theme navbar surface (frontend/src/index.css)
 - [x] Refine client liquid-glass navbar and neutral light background (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Recreate the mobile bottom navigation as an accessible liquid-glass control (frontend/src/components/BottomNavBar.tsx, frontend/src/index.css)

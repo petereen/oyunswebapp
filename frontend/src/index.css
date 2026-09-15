@@ -128,7 +128,7 @@
 
 :root {
   --liquid-nav-radius: 1.75rem;
-  --telegram-light-nav-background: #FFFFFF;
+  --telegram-light-nav-background: rgba(255, 255, 255, 0.78);
 }
 
 .liquid-nav { filter: drop-shadow(0 10px 22px rgba(35, 31, 32, 0.1)); }
@@ -213,6 +213,11 @@
 
 .dark .liquid-nav-glass > .glass {
   border-radius: var(--liquid-nav-radius) !important;
+}
+
+html:not(.dark) .liquid-nav-glass > .bg-black,
+html:not(.dark) .liquid-nav-glass .glass__warp {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

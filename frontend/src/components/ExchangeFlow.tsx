@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, CheckCircle2, ChevronDown, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
 import { DEFAULT_MIN_RUB_AMOUNT, DEFAULT_MIN_RUB_BUY, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN } from "./RegistrationModal";
 import { useLang } from "../i18n/useLang";
@@ -46,6 +46,7 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
   const [promoError, setPromoError] = useState("");
   const [promoValid, setPromoValid] = useState(false);
   const [promoMessage, setPromoMessage] = useState("");
+  const [showPromoOptions, setShowPromoOptions] = useState(false);
   const { data: adminBankData } = useQuery({
     queryKey: queryKeys.admin.bankAccounts,
     queryFn: fetchAdminBankAccounts,
@@ -246,6 +247,8 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
     setPromoCode("");
     setPromoDiscount(0);
     setPromoValid(false);
+    setPromoError("");
+    setPromoMessage("");
     setStep(2);
   };
 
@@ -517,9 +520,28 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
       {/* Step 1: Promo Code */}
       {step === 1 && direction && (
         <div className="flex flex-col gap-4">
-          <div className="text-sm text-slate-600 flex items-center gap-2">
-            <Tag className="w-4 h-4" /> {t("ef.promo_step")}
-          </div>
+          <button
+            type="button"
+            aria-expanded={showPromoOptions}
+            onClick={() => setShowPromoOptions((open) => !open)}
+            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+              showPromoOptions || promoValid
+                ? "border-maroon-300 bg-maroon-50/80"
+                : "border-slate-200 bg-white/70 hover:border-maroon-200 hover:bg-maroon-50/50"
+            }`}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-maroon-100 text-maroon-600">
+              <Tag className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-slate-700">{t("ef.promo_step")}</span>
+              <span className="block truncate text-xs text-slate-500">
+                {promoValid ? promoCode : t("txn.promo_placeholder")}
+              </span>
+            </span>
+            {promoValid && <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />}
+            <ChevronDown className={`h-4 w-4 shrink-0 text-maroon-600 transition-transform ${showPromoOptions ? "rotate-180" : ""}`} />
+          </button>
           
           <div className="flex items-center gap-2 p-2 bg-maroon-50 rounded-lg text-sm">
             <ArrowRightLeft className="w-4 h-4 text-maroon-600" />
@@ -527,48 +549,68 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
             <span className="ml-auto font-semibold">{t("ef.base_rate", { rate: String(baseRate) })}</span>
           </div>
 
-          {/* User's available promo codes */}
-          {userPromoCodes.length > 0 && (
-            <div className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl">
-              <div className="text-sm font-medium text-purple-700 mb-2 flex items-center gap-2">
-                <Gift className="w-4 h-4" /> {t("txn.your_promos")}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {userPromoCodes.map((promo) => (
-                  <button
-                    key={promo.code}
-                    onClick={() => {
-                      setPromoCode(promo.code);
-                      setPromoError("");
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      promoCode === promo.code
-                        ? "bg-purple-600 text-white"
-                        : "bg-white text-purple-700 border border-purple-200 hover:bg-purple-100"
-                    }`}
-                  >
-                    {promo.code} ({promo.discount > 0 ? `+${promo.discount}` : promo.discount})
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {showPromoOptions && (
+            <div className="animate-fadeIn rounded-xl border border-maroon-200 bg-maroon-50/50 p-3">
+              {userPromoCodes.length > 0 && (
+                <div className="mb-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-maroon-700">
+                    <Gift className="h-3.5 w-3.5" /> {t("txn.your_promos")}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {userPromoCodes.map((promo) => (
+                      <button
+                        key={promo.code}
+                        type="button"
+                        onClick={() => {
+                          setPromoCode(promo.code);
+                          setPromoError("");
+                          setPromoDiscount(0);
+                          setPromoValid(false);
+                          setPromoMessage("");
+                        }}
+                        className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                          promoCode === promo.code
+                            ? "border-maroon-600 bg-maroon-600 text-white"
+                            : "border-maroon-200 bg-white text-maroon-700 hover:bg-maroon-100"
+                        }`}
+                      >
+                        {promo.code} ({promo.discount > 0 ? `+${promo.discount}` : promo.discount})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          <input
-            value={promoCode}
-            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-            className="rounded-xl border border-maroon-100 p-3 text-lg uppercase"
-            placeholder={t("txn.promo_placeholder")}
-          />
-          
-          {promoError && (
-            <div className="text-red-600 text-sm">{promoError}</div>
-          )}
-          
-          {promoValid && promoDiscount > 0 && (
-            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700">
-              <Gift className="w-5 h-5" />
-              <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: String(promoDiscount) }) : t("txn.promo_sell_applied", { amount: String(promoDiscount) }))}</span>
+              <div className="flex gap-2">
+                <input
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value.toUpperCase());
+                    setPromoError("");
+                    setPromoDiscount(0);
+                    setPromoValid(false);
+                    setPromoMessage("");
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-maroon-200 bg-white px-3 py-2 text-sm uppercase outline-none transition placeholder:text-slate-400 focus:border-maroon-500 focus:ring-2 focus:ring-maroon-100"
+                  placeholder={t("txn.promo_placeholder")}
+                  aria-label={t("txn.promo_placeholder")}
+                />
+                <button
+                  type="button"
+                  onClick={handleValidatePromo}
+                  disabled={promoValidating || !promoCode.trim()}
+                  className="shrink-0 rounded-lg bg-maroon-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-maroon-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {promoValidating ? "…" : t("txn.activate_proceed")}
+                </button>
+              </div>
+              {promoError && <div className="mt-2 text-xs text-red-600">{promoError}</div>}
+              {promoValid && promoDiscount > 0 && (
+                <div className="mt-2 flex items-center gap-2 text-xs font-medium text-green-700">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>{promoMessage || (direction === "buy" ? t("txn.promo_buy_applied", { amount: String(promoDiscount) }) : t("txn.promo_sell_applied", { amount: String(promoDiscount) }))}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -584,7 +626,7 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
               disabled={promoValidating}
               className="flex-1 py-3 rounded-xl bg-maroon-600 text-white font-semibold hover:bg-maroon-700 disabled:opacity-50"
             >
-              {promoValidating ? t("txn.validating") : t("txn.activate_proceed")}
+              {promoValidating ? t("txn.validating") : t("txn.continue")}
             </button>
           </div>
         </div>
