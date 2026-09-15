@@ -90,6 +90,10 @@ export function TransactionTab({
   });
   const adminBanks: AdminBankAccount[] = adminBankData?.accounts || [];
   const userPromoCodes: UserPromoCode[] = (userPromoData?.promo_codes || []).filter((p) => p.active && p.source !== "default");
+  const sortedUserPromoCodes = useMemo(
+    () => [...userPromoCodes].sort((a, b) => Number(b.discount) - Number(a.discount) || a.code.localeCompare(b.code)),
+    [userPromoCodes],
+  );
   const [selectedAdminBank, setSelectedAdminBank] = useState<AdminBankAccount | null>(null);
   const [selectedMntAdminBank, setSelectedMntAdminBank] = useState<AdminBankAccount | null>(null);
 
@@ -859,32 +863,32 @@ export function TransactionTab({
 
         {showPromoOptions && (
           <div className="mb-3 animate-fadeIn rounded-xl border border-maroon-200 bg-maroon-50/50 p-3 dark:border-maroon-800 dark:bg-maroon-900/10">
-            {userPromoCodes.length > 0 && (
+            {sortedUserPromoCodes.length > 0 && (
               <div className="mb-3">
                 <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-maroon-700 dark:text-maroon-300">
                   <Gift className="h-3.5 w-3.5" /> {t("txn.your_promos")}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {userPromoCodes.map((promo) => (
-                    <button
-                      key={promo.code}
-                      type="button"
-                      onClick={() => {
-                        setPromoCode(promo.code);
-                        setPromoDiscount(0);
-                        setPromoValid(false);
-                        setPromoMessage("");
-                        setPromoError("");
-                      }}
-                      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
-                        promoCode === promo.code
-                          ? "border-maroon-600 bg-maroon-600 text-white"
-                          : "border-maroon-200 bg-white text-maroon-700 hover:bg-maroon-100 dark:border-maroon-700 dark:bg-dark-700 dark:text-maroon-300 dark:hover:bg-maroon-900/30"
-                      }`}
-                    >
-                      {promo.code} ({promo.discount > 0 ? `+${promo.discount}` : promo.discount})
-                    </button>
-                  ))}
+                <div className="relative">
+                  <select
+                    value={sortedUserPromoCodes.some((promo) => promo.code === promoCode) ? promoCode : ""}
+                    onChange={(e) => {
+                      setPromoCode(e.target.value);
+                      setPromoDiscount(0);
+                      setPromoValid(false);
+                      setPromoMessage("");
+                      setPromoError("");
+                    }}
+                    className="w-full appearance-none rounded-lg border border-maroon-200 bg-white px-3 py-2.5 pr-9 text-sm font-semibold text-dark-800 outline-none transition focus:border-maroon-500 focus:ring-2 focus:ring-maroon-100 dark:border-maroon-700 dark:bg-dark-700 dark:text-ivory-200"
+                    aria-label={t("txn.your_promos")}
+                  >
+                    <option value="">{t("txn.promo_placeholder")}</option>
+                    {sortedUserPromoCodes.map((promo) => (
+                      <option key={promo.code} value={promo.code}>
+                        {promo.code} ({promo.discount > 0 ? `+${promo.discount}` : promo.discount})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-maroon-600 dark:text-maroon-300" />
                 </div>
               </div>
             )}
@@ -903,14 +907,6 @@ export function TransactionTab({
                 placeholder={t("txn.promo_placeholder")}
                 aria-label={t("txn.promo_placeholder")}
               />
-              <button
-                type="button"
-                onClick={handleValidatePromo}
-                disabled={promoValidating || !promoCode.trim()}
-                className="shrink-0 rounded-lg bg-maroon-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-maroon-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {promoValidating ? "…" : t("txn.activate_proceed")}
-              </button>
             </div>
             {promoError && <div className="mt-2 text-xs text-red-600 dark:text-red-400">{promoError}</div>}
             {promoValid && promoDiscount > 0 && (
