@@ -79,8 +79,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: numb
 export async function prepareImageForUpload(file: File): Promise<PreparedImageFile> {
   const originalName = file.name || "image";
   const originalExtension = sanitizeExtension(originalName.split(".").pop());
-  const inferredMime = inferMimeType(file, originalExtension);
-  const normalizedMime = inferredMime === "image/heic" || inferredMime === "image/heif" ? DEFAULT_IMAGE_MIME : inferredMime;
+  const normalizedMime = inferMimeType(file, originalExtension);
   const normalizedExtension = getExtensionForMime(normalizedMime);
   const safeName = buildSafeFileName(originalName, normalizedExtension);
 

@@ -19,7 +19,6 @@ import {
 import {
   FUEL_STATIONS_FALLBACK,
   fetchFuelStations,
-  calculateFuel,
   createFuelOrder,
   fetchFuelAdminBanks,
   requestPresign,
@@ -31,9 +30,11 @@ import {
   FuelCalculation,
   FuelOrder,
   FuelStation,
+  logUploadIssue,
 } from "../api";
 import { FuelChat } from "./FuelChat";
 import { useLang } from "../i18n/useLang";
+import { prepareImageForUpload } from "../utils/imageUpload";
 
 interface Props {
   sellRate: number;

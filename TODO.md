@@ -1,6 +1,20 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Refactor main admin navigation with persistent tabs and settings/users sections (frontend/src/pages/AdminPanel.tsx)
+- [x] Extract shared shift and working-hours controls into persistent admin bar (frontend/src/components/admin/AdminShiftBar.tsx)
+- [x] Split bank account CRUD from system settings (frontend/src/components/AdminBankAccounts.tsx, frontend/src/components/admin/AdminSettings.tsx)
+- [x] Add admin users container with persistent KYC/search subviews (frontend/src/components/admin/AdminUsersContainer.tsx)
+- [x] Add admin refactor regression tests and verify TypeScript/build (frontend/src/pages/AdminPanel.test.tsx)
+- [x] Repair pre-existing project TypeScript baseline errors required for clean tsc validation (App.tsx, HomeTab.tsx, FuelFlow.tsx, entitlement fixture)
+- [x] Phase 1: Consolidate client query keys, cache policy, and shared UI-data queries
+- [x] Phase 2: Add centralized entitlements and visit-once persistent tab panels
+- [x] Phase 3: Add reusable dimension-matched skeleton primitives and loaders
+- [x] Phase 4: Integrate gated loaders across Home, Transaction, Services, Stats, and OYUNS Plus
+- [x] Audit unused code, references, import side effects, and dependencies across the frontend, backend, and bot
+- [x] Remove verified dead code and redundant implementation while preserving runtime behavior and external interfaces
+- [x] Validate cleanup: frontend production build passes, 16 backend tests pass in isolated Python 3.11 environment, exports/props/routes/models preserved, and generated CSS/images unchanged
+- [x] Verify no TypeScript unused-code diagnostics remain; retain two pre-existing missing upload imports in FuelFlow.tsx and pre-existing bot undefined names for separate fixes
 - [x] Fix legacy Telegram transaction approval status transition (oyunsbot.py)
 - [x] Show the approved state in the legacy Telegram status command (oyunsbot.py, bot_translations.py)
 - [x] Automatically persist cost rates and refresh same-day black-rate changes (frontend/src/pages/BalanceProfitPage.tsx, backend/main.py)
@@ -9,9 +23,9 @@
 - [x] Add inline pencil editing for manual USD rates in historical black-rate listing (frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Implement dashboard black-rate fetching from Transactions2 rows where E is Ханш (backend/config.py, backend/google_sheets.py, frontend/src/pages/BalanceProfitPage.tsx, .env.example)
 - [x] Verify frontend production build and clean diff
-- [ ] Run focused backend black-rate test (local Python runtime/dependencies are unavailable)
+- [x] Run focused backend black-rate test (passes in isolated Python 3.11 environment)
 - [x] Fix dashboard plane-ticket sale 400 handling and validation (backend/main.py, frontend/src/pages/BalanceProfitPage.tsx)
-- [ ] Run backend tests (local environment is missing Python dependency `requests`)
+- [x] Run backend tests (16 passed in isolated Python 3.11 environment with pinned project dependencies)
 - [x] Add manual transaction recovery schema migration (database/add_manual_transactions.sql)
 - [x] Add strict admin lookup/create API and manual transaction metadata (backend/main.py, backend/models.py)
 - [x] Add manual transaction recovery admin form and API client (frontend/src/components/AdminManualTransaction.tsx, frontend/src/api.ts)
@@ -20,6 +34,33 @@
 - [x] Run frontend production build
 
 ## Completed Tasks
+- [x] Preserve side-effectful calls and fallible input/date/configuration evaluation while removing unused bindings; retain public exports and operational scripts
+- [x] Remove unused @headlessui/react and classnames dependencies and synchronize the lockfile (frontend/package.json, frontend/package-lock.json)
+- [x] Prune verified unused implementation (oyunsbot.py)
+- [x] Prune verified unused implementation (backend/utils.py)
+- [x] Prune verified unused implementation (backend/telegram.py)
+- [x] Prune verified unused implementation (backend/models.py)
+- [x] Prune verified unused implementation (backend/main.py)
+- [x] Prune verified unused implementation (frontend/src/hooks/useTelegramAuth.ts)
+- [x] Prune verified unused implementation (frontend/src/pages/Dashboard.tsx)
+- [x] Prune verified unused implementation (frontend/src/utils/imageUpload.ts)
+- [x] Prune verified unused implementation (frontend/src/components/TelegramDiagnostic.tsx)
+- [x] Prune verified unused implementation (frontend/src/pages/HomeTab.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/AdminInbox.tsx)
+- [x] Prune verified unused implementation (frontend/src/pages/TransactionTab.tsx)
+- [x] Prune verified unused implementation (frontend/src/pages/StatsTab.tsx)
+- [x] Prune verified unused implementation (frontend/src/pages/ProfilePage.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/ProfileModal.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/PendingGiftBanner.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/GiftFlow.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/FuelFlow.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/FuelAdminStations.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/FuelAdminInbox.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/FuelAdminHistory.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/ExchangeFlow.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/AdminUserSearch.tsx)
+- [x] Prune verified unused implementation (frontend/src/components/AdminGifts.tsx)
+- [x] Prune verified unused implementation (frontend/src/App.tsx)
 - [x] Display approved transaction status in the legacy Telegram status command (oyunsbot.py, bot_translations.py)
 - [x] Make legacy Telegram Confirm approve transactions and require approved status before proof-photo completion (oyunsbot.py)
 - [x] Limit black-rate refresh to dashboard open/date selection instead of periodic polling (frontend/src/pages/BalanceProfitPage.tsx)

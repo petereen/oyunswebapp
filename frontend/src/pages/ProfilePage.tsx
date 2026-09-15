@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import {
-  ArrowLeft, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp,
+  ArrowLeft, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp,
   Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save, MessageCircle,
   ShieldCheck, Users, Copy, Check, LogOut,
 } from "lucide-react";
 import { fetchMe, fetchOyunsPlusSummary, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput, OYUNS_PLUS_LOGO_DEFAULT_URL } from "../api";
+import { queryKeys } from "../queryKeys";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone, RegistrationModal } from "../components/RegistrationModal";
 import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { useLang } from "../i18n/useLang";
@@ -58,7 +59,7 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
   const [mntPhone, setMntPhone] = useState("");
 
   const { data: profileData, isLoading } = useQuery({
-    queryKey: ["me", userId],
+    queryKey: userId ? queryKeys.profile(userId) : ["user", "profile", "anonymous"],
     queryFn: () => fetchMe(),
     enabled: Boolean(userId),
     staleTime: 0,
@@ -70,13 +71,13 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
   const pendingVerification = profile?.ready_for_verification && !profile?.verified;
 
   const { data: promoCodes, isLoading: promoLoading } = useQuery({
-    queryKey: ["user-promos", userId],
+    queryKey: userId ? queryKeys.userPromos(userId) : ["user", "promos", "anonymous"],
     queryFn: () => fetchUserPromoCodes(),
     enabled: Boolean(userId) && showPromos,
   });
 
   const { data: oyunsPlusSummary } = useQuery({
-    queryKey: ["oyuns-plus-summary", userId],
+    queryKey: userId ? queryKeys.oyunsPlus.summary(userId) : ["oyuns-plus", "summary", "anonymous"],
     queryFn: () => fetchOyunsPlusSummary(),
     enabled: Boolean(userId),
     retry: 1,
@@ -118,7 +119,7 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
         mnt_phone: mntPhone.replace(/\D/g, "").replace(/^976/, "").slice(0, 8),
       };
       await updateBankInfo(payload);
-      queryClient.invalidateQueries({ queryKey: ["me", userId] });
+      if (userId) queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
       setEditMode(false);
     } catch {
       setError(t("profile.save_error"));
@@ -425,7 +426,7 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
           {showKycModal && (
             <RegistrationModal
               onRegistered={() => {
-                queryClient.invalidateQueries({ queryKey: ["me", userId] });
+                if (userId) queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
                 setShowKycModal(false);
               }}
               onClose={() => setShowKycModal(false)}
@@ -442,7 +443,7 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
           isEmailVerified={Boolean(profile.email_verified_at)}
           onClose={() => setShowEmailVerification(false)}
           onVerified={() => {
-            queryClient.invalidateQueries({ queryKey: ["me", userId] });
+            if (userId) queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
             setShowEmailVerification(false);
           }}
         />

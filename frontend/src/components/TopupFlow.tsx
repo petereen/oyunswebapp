@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -18,6 +19,8 @@ import {
 import { toSafeNumber } from "../utils/exchangePricing";
 import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
+import { queryKeys } from "../queryKeys";
+import { Skeleton } from "./Skeleton";
 
 interface Props {
   sellRate: number;
@@ -53,7 +56,12 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
   const [phone, setPhone] = useState("");
   const [selectedTelecom, setSelectedTelecom] = useState("");
   const [customTelecom, setCustomTelecom] = useState("");
-  const [adminBanks, setAdminBanks] = useState<AdminBankAccount[]>([]);
+  const { data: adminBankData, isLoading: adminBanksLoading } = useQuery({
+    queryKey: queryKeys.admin.bankAccounts,
+    queryFn: fetchAdminBankAccounts,
+    staleTime: 0,
+  });
+  const adminBanks: AdminBankAccount[] = adminBankData?.accounts || [];
   const [selectedBankId, setSelectedBankId] = useState<string>("");
   const [invoiceId, setInvoiceId] = useState("");
   const [receiptUrls, setReceiptUrls] = useState<string[]>([]);
@@ -62,12 +70,6 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
   const [error, setError] = useState("");
   const [successInvoice, setSuccessInvoice] = useState("");
   const [copied, setCopied] = useState("");
-
-  useEffect(() => {
-    fetchAdminBankAccounts()
-      .then((res) => setAdminBanks(res.accounts || []))
-      .catch(() => setAdminBanks([]));
-  }, []);
 
   const availableBanks = useMemo(
     () => adminBanks.filter((bank) => bank.currency === "MNT" && bank.is_active),
@@ -420,7 +422,9 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
               </button>
             </div>
 
-            {availableBanks.length > 1 && (
+            {adminBanksLoading ? (
+              <Skeleton className="mt-4 h-[180px] w-full rounded-2xl" />
+            ) : availableBanks.length > 1 && (
               <select
                 value={selectedBankId}
                 onChange={(event) => setSelectedBankId(event.target.value)}

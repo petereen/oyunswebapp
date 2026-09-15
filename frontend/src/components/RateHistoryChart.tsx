@@ -6,6 +6,8 @@ import {
 } from "recharts";
 import { fetchRateHistory } from "../api";
 import { useLang } from "../i18n/useLang";
+import { queryKeys } from "../queryKeys";
+import { Skeleton } from "./Skeleton";
 
 export function RateHistoryChart() {
   const { t, lang } = useLang();
@@ -19,7 +21,7 @@ export function RateHistoryChart() {
   ];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["rateHistory", selectedDays],
+    queryKey: queryKeys.ratesHistory(selectedDays),
     queryFn: () => fetchRateHistory(selectedDays),
     staleTime: 5 * 60_000,
   });
@@ -64,9 +66,7 @@ export function RateHistoryChart() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-maroon-600" />
-        </div>
+        <Skeleton className="h-[200px] w-full rounded-xl" />
       ) : !hasData ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <BarChart3 className="w-10 h-10 text-silver dark:text-dark-600 mb-2" />

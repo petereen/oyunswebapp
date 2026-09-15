@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Tag, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2, Mail } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, Upload, Edit3, Gift, ArrowRightLeft, CreditCard, UserPlus, Clock, Loader2, Mail } from "lucide-react";
 import { ExchangeCard } from "../components/ExchangeCard";
 import {
-  fetchRates, fetchMe, fetchAppSettings, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue,
+  fetchRates, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue,
   fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes,
   UserPromoCode, fetchServiceStatus, fetchEditableExchange, resubmitExchange,
 } from "../api";
@@ -14,30 +14,19 @@ import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useLang } from "../i18n/useLang";
 import { getAppliedRateAdjustment } from "../utils/exchangePricing";
 import { prepareImageForUpload } from "../utils/imageUpload";
+import { queryKeys } from "../queryKeys";
+import { Entitlements } from "../hooks/useEntitlements";
+import { TransactionFrameSkeleton } from "../components/Skeleton";
 
 interface Props {
   initData: string;
   user: TelegramUser | null;
+  isAuthenticating?: boolean;
+  entitlements: Entitlements;
   initialDirection?: "buy" | "sell" | null;
   initialEditInvoice?: string | null;
   onResetDirection: () => void;
   onEditInvoiceHandled?: () => void;
-}
-
-const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
-const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
-
-function parseSavedBank(saved: string | undefined): Record<string, string> {
-  if (!saved) return {};
-  const result: Record<string, string> = {};
-  const parts = saved.split("•").map((s) => s.trim());
-  parts.forEach((part) => {
-    const [key, ...rest] = part.split(":");
-    if (key && rest.length > 0) {
-      result[key.trim().toLowerCase()] = rest.join(":").trim();
-    }
-  });
-  return result;
 }
 
 function buildSafeReceiptPath(direction: "buy" | "sell" | null, file: File) {
@@ -49,47 +38,23 @@ function buildSafeReceiptPath(direction: "buy" | "sell" | null, file: File) {
 }
 
 export function TransactionTab({
-  initData,
   user,
+  isAuthenticating = false,
+  entitlements,
   initialDirection,
   initialEditInvoice,
   onResetDirection,
   onEditInvoiceHandled,
 }: Props) {
-  const { t, lang } = useLang();
-  const { data: rate } = useQuery({ queryKey: ["rates"], queryFn: fetchRates, retry: 2 });
+  const { t } = useLang();
+  const { data: rate, isLoading: ratesLoading } = useQuery({ queryKey: queryKeys.rates, queryFn: fetchRates, retry: 2 });
   const { data: serviceStatus } = useQuery({
-    queryKey: ["serviceStatus"],
+    queryKey: queryKeys.serviceStatus,
     queryFn: fetchServiceStatus,
     refetchInterval: 60_000,
   });
-  const { data: profile } = useQuery({
-    queryKey: ["me", user?.id],
-    queryFn: fetchMe,
-    enabled: Boolean(user?.id),
-    staleTime: 0,
-  });
-  const { data: appSettings } = useQuery({
-    queryKey: ["app-settings"],
-    queryFn: fetchAppSettings,
-    retry: 1,
-  });
-
+  const { profile, isResolving, profileError, emailVerificationPending, needsEmailVerification: emailGateActive, verificationLevel, isKycVerified: isVerified, isRegistered: isBasicRegistered } = entitlements;
   const userProfile = profile?.user;
-  const emailVerificationPending = Boolean(userProfile?.email_verification_pending);
-  const emailNeedsVerification = Boolean(userProfile)
-    && (
-      Number(userProfile?.verification_level || 0) >= 1
-      || emailVerificationPending
-      || Boolean(userProfile?.verified)
-      || Boolean(userProfile?.ready_for_verification)
-    )
-    && !userProfile?.email_verified_at;
-  const emailGateActive = (appSettings?.email_verification_enabled ?? 1) > 0
-    && (emailVerificationPending || emailNeedsVerification);
-  const verificationLevel = userProfile?.verification_level ?? (userProfile?.verified ? 2 : userProfile?.ready_for_verification ? 1 : 0);
-  const isVerified = verificationLevel >= 2;
-  const isBasicRegistered = verificationLevel >= 1;
   const savedBankRub = userProfile?.bank_rub;
   const savedBankMnt = userProfile?.bank_mnt;
   const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
@@ -110,10 +75,20 @@ export function TransactionTab({
   const [promoError, setPromoError] = useState("");
   const [promoValid, setPromoValid] = useState(false);
   const [promoMessage, setPromoMessage] = useState("");
-  const [userPromoCodes, setUserPromoCodes] = useState<UserPromoCode[]>([]);
-
-  // Admin banks
-  const [adminBanks, setAdminBanks] = useState<AdminBankAccount[]>([]);
+  // Shared cached supporting data. Admin bank data intentionally remains
+  // mount-fresh because it is operational input to a transaction.
+  const { data: adminBankData, isLoading: adminBanksLoading } = useQuery({
+    queryKey: queryKeys.admin.bankAccounts,
+    queryFn: fetchAdminBankAccounts,
+    staleTime: 0,
+  });
+  const { data: userPromoData, isLoading: userPromosLoading } = useQuery({
+    queryKey: user?.id ? queryKeys.userPromos(user.id) : ["user", "promos", "anonymous"],
+    queryFn: fetchUserPromoCodes,
+    enabled: Boolean(user?.id),
+  });
+  const adminBanks: AdminBankAccount[] = adminBankData?.accounts || [];
+  const userPromoCodes: UserPromoCode[] = (userPromoData?.promo_codes || []).filter((p) => p.active && p.source !== "default");
   const [selectedAdminBank, setSelectedAdminBank] = useState<AdminBankAccount | null>(null);
   const [selectedMntAdminBank, setSelectedMntAdminBank] = useState<AdminBankAccount | null>(null);
 
@@ -141,18 +116,6 @@ export function TransactionTab({
   const [editLoading, setEditLoading] = useState(false);
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(initialEditInvoice || null);
   const [editAdminBankId, setEditAdminBankId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchAdminBankAccounts()
-      .then((res) => setAdminBanks(res.accounts || []))
-      .catch(() => {});
-    fetchUserPromoCodes()
-      .then((res) => {
-        const codes = (res.promo_codes || []).filter((p) => p.active && p.source !== "default");
-        setUserPromoCodes(codes);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (initialEditInvoice) {
@@ -541,11 +504,24 @@ export function TransactionTab({
   const queryClient = useQueryClient();
 
   const handleRegistered = () => {
-    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    if (user?.id) queryClient.invalidateQueries({ queryKey: queryKeys.profile(user.id) });
     setShowRegistration(false);
     setShowQuickRegistration(false);
     setShowEmailVerification(false);
   };
+
+  // Entitlements must settle before any registration/KYC blocker is eligible
+  // to render. Keep this neutral while auth/profile data is unavailable.
+  if (profileError && !profile) {
+    return <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-xl text-sm">{t("home.profile_load_failed")}</div>;
+  }
+  if (isAuthenticating || isResolving || !profile) {
+    return <div aria-busy="true"><TransactionFrameSkeleton /></div>;
+  }
+
+  if (ratesLoading || !rate) {
+    return <div aria-busy="true"><TransactionFrameSkeleton /></div>;
+  }
 
   // Email must be verified before any money transaction flow can start.
   if (emailGateActive) {
@@ -842,6 +818,7 @@ export function TransactionTab({
 
   // Promo step
   if (flowStep === "promo") {
+    if (userPromosLoading) return <div aria-busy="true"><TransactionFrameSkeleton /></div>;
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
         <FlowHeader title={t("txn.promo_code")} onBack={() => setFlowStep("card")} />
@@ -912,6 +889,7 @@ export function TransactionTab({
 
   // Admin bank selection step
   if (flowStep === "adminBank") {
+    if (adminBanksLoading) return <div aria-busy="true"><TransactionFrameSkeleton /></div>;
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
         <FlowHeader title={t("txn.select_bank")} onBack={() => setFlowStep("promo")} />

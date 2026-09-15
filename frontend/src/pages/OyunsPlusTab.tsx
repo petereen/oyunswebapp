@@ -15,6 +15,8 @@ import {
 import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { useLang } from "../i18n/useLang";
+import { queryKeys } from "../queryKeys";
+import { OyunsPlusSkeleton, Skeleton } from "../components/Skeleton";
 
 const KNOCKOUT_ROUND_ORDER: Record<string, number> = {
   quarterfinals: 1,
@@ -28,11 +30,12 @@ interface Props {
   emailVerificationPending?: boolean;
   emailAddress?: string;
   isProfileLoading?: boolean;
+  isProfileResolved?: boolean;
   initialTournamentSection?: "basketball" | null;
   initialTournamentInnerTab?: "schedule" | "stages" | "leaderboard";
 }
 
-export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationPending = false, emailAddress, isProfileLoading = false, initialTournamentSection = null, initialTournamentInnerTab = "schedule" }: Props) {
+export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationPending = false, emailAddress, isProfileLoading = false, isProfileResolved = true, initialTournamentSection = null, initialTournamentInnerTab = "schedule" }: Props) {
   const { t } = useLang();
   const queryClient = useQueryClient();
   const [gameCategoryFilter, setGameCategoryFilter] = useState<"all" | TournamentCategory>("all");
@@ -46,27 +49,27 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationP
   const [codeCopied, setCodeCopied] = useState(false);
 
   const { data: summary } = useQuery({
-    queryKey: ["oyuns-plus-summary", userId],
+    queryKey: userId ? queryKeys.oyunsPlus.summary(userId) : ["oyuns-plus", "summary", "anonymous"],
     queryFn: () => fetchOyunsPlusSummary(),
     enabled: Boolean(userId),
     retry: 1,
   });
 
   const { data: historyData } = useQuery({
-    queryKey: ["oyuns-plus-history", userId],
+    queryKey: userId ? queryKeys.oyunsPlus.history(userId) : ["oyuns-plus", "history", "anonymous"],
     queryFn: () => fetchOyunsPlusHistory(),
     enabled: Boolean(userId) && showSettings,
     retry: 1,
   });
 
   const { data: tournamentOverview, isLoading: tournamentLoading } = useQuery({
-    queryKey: ["tournament-overview"],
+    queryKey: queryKeys.tournament.overview,
     queryFn: () => fetchTournamentOverview(),
     retry: 1,
   });
 
   const { data: myVotes } = useQuery({
-    queryKey: ["tournament-my-votes", userId],
+    queryKey: userId ? queryKeys.tournament.myVotes(userId) : ["tournament", "my-votes", "anonymous"],
     queryFn: () => fetchTournamentMyVotes(),
     enabled: Boolean(userId),
     retry: 1,
@@ -120,15 +123,15 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationP
 
   const hasScheduleContent = filteredGames.length > 0;
   const holdTournamentContent = Boolean(userId) && isProfileLoading;
-  const needsLevelOneRegistration = Boolean(userId) && !isProfileLoading && verificationLevel < 1 && !emailVerificationPending;
+  const needsLevelOneRegistration = Boolean(userId) && isProfileResolved && !isProfileLoading && verificationLevel < 1 && !emailVerificationPending;
 
   const voteMutation = useMutation({
     mutationFn: submitTournamentVote,
     onSuccess: async (res) => {
       setVoteMessage(res.message || t("oyuns_plus.vote_success"));
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["tournament-overview"] }),
-        queryClient.invalidateQueries({ queryKey: ["tournament-my-votes", userId] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.tournament.overview }),
+        ...(userId ? [queryClient.invalidateQueries({ queryKey: queryKeys.tournament.myVotes(userId) })] : []),
       ]);
     },
     onError: (err: any) => {
@@ -299,7 +302,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationP
   };
 
   const handleRegistered = () => {
-    queryClient.invalidateQueries({ queryKey: ["me", userId] });
+    if (userId) queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
     setShowQuickRegistration(false);
     setShowEmailVerification(false);
   };
@@ -328,6 +331,10 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationP
       </button>
     </div>
   );
+
+  if (isProfileLoading) {
+    return <div aria-busy="true"><OyunsPlusSkeleton /></div>;
+  }
 
   if (showSettings) {
     const logoUrl = tournamentOverview?.logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL;
@@ -527,9 +534,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationP
           </div>
 
           {holdTournamentContent ? (
-            <div className="bg-white dark:bg-dark-800 rounded-3xl p-5 border border-silver/60 dark:border-dark-600 shadow-card text-xs text-dark-600 dark:text-ivory-400">
-              {t("profile.loading")}
-            </div>
+            <Skeleton className="h-[180px] w-full rounded-3xl" />
           ) : needsLevelOneRegistration || emailVerificationPending ? (
             renderTournamentRegistrationBlocker()
           ) : tournamentInnerTab === "schedule" ? (
@@ -572,7 +577,7 @@ export function OyunsPlusTab({ userId, verificationLevel = 0, emailVerificationP
               </div>
 
               {tournamentLoading ? (
-                <div className="text-xs text-dark-600 dark:text-ivory-400">{t("profile.loading")}</div>
+                <Skeleton className="h-[180px] w-full rounded-2xl" />
               ) : !hasScheduleContent ? (
                 <div className="text-xs text-dark-600 dark:text-ivory-400">{t("oyuns_plus.no_games")}</div>
               ) : (

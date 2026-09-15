@@ -917,11 +917,14 @@ Native navigation destination over the tab shell. Shows identity/KYC level, edit
 
 This inventory preserves the required operator logic and screens for separate distribution. None is reachable from the customer app's tab bar, deep-link allowlist, binary, or session state.
 
-- `AdminPanel` (separate exchange/KYC app): role-protected tabs `inbox`, `kyc`, `users`, `banks`, `history`, `gifts`.
-- `AdminInbox`: paged load/pull-to-refresh; shift/hour controls; oldest/newest/amount sort; direction filter; bank mismatch and user labels; proof viewer/uploads; return-to-edit, claim, reject, or complete; phone top-up and JSON/single proof display parsing.
+- `AdminPanel` (separate exchange/KYC app): role-protected tabs `inbox`, `users`, `accounts`, `history`, `manual`, `gifts`, `settings`; visited panels remain mounted while navigating.
+- `AdminShiftBar`: persistent shift and working-hours status/control bar shared by the admin shell, with inbox read-only completion-admin context sourced from the same cached shift data.
+- `AdminUsersContainer`: nested KYC and user-search views with persistent local state.
+- `AdminInbox`: paged load/pull-to-refresh; oldest/newest/amount sort; direction filter; bank mismatch and user labels; proof viewer/uploads; return-to-edit, claim, reject, or complete; phone top-up and JSON/single proof display parsing.
 - `AdminKyc`: cached pending queue with approve/reject mutations and invalidation.
 - `AdminUserSearch`: debounced search and clipboard support.
-- `AdminBankAccounts`: CRUD, bank ownership/priority/logo, application limits, banner image/link, OYUNS+ parameters, and operator-queue settings.
+- `AdminBankAccounts`: bank-account CRUD, ownership/priority/logo, active state, and admin assignment.
+- `AdminSettings`: Telegram group ID for per-request settlement dispatch, exchange limits, email verification, OYUNS+ parameters, and home banner image/link controls.
 - `AdminHistory`: status filter, 20-row pages, transaction detail.
 - `AdminGifts`: filter and process gift queue.
 - `FuelAdminPanel` (separate fuel operations app): tabs inbox/history/banks/stations/shift. Inbox refreshes, acts, uploads approval image, and displays chat/unread state. History has status/pagination. Bank/station panels perform CRUD. Shift selects active and always-notify admin.

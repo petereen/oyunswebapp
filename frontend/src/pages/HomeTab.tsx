@@ -13,10 +13,13 @@ import { RegistrationModal } from "../components/RegistrationModal";
 import { QuickRegistrationModal } from "../components/QuickRegistrationModal";
 import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { RequiredInfoModal } from "../components/RequiredInfoModal";
-import { fetchAppSettings, fetchRates, fetchMe, fetchOyunsPlusSummary, fetchServiceStatus } from "../api";
+import { fetchRates, fetchOyunsPlusSummary, fetchServiceStatus } from "../api";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useTheme } from "../hooks/useTheme";
 import { useLang } from "../i18n/useLang";
+import { queryKeys } from "../queryKeys";
+import { Entitlements } from "../hooks/useEntitlements";
+import { EntitlementCardSkeleton, HomeBannerSkeleton, QuickActionsSkeleton, TrackerSkeleton } from "../components/Skeleton";
 
 interface Props {
   initData: string;
@@ -30,63 +33,38 @@ interface Props {
   onNavigateToProfile: () => void;
   onNavigateToFuelOrder?: (orderId: string) => void;
   openEmailVerify?: boolean;
+  entitlements: Entitlements;
 }
 
-export function HomeTab({ initData, user, isAuthenticating, authError, needsBrowserLogin = false, onStartBrowserLogin, onLogout, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder, openEmailVerify = false }: Props) {
+export function HomeTab({ initData, user, isAuthenticating, authError, needsBrowserLogin = false, onStartBrowserLogin, onLogout, onNavigateToTransaction, onNavigateToProfile, onNavigateToFuelOrder, openEmailVerify = false, entitlements }: Props) {
   const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
   const { lang, setLang, t } = useLang();
 
   const { data: rate } = useQuery({
-    queryKey: ["rates"],
+    queryKey: queryKeys.rates,
     queryFn: () => fetchRates(),
     retry: 2,
   });
 
-  const { data: serviceStatus } = useQuery({
-    queryKey: ["serviceStatus"],
+  const { data: serviceStatus, isLoading: serviceStatusLoading } = useQuery({
+    queryKey: queryKeys.serviceStatus,
     queryFn: () => fetchServiceStatus(),
     retry: 2,
     refetchInterval: 60000,
   });
 
-  const { data: appSettings } = useQuery({
-    queryKey: ["app-settings"],
-    queryFn: () => fetchAppSettings(),
-    retry: 1,
-  });
-
-  const { data: profile, error: profileError } = useQuery({
-    queryKey: ["me", user?.id],
-    queryFn: () => fetchMe(),
-    enabled: Boolean(user?.id) && !isAuthenticating,
-    staleTime: 0,
-  });
-
   const { data: oyunsPlusSummary } = useQuery({
-    queryKey: ["oyuns-plus-summary", user?.id],
+    queryKey: user?.id ? queryKeys.oyunsPlus.summary(user.id) : ["oyuns-plus", "summary", "anonymous"],
     queryFn: () => fetchOyunsPlusSummary(),
     enabled: Boolean(user?.id) && !isAuthenticating,
     retry: 1,
   });
 
+  const { profile, appSettings, profileError, emailVerificationPending, needsEmailVerification: emailGateActive, verificationLevel, isKycVerified: isVerified, isRegistered: isBasicRegistered, isPendingKyc } = entitlements;
   const userProfile = profile?.user;
-  const emailVerificationPending = Boolean(userProfile?.email_verification_pending);
-  const emailNeedsVerification = Boolean(userProfile)
-    && (
-      Number(userProfile?.verification_level || 0) >= 1
-      || emailVerificationPending
-      || Boolean(userProfile?.verified)
-      || Boolean(userProfile?.ready_for_verification)
-    )
-    && !userProfile?.email_verified_at;
-  const emailGateActive = (appSettings?.email_verification_enabled ?? 1) > 0
-    && (emailVerificationPending || emailNeedsVerification);
-  const verificationLevel = userProfile?.verification_level ?? (userProfile?.verified ? 2 : userProfile?.ready_for_verification ? 1 : 0);
-  const isVerified = verificationLevel >= 2;
-  const isBasicRegistered = verificationLevel >= 1;
-  const needsRegistration = verificationLevel === 0 && !emailVerificationPending;
-  const pendingVerification = emailGateActive || Boolean(userProfile && userProfile.verified === false && userProfile.ready_for_verification === true);
+  const needsRegistration = Boolean(profile) && !isBasicRegistered && !emailVerificationPending;
+  const pendingVerification = emailGateActive || isPendingKyc;
 
   const missingEmail = isVerified && !userProfile?.email?.trim();
   const getMntPhone = (bankMnt: string | undefined) => {
@@ -103,10 +81,10 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
   const [showEmailVerification, setShowEmailVerification] = useState(false);
   const [showKycRegistration, setShowKycRegistration] = useState(false);
   const [showRequiredInfo, setShowRequiredInfo] = useState(false);
-  const [direction, setDirection] = useState<"buy" | "sell">("buy");
+  const [, setDirection] = useState<"buy" | "sell">("buy");
 
   const handleRegistered = () => {
-    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    if (user?.id) queryClient.invalidateQueries({ queryKey: queryKeys.profile(user.id) });
     setShowRegistration(false);
     setShowQuickRegistration(false);
     setShowEmailVerification(false);
@@ -114,7 +92,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
   };
 
   const handleRequiredInfoSaved = () => {
-    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    if (user?.id) queryClient.invalidateQueries({ queryKey: queryKeys.profile(user.id) });
     setShowRequiredInfo(false);
   };
 
@@ -164,6 +142,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
     return /^https?:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`;
   }, [appSettings?.home_banner_link_url]);
   const showHomeBanner = (appSettings?.home_banner_enabled ?? 0) > 0 && Boolean(homeBannerImageUrl);
+  const isSettingsResolving = !appSettings && !entitlements.settingsError;
   const showBrowserLogout = Boolean(user?.id) && Boolean(onLogout) && !initData;
 
   const handleHomeBannerClick = () => {
@@ -339,7 +318,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
         </div>
       </div>
 
-      {showHomeBanner && (
+      {isSettingsResolving ? <HomeBannerSkeleton /> : showHomeBanner && (
         homeBannerLinkUrl ? (
           <button
             type="button"
@@ -353,13 +332,13 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
       )}
 
       {/* Transaction Status Trackers */}
-      {user?.id && <TransactionStatusTracker userId={user.id} onEditRequest={handleEditTransaction} />}
-      {user?.id && isVerified && <GiftStatusTracker userId={user.id} />}
-      {user?.id && isBasicRegistered && <FuelStatusTracker userId={user.id} onOpenOrder={onNavigateToFuelOrder} />}
-      {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: ["me", user?.id] })} />}
+      {user?.id && entitlements.isResolving ? <TrackerSkeleton /> : user?.id && <TransactionStatusTracker userId={user.id} onEditRequest={handleEditTransaction} />}
+      {user?.id && !entitlements.isResolving && isVerified && <GiftStatusTracker userId={user.id} />}
+      {user?.id && !entitlements.isResolving && isBasicRegistered && <FuelStatusTracker userId={user.id} onOpenOrder={onNavigateToFuelOrder} />}
+      {user?.id && !entitlements.isResolving && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: queryKeys.profile(user.id) })} />}
 
       {/* Profile Error */}
-      {profileError && (
+      {profileError && !profile && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-xl text-sm">
           <strong>{t("home.profile_load_failed")}</strong>
           <div className="text-xs mt-2">
@@ -369,6 +348,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
       )}
 
       {/* Registration / Verification States */}
+      {user?.id && entitlements.isResolving && <EntitlementCardSkeleton />}
       {needsRegistration && (
         <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
           <div className="flex items-center gap-4 mb-4">
@@ -446,7 +426,9 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
       )}
 
       {/* Buy/Sell Quick Action Row */}
-      {isVerified && isServiceOpen && (
+      {entitlements.isResolving || (isVerified && serviceStatusLoading) ? (
+        <QuickActionsSkeleton />
+      ) : isVerified && isServiceOpen && (
         <div className="flex gap-3">
           <button
             onClick={() => handleBuySell("sell")}

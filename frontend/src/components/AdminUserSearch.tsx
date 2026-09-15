@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   XCircle,
   Copy,
-  ExternalLink,
   MessageCircle,
   RefreshCw,
 } from "lucide-react";

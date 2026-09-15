@@ -4,15 +4,15 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  X,
   Building,
   CreditCard,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
 import { fetchPendingGifts, confirmGiftReceipt, PendingGift } from "../api";
-import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
+import { formatCardNumber, formatIBAN } from "./RegistrationModal";
 import { useLang } from "../i18n/useLang";
+import { Skeleton } from "./Skeleton";
 
 interface Props {
   onGiftConfirmed?: () => void;
@@ -122,7 +122,7 @@ export function PendingGiftBanner({ onGiftConfirmed }: Props) {
     return currencyTo === "RUB" ? RUB_BANKS : MNT_BANKS;
   };
 
-  if (loading) return null;
+  if (loading) return <Skeleton className="h-[104px] w-full rounded-2xl mb-6" />;
   if (pendingGifts.length === 0) return null;
 
   return (

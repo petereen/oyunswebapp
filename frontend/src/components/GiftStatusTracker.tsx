@@ -4,6 +4,8 @@ import { Gift, Clock, UserCheck, ThumbsUp, CheckCircle2, X, AlertTriangle, Messa
 import { fetchSentGifts, SentGift } from "../api";
 import { useLang } from "../i18n/useLang";
 import { useSwipeToDismiss } from "../hooks/useSwipeToDismiss";
+import { queryKeys } from "../queryKeys";
+import { TrackerSkeleton } from "./Skeleton";
 
 interface GiftStatusTrackerProps {
   userId?: number;
@@ -21,7 +23,7 @@ export function GiftStatusTracker({ userId }: GiftStatusTrackerProps) {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["sentGifts", userId],
+    queryKey: userId ? queryKeys.trackers.gifts(userId) : ["trackers", "gifts", "anonymous"],
     queryFn: () => fetchSentGifts(),
     enabled: Boolean(userId),
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -36,7 +38,8 @@ export function GiftStatusTracker({ userId }: GiftStatusTrackerProps) {
     setDismissedInvoices((prev) => [...prev, invoice]);
   };
 
-  if (isLoading || !data) return null;
+  if (isLoading) return <TrackerSkeleton />;
+  if (!data) return null;
 
   // Filter out dismissed gifts (only completed/rejected ones can be dismissed)
   const visibleGifts = data.gifts.filter(

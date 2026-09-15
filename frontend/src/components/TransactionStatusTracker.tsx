@@ -4,6 +4,8 @@ import { Clock, ThumbsUp, CheckCircle2, X, AlertTriangle, MessageCircle } from "
 import { fetchActiveTransactions, ActiveTransaction } from "../api";
 import { useLang } from "../i18n/useLang";
 import { useSwipeToDismiss } from "../hooks/useSwipeToDismiss";
+import { queryKeys } from "../queryKeys";
+import { TrackerSkeleton } from "./Skeleton";
 
 interface TransactionStatusTrackerProps {
   userId?: number;
@@ -22,7 +24,7 @@ export function TransactionStatusTracker({ userId, onEditRequest }: TransactionS
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["activeTransactions", userId],
+    queryKey: userId ? queryKeys.trackers.transactions(userId) : ["trackers", "transactions", "anonymous"],
     queryFn: () => fetchActiveTransactions(),
     enabled: Boolean(userId),
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -37,7 +39,8 @@ export function TransactionStatusTracker({ userId, onEditRequest }: TransactionS
     setDismissedInvoices(prev => [...prev, invoice]);
   };
 
-  if (isLoading || !data) return null;
+  if (isLoading) return <TrackerSkeleton />;
+  if (!data) return null;
 
   // Filter out dismissed transactions
   const visibleTransactions = data.transactions.filter(

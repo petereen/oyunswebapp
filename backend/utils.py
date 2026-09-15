@@ -109,8 +109,6 @@ def verify_jwt_token(token: str, secret: str) -> AuthenticatedUser:
         last_name = payload.get("last_name")
         username = payload.get("username")
         
-        # logger.info(f"JWT token verified for user {user_id}")
-        
         return AuthenticatedUser(
             id=user_id,
             first_name=first_name,

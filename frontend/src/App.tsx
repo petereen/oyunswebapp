@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import oyunsLogo from "./assets/oyuns-logo.png";
-import { useQuery } from "@tanstack/react-query";
 import { AdminPanel } from "./pages/AdminPanel";
 import { FuelAdminPanel } from "./pages/FuelAdminPanel";
 import { HomeTab } from "./pages/HomeTab";
@@ -14,10 +13,9 @@ import { DashboardPanel } from "./pages/DashboardPanel";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
 import { Shield } from "lucide-react";
-import { TelegramDiagnostic } from "./components/TelegramDiagnostic";
 import { useLang } from "./i18n/useLang";
 import { DevToolbar } from "./components/DevToolbar";
-import { fetchMe } from "./api";
+import { useEntitlements } from "./hooks/useEntitlements";
 
 export default function App() {
   const queryParams = new URLSearchParams(window.location.search);
@@ -71,13 +69,32 @@ export default function App() {
     : "schedule";
 
   const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
+  const entitlements = useEntitlements({ userId: user?.id, isAuthenticating });
   const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
-  const [activeTab, setActiveTab] = useState(urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0);
+  const initialActiveTab = urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0;
+  const [activeTab, setActiveTab] = useState(initialActiveTab);
+  const effectiveActiveTab = user ? activeTab : 0;
   const [showProfile, setShowProfile] = useState(false);
   const [transactionDirection, setTransactionDirection] = useState<"buy" | "sell" | null>(null);
   const [fuelOrderId, setFuelOrderId] = useState<string | null>(urlFuelOrderId);
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(urlEditInvoice);
+  const [visitedTabs, setVisitedTabs] = useState<Set<number>>(() => new Set([0, initialActiveTab]));
+  const scrollPositionsRef = useRef<Record<number, number>>({});
+  const previousTabRef = useRef(effectiveActiveTab);
+
+  useEffect(() => {
+    if (!user) {
+      setVisitedTabs(new Set([0, initialActiveTab]));
+      return;
+    }
+    setVisitedTabs((previous) => {
+      if (previous.has(effectiveActiveTab)) return previous;
+      const next = new Set(previous);
+      next.add(effectiveActiveTab);
+      return next;
+    });
+  }, [user, effectiveActiveTab]);
 
   // Listen for auth:unauthorized events and trigger re-authentication
   useEffect(() => {
@@ -90,18 +107,7 @@ export default function App() {
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, [refreshAuth]);
 
-  // Fetch profile at App level to determine admin status immediately
-  const { data: profile, isLoading: isProfileLoading } = useQuery({
-    queryKey: ["me", user?.id],
-    queryFn: () => fetchMe(),
-    enabled: Boolean(user?.id) && !isAuthenticating,
-    staleTime: 0,
-  });
-
-  const isAdmin = profile?.is_admin || false;
-  const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : profile?.user?.ready_for_verification ? 1 : 0);
-  const effectiveActiveTab = user ? activeTab : 0;
-
+  const isAdmin = entitlements.isAdmin;
   const handleNavigateToTransaction = (direction?: "buy" | "sell", editInvoice?: string) => {
     if (editInvoice) {
       setEditInvoiceId(editInvoice);
@@ -125,11 +131,13 @@ export default function App() {
   };
 
   const handleNavigateToProfile = () => {
+    scrollPositionsRef.current[effectiveActiveTab] = window.scrollY;
     setShowProfile(true);
   };
 
   const handleBackFromProfile = () => {
     setShowProfile(false);
+    requestAnimationFrame(() => window.scrollTo({ top: scrollPositionsRef.current[effectiveActiveTab] || 0, behavior: "auto" }));
   };
 
   const handleLogout = () => {
@@ -148,8 +156,12 @@ export default function App() {
   };
 
   const handleTabChange = (tab: number) => {
+    scrollPositionsRef.current[previousTabRef.current] = window.scrollY;
+    previousTabRef.current = tab;
+    setVisitedTabs((previous) => new Set(previous).add(tab));
     setActiveTab(tab);
     setShowProfile(false);
+    requestAnimationFrame(() => window.scrollTo({ top: scrollPositionsRef.current[tab] || 0, behavior: "auto" }));
     if (tab !== 1) setTransactionDirection(null);
     if (tab !== 1) setEditInvoiceId(null);
     if (tab !== 2) setFuelOrderId(null);
@@ -205,17 +217,15 @@ export default function App() {
           </div>
         )}
 
-        {/* Profile Page (overlays tabs) */}
-        {showProfile ? (
-          <ProfilePage userId={user?.id} onBack={handleBackFromProfile} onLogout={handleLogout} />
-        ) : (
-          <>
-            {effectiveActiveTab === 0 && (
+        {/* Visited tabs remain mounted so local state and data observers survive navigation. */}
+        {visitedTabs.has(0) && (
+          <div className={showProfile || effectiveActiveTab !== 0 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 0}>
               <HomeTab
                 initData={initData}
                 user={user}
                 isAuthenticating={isAuthenticating}
                 authError={authError}
+                entitlements={entitlements}
                 needsBrowserLogin={needsBrowserLogin}
                 onStartBrowserLogin={startBrowserLogin}
                 onNavigateToTransaction={handleNavigateToTransaction}
@@ -223,32 +233,47 @@ export default function App() {
                 onNavigateToFuelOrder={handleNavigateToFuelOrder}
                 openEmailVerify={urlVerifyEmail}
               />
-            )}
-            {user && effectiveActiveTab === 1 && (
+          </div>
+        )}
+        {user && visitedTabs.has(1) && (
+          <div className={showProfile || effectiveActiveTab !== 1 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 1}>
               <TransactionTab
                 initData={initData}
                 user={user}
+                isAuthenticating={isAuthenticating}
+                entitlements={entitlements}
                 initialDirection={transactionDirection}
                 initialEditInvoice={editInvoiceId}
                 onResetDirection={() => setTransactionDirection(null)}
                 onEditInvoiceHandled={handleEditInvoiceConsumed}
               />
-            )}
-            {user && effectiveActiveTab === 2 && <ServicesTab initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />}
-            {user && effectiveActiveTab === 3 && (
+          </div>
+        )}
+        {user && visitedTabs.has(2) && (
+          <div className={showProfile || effectiveActiveTab !== 2 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 2}>
+            <ServicesTab userId={user.id} isAuthenticating={isAuthenticating} entitlements={entitlements} initialFuelOrderId={fuelOrderId} onFuelOrderOpened={() => setFuelOrderId(null)} />
+          </div>
+        )}
+        {user && visitedTabs.has(3) && (
+          <div className={showProfile || effectiveActiveTab !== 3 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 3}>
               <OyunsPlusTab
                 userId={user?.id}
-                verificationLevel={verificationLevel}
-                emailVerificationPending={Boolean(profile?.user?.email_verification_pending)}
-                emailAddress={profile?.user?.email}
-                isProfileLoading={Boolean(user?.id) && isProfileLoading}
+                verificationLevel={entitlements.verificationLevel}
+                emailVerificationPending={entitlements.emailVerificationPending}
+                emailAddress={entitlements.profile?.user?.email}
+                isProfileLoading={entitlements.isResolving}
+                isProfileResolved={Boolean(entitlements.profile)}
                 initialTournamentSection={urlTournamentSection}
                 initialTournamentInnerTab={urlTournamentInnerTab}
               />
-            )}
-            {user && effectiveActiveTab === 4 && <StatsTab userId={user?.id} />}
-          </>
+          </div>
         )}
+        {user && visitedTabs.has(4) && (
+          <div className={showProfile || effectiveActiveTab !== 4 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 4}>
+            <StatsTab userId={user.id} isAuthenticating={isAuthenticating} entitlements={entitlements} />
+          </div>
+        )}
+        {showProfile && <ProfilePage userId={user?.id} onBack={handleBackFromProfile} onLogout={handleLogout} />}
       </div>
 
       {/* Bottom Nav */}

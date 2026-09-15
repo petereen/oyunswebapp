@@ -1,17 +1,13 @@
 import { useState, useEffect } from "react";
 import {
   RefreshCw,
-  Image,
   X,
   CheckCircle2,
   XCircle,
-  Play,
-  Fuel,
   MapPin,
   ChevronDown,
   ChevronUp,
   Clock,
-  Upload,
   Loader2,
   Camera,
   MessageCircle,

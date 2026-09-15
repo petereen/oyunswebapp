@@ -12,6 +12,8 @@ import {
 import { fetchActiveFuelOrders, FuelOrder } from "../api";
 import { useLang } from "../i18n/useLang";
 import { useSwipeToDismiss } from "../hooks/useSwipeToDismiss";
+import { queryKeys } from "../queryKeys";
+import { TrackerSkeleton } from "./Skeleton";
 
 interface Props {
   userId?: number;
@@ -29,7 +31,7 @@ export function FuelStatusTracker({ userId, onOpenOrder }: Props) {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["activeFuelOrders", userId],
+    queryKey: userId ? queryKeys.trackers.fuel(userId) : ["trackers", "fuel", "anonymous"],
     queryFn: () => fetchActiveFuelOrders(),
     enabled: Boolean(userId),
     refetchInterval: 30000,
@@ -43,7 +45,8 @@ export function FuelStatusTracker({ userId, onOpenOrder }: Props) {
     setDismissed((prev) => [...prev, id]);
   };
 
-  if (isLoading || !data) return null;
+  if (isLoading) return <TrackerSkeleton />;
+  if (!data) return null;
 
   const visible = data.orders.filter(
     (o) =>

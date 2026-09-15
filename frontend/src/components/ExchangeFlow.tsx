@@ -1,34 +1,20 @@
 import { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRightLeft, CheckCircle2, Copy, CreditCard, Upload, Edit3, Tag, Gift } from "lucide-react";
 import { DEFAULT_MIN_RUB_AMOUNT, DEFAULT_MIN_RUB_BUY, createExchange, ExchangeCreateInput, requestPresign, logUploadIssue, fetchAdminBankAccounts, validatePromoCode, AdminBankAccount, fetchUserPromoCodes, UserPromoCode, fetchAppSettings } from "../api";
-import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
+import { formatRussianPhone, formatCardNumber, formatIBAN } from "./RegistrationModal";
 import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
+import { queryKeys } from "../queryKeys";
 
 interface Props {
+  userId?: number;
   initData: string;
   buyRate: number;
   sellRate: number;
   savedBankRub?: string;
   savedBankMnt?: string;
   onBack: () => void;
-}
-
-const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
-const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
-
-// Parse saved bank info
-function parseSavedBank(saved: string | undefined): Record<string, string> {
-  if (!saved) return {};
-  const result: Record<string, string> = {};
-  const parts = saved.split("•").map((s) => s.trim());
-  parts.forEach((part) => {
-    const [key, ...rest] = part.split(":");
-    if (key && rest.length > 0) {
-      result[key.trim().toLowerCase()] = rest.join(":").trim();
-    }
-  });
-  return result;
 }
 
 function buildSafeReceiptPath(direction: "buy" | "sell" | null, file: File) {
@@ -39,7 +25,7 @@ function buildSafeReceiptPath(direction: "buy" | "sell" | null, file: File) {
   return `${folder}/${Date.now()}-${nonce}.${safeExt}`;
 }
 
-export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedBankMnt, onBack }: Props) {
+export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBankMnt, onBack }: Props) {
   const { t } = useLang();
   // Steps:
   // 0: Direction selection
@@ -60,13 +46,23 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   const [promoError, setPromoError] = useState("");
   const [promoValid, setPromoValid] = useState(false);
   const [promoMessage, setPromoMessage] = useState("");
-  const [userPromoCodes, setUserPromoCodes] = useState<UserPromoCode[]>([]);
+  const { data: adminBankData } = useQuery({
+    queryKey: queryKeys.admin.bankAccounts,
+    queryFn: fetchAdminBankAccounts,
+    staleTime: 0,
+  });
+  const { data: userPromoData } = useQuery({
+    queryKey: userId ? queryKeys.userPromos(userId) : ["user", "promos", "anonymous"],
+    queryFn: fetchUserPromoCodes,
+    enabled: Boolean(userId),
+  });
+  const userPromoCodes: UserPromoCode[] = (userPromoData?.promo_codes || []).filter((p) => p.active && p.source !== "default");
   
   // Amount
   const [amount, setAmount] = useState<number>(0);
   
   // Admin bank accounts (for RUB->MNT direction)
-  const [adminBanks, setAdminBanks] = useState<AdminBankAccount[]>([]);
+  const adminBanks: AdminBankAccount[] = adminBankData?.accounts || [];
   const [selectedAdminBank, setSelectedAdminBank] = useState<AdminBankAccount | null>(null);
   
   // MNT admin bank for MNT->RUB (sell) direction
@@ -91,9 +87,12 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
   // Invoice ID (generated when entering step 3)
   const [invoiceId, setInvoiceId] = useState<string>("");
   
-  // App settings
-  const [minRubAmount, setMinRubAmount] = useState<number>(DEFAULT_MIN_RUB_AMOUNT);
-  const [minRubBuy, setMinRubBuy] = useState<number>(DEFAULT_MIN_RUB_BUY);
+  const { data: appSettings } = useQuery({
+    queryKey: queryKeys.appSettings,
+    queryFn: fetchAppSettings,
+  });
+  const minRubAmount = appSettings?.min_rub_amount ?? DEFAULT_MIN_RUB_AMOUNT;
+  const minRubBuy = appSettings?.min_rub_buy ?? DEFAULT_MIN_RUB_BUY;
   
   // Show Russian bank warning when user tries to sell (MNT->RUB) without bank info
   const [showRubBankWarning, setShowRubBankWarning] = useState(false);
@@ -123,41 +122,6 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
     
     return `${year}${month}${day}-${hours}${minutes}${seconds}-${random}`;
   };
-
-  // Load admin bank accounts and user promo codes
-  useEffect(() => {
-    fetchAdminBankAccounts()
-      .then((res) => setAdminBanks(res.accounts || []))
-      .catch(() => setAdminBanks([]));
-    
-    // Load app settings (min_rub_amount, min_rub_buy)
-    fetchAppSettings()
-      .then((res) => {
-        setMinRubAmount(res.min_rub_amount);
-        setMinRubBuy(res.min_rub_buy);
-      })
-      .catch(() => {
-        setMinRubAmount(DEFAULT_MIN_RUB_AMOUNT);
-        setMinRubBuy(DEFAULT_MIN_RUB_BUY);
-      });
-    
-    // Load user's promo codes (active codes belonging to this user)
-    fetchUserPromoCodes()
-      .then((res) => {
-        console.log("User promo codes response:", res);
-        // Show all active promo codes that belong to the user
-        // Filter out only 'default' source codes (these are general codes, not user-specific)
-        const userCodes = (res.promo_codes || []).filter(
-          p => p.active && p.source !== "default"
-        );
-        console.log("User's promo codes (excluding default):", userCodes);
-        setUserPromoCodes(userCodes);
-      })
-      .catch((err) => {
-        console.error("Error fetching user promo codes:", err);
-        setUserPromoCodes([]);
-      });
-  }, []);
 
   // Calculate effective rate with promo discount
   const baseRate = useMemo(() => {
@@ -378,23 +342,6 @@ export function ExchangeFlow({ initData, buyRate, sellRate, savedBankRub, savedB
       setRubCardNumber("");
       setRubPhone("");
       setRubOwnerName("");
-    }
-  };
-
-  const prefillSavedBank = (dir: "buy" | "sell") => {
-    const saved = getSavedBankForDirection(dir);
-    if (!saved) return;
-    const parsed = parseSavedBank(saved);
-    
-    if (dir === "buy") {
-      setMntBank(parsed["bank"] || "");
-      setMntIban(parsed["iban"] || parsed["account"] || "");
-      setMntOwnerName(parsed["owner"] || parsed["name"] || "");
-    } else {
-      setRubBank(parsed["bank"] || "");
-      setRubCardNumber(parsed["card"] || parsed["account"] || "");
-      setRubPhone(parsed["phone"] || parsed["сбп"] || "");
-      setRubOwnerName(parsed["owner"] || parsed["name"] || "");
     }
   };
 

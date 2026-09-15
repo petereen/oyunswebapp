@@ -14,6 +14,7 @@ import { TransactionStatusTracker } from "../components/TransactionStatusTracker
 import { PendingGiftBanner } from "../components/PendingGiftBanner";
 import { GiftStatusTracker } from "../components/GiftStatusTracker";
 import { fetchRates, fetchMe, fetchServiceStatus } from "../api";
+import { queryKeys } from "../queryKeys";
 import { TelegramUser } from "../hooks/useTelegramAuth";
 import { useLang } from "../i18n/useLang";
 
@@ -29,20 +30,20 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
   const { t } = useLang();
   
   const { data: rate, isLoading: ratesLoading, error: ratesError } = useQuery({
-    queryKey: ["rates"],
+    queryKey: queryKeys.rates,
     queryFn: () => fetchRates(),
     retry: 2,
   });
 
   const { data: serviceStatus } = useQuery({
-    queryKey: ["serviceStatus"],
+    queryKey: queryKeys.serviceStatus,
     queryFn: () => fetchServiceStatus(),
     retry: 2,
     refetchInterval: 60000, // Refresh every minute
   });
 
   const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
-    queryKey: ["me", user?.id],
+    queryKey: user?.id ? queryKeys.profile(user.id) : ["user", "profile", "anonymous"],
     queryFn: () => fetchMe(),
     enabled: Boolean(user?.id) && !isAuthenticating,
     staleTime: 0, // Always refetch to ensure fresh user data
@@ -66,9 +67,6 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
 
   // Check if user is verified (can use exchange)
   const isVerified = userProfile?.verified === true;
-  
-  // Check if user needs registration (not verified and not pending verification)
-  const needsRegistration = userProfile && userProfile.verified === false && userProfile.ready_for_verification === false;
   
   // Check if user is waiting for verification
   const pendingVerification = userProfile && userProfile.verified === false && userProfile.ready_for_verification === true;
@@ -94,13 +92,13 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
 
   const handleRegistered = () => {
     // Refetch profile to update registration status
-    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    if (user?.id) queryClient.invalidateQueries({ queryKey: queryKeys.profile(user.id) });
     setShowRegistration(false);
   };
   
   const handleRequiredInfoSaved = () => {
     // Refetch profile to update info
-    queryClient.invalidateQueries({ queryKey: ["me", user?.id] });
+    if (user?.id) queryClient.invalidateQueries({ queryKey: queryKeys.profile(user.id) });
     setShowRequiredInfo(false);
   };
 
@@ -237,7 +235,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
       {user?.id && isVerified && <GiftStatusTracker userId={user.id} />}
 
       {/* Pending Gift Banner - shows gifts waiting for recipient confirmation */}
-      {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: ["me", user?.id] })} />}
+      {user?.id && isVerified && <PendingGiftBanner onGiftConfirmed={() => queryClient.invalidateQueries({ queryKey: queryKeys.profile(user.id) })} />}
 
       {/* Profile Error */}
       {profileError && (

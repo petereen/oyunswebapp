@@ -1,6 +1,5 @@
 import telebot
 import telebot.apihelper
-import datetime
 import requests
 import tempfile
 import threading
@@ -15,7 +14,6 @@ from datetime import date
 from datetime import datetime, timedelta, time, timezone
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from supabase import create_client, Client
-import os
 import re
 
 from zoneinfo import ZoneInfo
@@ -82,16 +80,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # Replace with the Operator's Telegram User ID
-#OPERATOR_CHAT_ID = 1932946217 # Change to real operator ID
-#ADMIN_IDS = 1932946217
 HIGH_VALUE_OPERATOR_CHAT_ID = 1447446407
 ALWAYS_NOTIFY_OPERATOR_ID = [1932946217, 1447446407]
 ALLOWED_ADMINS = {1932946217, 1447446407, 5564298862, 1409343588, 6351681039}  #pending_users
 MODERATOR_ID = 1920453419  # Moderator for referral confirmations
 #1447446407 Surnee ah
 #1932946217 Temuulen Ochirbat
-#BANK_DETAILS_MNT = "🏦 ХААН БАНК\n Дансны нэр: СҮРЭНЖАВ\nДансны IBAN дугаар: IBAN MN750005005313286273\nДансны дугаар: `5313286273`\n"
-#BANK_DETAILS_RUB = "🏦 СБЕРБАНК\n Дансны нэр: XXX\nДансны дугаар: 500XXXXXX"
 
 # Global variables for operator and bank details (set dynamically from config)
 OPERATOR_CHAT_ID = None
@@ -1053,12 +1047,6 @@ def get_current_shift_config():
     }
 
 
-# This handler is removed - using direct handlers for BUY_RATE and SELL_RATE instead
-# @bot.callback_query_handler(func=lambda call: call.data in ["BUY_RATE", "SELL_RATE"])
-# def handle_exchange_direction(call):
-#     ... (removed to avoid conflict with specific handlers)
-
-
 # Store user states, profiles, and transactions
 user_amounts = {}  # Stores the entered amount
 user_profiles = {}  # {user_id: {"bank_details": "..."}}
@@ -1516,7 +1504,7 @@ def update_transaction_status(user_id, status):
     try:
         # Find the user's latest transaction (matching user_id)
         invoice = pending_transactions[user_id]["invoice"]
-        response = supabase.table("transactions").update({"status": status}).eq("invoice", invoice).execute()
+        supabase.table("transactions").update({"status": status}).eq("invoice", invoice).execute()
         print(f"✅ Transaction `{invoice}` updated to `{status}` in Supabase")
     except Exception as e:
         print(f"❌ Failed to update transaction status: {e}")
@@ -2696,9 +2684,7 @@ def confirm_referral_callback(call):
 
         # Allow moderator to manually award even when computed `to_award` == 0
         awards_to_create = to_award
-        manual_award = False
         if awards_to_create <= 0:
-            manual_award = True
             awards_to_create = 1
 
         created_codes = []
@@ -3477,7 +3463,6 @@ def handle_transaction_action(call):
     amount = float(txn["amount"])
     rate = float(txn["rate"])
     bank_details = txn.get("bank_details", "")
-    receipt_id = txn.get("receipt_id")
 
     # 3️⃣ Prepare timestamp and payload
     now_moscow = datetime.now(MOSCOW_TZ).isoformat()
@@ -3575,7 +3560,7 @@ def handle_transaction_action(call):
             if not bank_info:
                 raise ValueError("Unsupported bank details format")
 
-            msg = bot.send_message(call.message.chat.id, bank_info, parse_mode="Markdown")
+            bot.send_message(call.message.chat.id, bank_info, parse_mode="Markdown")
         except Exception as e:
             print(f"❌ Error formatting bank details: {e}")
             bot.send_message(call.message.chat.id, t(lang_admin, "admin_payout_format_error"))

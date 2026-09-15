@@ -12,12 +12,8 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
-  Play,
   Pause,
   RefreshCw,
-  UserCheck,
-  Settings,
-  Power,
   AlertCircle,
 } from "lucide-react";
 import { 
@@ -25,18 +21,9 @@ import {
   adminAction, 
   fetchInbox, 
   requestPresign,
-  fetchCurrentShift,
-  fetchAdminUsers,
-  openShift,
-  closeShift,
-  transferShift,
-  fetchWorkingHours,
-  updateWorkingHours,
   updateUserLabel,
-  ShiftResponse,
-  AdminUser,
-  WorkingHoursConfig,
 } from "../api";
+import { useAdminShiftContext } from "../hooks/useAdminShift";
 
 const LABEL_PRESETS: { name: string; color: string; bg: string; border: string }[] = [
   { name: "Тэмдэглэл", color: "text-green-700", bg: "bg-green-100", border: "border-green-300" },
@@ -105,6 +92,9 @@ function getAdminActionError(error: unknown, fallback: string): string {
 
 // No props needed - auth is removed
 export function AdminInbox() {
+  const { data: shiftContext } = useAdminShiftContext();
+  const currentShift = shiftContext?.shift ?? null;
+  const adminUsers = shiftContext?.admins ?? [];
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -129,7 +119,7 @@ export function AdminInbox() {
   const [editLabelCustom, setEditLabelCustom] = useState("");
   const [labelSaving, setLabelSaving] = useState(false);
   const [expandedLabel, setExpandedLabel] = useState<number | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [, setCopied] = useState(false);
 
   // Helper function to parse bill_url (can be JSON array or single URL string)
   const parseBillUrls = (billUrl?: string): string[] => {
@@ -150,21 +140,6 @@ export function AdminInbox() {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
-  // Shift Management State - using new flat structure
-  const [currentShift, setCurrentShift] = useState<ShiftResponse | null>(null);
-  const [shiftLoading, setShiftLoading] = useState(false);
-  const [showShiftModal, setShowShiftModal] = useState(false);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
-  const [selectedAdminId, setSelectedAdminId] = useState<number | null>(null);
-
-  // Working Hours Management State
-  const [workingHours, setWorkingHours] = useState<WorkingHoursConfig | null>(null);
-  const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
-  const [workingHoursLoading, setWorkingHoursLoading] = useState(false);
-  const [editStartHour, setEditStartHour] = useState<number>(4);
-  const [editEndHour, setEditEndHour] = useState<number>(23);
-  const [editIsEnabled, setEditIsEnabled] = useState<boolean>(true);
-
   const load = async () => {
     try {
       setLoading(true);
@@ -178,108 +153,8 @@ export function AdminInbox() {
     }
   };
 
-  const loadShift = async () => {
-    try {
-      setShiftLoading(true);
-      const [shiftRes, usersRes] = await Promise.all([
-        fetchCurrentShift(),
-        fetchAdminUsers(),
-      ]);
-      setCurrentShift(shiftRes);
-      setAdminUsers(usersRes.admins || []);
-    } catch (err) {
-      console.error("Failed to load shift:", err);
-    } finally {
-      setShiftLoading(false);
-    }
-  };
-
-  const loadWorkingHours = async () => {
-    try {
-      setWorkingHoursLoading(true);
-      const config = await fetchWorkingHours();
-      setWorkingHours(config);
-      setEditStartHour(config.start_hour_moscow);
-      setEditEndHour(config.end_hour_moscow);
-      setEditIsEnabled(config.is_enabled);
-    } catch (err) {
-      console.error("Failed to load working hours:", err);
-    } finally {
-      setWorkingHoursLoading(false);
-    }
-  };
-
-  const handleUpdateWorkingHours = async () => {
-    try {
-      setWorkingHoursLoading(true);
-      await updateWorkingHours({
-        start_hour_moscow: editStartHour,
-        end_hour_moscow: editEndHour,
-        is_enabled: editIsEnabled,
-      });
-      await loadWorkingHours();
-      setShowWorkingHoursModal(false);
-    } catch (err) {
-      console.error("Failed to update working hours:", err);
-      alert("Ажлын цаг шинэчлэхэд алдаа гарлаа");
-    } finally {
-      setWorkingHoursLoading(false);
-    }
-  };
-
-  const handleOpenShift = async () => {
-    if (!selectedAdminId) return;
-    const selectedAdmin = adminUsers.find(a => a.id === selectedAdminId);
-    try {
-      setShiftLoading(true);
-      await openShift(selectedAdminId, selectedAdmin?.name);
-      await loadShift();
-      setShowShiftModal(false);
-      setSelectedAdminId(null);
-    } catch (err) {
-      console.error("Failed to open shift:", err);
-      alert("Ээлж эхлүүлэхэд алдаа гарлаа");
-    } finally {
-      setShiftLoading(false);
-    }
-  };
-
-  const handleCloseShift = async () => {
-    if (!currentShift?.current_admin_id) return;
-    if (!confirm("Ээлж хаахдаа итгэлтэй байна уу?")) return;
-    try {
-      setShiftLoading(true);
-      await closeShift(currentShift.current_admin_id);
-      setCurrentShift(null);
-    } catch (err) {
-      console.error("Failed to close shift:", err);
-      alert("Ээлж хаахад алдаа гарлаа");
-    } finally {
-      setShiftLoading(false);
-    }
-  };
-
-  const handleTransferShift = async () => {
-    if (!currentShift?.current_admin_id || !selectedAdminId) return;
-    const selectedAdmin = adminUsers.find(a => a.id === selectedAdminId);
-    try {
-      setShiftLoading(true);
-      await transferShift(currentShift.current_admin_id, selectedAdminId, selectedAdmin?.name);
-      await loadShift();
-      setShowShiftModal(false);
-      setSelectedAdminId(null);
-    } catch (err) {
-      console.error("Failed to transfer shift:", err);
-      alert("Ээлж шилжүүлэхэд алдаа гарлаа");
-    } finally {
-      setShiftLoading(false);
-    }
-  };
-
   useEffect(() => {
     load();
-    loadShift();
-    loadWorkingHours();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -346,20 +221,6 @@ export function AdminInbox() {
     console.log("Approved items:", approved.length, approved.map(i => ({ invoice: i.invoice, status: i.status })));
     return approved;
   }, [displayItems]);
-
-  const handleApprove = async (invoice: string) => {
-    try {
-      console.log("Approving invoice:", invoice);
-      const result = await adminAction({ invoice, status: "approved", processing_mode: "traditional" });
-      console.log("Approval result:", result);
-      setDetailModal(null);
-      await load();
-      console.log("Items after reload:", items);
-    } catch (err) {
-      console.error("Approval error:", err);
-      setError("Гүйлгээг баталж, Telegram дараалалд оруулахад алдаа гарлаа");
-    }
-  };
 
   const handleRevertToPending = async (invoice: string) => {
     try {
@@ -628,89 +489,6 @@ export function AdminInbox() {
         >
           Дахин ачаалах
         </button>
-      </div>
-
-      {/* Shift Status Bar */}
-      <div className={`p-3 rounded-xl border ${currentShift?.is_shift_active ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {currentShift?.is_shift_active ? (
-              <>
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-sm font-medium text-green-700">
-                  Ээлж: {currentShift.current_admin_name || `Admin ${currentShift.current_admin_id}`}
-                </span>
-                {currentShift.last_updated && (
-                  <span className="text-xs text-green-600">
-                    ({new Date(currentShift.last_updated).toLocaleTimeString()}-с)
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="w-2 h-2 rounded-full bg-slate-400" />
-                <span className="text-sm text-slate-600">Ээлж идэвхгүй байна</span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {currentShift?.is_shift_active ? (
-              <>
-                <button
-                  onClick={() => setShowShiftModal(true)}
-                  className="text-xs px-2 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center gap-1"
-                  disabled={shiftLoading}
-                >
-                  <RefreshCw className="w-3 h-3" /> Шилжүүлэх
-                </button>
-                <button
-                  onClick={handleCloseShift}
-                  className="text-xs px-2 py-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 flex items-center gap-1"
-                  disabled={shiftLoading}
-                >
-                  <Pause className="w-3 h-3" /> Хаах
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setShowShiftModal(true)}
-                className="text-xs px-2 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 flex items-center gap-1"
-                disabled={shiftLoading}
-              >
-                <Play className="w-3 h-3" /> Ээлж эхлүүлэх
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Working Hours Status Bar */}
-      <div className={`p-3 rounded-xl border ${workingHours?.is_enabled ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-600" />
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-blue-700">
-                Ажлын цаг: {workingHours?.start_time_moscow || "04:00"} - {workingHours?.end_time_moscow || "23:00"} (Москва)
-              </span>
-              <span className="text-xs text-blue-600">
-                {workingHours?.start_time_ub || "09:00"} - {workingHours?.end_time_ub || "04:00"} (УБ)
-              </span>
-            </div>
-            {!workingHours?.is_enabled && (
-              <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">
-                Түр хаалттай
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => setShowWorkingHoursModal(true)}
-            className="text-xs px-2 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center gap-1"
-            disabled={workingHoursLoading}
-          >
-            <Settings className="w-3 h-3" /> Тохируулах
-          </button>
-        </div>
       </div>
 
       {/* Sort & Filter Bar */}
@@ -1922,214 +1700,6 @@ export function AdminInbox() {
         );
       })()}
 
-      {/* Shift Management Modal */}
-      {showShiftModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-5 max-w-md w-full">
-            <div className="flex items-center justify-between mb-4">
-              <div className="font-semibold text-maroon-700 flex items-center gap-2">
-                <UserCheck className="w-5 h-5" />
-                {currentShift ? "Ээлж шилжүүлэх" : "Ээлж эхлүүлэх"}
-              </div>
-              <button
-                onClick={() => {
-                  setShowShiftModal(false);
-                  setSelectedAdminId(null);
-                }}
-                className="p-1 rounded hover:bg-slate-100"
-              >
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
-
-            {currentShift?.is_shift_active ? (
-              /* Transfer Shift */
-              <div className="space-y-4">
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="text-sm text-blue-700">
-                    Одоогийн ээлж: <strong>{currentShift.current_admin_name || `Admin ${currentShift.current_admin_id}`}</strong>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Дараагийн админ
-                  </label>
-                  <select
-                    value={selectedAdminId || ""}
-                    onChange={(e) => setSelectedAdminId(e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
-                  >
-                    <option value="">-- Админ сонгоно уу --</option>
-                    {adminUsers
-                      .filter(a => a.id !== currentShift.current_admin_id)
-                      .map(admin => (
-                        <option key={admin.id} value={admin.id}>
-                          {admin.name} ({admin.id})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <button
-                  onClick={handleTransferShift}
-                  disabled={!selectedAdminId || shiftLoading}
-                  className="w-full py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${shiftLoading ? 'animate-spin' : ''}`} />
-                  Шилжүүлэх
-                </button>
-              </div>
-            ) : (
-              /* Open New Shift */
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Админ сонгох
-                  </label>
-                  <select
-                    value={selectedAdminId || ""}
-                    onChange={(e) => setSelectedAdminId(e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
-                  >
-                    <option value="">-- Админ сонгоно уу --</option>
-                    {adminUsers.map(admin => (
-                      <option key={admin.id} value={admin.id}>
-                        {admin.name} ({admin.id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  onClick={handleOpenShift}
-                  disabled={!selectedAdminId || shiftLoading}
-                  className="w-full py-3 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <Play className={`w-4 h-4 ${shiftLoading ? 'animate-spin' : ''}`} />
-                  Ээлж эхлүүлэх
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Working Hours Modal */}
-      {showWorkingHoursModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-5 max-w-md w-full">
-            <div className="flex items-center justify-between mb-4">
-              <div className="font-semibold text-maroon-700 flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                Ажлын цаг тохируулах
-              </div>
-              <button
-                onClick={() => setShowWorkingHoursModal(false)}
-                className="p-1 rounded hover:bg-slate-100"
-              >
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Enable/Disable Toggle */}
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Power className={`w-4 h-4 ${editIsEnabled ? 'text-green-600' : 'text-slate-400'}`} />
-                  <span className="text-sm font-medium">
-                    Үйлчилгээ {editIsEnabled ? 'идэвхтэй' : 'идэвхгүй'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setEditIsEnabled(!editIsEnabled)}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    editIsEnabled ? 'bg-green-500' : 'bg-slate-300'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                      editIsEnabled ? 'right-1' : 'left-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Time Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Эхлэх (Москвагийн цагаар)
-                  </label>
-                  <select
-                    value={editStartHour}
-                    onChange={(e) => setEditStartHour(parseInt(e.target.value))}
-                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
-                    disabled={!editIsEnabled}
-                  >
-                    {Array.from({ length: 24 }, (_, i) => (
-                      <option key={i} value={i}>
-                        {i.toString().padStart(2, '0')}:00
-                      </option>
-                    ))}
-                  </select>
-                  <div className="text-xs text-slate-500 mt-1">
-                    УБ: {((editStartHour + 5) % 24).toString().padStart(2, '0')}:00
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Дуусах (Москвагийн цагаар)
-                  </label>
-                  <select
-                    value={editEndHour}
-                    onChange={(e) => setEditEndHour(parseInt(e.target.value))}
-                    className="w-full border border-maroon-200 rounded-lg p-3 text-sm bg-white"
-                    disabled={!editIsEnabled}
-                  >
-                    {Array.from({ length: 24 }, (_, i) => (
-                      <option key={i} value={i}>
-                        {i.toString().padStart(2, '0')}:00
-                      </option>
-                    ))}
-                  </select>
-                  <div className="text-xs text-slate-500 mt-1">
-                    УБ: {((editEndHour + 5) % 24).toString().padStart(2, '0')}:00
-                  </div>
-                </div>
-              </div>
-
-              {/* Preview */}
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="text-sm text-blue-700">
-                  <div className="font-medium mb-1">Ажлын цаг:</div>
-                  <div>
-                    Москва: {editStartHour.toString().padStart(2, '0')}:00 - {editEndHour.toString().padStart(2, '0')}:00
-                  </div>
-                  <div>
-                    Улаанбаатар: {((editStartHour + 5) % 24).toString().padStart(2, '0')}:00 - {((editEndHour + 5) % 24).toString().padStart(2, '0')}:00
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowWorkingHoursModal(false)}
-                  className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
-                >
-                  Цуцлах
-                </button>
-                <button
-                  onClick={handleUpdateWorkingHours}
-                  disabled={workingHoursLoading}
-                  className="flex-1 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {workingHoursLoading && <RefreshCw className="w-4 h-4 animate-spin" />}
-                  Хадгалах
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

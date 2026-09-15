@@ -1,6 +1,7 @@
 import { Wallet, TrendingUp, Clock3 } from "lucide-react";
 import { Rate } from "../api";
 import { useLang } from "../i18n/useLang";
+import { RateCardSkeleton } from "./Skeleton";
 
 interface Props {
   rate?: Rate;
@@ -8,6 +9,7 @@ interface Props {
 
 export function RateCard({ rate }: Props) {
   const { t, lang } = useLang();
+  if (!rate) return <RateCardSkeleton />;
   return (
     <div className="relative overflow-hidden bg-gradient-to-br from-maroon-600 via-maroon-700 to-maroon-800 dark:from-maroon-800 dark:via-maroon-900 dark:to-dark-900 p-5 rounded-3xl shadow-card-dark text-white">
       {/* Decorative gradient orb */}

@@ -1,5 +1,4 @@
 from datetime import datetime, timezone, timedelta
-from typing import Annotated
 from contextlib import asynccontextmanager
 import asyncio
 import logging
@@ -26,7 +25,6 @@ from models import (
     AdminHistoryResponse,
     AdminInboxItem,
     AdminInboxResponse,
-    AdminShift,
     AdminShiftResponse,
     AdminUser,
     AdminUsersResponse,
@@ -85,7 +83,6 @@ from models import (
     UserPromoCodesResponse,
     UserSearchItem,
     UserSearchResponse,
-    WorkingHoursConfig,
     WorkingHoursResponse,
     WorkingHoursUpdateRequest,
     # Gift-related models
@@ -106,7 +103,6 @@ from models import (
     GiftFinalizeRequest,
     # Fuel-related models
     FUEL_STATION_DISCOUNTS,
-    FUEL_STATIONS,
     FuelStationItem,
     FuelStationsResponse,
     FuelStationCreateRequest,
@@ -163,12 +159,10 @@ from bot_translations import tb
 from utils import (
     TelegramAuthError,
     TelegramLoginError,
-    JWTAuthError,
     generate_invoice,
     verify_telegram_init_data,
     create_telegram_login_challenge,
     create_jwt_token,
-    verify_jwt_token,
     verify_telegram_login_id_token,
     verify_telegram_login_challenge,
     exchange_telegram_login_code_for_id_token,
@@ -1681,7 +1675,6 @@ def _list_tournament_knockout(
     items: list[TournamentKnockoutPhase] = []
     for raw_item in sorted(phase_rows, key=lambda item: item["category"]):
         team_count = _safe_int(raw_item.get("team_count"), 4)
-        template_map = {template["id"]: template for template in TOURNAMENT_KNOCKOUT_TEMPLATES[team_count]}
         raw_matches = raw_item.get("matches") if isinstance(raw_item.get("matches"), list) else []
         stored_match_map = {
             str(match.get("id") or ""): match
@@ -2091,7 +2084,7 @@ async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
     )
     
     # Filter to only pending/approved or recently (within 24h) completed/successful/rejected
-    from datetime import datetime, timedelta
+    from datetime import datetime
     now = datetime.now()
     # Fetch admin bank accounts for name resolution
     admin_banks = {}
@@ -2695,11 +2688,6 @@ def _dashboard_day_bounds(date_str: str | None, tz_key: str = "moscow"):
     return day_start.isoformat(), day_end.isoformat(), day_start.strftime("%Y-%m-%d")
 
 
-def _moscow_day_bounds(date_str: str | None):
-    """Return (start_iso, end_iso, date_iso) for a Moscow-local calendar day."""
-    return _dashboard_day_bounds(date_str, "moscow")
-
-
 def _dashboard_db_error(exc: Exception, action: str):
     """Translate a Supabase/Postgres error into an actionable HTTP error.
 
@@ -2833,49 +2821,6 @@ def _validated_admin_bank_account_id(client, value, field_name: str = "admin_ban
     if not row:
         raise HTTPException(status_code=400, detail=f"{field_name} must reference admin_bank_accounts.id")
     return admin_bank_id
-
-
-def _dashboard_balance_setup_detail(exc: Exception) -> str | None:
-    lowered = str(exc).lower()
-    has_balance_table_ref = any(name in lowered for name in (
-        "dashboard_balance_daily",
-        "dashboard_balance_history",
-        "dashboard_balance_adjustments",
-        "treasury_accounts",
-    ))
-    has_permission_ref = any(token in lowered for token in (
-        "permission denied",
-        "row-level security",
-        "violates row-level security",
-        "forbidden",
-        "42501",
-    ))
-    has_schema_ref = any(token in lowered for token in (
-        "schema cache",
-        "could not find the table",
-        "does not exist",
-        "relation",
-    ))
-    if not (has_balance_table_ref or has_permission_ref or has_schema_ref):
-        return None
-    settings = get_settings()
-    key_hint = (
-        "The backend is currently using SUPABASE_KEY. If that env var contains the anon key, "
-        "these RLS-enabled dashboard tables will stay inaccessible. Set SUPABASE_SERVICE_ROLE_KEY "
-        "for the backend (preferred), or replace SUPABASE_KEY with the service-role key."
-        if settings.supabase_key_source == "SUPABASE_KEY"
-        else "The backend is already using SUPABASE_SERVICE_ROLE_KEY."
-    )
-    if has_permission_ref:
-        return (
-            "Dashboard balance tables exist but the backend cannot read them. "
-            f"{key_hint} Underlying error: {exc}"
-        )
-    return (
-        "Dashboard balance tables are not fully available to the backend. Run database/balance_profit_tables.sql "
-        "in Supabase, then restart the backend if the schema cache is stale. "
-        f"{key_hint} Underlying error: {exc}"
-    )
 
 
 def _dashboard_admins(client) -> list[dict]:
@@ -3429,58 +3374,6 @@ def _list_dashboard_balance_history(client, max_days: int) -> dict:
     return {"days": included_days, "rows": normalized_rows}
 
 
-def _dashboard_balance_fallback_payload(client, day: str, selected_admin_id: int | None, setup_error: str) -> dict:
-    admins = _dashboard_admins(client)
-    scoped_admins = _dashboard_scoped_admins(admins, selected_admin_id)
-    admin_ids = [int(admin["admin_id"]) for admin in scoped_admins if admin.get("admin_id") is not None]
-    txn_totals = _dashboard_daily_transaction_totals(client, day, admin_ids)
-
-    daily_balances = []
-    rub_to_mnt_total = 0.0
-    mnt_to_rub_total = 0.0
-    total_balance = 0.0
-    for admin in scoped_admins:
-        admin_id = int(admin["admin_id"])
-        rub_to_mnt_rub = float(txn_totals.get(admin_id, {}).get("rub_to_mnt_rub") or 0)
-        mnt_to_rub_rub = float(txn_totals.get(admin_id, {}).get("mnt_to_rub_rub") or 0)
-        calculated_balance = _dashboard_calculated_balance(0.0, rub_to_mnt_rub, mnt_to_rub_rub, 0.0)
-        rub_to_mnt_total += rub_to_mnt_rub
-        mnt_to_rub_total += mnt_to_rub_rub
-        total_balance += calculated_balance
-        daily_balances.append({
-            "admin_id": admin_id,
-            "admin_name": admin.get("name"),
-            "balance_date": day,
-            "opening_balance": 0.0,
-            "entered_balance": None,
-            "rub_to_mnt_rub": round(rub_to_mnt_rub, 2),
-            "mnt_to_rub_rub": round(mnt_to_rub_rub, 2),
-            "adjustment_total": 0.0,
-            "calculated_balance": round(calculated_balance, 2),
-            "discrepancy": None,
-        })
-
-    selected_daily_balance = daily_balances[0] if selected_admin_id is not None and daily_balances else None
-    return {
-        "date": day,
-        "admins": admins,
-        "selected_admin_id": selected_admin_id,
-        "daily_balances": daily_balances,
-        "selected_daily_balance": selected_daily_balance,
-        "adjustments": [],
-        "rub_to_mnt_rub": round(rub_to_mnt_total, 2),
-        "mnt_to_rub_rub": round(mnt_to_rub_total, 2),
-        "prev_balance_total": 0.0,
-        "adjustment_total": 0.0,
-        "total_balance": round(total_balance, 2),
-        "entered_balance_total": 0.0,
-        "difference_total": None,
-        "missing_entered_balance_count": len(scoped_admins),
-        "setup_required": True,
-        "setup_error": setup_error,
-    }
-
-
 def _account_legacy_adjustment(a: dict) -> float:
     return float(a.get("adjustment") or 0)
 
@@ -3505,13 +3398,6 @@ def _account_entered_balance(a: dict) -> float | None:
     if raw is None:
         return None
     return float(raw or 0)
-
-
-def _account_discrepancy(a: dict) -> float | None:
-    entered_balance = _account_entered_balance(a)
-    if entered_balance is None:
-        return None
-    return _account_balance(a) - entered_balance
 
 
 def _dashboard_daily_rows_from_accounts(
@@ -8138,9 +8024,6 @@ async def lookup_recipient_by_phone(
     if len(digits_only) > 15:
         return RecipientLookupResponse(found=False)
     
-    # Also create version without + for comparison
-    phone_no_plus = clean_phone.lstrip("+")
-    
     # Helper function to extract phone numbers from bank info string
     def extract_phone_from_bank_info(bank_info: str) -> list:
         """Extract phone numbers from comma-separated bank info.
@@ -8504,7 +8387,7 @@ async def confirm_gift(
 ):
     """Recipient confirms gift and provides bank details"""
     client = get_supabase()
-    settings = get_settings()
+    get_settings()
     
     try:
         # Get the gift
@@ -9115,7 +8998,7 @@ async def fuel_calculate(payload: FuelCalculateRequest, user=Depends(get_authent
 @app.post("/api/fuel/create")
 async def fuel_create_order(payload: FuelOrderCreateRequest, user=Depends(get_authenticated_user)):
     """Create a new fuel purchase order."""
-    settings = get_settings()
+    get_settings()
     client = get_supabase()
     _require_email_verified(client, user.id)
 

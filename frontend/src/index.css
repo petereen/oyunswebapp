@@ -30,6 +30,10 @@
     background-size: 200% 100%;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; }
+  }
+
   /* Frosted card for overlays */
   .glass-card {
     background: rgba(255, 255, 255, 0.85);

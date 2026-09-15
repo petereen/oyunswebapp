@@ -10,7 +10,16 @@ import "./index.css";
 // when a WebView has cached an earlier failed response for a hashed asset URL.
 document.documentElement.dataset.buildId = import.meta.env.VITE_BUILD_ID || "local";
 
-const client = new QueryClient();
+const client = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Client-facing data can safely remain fresh while users move between
+      // tabs. Individual operational queries opt into shorter freshness below.
+      staleTime: 5 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
+    },
+  },
+});
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

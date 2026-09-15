@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { History, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MapPin, Image, X, Clock } from "lucide-react";
+import { History, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MapPin, X } from "lucide-react";
 import { fetchFuelAdminHistory, FuelOrder } from "../api";
 import { FuelChat } from "./FuelChat";
 import { useFuelLang } from "../i18n/useFuelLang";

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeftRight } from "lucide-react";
 import { Rate } from "../api";
 import { useLang } from "../i18n/useLang";
+import { ConverterSkeleton } from "./Skeleton";
 
 interface Props {
   rate?: Rate;
@@ -10,6 +11,7 @@ interface Props {
 
 export function Converter({ rate, onAmountChange }: Props) {
   const { t } = useLang();
+  if (!rate) return <ConverterSkeleton />;
   const [direction, setDirection] = useState<"buy" | "sell">("buy");
   const [amountFrom, setAmountFrom] = useState<string>("");
   const [amountTo, setAmountTo] = useState<string>("");

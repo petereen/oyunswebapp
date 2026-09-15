@@ -23,7 +23,7 @@ export function TelegramDiagnostic() {
   const [info, setInfo] = useState<DiagnosticInfo | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [debugResult, setDebugResult] = useState<any>(null);
-  const [debugLoading, setDebugLoading] = useState(false);
+  const debugLoading = false;
 
   const runDebug = async () => {
     setDebugResult({ message: "Auth disabled - running in dev mode" });

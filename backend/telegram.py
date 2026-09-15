@@ -1,6 +1,5 @@
 import requests
 import logging
-import json
 
 from config import get_settings
 

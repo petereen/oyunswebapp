@@ -1,15 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import {
   TrendingUp, TrendingDown, BarChart3, ChevronLeft, ChevronRight,
   ArrowRightLeft, Clock, CheckCircle2, XCircle, AlertCircle, Image, X,
 } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend,
+  Tooltip,
 } from "recharts";
-import { fetchAnalytics, fetchHistory, fetchMe } from "../api";
+import { fetchAnalytics, fetchHistory } from "../api";
 import { useLang } from "../i18n/useLang";
+import { queryKeys } from "../queryKeys";
+import { Entitlements } from "../hooks/useEntitlements";
+import { StatsSkeleton, Skeleton } from "../components/Skeleton";
 
 interface MonthlyData { month: string; amount: number; }
 interface AnalyticsData {
@@ -68,37 +71,39 @@ function getTimeAgo(dateStr: string, t: (k: string, p?: Record<string, string | 
 
 interface Props {
   userId?: number;
+  isAuthenticating?: boolean;
+  entitlements: Entitlements;
 }
 
-export function StatsTab({ userId }: Props) {
+export function StatsTab({ userId, isAuthenticating = false, entitlements }: Props) {
   const { t, lang } = useLang();
   const [section, setSection] = useState<"analytics" | "history">("analytics");
   const [periodOffset, setPeriodOffset] = useState(0);
   const [photoModal, setPhotoModal] = useState<string | null>(null);
 
-  const { data: profile } = useQuery({
-    queryKey: ["me", userId],
-    queryFn: fetchMe,
-    enabled: Boolean(userId),
-    staleTime: 0,
-  });
-  const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : 0);
-  const isVerified = verificationLevel >= 2;
+  const { isResolving, profileError, isKycVerified: isVerified } = entitlements;
 
   // Analytics - only for verified users
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery<AnalyticsData>({
-    queryKey: ["analytics"],
+    queryKey: userId ? queryKeys.stats.analytics(userId) : ["stats", "analytics", "anonymous"],
     queryFn: () => fetchAnalytics(),
     enabled: Boolean(userId) && isVerified,
   });
 
   // History - only for verified users
   const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ["history", userId],
+    queryKey: userId ? queryKeys.stats.history(userId) : ["stats", "history", "anonymous"],
     queryFn: () => fetchHistory(),
     enabled: Boolean(userId) && isVerified,
     staleTime: 0,
   });
+
+  if (profileError && !entitlements.profile) {
+    return <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-xl text-sm">{t("home.profile_load_failed")}</div>;
+  }
+  if (isAuthenticating || isResolving || !entitlements.profile) {
+    return <div aria-busy="true"><StatsSkeleton /></div>;
+  }
 
   if (!isVerified) {
     return (
@@ -152,7 +157,6 @@ export function StatsTab({ userId }: Props) {
     return periodMonths.map(m => ({ month: m, amount: analyticsData.monthly_sell.find(d => d.month === m)?.amount || 0 }));
   }, [analyticsData, periodMonths]);
 
-  const maxValue = useMemo(() => Math.max(...filteredBuyData.map(d => d.amount), ...filteredSellData.map(d => d.amount), 1), [filteredBuyData, filteredSellData]);
   const periodBuyTotal = filteredBuyData.reduce((s, d) => s + d.amount, 0);
   const periodSellTotal = filteredSellData.reduce((s, d) => s + d.amount, 0);
 
@@ -187,10 +191,7 @@ export function StatsTab({ userId }: Props) {
       {section === "analytics" && (
         <div className="space-y-4">
           {analyticsLoading && (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-maroon-600 mx-auto" />
-              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">{t("stats.loading")}</p>
-            </div>
+            <StatsSkeleton />
           )}
 
           {analyticsData && !analyticsLoading && (
@@ -312,9 +313,8 @@ export function StatsTab({ userId }: Props) {
       {section === "history" && (
         <div className="space-y-3">
           {historyLoading && (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-maroon-600 mx-auto" />
-              <p className="mt-3 text-dark-600 dark:text-ivory-400 text-sm">{t("stats.loading")}</p>
+            <div className="space-y-2" aria-hidden="true">
+              {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-[92px] w-full rounded-2xl" />)}
             </div>
           )}
 

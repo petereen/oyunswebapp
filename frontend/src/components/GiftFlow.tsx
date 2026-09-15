@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  ArrowRight,
   Gift,
   User,
   Phone,
@@ -11,8 +11,6 @@ import {
   Upload,
   Copy,
   MessageSquare,
-  CreditCard,
-  Building,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -32,6 +30,8 @@ import {
 } from "../api";
 import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
+import { queryKeys } from "../queryKeys";
+import { Skeleton } from "./Skeleton";
 
 interface Props {
   buyRate: number;
@@ -39,10 +39,6 @@ interface Props {
   onBack: () => void;
   onSuccess: () => void;
 }
-
-// Bank name options
-const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
-const MNT_BANKS = ["Хаан банк", "Голомт банк", "М банк", "Хас банк", "Худалдаа хөгжлийн банк", "Ариг банк", "Богд банк", "Төрийн банк", "Капитрон банк", "Бусад"];
 
 export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   const { t } = useLang();
@@ -74,8 +70,13 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   const [amount, setAmount] = useState<string>("");
   const [message, setMessage] = useState("");
 
-  // Admin bank accounts
-  const [adminBanks, setAdminBanks] = useState<AdminBankAccount[]>([]);
+  // Admin bank accounts are shared with the other transaction flows.
+  const { data: adminBankData, isLoading: adminBanksLoading } = useQuery({
+    queryKey: queryKeys.admin.bankAccounts,
+    queryFn: fetchAdminBankAccounts,
+    staleTime: 0,
+  });
+  const adminBanks: AdminBankAccount[] = adminBankData?.accounts || [];
   const [selectedAdminBank, setSelectedAdminBank] = useState<AdminBankAccount | null>(null);
 
   // Receipt
@@ -94,9 +95,12 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   // From who field (sender's display name on the gift)
   const [fromName, setFromName] = useState("");
 
-  // App settings
-  const [minRubAmount, setMinRubAmount] = useState<number>(DEFAULT_MIN_RUB_AMOUNT);
-  const [minRubBuy, setMinRubBuy] = useState<number>(DEFAULT_MIN_RUB_BUY);
+  const { data: appSettings } = useQuery({
+    queryKey: queryKeys.appSettings,
+    queryFn: fetchAppSettings,
+  });
+  const minRubAmount = appSettings?.min_rub_amount ?? DEFAULT_MIN_RUB_AMOUNT;
+  const minRubBuy = appSettings?.min_rub_buy ?? DEFAULT_MIN_RUB_BUY;
 
   // Load gift cards
   useEffect(() => {
@@ -110,24 +114,6 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
         setError(t("gift.card_load_error"));
       })
       .finally(() => setCardsLoading(false));
-  }, []);
-
-  // Load admin bank accounts
-  useEffect(() => {
-    fetchAdminBankAccounts()
-      .then((res) => setAdminBanks(res.accounts || []))
-      .catch(() => setAdminBanks([]));
-    
-    // Load app settings (min_rub_amount, min_rub_buy)
-    fetchAppSettings()
-      .then((res) => {
-        setMinRubAmount(res.min_rub_amount);
-        setMinRubBuy(res.min_rub_buy);
-      })
-      .catch(() => {
-        setMinRubAmount(DEFAULT_MIN_RUB_AMOUNT);
-        setMinRubBuy(DEFAULT_MIN_RUB_BUY);
-      });
   }, []);
 
   // Generate invoice ID
@@ -654,7 +640,9 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
           </div>
 
           {/* Admin bank selection */}
-          {availableAdminBanks.length > 0 ? (
+          {adminBanksLoading ? (
+            <Skeleton className="h-[180px] w-full rounded-xl" />
+          ) : availableAdminBanks.length > 0 ? (
             <div className="space-y-2">
               {availableAdminBanks.map((bank) => (
                 <div

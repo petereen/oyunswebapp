@@ -5,15 +5,21 @@ import { GiftFlow } from "../components/GiftFlow";
 import { FuelFlow } from "../components/FuelFlow";
 import { TopupFlow } from "../components/TopupFlow";
 import { EmailVerificationModal } from "../components/EmailVerificationModal";
-import { fetchRates, fetchMe, fetchAppSettings, fetchServiceStatus } from "../api";
+import { fetchRates, fetchServiceStatus } from "../api";
 import { useLang } from "../i18n/useLang";
+import { queryKeys } from "../queryKeys";
+import { Entitlements } from "../hooks/useEntitlements";
+import { ServicesGridSkeleton } from "../components/Skeleton";
 
 interface Props {
+  userId?: number;
+  isAuthenticating?: boolean;
+  entitlements: Entitlements;
   initialFuelOrderId?: string | null;
   onFuelOrderOpened?: () => void;
 }
 
-export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {}) {
+export function ServicesTab({ userId, isAuthenticating = false, entitlements, initialFuelOrderId, onFuelOrderOpened }: Props) {
   const [activeService, setActiveService] = useState<"gift" | "fuel" | "topup" | null>(null);
   const [pendingFuelOrderId, setPendingFuelOrderId] = useState<string | null>(null);
   const [showEmailVerification, setShowEmailVerification] = useState(false);
@@ -21,39 +27,33 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
   const { t } = useLang();
 
   const { data: rate } = useQuery({
-    queryKey: ["rates"],
+    queryKey: queryKeys.rates,
     queryFn: fetchRates,
     retry: 2,
   });
 
-  const { data: profile } = useQuery({
-    queryKey: ["me"],
-    queryFn: fetchMe,
-    staleTime: 0,
-  });
-
   const { data: serviceStatus } = useQuery({
-    queryKey: ["service-status"],
+    queryKey: queryKeys.serviceStatus,
     queryFn: fetchServiceStatus,
     refetchInterval: 60000,
   });
-  const { data: appSettings } = useQuery({
-    queryKey: ["app-settings"],
-    queryFn: fetchAppSettings,
-    retry: 1,
-  });
-
-  const verificationLevel = profile?.user?.verification_level ?? (profile?.user?.verified ? 2 : 0);
-  const isVerified = verificationLevel >= 2;
-  const isBasicRegistered = verificationLevel >= 1;
-  const emailVerificationPending = Boolean(profile?.user?.email_verification_pending);
-  const needsEmailVerification = (isBasicRegistered || Boolean(profile?.user?.verified) || Boolean(profile?.user?.ready_for_verification))
-    && (appSettings?.email_verification_enabled ?? 1) > 0
-    && (emailVerificationPending || !profile?.user?.email_verified_at);
+  const { profile, isResolving, profileError, isKycVerified: isVerified, isRegistered: isBasicRegistered, needsEmailVerification } = entitlements;
   const isServiceOpen = serviceStatus?.is_open ?? true;
   const serviceBlockedMessage = serviceStatus?.message || "Үйлчилгээ түр хаалттай байна";
   const isGiftDisabled = !isVerified || !isServiceOpen;
   const isTopupDisabled = !isBasicRegistered || !isServiceOpen;
+
+  if (profileError && !profile) {
+    return <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-xl text-sm">{t("home.profile_load_failed")}</div>;
+  }
+  if (isAuthenticating || isResolving || !profile) {
+    return (
+      <div className="animate-fadeIn" aria-busy="true">
+        <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200 mb-4">{t("services.title")}</h2>
+        <ServicesGridSkeleton />
+      </div>
+    );
+  }
 
   const openMoneyService = (service: "gift" | "fuel" | "topup") => {
     if (needsEmailVerification) {
@@ -210,7 +210,7 @@ export function ServicesTab({ initialFuelOrderId, onFuelOrderOpened }: Props = {
           onClose={() => setShowEmailVerification(false)}
           onVerified={() => {
             setShowEmailVerification(false);
-            queryClient.invalidateQueries({ queryKey: ["me"] });
+            if (userId) queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
           }}
         />
       )}

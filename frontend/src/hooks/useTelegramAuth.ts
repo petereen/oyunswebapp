@@ -32,12 +32,6 @@ interface TelegramLoginCallbackData {
   error?: string;
 }
 
-interface TelegramLoginPopupMessage {
-  event?: string;
-  result?: string;
-  error?: string;
-}
-
 interface TelegramLoginSdkResult {
   id_token?: string;
   error?: string;

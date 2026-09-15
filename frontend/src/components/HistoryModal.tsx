@@ -3,6 +3,7 @@ import { X, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, ArrowRightLeft, 
 import { fetchHistory } from "../api";
 import { useState } from "react";
 import { useLang } from "../i18n/useLang";
+import { queryKeys } from "../queryKeys";
 
 interface HistoryItem {
   invoice: string;
@@ -92,7 +93,7 @@ export function HistoryModal({ userId, onClose }: Props) {
   const { t, lang } = useLang();
   
   const { data, isLoading, error } = useQuery({
-    queryKey: ["history", userId],
+    queryKey: userId ? queryKeys.stats.history(userId) : ["stats", "history", "anonymous"],
     queryFn: () => fetchHistory(),
     enabled: Boolean(userId),
     staleTime: 0, // Always refetch to ensure fresh user data

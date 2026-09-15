@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { TrendingUp, TrendingDown, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchAnalytics } from "../api";
+import { queryKeys } from "../queryKeys";
 
 interface AnalyticsModalProps {
   onClose: () => void;
@@ -24,7 +25,7 @@ export function AnalyticsModal({ onClose }: AnalyticsModalProps) {
   const [periodOffset, setPeriodOffset] = useState(0); // 0 = current 6 months, 1 = previous 6 months, etc.
 
   const { data, isLoading, error } = useQuery<AnalyticsData>({
-    queryKey: ["analytics"],
+    queryKey: queryKeys.admin.analytics,
     queryFn: () => fetchAnalytics(),
   });
 

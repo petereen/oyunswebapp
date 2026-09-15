@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { X, User, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp, Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save } from "lucide-react";
-import { fetchMe, fetchUserPromoCodes, updateBankInfo, UserProfile, UserPromoCode, UpdateBankInfoInput } from "../api";
+import { X, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp, Gift, FileText, ExternalLink, Edit2, Loader2, AlertCircle, Building, Save } from "lucide-react";
+import { fetchMe, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
+import { queryKeys } from "../queryKeys";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
 
@@ -62,7 +63,7 @@ export function ProfileModal({ userId, onClose }: Props) {
   const [mntPhone, setMntPhone] = useState("");
   
   const { data: profileData, isLoading } = useQuery({
-    queryKey: ["me", userId],
+    queryKey: userId ? queryKeys.profile(userId) : ["user", "profile", "anonymous"],
     queryFn: () => fetchMe(),
     enabled: Boolean(userId),
     staleTime: 0, // Always refetch to ensure fresh user data
@@ -72,7 +73,7 @@ export function ProfileModal({ userId, onClose }: Props) {
   const profile = profileData?.user;
 
   const { data: promoCodes, isLoading: promoLoading } = useQuery({
-    queryKey: ["user-promos", userId],
+    queryKey: userId ? queryKeys.userPromos(userId) : ["user", "promos", "anonymous"],
     queryFn: () => fetchUserPromoCodes(),
     enabled: Boolean(userId) && showPromos,
   });
@@ -146,7 +147,7 @@ export function ProfileModal({ userId, onClose }: Props) {
         mnt_phone: mntPhone.replace(/\D/g, '').replace(/^976/, '').slice(0, 8),
       };
       await updateBankInfo(payload);
-      queryClient.invalidateQueries({ queryKey: ["me", userId] });
+      if (userId) queryClient.invalidateQueries({ queryKey: queryKeys.profile(userId) });
       setEditMode(false);
     } catch (err) {
       console.error("Save error:", err);
