@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Align active navbar highlight corners with the navbar and match the Telegram light-theme navbar surface (frontend/src/index.css)
 - [x] Refine client liquid-glass navbar and neutral light background (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Recreate the mobile bottom navigation as an accessible liquid-glass control (frontend/src/components/BottomNavBar.tsx, frontend/src/index.css)
 - [x] Apply the OYUNS liquid-glass material system to appropriate mobile bars and cards without reducing contrast (frontend/src/App.tsx, frontend/src/pages, frontend/src/components, frontend/src/index.css)
