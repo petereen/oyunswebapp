@@ -1,6 +1,10 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Recreate the mobile bottom navigation as an accessible liquid-glass control (frontend/src/components/BottomNavBar.tsx, frontend/src/index.css)
+- [x] Apply the OYUNS liquid-glass material system to appropriate mobile bars and cards without reducing contrast (frontend/src/App.tsx, frontend/src/pages, frontend/src/components, frontend/src/index.css)
+- [x] Add and configure liquid-glass-react with graceful browser and reduced-transparency fallbacks (frontend/package.json, frontend/package-lock.json)
+- [x] Verify the liquid-glass redesign with focused tests, TypeScript, production build, and responsive screenshots
 - [x] Reorganize admin navigation into nested transaction actions and collapsible settings (frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx)
 - [x] Move shift, working-hours, and bank account controls into the collapsible settings area (frontend/src/components/admin/AdminShiftBar.tsx)
 - [x] Update admin navigation regression coverage for the new hierarchy (frontend/src/pages/AdminPanel.test.tsx)

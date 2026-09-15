@@ -238,7 +238,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
   return (
     <div className="space-y-5 animate-fadeIn">
       {/* Header Bar */}
-      <div className="flex items-center justify-between pt-1">
+      <div className="glass-toolbar flex items-center justify-between p-2.5 pl-3">
         <div className="flex items-center gap-3">
           <img
             src={oyunsIcon}
@@ -350,7 +350,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
       {/* Registration / Verification States */}
       {user?.id && entitlements.isResolving && <EntitlementCardSkeleton />}
       {needsRegistration && (
-        <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
+        <div className="glass-card p-6 rounded-3xl animate-slideUp">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-14 h-14 bg-maroon-50 dark:bg-maroon-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
               <UserPlus className="w-7 h-7 text-maroon-600 dark:text-maroon-400" />
@@ -370,7 +370,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
       )}
 
       {emailGateActive && (
-        <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-gold-200 dark:border-gold-800 animate-slideUp">
+        <div className="glass-card glass-card--gold p-6 rounded-3xl animate-slideUp">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-14 h-14 bg-gold-50 dark:bg-gold-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
               <Mail className="w-7 h-7 text-gold-600 dark:text-gold-400" />
@@ -391,7 +391,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
 
       {/* Level 1 registered but not fully verified - show upgrade prompt */}
       {isBasicRegistered && !isVerified && !pendingVerification && (
-        <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-amber-200 dark:border-amber-800 animate-slideUp">
+        <div className="glass-card glass-card--gold p-5 rounded-3xl animate-slideUp">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-amber-50 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
               <UserPlus className="w-6 h-6 text-amber-500" />
@@ -411,7 +411,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
       )}
 
       {pendingVerification && (
-        <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
+        <div className="glass-card p-5 rounded-3xl animate-slideUp">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-gold-50 dark:bg-gold-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
               <Loader2 className="w-6 h-6 text-gold-500 animate-spin" />
@@ -456,7 +456,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
 
       {/* Outside working hours */}
       {isVerified && !isServiceOpen && (
-        <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
+        <div className="glass-card p-5 rounded-3xl animate-slideUp">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-gold-50 dark:bg-gold-900/30 rounded-2xl flex items-center justify-center flex-shrink-0">
               <Clock className="w-6 h-6 text-gold-500" />

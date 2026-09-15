@@ -11,7 +11,7 @@ export function RateCard({ rate }: Props) {
   const { t, lang } = useLang();
   if (!rate) return <RateCardSkeleton />;
   return (
-    <div className="relative overflow-hidden bg-gradient-to-br from-maroon-600 via-maroon-700 to-maroon-800 dark:from-maroon-800 dark:via-maroon-900 dark:to-dark-900 p-5 rounded-3xl shadow-card-dark text-white">
+    <div className="rate-glass-card relative overflow-hidden bg-gradient-to-br from-maroon-600 via-maroon-700 to-maroon-800 dark:from-maroon-800 dark:via-maroon-900 dark:to-dark-900 p-5 rounded-3xl text-white">
       {/* Decorative gradient orb */}
       <div className="absolute -top-10 -right-10 w-32 h-32 bg-gold-400/20 rounded-full blur-2xl" />
       <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-gold-500/10 rounded-full blur-xl" />

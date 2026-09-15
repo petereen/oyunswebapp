@@ -36,7 +36,7 @@ export function RateHistoryChart() {
   const hasData = points.some(p => p.buy_rate !== null || p.sell_rate !== null);
 
   return (
-    <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card-xs border border-silver/60 dark:border-dark-600">
+    <div className="glass-card p-5 rounded-3xl">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-dark-800 dark:text-ivory-200">
           <TrendingUp className="w-4 h-4 text-maroon-600 dark:text-gold-400" />

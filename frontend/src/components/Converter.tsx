@@ -57,7 +57,7 @@ export function Converter({ rate, onAmountChange }: Props) {
   const toCurrency = direction === "buy" ? { symbol: "₮", flag: "🇲🇳", code: "MNT" } : { symbol: "₽", flag: "🇷🇺", code: "RUB" };
 
   return (
-    <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 space-y-4">
+    <div className="glass-card p-5 rounded-3xl space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm font-bold text-dark-800 dark:text-ivory-200 tracking-wide">{t("converter.title")}</div>
         <button

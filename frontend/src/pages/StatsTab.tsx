@@ -172,7 +172,7 @@ export function StatsTab({ userId, isAuthenticating = false, entitlements }: Pro
       <h2 className="text-base font-bold text-dark-800 dark:text-ivory-200">{t("stats.title")}</h2>
 
       {/* Section Toggle */}
-      <div className="flex gap-1 bg-surface-100 dark:bg-dark-700 p-1 rounded-xl">
+      <div className="glass-segmented flex gap-1 p-1 rounded-2xl">
         <button
           onClick={() => setSection("analytics")}
           className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${section === "analytics" ? "bg-white dark:bg-dark-800 text-dark-800 dark:text-ivory-200 shadow-card-xs" : "text-dark-600 dark:text-ivory-400"}`}
@@ -235,7 +235,7 @@ export function StatsTab({ userId, isAuthenticating = false, entitlements }: Pro
               {/* Chart */}
               {(periodBuyTotal > 0 || periodSellTotal > 0) ? (
                 <>
-                  <div className="bg-surface-50 dark:bg-dark-700 rounded-xl p-3">
+                  <div className="glass-card rounded-2xl p-3">
                     <div className="flex items-center gap-4 mb-3">
                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">{t("stats.rub_currency")}</span></div>
                       <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className="text-[10px] text-dark-600 dark:text-ivory-400">{t("stats.mnt_currency")}</span></div>
