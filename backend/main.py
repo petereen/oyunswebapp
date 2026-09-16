@@ -1072,18 +1072,33 @@ async def get_rates():
 
 @app.get("/api/rate-history")
 async def get_rate_history(days: int = 30):
-    """Public endpoint - daily rates from bot_rates table (latest entry per day)."""
+    """Public endpoint - a continuous daily series of the latest effective rates."""
     if days < 1 or days > 365:
         days = 30
+
     client = get_supabase()
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=days - 1)
+    start_at = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+
+    # Fetch the last uploaded rate before the requested window so the first
+    # days can also carry forward a known rate.
+    previous_res = (
+        client.table("bot_rates")
+        .select("buy_rate,sell_rate,updated_at")
+        .lt("updated_at", start_at.isoformat())
+        .order("updated_at", desc=True)
+        .limit(1)
+        .execute()
+    )
     res = (
         client.table("bot_rates")
         .select("buy_rate,sell_rate,updated_at")
-        .gte("updated_at", cutoff)
+        .gte("updated_at", start_at.isoformat())
         .order("updated_at", desc=False)
         .execute()
     )
+
     # Group by date, keep only the latest entry per day
     daily: dict[str, dict] = {}
     for row in (res.data or []):
@@ -1097,10 +1112,22 @@ async def get_rate_history(days: int = 30):
             "sell_rate": round(float(row["sell_rate"]), 2) if row.get("sell_rate") is not None else None,
         }
 
-    points = [
-        {"date": dk, "buy_rate": d["buy_rate"], "sell_rate": d["sell_rate"]}
-        for dk, d in sorted(daily.items())
-    ]
+    previous = (previous_res.data or [None])[0]
+    effective = {
+        "buy_rate": round(float(previous["buy_rate"]), 2) if previous and previous.get("buy_rate") is not None else None,
+        "sell_rate": round(float(previous["sell_rate"]), 2) if previous and previous.get("sell_rate") is not None else None,
+    }
+    points = []
+    for day_offset in range(days):
+        date_key = (start_date + timedelta(days=day_offset)).isoformat()
+        uploaded = daily.get(date_key)
+        if uploaded:
+            # A partial upload should not erase the last known side of the rate.
+            if uploaded["buy_rate"] is not None:
+                effective["buy_rate"] = uploaded["buy_rate"]
+            if uploaded["sell_rate"] is not None:
+                effective["sell_rate"] = uploaded["sell_rate"]
+        points.append({"date": date_key, **effective})
 
     return {"points": points, "days": days}
 

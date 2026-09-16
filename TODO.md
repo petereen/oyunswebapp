@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Render a continuous daily exchange-rate graph by carrying forward the latest uploaded rate (backend/main.py, frontend/src/components/RateHistoryChart.tsx)
 - [x] Redesign pending and approved transaction review as a viewport-sized, responsive inspection workspace (frontend/src/components/AdminInbox.tsx)
 - [x] Keep dialog close controls and transaction actions reachable for tall receipt images, including keyboard and backdrop dismissal (frontend/src/components/AdminInbox.tsx)
 - [x] Add a full-screen receipt viewer with bounded scrolling and zoom controls (frontend/src/components/AdminInbox.tsx)
