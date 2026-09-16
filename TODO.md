@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Keep Telegram WebApp startup screen visible until initial app data has loaded (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Render a continuous daily exchange-rate graph by carrying forward the latest uploaded rate (backend/main.py, frontend/src/components/RateHistoryChart.tsx)
 - [x] Redesign pending and approved transaction review as a viewport-sized, responsive inspection workspace (frontend/src/components/AdminInbox.tsx)
 - [x] Keep dialog close controls and transaction actions reachable for tall receipt images, including keyboard and backdrop dismissal (frontend/src/components/AdminInbox.tsx)
@@ -60,6 +61,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Keep Telegram WebApp startup screen visible until initial app data has loaded (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Group admin bank accounts by admin, clarify active/inactive states, and keep transaction actions in a single four-button row (frontend/src/components/AdminBankAccounts.tsx, frontend/src/pages/AdminPanel.tsx)
 - [x] Polish nested admin controls with focus-visible states and native collapsible system settings (frontend/src/components/admin/AdminSettings.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/pages/AdminPanel.tsx)
 - [x] Preserve side-effectful calls and fallible input/date/configuration evaluation while removing unused bindings; retain public exports and operational scripts

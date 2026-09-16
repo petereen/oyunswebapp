@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import oyunsLogo from "./assets/oyuns-logo.png";
 import { AdminPanel } from "./pages/AdminPanel";
+import { useIsFetching } from "@tanstack/react-query";
 import { FuelAdminPanel } from "./pages/FuelAdminPanel";
 import { HomeTab } from "./pages/HomeTab";
 import { TransactionTab } from "./pages/TransactionTab";
@@ -12,7 +13,7 @@ import { OyunsSagsAdminPanel } from "./pages/OyunsSagsAdminPanel";
 import { DashboardPanel } from "./pages/DashboardPanel";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
-import { Shield } from "lucide-react";
+import { Loader2, Shield } from "lucide-react";
 import { useLang } from "./i18n/useLang";
 import { DevToolbar } from "./components/DevToolbar";
 import { useEntitlements } from "./hooks/useEntitlements";
@@ -70,18 +71,32 @@ export default function App() {
 
   const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
   const entitlements = useEntitlements({ userId: user?.id, isAuthenticating });
+  const isFetchingInitialData = useIsFetching() > 0;
   const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
   const initialActiveTab = urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0;
   const [activeTab, setActiveTab] = useState(initialActiveTab);
   const effectiveActiveTab = user ? activeTab : 0;
   const [showProfile, setShowProfile] = useState(false);
+  const [hasCompletedInitialLoad, setHasCompletedInitialLoad] = useState(false);
   const [transactionDirection, setTransactionDirection] = useState<"buy" | "sell" | null>(null);
   const [fuelOrderId, setFuelOrderId] = useState<string | null>(urlFuelOrderId);
   const [editInvoiceId, setEditInvoiceId] = useState<string | null>(urlEditInvoice);
   const [visitedTabs, setVisitedTabs] = useState<Set<number>>(() => new Set([0, initialActiveTab]));
   const scrollPositionsRef = useRef<Record<number, number>>({});
   const previousTabRef = useRef(effectiveActiveTab);
+
+  // Keep the first app view behind one stable loading screen while auth and
+  // the data needed by the initial tab settle. This prevents individual page
+  // skeletons from flashing during the startup handoff.
+  const initialDataLoading = isAuthenticating || entitlements.isResolving || isFetchingInitialData;
+  const showInitialLoadingScreen = !hasCompletedInitialLoad;
+
+  useEffect(() => {
+    if (!initialDataLoading) {
+      setHasCompletedInitialLoad(true);
+    }
+  }, [initialDataLoading]);
 
   useEffect(() => {
     if (!user) {
@@ -203,7 +218,19 @@ export default function App() {
 
   // Client view - Tab-based
   return (
-    <div className="client-shell min-h-screen bg-surface-50 dark:bg-dark-900">
+    <>
+      {showInitialLoadingScreen && (
+        <div className="startup-loading-screen" role="status" aria-live="polite" aria-label="Loading application">
+          <div className="startup-loading-card">
+            <div className="startup-loading-logo-wrap">
+              <img src={oyunsLogo} alt="OYUNS ALL-IN-ONE" className="startup-loading-logo" />
+              <Loader2 className="startup-loading-spinner" aria-hidden="true" />
+            </div>
+            <span>OYUNS ALL-IN-ONE</span>
+          </div>
+        </div>
+      )}
+      <div className="client-shell min-h-screen bg-surface-50 dark:bg-dark-900" aria-busy={showInitialLoadingScreen}>
       <main className="client-content max-w-lg mx-auto p-4 pb-32">
         {/* Admin toggle for admins */}
         {isAdmin && (
@@ -281,6 +308,7 @@ export default function App() {
 
       {/* Diagnostic Helper */}
       <DevToolbar />
-    </div>
+      </div>
+    </>
   );
 }
