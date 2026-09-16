@@ -232,7 +232,7 @@ export default function App() {
       {showInitialLoadingScreen && (
         <div className="startup-loading-screen" role="status" aria-live="polite" aria-label="Loading application">
           <div className="startup-loading-card">
-            <div className="startup-loading-logo-wrap">
+            <div className="startup-loading-logo-wrap" aria-hidden="true">
               <img src={oyunsIcon} alt="OYUNS ALL-IN-ONE" className="startup-loading-logo" />
               <span className="startup-loading-spinner" aria-hidden="true" />
             </div>

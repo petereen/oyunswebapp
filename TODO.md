@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Replace the startup square loader with a circular logo badge and animated circular ring (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Hold the Telegram startup screen through cascading initial queries and match its loader to the square logo (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Keep Telegram WebApp startup screen visible until initial app data has loaded (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Render a continuous daily exchange-rate graph by carrying forward the latest uploaded rate (backend/main.py, frontend/src/components/RateHistoryChart.tsx)

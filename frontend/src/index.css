@@ -152,32 +152,35 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 5.5rem;
-  height: 5.5rem;
-  border-radius: 1.75rem;
+  width: 5.75rem;
+  height: 5.75rem;
+  border: 1px solid rgba(45, 98, 236, 0.12);
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 16px 38px rgba(45, 98, 236, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .dark .startup-loading-logo-wrap {
+  border-color: rgba(147, 170, 253, 0.18);
   background: rgba(22, 38, 64, 0.88);
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .startup-loading-logo {
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 3.25rem;
+  height: auto;
   object-fit: contain;
 }
 .startup-loading-spinner {
   position: absolute;
-  inset: -0.5rem;
-  border: 3px solid rgba(45, 98, 236, 0.18);
+  inset: -0.7rem;
+  border: 3px solid rgba(45, 98, 236, 0.14);
   border-top-color: #2D62EC;
-  border-right-color: #2D62EC;
-  border-radius: 2rem;
-  animation: startup-square-spin 1.1s linear infinite;
+  border-right-color: #F5A623;
+  border-radius: 50%;
+  animation: startup-circle-spin 1.05s linear infinite;
+  will-change: transform;
 }
 
-@keyframes startup-square-spin {
+@keyframes startup-circle-spin {
   to { transform: rotate(360deg); }
 }
 
