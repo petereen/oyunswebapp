@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import oyunsLogo from "./assets/oyuns-logo.png";
+import oyunsIcon from "./assets/oyuns-icon.png";
 import { AdminPanel } from "./pages/AdminPanel";
 import { useIsFetching } from "@tanstack/react-query";
 import { FuelAdminPanel } from "./pages/FuelAdminPanel";
@@ -13,10 +14,12 @@ import { OyunsSagsAdminPanel } from "./pages/OyunsSagsAdminPanel";
 import { DashboardPanel } from "./pages/DashboardPanel";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
-import { Loader2, Shield } from "lucide-react";
+import { Shield } from "lucide-react";
 import { useLang } from "./i18n/useLang";
 import { DevToolbar } from "./components/DevToolbar";
 import { useEntitlements } from "./hooks/useEntitlements";
+
+const INITIAL_LOAD_IDLE_MS = 500;
 
 export default function App() {
   const queryParams = new URLSearchParams(window.location.search);
@@ -93,10 +96,17 @@ export default function App() {
   const showInitialLoadingScreen = !hasCompletedInitialLoad;
 
   useEffect(() => {
-    if (!initialDataLoading) {
+    if (hasCompletedInitialLoad || initialDataLoading) return;
+
+    // Initial queries can arrive in waves as auth/profile results mount more
+    // data-backed children. Only reveal the app after all queries have stayed
+    // idle long enough for the next wave to register.
+    const idleTimer = window.setTimeout(() => {
       setHasCompletedInitialLoad(true);
-    }
-  }, [initialDataLoading]);
+    }, INITIAL_LOAD_IDLE_MS);
+
+    return () => window.clearTimeout(idleTimer);
+  }, [hasCompletedInitialLoad, initialDataLoading]);
 
   useEffect(() => {
     if (!user) {
@@ -223,8 +233,8 @@ export default function App() {
         <div className="startup-loading-screen" role="status" aria-live="polite" aria-label="Loading application">
           <div className="startup-loading-card">
             <div className="startup-loading-logo-wrap">
-              <img src={oyunsLogo} alt="OYUNS ALL-IN-ONE" className="startup-loading-logo" />
-              <Loader2 className="startup-loading-spinner" aria-hidden="true" />
+              <img src={oyunsIcon} alt="OYUNS ALL-IN-ONE" className="startup-loading-logo" />
+              <span className="startup-loading-spinner" aria-hidden="true" />
             </div>
             <span>OYUNS ALL-IN-ONE</span>
           </div>

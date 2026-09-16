@@ -169,11 +169,16 @@
 }
 .startup-loading-spinner {
   position: absolute;
-  inset: -0.45rem;
-  width: calc(100% + 0.9rem);
-  height: calc(100% + 0.9rem);
-  color: #2D62EC;
-  animation: spin 1.1s linear infinite;
+  inset: -0.5rem;
+  border: 3px solid rgba(45, 98, 236, 0.18);
+  border-top-color: #2D62EC;
+  border-right-color: #2D62EC;
+  border-radius: 2rem;
+  animation: startup-square-spin 1.1s linear infinite;
+}
+
+@keyframes startup-square-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
