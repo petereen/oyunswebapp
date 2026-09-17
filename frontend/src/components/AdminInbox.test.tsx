@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminInbox } from "./AdminInbox";
 
 const mocks = vi.hoisted(() => ({
@@ -19,6 +19,10 @@ vi.mock("../hooks/useAdminShift", () => ({
     },
   }),
 }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const pendingTransaction = {
   invoice: "INV-PENDING",
@@ -84,5 +88,42 @@ describe("AdminInbox transaction review", () => {
     fireEvent.click(within(reviewDialog).getByRole("button", { name: "Гүйлгээ дуусгах" }));
     expect(screen.getByRole("dialog", { name: "Гүйлгээг дуусгах" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Гүйлгээ дуусгах цонхыг хаах" })).toBeVisible();
+  });
+
+  it("submits group completion with uploaded proof photos", async () => {
+    const groupTransaction = {
+      ...approvedTransaction,
+      invoice: "INV-GROUP",
+      automation_managed: true,
+      group_dispatch_status: "awaiting_proof",
+    };
+    mocks.fetchInbox.mockResolvedValue({ items: [groupTransaction] });
+    mocks.requestPresign.mockResolvedValue({
+      upload_url: "https://storage.example/upload",
+      public_url: "https://storage.example/admin-proof.jpg",
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
+    render(<AdminInbox />);
+
+    fireEvent.click(await screen.findByText("2,000 MNT"));
+    const reviewDialog = screen.getByRole("dialog", { name: "Гүйлгээ шалгах" });
+    fireEvent.click(within(reviewDialog).getByRole("button", { name: "Группийн гүйлгээг гараар дуусгах" }));
+
+    const proofFile = new File(["proof"], "proof.jpg", { type: "image/jpeg" });
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput!, { target: { files: [proofFile] } });
+
+    await waitFor(() => expect(mocks.requestPresign).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Гараар дуусгах" }));
+
+    await waitFor(() => expect(mocks.adminAction).toHaveBeenCalledWith({
+      invoice: "INV-GROUP",
+      status: "successful",
+      processing_mode: "group_manual",
+      admin_bill_url: JSON.stringify(["https://storage.example/admin-proof.jpg"]),
+      completed_by_admin: 7,
+    }));
   });
 });

@@ -12,7 +12,7 @@ from exchange_group import (
     rounded_rub_payout,
     rub_payout,
 )
-from main import _manual_group_confirmation_error
+from main import _manual_group_confirmation_error, _parse_admin_bill_urls
 
 
 class ExchangeGroupFormattingTests(unittest.TestCase):
@@ -59,6 +59,14 @@ class ExchangeGroupFormattingTests(unittest.TestCase):
 
 
 class ManualGroupConfirmationTests(unittest.TestCase):
+    def test_parses_single_and_multiple_admin_proof_urls(self):
+        self.assertEqual(_parse_admin_bill_urls("https://example.com/proof.jpg"), ["https://example.com/proof.jpg"])
+        self.assertEqual(
+            _parse_admin_bill_urls('[" https://example.com/proof-1.jpg ", "https://example.com/proof-2.jpg"]'),
+            ["https://example.com/proof-1.jpg", "https://example.com/proof-2.jpg"],
+        )
+        self.assertEqual(_parse_admin_bill_urls('[null, 42, ""]'), [])
+
     def test_allows_approved_group_dispatch_that_is_not_completed(self):
         self.assertIsNone(
             _manual_group_confirmation_error(

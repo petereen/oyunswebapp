@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Fix 500 when manually finalizing a group-managed transaction with proof photos (backend/main.py, backend/tests/test_exchange_group.py, frontend/src/components/AdminInbox.test.tsx)
 - [x] Replace the startup square loader with a circular logo badge and animated circular ring (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Hold the Telegram startup screen through cascading initial queries and match its loader to the square logo (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Keep Telegram WebApp startup screen visible until initial app data has loaded (frontend/src/App.tsx, frontend/src/index.css)
@@ -63,6 +64,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Fix 500 when manually finalizing a group-managed transaction with proof photos (backend/main.py, backend/tests/test_exchange_group.py, frontend/src/components/AdminInbox.test.tsx)
 - [x] Hold the Telegram startup screen through cascading initial queries and match its loader to the square logo (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Keep Telegram WebApp startup screen visible until initial app data has loaded (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Group admin bank accounts by admin, clarify active/inactive states, and keep transaction actions in a single four-button row (frontend/src/components/AdminBankAccounts.tsx, frontend/src/pages/AdminPanel.tsx)

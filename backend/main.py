@@ -2314,6 +2314,20 @@ def _manual_group_confirmation_error(
     return None
 
 
+def _parse_admin_bill_urls(raw_bill_url: str | None) -> list[str]:
+    """Normalize legacy single-photo and current JSON-array proof payloads."""
+    if not raw_bill_url:
+        return []
+
+    try:
+        parsed = json.loads(raw_bill_url)
+    except (json.JSONDecodeError, TypeError):
+        parsed = raw_bill_url
+
+    values = parsed if isinstance(parsed, list) else [parsed]
+    return [value.strip() for value in values if isinstance(value, str) and value.strip()]
+
+
 def _rank_rub_bank_accounts_by_usage(
     accounts: list[AdminBankAccount],
     usage_rows: list[dict] | None,
@@ -6385,7 +6399,12 @@ async def admin_action(
         try:
             transaction_update = client.table("transactions").update(update_payload).eq("invoice", payload.invoice)
             if manual_group_confirmation_requested:
-                transaction_update = transaction_update.eq("status", "approved").select("invoice,status")
+                # ``update`` already requests the updated representation in the
+                # Supabase client. Avoid chaining ``select`` here: it adds an
+                # unnecessary SELECT permission/representation requirement to
+                # the conditional write and can turn a successful update into a
+                # 500 on installations with stricter RLS policies.
+                transaction_update = transaction_update.eq("status", "approved")
             update_result = transaction_update.execute()
             logger.info(f"Update result data: {update_result.data}")
 
@@ -6404,13 +6423,7 @@ async def admin_action(
             raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
 
     if manual_group_confirmation_requested:
-        proof_urls = []
-        if payload.admin_bill_url:
-            try:
-                parsed_bill_urls = json.loads(payload.admin_bill_url)
-                proof_urls = parsed_bill_urls if isinstance(parsed_bill_urls, list) else [payload.admin_bill_url]
-            except (json.JSONDecodeError, TypeError):
-                proof_urls = [payload.admin_bill_url]
+        proof_urls = _parse_admin_bill_urls(payload.admin_bill_url)
         try:
             dispatch_update = client.table("exchange_group_dispatches").update({
                 "status": "completed",
@@ -6419,11 +6432,11 @@ async def admin_action(
                 "lease_expires_at": None,
                 "last_error": None,
                 "updated_at": now.isoformat(),
-            }).eq("invoice", payload.invoice).select("id").execute()
+            }).eq("invoice", payload.invoice).execute()
             if not dispatch_update.data:
                 raise RuntimeError("Group dispatch was not found while completing the transaction")
         except Exception as exc:
-            logger.error("Could not close manually completed group dispatch %s: %s", payload.invoice, exc)
+            logger.exception("Could not close manually completed group dispatch %s", payload.invoice)
             raise HTTPException(status_code=500, detail="Transaction completed but group dispatch could not be closed") from exc
 
     # notify user based on status
@@ -6442,18 +6455,7 @@ async def admin_action(
             # If admin uploaded bills, send them as photos
             if payload.admin_bill_url:
                 try:
-                    import json as json_module
-                    # Try to parse as JSON array (new format)
-                    photo_urls = []
-                    try:
-                        parsed = json_module.loads(payload.admin_bill_url)
-                        if isinstance(parsed, list):
-                            photo_urls = parsed
-                        else:
-                            photo_urls = [payload.admin_bill_url]
-                    except (json_module.JSONDecodeError, TypeError):
-                        # Not JSON, treat as single URL
-                        photo_urls = [payload.admin_bill_url]
+                    photo_urls = _parse_admin_bill_urls(payload.admin_bill_url)
                     
                     logger.info(f"Sending {len(photo_urls)} photo(s) to user {user_id}")
                     
@@ -6561,16 +6563,7 @@ async def admin_action(
             # If admin uploaded rejection proof photos, send them
             if payload.admin_bill_url:
                 try:
-                    import json as json_module
-                    photo_urls = []
-                    try:
-                        parsed = json_module.loads(payload.admin_bill_url)
-                        if isinstance(parsed, list):
-                            photo_urls = parsed
-                        else:
-                            photo_urls = [payload.admin_bill_url]
-                    except (json_module.JSONDecodeError, TypeError):
-                        photo_urls = [payload.admin_bill_url]
+                    photo_urls = _parse_admin_bill_urls(payload.admin_bill_url)
                     
                     logger.info(f"Sending {len(photo_urls)} rejection photo(s) to user {user_id}")
                     photo_sent = send_user_photos(
