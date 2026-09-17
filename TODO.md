@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Add smooth transaction submission and animated success-check feedback for saved and new receiving accounts (frontend/src/pages/TransactionTab.tsx, frontend/src/components/ExchangeFlow.tsx, frontend/src/components/SuccessCheck.tsx, frontend/src/index.css)
 - [x] Fix 500 when manually finalizing a group-managed transaction with proof photos (backend/main.py, backend/tests/test_exchange_group.py, frontend/src/components/AdminInbox.test.tsx)
 - [x] Replace the startup square loader with a circular logo badge and animated circular ring (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Hold the Telegram startup screen through cascading initial queries and match its loader to the square logo (frontend/src/App.tsx, frontend/src/index.css)

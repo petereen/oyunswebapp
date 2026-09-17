@@ -6,6 +6,7 @@ import { formatRussianPhone, formatCardNumber, formatIBAN } from "./Registration
 import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
 import { queryKeys } from "../queryKeys";
+import { SuccessCheck } from "./SuccessCheck";
 
 interface Props {
   userId?: number;
@@ -383,7 +384,7 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
   };
 
   const handleSubmit = async (overrideBankDetails?: string) => {
-    if (!direction) return;
+    if (!direction || loading) return;
     setLoading(true);
     setError("");
     try {
@@ -410,6 +411,7 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
     } catch (err) {
       console.error("Exchange creation error:", err);
       setError(t("txn.exchange_error"));
+      setUseSavedBank(overrideBankDetails ? null : false);
     } finally {
       setLoading(false);
     }
@@ -989,7 +991,19 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
       )}
 
       {/* Step 5: User's Receiving Bank */}
-      {step === 5 && direction && (
+      {step === 5 && direction && loading && (
+        <div className="flex min-h-[18rem] flex-col items-center justify-center py-12" aria-busy="true" role="status">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-maroon-50">
+            <svg className="h-8 w-8 animate-spin text-maroon-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+          </div>
+          <span className="sr-only">{t("txn.processing")}</span>
+        </div>
+      )}
+
+      {step === 5 && direction && !loading && (
         <div className="flex flex-col gap-3">
           <div className="text-sm text-slate-600">
             {t("ef.bank_step_receive", { currency: currencyTo })}
@@ -1020,6 +1034,8 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
               </div>
             </div>
           )}
+
+          {error && <div className="text-sm text-red-600">{error}</div>}
 
           {/* Show form if saved bank choice made or no saved bank */}
           {(useSavedBank !== null || !getSavedBankForDirection(direction)) && (
@@ -1102,10 +1118,9 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
                 onClick={() => handleSubmit()}
                 disabled={!isBankValid() || loading}
               >
-                {loading ? t("txn.submitting") : t("txn.submit_exchange")}
+                {t("txn.submit_exchange")}
               </button>
               
-              {error && <div className="text-red-600 text-sm">{error}</div>}
             </>
           )}
         </div>
@@ -1114,7 +1129,7 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
       {/* Step 6: Success */}
       {step === 6 && (
         <div className="flex flex-col items-center gap-4 py-6">
-          <CheckCircle2 className="w-16 h-16 text-green-500" />
+          <SuccessCheck />
           <div className="text-xl font-bold text-maroon-700">{t("txn.success_title")}</div>
           <div className="text-sm text-slate-600 text-center">
             Invoice: <span className="font-mono font-bold">{successInvoice}</span>

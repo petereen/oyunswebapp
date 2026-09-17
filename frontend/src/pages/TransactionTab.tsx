@@ -17,6 +17,7 @@ import { prepareImageForUpload } from "../utils/imageUpload";
 import { queryKeys } from "../queryKeys";
 import { Entitlements } from "../hooks/useEntitlements";
 import { TransactionFrameSkeleton } from "../components/Skeleton";
+import { SuccessCheck } from "../components/SuccessCheck";
 
 interface Props {
   initData: string;
@@ -62,7 +63,7 @@ export function TransactionTab({
     && Boolean(userProfile?.ready_for_verification)
     && verificationLevel >= 2;
 
-  // Flow states: "card" | "promo" | "adminBank" | "receipt" | "receivingBank" | "success"
+  // Flow states: "card" | "promo" | "adminBank" | "receipt" | "receivingBank" | "submitting" | "success"
   const [flowStep, setFlowStep] = useState<string>("card");
   const [direction, setDirection] = useState<"buy" | "sell" | null>(null);
   const [amount, setAmount] = useState(0);
@@ -407,9 +408,10 @@ export function TransactionTab({
   };
 
   const handleSubmit = async (overrideBankDetails?: string) => {
-    if (!direction) return;
+    if (!direction || loading) return;
     setLoading(true);
     setError("");
+    setFlowStep("submitting");
     try {
       const payload: ExchangeCreateInput = {
         direction,
@@ -431,6 +433,8 @@ export function TransactionTab({
       setFlowStep("success");
     } catch {
       setError(t("txn.exchange_error"));
+      setUseSavedBank(overrideBankDetails ? null : false);
+      setFlowStep("receivingBank");
     } finally {
       setLoading(false);
     }
@@ -445,6 +449,7 @@ export function TransactionTab({
 
     setLoading(true);
     setError("");
+    setFlowStep("submitting");
     try {
       const response = await resubmitExchange({
         invoice: invoiceId,
@@ -461,6 +466,7 @@ export function TransactionTab({
       setFlowStep("success");
     } catch {
       setError(t("txn.edit_resubmit_error"));
+      setFlowStep("edit");
     } finally {
       setLoading(false);
     }
@@ -1136,6 +1142,19 @@ export function TransactionTab({
   }
 
   // Receiving bank step
+  if (flowStep === "submitting") {
+    return (
+      <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-fadeIn" aria-busy="true" role="status">
+        <div className="flex min-h-[18rem] flex-col items-center justify-center py-12">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-maroon-50 dark:bg-maroon-900/20">
+            <Loader2 className="h-8 w-8 animate-spin text-maroon-600 dark:text-gold-400" aria-hidden="true" />
+          </div>
+          <span className="sr-only">{t("txn.processing")}</span>
+        </div>
+      </div>
+    );
+  }
+
   if (flowStep === "receivingBank") {
     return (
       <div className="bg-white dark:bg-dark-800 p-5 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-slideUp">
@@ -1159,6 +1178,8 @@ export function TransactionTab({
             </div>
           </div>
         )}
+
+        {error && <div className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</div>}
 
         {(useSavedBank !== null || !getSavedBankForDirection(direction!)) && (
           <div className="flex flex-col gap-3">
@@ -1190,10 +1211,9 @@ export function TransactionTab({
               onClick={() => handleSubmit()}
               disabled={!isBankValid() || loading}
             >
-              {loading ? t("txn.processing") : t("txn.confirm")}
+              {t("txn.confirm")}
             </button>
 
-            {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
           </div>
         )}
       </div>
@@ -1205,9 +1225,7 @@ export function TransactionTab({
     return (
       <div className="bg-white dark:bg-dark-800 p-6 rounded-3xl shadow-card border border-silver/60 dark:border-dark-600 animate-scaleIn">
         <div className="flex flex-col items-center gap-4 py-6">
-          <div className="w-16 h-16 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center">
-            <CheckCircle2 className="w-9 h-9 text-green-500" />
-          </div>
+          <SuccessCheck />
           <div className="text-xl font-bold text-dark-800 dark:text-ivory-200">{t("txn.success_title")}</div>
           <div className="text-sm text-dark-600 dark:text-ivory-400 text-center">
             Invoice: <span className="font-mono font-bold text-dark-800 dark:text-ivory-200">{successInvoice}</span>
