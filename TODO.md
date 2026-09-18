@@ -1,6 +1,12 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Add Oyuns+ voucher/card schema, storage buckets, and atomic redemption/refund SQL migration (database/)
+- [x] Add Oyuns+ user/admin API models, endpoints, validation, history balance metadata, and Telegram notifications (backend/main.py, backend/models.py, bot_translations.py)
+- [x] Build the Oyuns+ voucher grid, detail/purchase flow, balance/history refresh, and motion polish (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/)
+- [x] Add Oyuns+ card management under Settings and request management under Гүйлгээ → Бэлэг (frontend/src/components/admin/, frontend/src/components/)
+- [x] Remove basketball frontend routes/components/client API while retaining tournament backend functionality (frontend/src/App.tsx, frontend/src/pages/, frontend/src/api.ts)
+- [x] Add Oyuns+ frontend/backend regression coverage and verify tests, typecheck, and production build
 - [x] Add smooth transaction submission and animated success-check feedback for saved and new receiving accounts (frontend/src/pages/TransactionTab.tsx, frontend/src/components/ExchangeFlow.tsx, frontend/src/components/SuccessCheck.tsx, frontend/src/index.css)
 - [x] Fix 500 when manually finalizing a group-managed transaction with proof photos (backend/main.py, backend/tests/test_exchange_group.py, frontend/src/components/AdminInbox.test.tsx)
 - [x] Replace the startup square loader with a circular logo badge and animated circular ring (frontend/src/App.tsx, frontend/src/index.css)

@@ -1432,6 +1432,18 @@ _translations = {
 
 # ── Backend notification translations ──
 _backend_translations = {
+    "notif_oyuns_plus_request_created": {
+        "mn": "🎁 <b>{card_name}</b> эрхийн хүсэлт амжилттай үүслээ!\n\nБаталгаажсаны дараа тантай холбогдох болно.",
+        "ru": "🎁 Запрос на ваучер <b>{card_name}</b> успешно создан!\n\nМы свяжемся с вами после подтверждения.",
+    },
+    "notif_oyuns_plus_fulfilled": {
+        "mn": "✅ Таны <b>{card_name}</b> эрх илгээгдлээ!",
+        "ru": "✅ Ваш ваучер <b>{card_name}</b> отправлен!",
+    },
+    "notif_oyuns_plus_refunded": {
+        "mn": "😔 Уучлаарай, таны <b>{card_name}</b> эрхийн хүсэлтийг биелүүлэх боломжгүй боллоо.\n\n↩️ {points} оноог буцаан олголоо.\n📌 Шалтгаан: {reason}\n⭐ Одоогийн оноо: <b>{balance}</b>",
+        "ru": "😔 К сожалению, мы не можем выполнить запрос на ваучер <b>{card_name}</b>.\n\n↩️ Мы вернули {points} баллов.\n📌 Причина: {reason}\n⭐ Текущий баланс: <b>{balance}</b>",
+    },
     "notif_exchange_received": {
         "mn": "✅ <b>Таны гүйлгээний хүсэлтийг хүлээн авлаа!</b>\n\n📌 Дугаар: <b>{invoice}</b>\n💰 {amount} {from_} → {to}\n💱 Ханш: {rate}\n\n⏳ Админ таны хүсэлтийг боловсруулж байна.",
         "ru": "✅ <b>Ваша заявка на обмен принята!</b>\n\n📌 Номер: <b>{invoice}</b>\n💰 {amount} {from_} → {to}\n💱 Курс: {rate}\n\n⏳ Администратор обрабатывает вашу заявку.",

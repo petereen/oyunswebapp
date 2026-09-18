@@ -20,6 +20,8 @@ export const queryKeys = {
     analytics: ["admin", "analytics"] as const,
     shiftContext: ["admin", "shift-context"] as const,
     workingHours: ["admin", "working-hours"] as const,
+    oyunsPlusCards: ["admin", "oyuns-plus", "cards"] as const,
+    oyunsPlusRequests: (status: string) => ["admin", "oyuns-plus", "requests", status] as const,
   },
   userPromos: (userId: number) => ["user", "promos", userId] as const,
   stats: {
@@ -29,10 +31,6 @@ export const queryKeys = {
   oyunsPlus: {
     summary: (userId: number) => ["oyuns-plus", "summary", userId] as const,
     history: (userId: number) => ["oyuns-plus", "history", userId] as const,
-  },
-  tournament: {
-    overview: ["tournament", "overview"] as const,
-    myVotes: (userId: number) => ["tournament", "my-votes", userId] as const,
   },
   ratesHistory: (days: number) => ["rates", "history", days] as const,
 } as const;

@@ -10,7 +10,6 @@ import { ServicesTab } from "./pages/ServicesTab";
 import { OyunsPlusTab } from "./pages/OyunsPlusTab";
 import { StatsTab } from "./pages/StatsTab";
 import { ProfilePage } from "./pages/ProfilePage";
-import { OyunsSagsAdminPanel } from "./pages/OyunsSagsAdminPanel";
 import { DashboardPanel } from "./pages/DashboardPanel";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
@@ -35,8 +34,6 @@ export default function App() {
   const isAllowedHost = allowedHosts.has(hostname);
   const normalizedPath = rawPath === "/" ? "/" : rawPath.replace(/\/+$/, "");
   const requestedTab = queryParams.get("tab");
-  const requestedTournament = queryParams.get("tournament");
-  const requestedTournamentSection = queryParams.get("section");
 
   if (!isAllowedHost) {
     return (
@@ -51,10 +48,6 @@ export default function App() {
     );
   }
 
-  // Standalone tournament admin panel without Telegram auth
-  const isOyunsSagsAdmin = normalizedPath === "/oyuns-sags" || normalizedPath === "/omoh-sags";
-  if (isOyunsSagsAdmin) return <OyunsSagsAdminPanel />;
-
   // Standalone analytics dashboard without Telegram auth
   if (hostname === "dashboard.oyuns.mn" || normalizedPath === "/dashboard") return <DashboardPanel />;
 
@@ -67,10 +60,6 @@ export default function App() {
   const urlEditInvoice = queryParams.get("edit-invoice");
   const urlVerifyEmail = queryParams.has("verify-email");
   const urlOyunsPlusTab = requestedTab === "oyuns-plus";
-  const urlTournamentSection = requestedTournament === "basketball" ? "basketball" : null;
-  const urlTournamentInnerTab = requestedTournamentSection === "schedule" || requestedTournamentSection === "leaderboard" || requestedTournamentSection === "stages"
-    ? requestedTournamentSection
-    : "schedule";
 
   const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
   const entitlements = useEntitlements({ userId: user?.id, isAuthenticating });
@@ -300,8 +289,6 @@ export default function App() {
                 emailAddress={entitlements.profile?.user?.email}
                 isProfileLoading={entitlements.isResolving}
                 isProfileResolved={Boolean(entitlements.profile)}
-                initialTournamentSection={urlTournamentSection}
-                initialTournamentInnerTab={urlTournamentInnerTab}
               />
           </div>
         )}

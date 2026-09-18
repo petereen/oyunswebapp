@@ -9,7 +9,7 @@ import {
   History,
   Users,
 } from "lucide-react";
-import { AdminGifts } from "../components/AdminGifts";
+import { AdminGiftTabs } from "../components/AdminGiftTabs";
 import { AdminHistory } from "../components/AdminHistory";
 import { AdminInbox } from "../components/AdminInbox";
 import { AdminManualTransaction } from "../components/AdminManualTransaction";
@@ -39,7 +39,7 @@ const PersistentInbox = memo(AdminInbox);
 const PersistentUsers = memo(AdminUsersContainer);
 const PersistentHistory = memo(AdminHistory);
 const PersistentManual = memo(AdminManualTransaction);
-const PersistentGifts = memo(AdminGifts);
+const PersistentGifts = memo(AdminGiftTabs);
 const PersistentSettings = memo(AdminSettingsContainer);
 
 interface Props { onExit?: () => void; }

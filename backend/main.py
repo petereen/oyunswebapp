@@ -7,6 +7,8 @@ import json
 import secrets
 import string
 import requests
+import uuid
+import re
 from decimal import Decimal, InvalidOperation
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
@@ -65,6 +67,17 @@ from models import (
     OyunsPlusSummaryResponse,
     OyunsPlusHistoryEntry,
     OyunsPlusHistoryResponse,
+    OyunsPlusCard,
+    OyunsPlusCardsResponse,
+    OyunsPlusCardCreateRequest,
+    OyunsPlusCardUpdateRequest,
+    OyunsPlusVoucherRequestCreate,
+    OyunsPlusVoucherRequestResponse,
+    OyunsPlusVoucherRequestCreateResponse,
+    OyunsPlusVoucherRequestsResponse,
+    OyunsPlusVoucherConfirmRequest,
+    OyunsPlusVoucherRefundRequest,
+    OyunsPlusAdminUploadRequest,
     PresignRequest,
     PresignResponse,
     PromoCodeValidateRequest,
@@ -201,6 +214,8 @@ TOURNAMENT_KNOCKOUT_TEAM_COUNTS = {4, 8}
 TOURNAMENT_GROUPS_SETTING_KEY = "oyuns_tournament_groups_json"
 TOURNAMENT_KNOCKOUT_SETTING_KEY = "oyuns_tournament_knockout_json"
 OYUNS_PLUS_LOGO_DEFAULT = "https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/OYUNS%20Plus.png"
+OYUNS_PLUS_CARD_BUCKET = "oyuns-plus-cards"
+OYUNS_PLUS_CONFIRMATION_BUCKET = "oyuns-plus-confirmations"
 
 TOURNAMENT_KNOCKOUT_TEMPLATES: dict[int, list[dict[str, str]]] = {
     4: [
@@ -1253,6 +1268,84 @@ def _get_oyuns_plus_balance(client, user_id: int) -> int:
     for row in res.data or []:
         total += _safe_int(row.get("points"), 0)
     return total
+
+
+def _normalize_oyuns_plus_phone(value: str) -> str:
+    """Normalize Mongolian mobile numbers to +976XXXXXXXX."""
+    digits = re.sub(r"\D", "", str(value or ""))
+    if digits.startswith("976") and len(digits) == 11:
+        digits = digits[3:]
+    if len(digits) != 8 or digits[0] not in "6789":
+        raise HTTPException(status_code=422, detail="Mongolian phone number must be 8 digits and start with 6, 7, 8, or 9")
+    return f"+976{digits}"
+
+
+def _oyuns_plus_rpc_error(exc: Exception) -> HTTPException:
+    message = str(exc)
+    upper = message.upper()
+    if "INSUFFICIENT_POINTS" in upper:
+        return HTTPException(status_code=409, detail="INSUFFICIENT_POINTS")
+    if "CARD_NOT_AVAILABLE" in upper:
+        return HTTPException(status_code=404, detail="CARD_NOT_AVAILABLE")
+    if "REQUEST_NOT_FOUND" in upper:
+        return HTTPException(status_code=404, detail="REQUEST_NOT_FOUND")
+    if "REQUEST_NOT_PENDING" in upper:
+        return HTTPException(status_code=409, detail="REQUEST_NOT_PENDING")
+    if "PHOTO_REQUIRED" in upper or "REASON_REQUIRED" in upper:
+        return HTTPException(status_code=422, detail=message)
+    logger.exception("Oyuns+ RPC failed")
+    return HTTPException(status_code=500, detail="Oyuns+ transaction could not be completed")
+
+
+def _oyuns_plus_card_response(row: dict) -> OyunsPlusCard:
+    return OyunsPlusCard(
+        id=str(row.get("id")),
+        name=str(row.get("name") or ""),
+        description=str(row.get("description") or ""),
+        points_price=_safe_int(row.get("points_price"), 0),
+        image_url=str(row.get("image_url") or ""),
+        image_path=row.get("image_path"),
+        is_active=bool(row.get("is_active", True)),
+        archived_at=row.get("archived_at"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _signed_oyuns_plus_confirmation_url(client, path: str | None) -> str | None:
+    if not path:
+        return None
+    try:
+        response = client.storage.from_(OYUNS_PLUS_CONFIRMATION_BUCKET).create_signed_url(path, 900)
+        if isinstance(response, dict):
+            return response.get("signedURL") or response.get("signed_url")
+    except Exception as exc:
+        logger.warning("Unable to sign Oyuns+ confirmation photo: %s", exc)
+    return None
+
+
+def _oyuns_plus_request_response(row: dict, user_row: dict | None = None, client=None) -> OyunsPlusVoucherRequestResponse:
+    user_row = user_row or {}
+    first_name = user_row.get("first_name") or ""
+    last_name = user_row.get("last_name") or ""
+    return OyunsPlusVoucherRequestResponse(
+        id=str(row.get("id")),
+        status=str(row.get("status") or "pending"),
+        card_id=str(row.get("card_id")),
+        card_name=str(row.get("card_name_snapshot") or ""),
+        points_spent=_safe_int(row.get("points_spent"), 0),
+        receiver_name=row.get("receiver_name"),
+        receiver_phone=row.get("receiver_phone"),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+        confirmation_photo_path=row.get("confirmation_photo_path"),
+        confirmation_photo_url=_signed_oyuns_plus_confirmation_url(client, row.get("confirmation_photo_path")) if client else None,
+        refund_reason=row.get("refund_reason"),
+        user_id=user_row.get("id") or row.get("user_id"),
+        user_name=(f"{first_name} {last_name}").strip() or None,
+        user_username=user_row.get("username"),
+        user_lang=user_row.get("lang"),
+    )
 
 
 def _generate_referral_code(length: int = 8) -> str:
@@ -4795,24 +4888,300 @@ async def oyuns_plus_history(user=Depends(get_jwt_authenticated_user)):
     client = get_supabase()
     res = (
         client.table("oyuns_plus_points_ledger")
-        .select("id,source_type,source_id,points,rub_equivalent,created_at")
+        .select("id,source_type,source_id,points,rub_equivalent,metadata,created_at")
         .eq("user_id", user.id)
         .order("created_at", desc=True)
         .limit(50)
         .execute()
     )
-    entries = [
-        OyunsPlusHistoryEntry(
-            id=row.get("id"),
-            source_type=row.get("source_type", ""),
-            source_id=row.get("source_id"),
-            points=_safe_int(row.get("points"), 0),
+    current_balance = _get_oyuns_plus_balance(client, user.id)
+    running_balance = current_balance
+    entries: list[OyunsPlusHistoryEntry] = []
+    for row in (res.data or []):
+        points = _safe_int(row.get("points"), 0)
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        source_type = str(row.get("source_type") or "")
+        if source_type in {"voucher_redeem"} or points < 0:
+            transaction_type = "redeemed"
+        elif source_type in {"voucher_refund"}:
+            transaction_type = "refunded"
+        else:
+            transaction_type = "earned"
+        entries.append(OyunsPlusHistoryEntry(
+            id=str(row.get("id")) if row.get("id") is not None else None,
+            source_type=source_type,
+            source_id=str(row.get("source_id")) if row.get("source_id") is not None else None,
+            points=points,
             rub_equivalent=row.get("rub_equivalent"),
             created_at=row.get("created_at"),
-        )
-        for row in (res.data or [])
-    ]
-    return OyunsPlusHistoryResponse(entries=entries)
+            transaction_type=transaction_type,
+            voucher_name=metadata.get("card_name") or metadata.get("voucher_name"),
+            balance_after=running_balance,
+            metadata=metadata,
+        ))
+        running_balance -= points
+    return OyunsPlusHistoryResponse(entries=entries, current_balance=current_balance)
+
+
+@app.get("/api/oyuns-plus/cards", response_model=OyunsPlusCardsResponse)
+async def oyuns_plus_cards(user=Depends(get_jwt_authenticated_user)):
+    client = get_supabase()
+    rows = (
+        client.table("oyuns_plus_cards")
+        .select("id,name,description,points_price,image_url,image_path,is_active,archived_at,created_at,updated_at")
+        .eq("is_active", True)
+        .is_("archived_at", "null")
+        .order("created_at", desc=True)
+        .execute()
+    ).data or []
+    return OyunsPlusCardsResponse(cards=[_oyuns_plus_card_response(row) for row in rows])
+
+
+@app.post("/api/oyuns-plus/requests", response_model=OyunsPlusVoucherRequestCreateResponse)
+async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user=Depends(get_jwt_authenticated_user)):
+    client = get_supabase()
+    try:
+        card_id = str(uuid.UUID(payload.card_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="card_id must be a UUID") from exc
+    receiver_name = payload.receiver_name.strip()
+    if not receiver_name:
+        raise HTTPException(status_code=422, detail="Receiver name is required")
+    receiver_phone = _normalize_oyuns_plus_phone(payload.receiver_phone)
+    try:
+        result = client.rpc("create_oyuns_plus_voucher_request", {
+            "p_user_id": user.id,
+            "p_card_id": card_id,
+            "p_receiver_name": receiver_name,
+            "p_receiver_phone": receiver_phone,
+        }).execute().data
+    except Exception as exc:
+        raise _oyuns_plus_rpc_error(exc)
+    if isinstance(result, list):
+        result = result[0] if result else {}
+    if not isinstance(result, dict) or not result.get("id"):
+        raise HTTPException(status_code=500, detail="Oyuns+ request was not created")
+
+    card_name = str(result.get("card_name") or "")
+    try:
+        lang = _get_user_lang(user.id)
+        send_user_notification(user.id, tb(lang, "notif_oyuns_plus_request_created", card_name=card_name))
+    except Exception:
+        logger.exception("Failed to send Oyuns+ request-created notification")
+
+    return OyunsPlusVoucherRequestCreateResponse(
+        id=str(result["id"]),
+        status=str(result.get("status") or "pending"),
+        card_id=str(result.get("card_id") or card_id),
+        card_name=card_name,
+        points_spent=_safe_int(result.get("points_spent"), 0),
+        receiver_name=receiver_name,
+        receiver_phone=receiver_phone,
+        created_at=result.get("created_at"),
+        balance_after=_safe_int(result.get("balance_after"), 0),
+        user_id=user.id,
+    )
+
+
+@app.get("/api/admin/oyuns-plus/cards", response_model=OyunsPlusCardsResponse)
+async def admin_oyuns_plus_cards(include_archived: bool = True, admin=Depends(require_admin)):
+    client = get_supabase()
+    query = client.table("oyuns_plus_cards").select("*")
+    if not include_archived:
+        query = query.is_("archived_at", "null")
+    rows = query.order("created_at", desc=True).execute().data or []
+    return OyunsPlusCardsResponse(cards=[_oyuns_plus_card_response(row) for row in rows])
+
+
+@app.post("/api/admin/oyuns-plus/cards", response_model=OyunsPlusCard)
+async def admin_create_oyuns_plus_card(payload: OyunsPlusCardCreateRequest, admin=Depends(require_admin)):
+    client = get_supabase()
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Card name is required")
+    row = client.table("oyuns_plus_cards").insert({
+        "name": name,
+        "description": payload.description.strip(),
+        "points_price": payload.points_price,
+        "image_url": payload.image_url.strip(),
+        "image_path": payload.image_path,
+        "is_active": payload.is_active,
+        "created_by": admin.id,
+        "updated_by": admin.id,
+    }).execute().data
+    if not row:
+        raise HTTPException(status_code=500, detail="Card could not be created")
+    return _oyuns_plus_card_response(row[0])
+
+
+@app.patch("/api/admin/oyuns-plus/cards/{card_id}", response_model=OyunsPlusCard)
+async def admin_update_oyuns_plus_card(card_id: str, payload: OyunsPlusCardUpdateRequest, admin=Depends(require_admin)):
+    client = get_supabase()
+    try:
+        uuid.UUID(card_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="card_id must be a UUID") from exc
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates:
+        updates["name"] = str(updates["name"]).strip()
+        if not updates["name"]:
+            raise HTTPException(status_code=422, detail="Card name is required")
+    if "description" in updates:
+        updates["description"] = str(updates["description"] or "").strip()
+    if "image_url" in updates:
+        updates["image_url"] = str(updates["image_url"] or "").strip()
+    updates["updated_by"] = admin.id
+    result = client.table("oyuns_plus_cards").update(updates).eq("id", card_id).execute().data
+    if not result:
+        raise HTTPException(status_code=404, detail="Card not found")
+    return _oyuns_plus_card_response(result[0])
+
+
+@app.post("/api/admin/oyuns-plus/cards/{card_id}/archive", response_model=OyunsPlusCard)
+async def admin_archive_oyuns_plus_card(card_id: str, admin=Depends(require_admin)):
+    client = get_supabase()
+    result = client.table("oyuns_plus_cards").update({
+        "is_active": False,
+        "archived_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": admin.id,
+    }).eq("id", card_id).execute().data
+    if not result:
+        raise HTTPException(status_code=404, detail="Card not found")
+    return _oyuns_plus_card_response(result[0])
+
+
+@app.post("/api/admin/oyuns-plus/cards/{card_id}/restore", response_model=OyunsPlusCard)
+async def admin_restore_oyuns_plus_card(card_id: str, admin=Depends(require_admin)):
+    client = get_supabase()
+    result = client.table("oyuns_plus_cards").update({
+        "archived_at": None,
+        "updated_by": admin.id,
+    }).eq("id", card_id).execute().data
+    if not result:
+        raise HTTPException(status_code=404, detail="Card not found")
+    return _oyuns_plus_card_response(result[0])
+
+
+@app.post("/api/admin/oyuns-plus/uploads/presign", response_model=PresignResponse)
+async def admin_oyuns_plus_upload_presign(payload: OyunsPlusAdminUploadRequest, admin=Depends(require_admin)):
+    client = get_supabase()
+    expected_mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[payload.extension]
+    if payload.mime_type != expected_mime:
+        raise HTTPException(status_code=422, detail="Image MIME type does not match extension")
+    ext = "jpg" if payload.extension == "jpeg" else payload.extension
+    if payload.asset_type == "card":
+        bucket = OYUNS_PLUS_CARD_BUCKET
+        path = f"cards/{uuid.uuid4()}.{ext}"
+    else:
+        if not payload.request_id:
+            raise HTTPException(status_code=422, detail="request_id is required for confirmation photos")
+        try:
+            request_id = str(uuid.UUID(payload.request_id))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="request_id must be a UUID") from exc
+        request_row = client.table("oyuns_plus_voucher_requests").select("id,status").eq("id", request_id).limit(1).execute().data
+        if not request_row:
+            raise HTTPException(status_code=404, detail="Request not found")
+        if request_row[0].get("status") != "pending":
+            raise HTTPException(status_code=409, detail="Request is no longer pending")
+        bucket = OYUNS_PLUS_CONFIRMATION_BUCKET
+        path = f"confirmations/{request_id}/{uuid.uuid4()}.{ext}"
+    try:
+        signed_url, ttl = presign_upload(client, bucket, path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return PresignResponse(
+        upload_url=signed_url,
+        public_url=public_url(client, bucket, path) if payload.asset_type == "card" else None,
+        expires_in=ttl,
+        path=path,
+    )
+
+
+@app.get("/api/admin/oyuns-plus/requests", response_model=OyunsPlusVoucherRequestsResponse)
+async def admin_oyuns_plus_requests(status: str = "pending", admin=Depends(require_admin)):
+    client = get_supabase()
+    query = client.table("oyuns_plus_voucher_requests").select("*")
+    if status and status != "all":
+        if status not in {"pending", "fulfilled", "refunded"}:
+            raise HTTPException(status_code=422, detail="Invalid status")
+        query = query.eq("status", status)
+    rows = query.order("created_at", desc=True).limit(500).execute().data or []
+    user_ids = list({row.get("user_id") for row in rows if row.get("user_id") is not None})
+    users = {}
+    if user_ids:
+        users = {row["id"]: row for row in (client.table("users").select("id,first_name,last_name,username,lang").in_("id", user_ids).execute().data or [])}
+    return OyunsPlusVoucherRequestsResponse(requests=[_oyuns_plus_request_response(row, users.get(row.get("user_id")), client) for row in rows])
+
+
+@app.post("/api/admin/oyuns-plus/requests/{request_id}/confirm", response_model=OyunsPlusVoucherRequestResponse)
+async def admin_confirm_oyuns_plus_request(request_id: str, payload: OyunsPlusVoucherConfirmRequest, admin=Depends(require_admin)):
+    client = get_supabase()
+    try:
+        uuid.UUID(request_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="request_id must be a UUID") from exc
+    if not payload.confirmation_photo_path.startswith(f"confirmations/{request_id}/"):
+        raise HTTPException(status_code=422, detail="Invalid confirmation photo path")
+    try:
+        result = client.rpc("fulfill_oyuns_plus_voucher_request", {
+            "p_request_id": request_id,
+            "p_admin_id": admin.id,
+            "p_confirmation_photo_path": payload.confirmation_photo_path,
+        }).execute().data
+    except Exception as exc:
+        raise _oyuns_plus_rpc_error(exc)
+    if isinstance(result, list):
+        result = result[0] if result else {}
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=500, detail="Request could not be fulfilled")
+    user_id = _safe_int(result.get("user_id"), 0)
+    if user_id:
+        try:
+            lang = _get_user_lang(user_id)
+            send_user_notification(user_id, tb(lang, "notif_oyuns_plus_fulfilled", card_name=result.get("card_name_snapshot") or ""))
+        except Exception:
+            logger.exception("Failed to send Oyuns+ fulfilled notification")
+    user_rows = client.table("users").select("id,first_name,last_name,username,lang").eq("id", result.get("user_id")).limit(1).execute().data
+    return _oyuns_plus_request_response(result, user_rows[0] if user_rows else None, client)
+
+
+@app.post("/api/admin/oyuns-plus/requests/{request_id}/refund")
+async def admin_refund_oyuns_plus_request(request_id: str, payload: OyunsPlusVoucherRefundRequest, admin=Depends(require_admin)):
+    client = get_supabase()
+    try:
+        uuid.UUID(request_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="request_id must be a UUID") from exc
+    try:
+        result = client.rpc("refund_oyuns_plus_voucher_request", {
+            "p_request_id": request_id,
+            "p_admin_id": admin.id,
+            "p_reason": payload.reason.strip(),
+        }).execute().data
+    except Exception as exc:
+        raise _oyuns_plus_rpc_error(exc)
+    if isinstance(result, list):
+        result = result[0] if result else {}
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=500, detail="Request could not be refunded")
+    request_row = result.get("request") or {}
+    user_id = _safe_int(request_row.get("user_id"), 0)
+    balance_after = _safe_int(result.get("balance_after"), 0)
+    if user_id:
+        try:
+            lang = _get_user_lang(user_id)
+            send_user_notification(user_id, tb(
+                lang,
+                "notif_oyuns_plus_refunded",
+                card_name=request_row.get("card_name_snapshot") or "",
+                points=_safe_int(request_row.get("points_spent"), 0),
+                reason=payload.reason.strip(),
+                balance=balance_after,
+            ))
+        except Exception:
+            logger.exception("Failed to send Oyuns+ refund notification")
+    return {"request": request_row, "balance_after": balance_after}
 
 
 @app.get("/api/tournament/overview", response_model=TournamentOverviewResponse)

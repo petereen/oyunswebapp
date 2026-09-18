@@ -350,16 +350,104 @@ class OyunsPlusSummaryResponse(BaseModel):
 
 
 class OyunsPlusHistoryEntry(BaseModel):
-    id: Optional[int] = None
+    id: Optional[str] = None
     source_type: str
     source_id: Optional[str] = None
     points: int
     rub_equivalent: Optional[float] = None
     created_at: Optional[str] = None
+    transaction_type: str = "earned"
+    voucher_name: Optional[str] = None
+    balance_after: int = 0
+    metadata: dict = Field(default_factory=dict)
 
 
 class OyunsPlusHistoryResponse(BaseModel):
     entries: list[OyunsPlusHistoryEntry] = []
+    current_balance: int = 0
+
+
+class OyunsPlusCard(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    points_price: int
+    image_url: str
+    image_path: Optional[str] = None
+    is_active: bool = True
+    archived_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class OyunsPlusCardsResponse(BaseModel):
+    cards: list[OyunsPlusCard] = Field(default_factory=list)
+
+
+class OyunsPlusCardCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    description: str = Field(default="", max_length=4000)
+    points_price: int = Field(..., gt=0)
+    image_url: str = Field(..., min_length=1)
+    image_path: Optional[str] = None
+    is_active: bool = True
+
+
+class OyunsPlusCardUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    description: Optional[str] = Field(default=None, max_length=4000)
+    points_price: Optional[int] = Field(default=None, gt=0)
+    image_url: Optional[str] = Field(default=None, min_length=1)
+    image_path: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class OyunsPlusVoucherRequestCreate(BaseModel):
+    card_id: str
+    receiver_name: str = Field(..., min_length=1, max_length=160)
+    receiver_phone: str = Field(..., min_length=8, max_length=20)
+
+
+class OyunsPlusVoucherRequestResponse(BaseModel):
+    id: str
+    status: str
+    card_id: str
+    card_name: str
+    points_spent: int
+    receiver_name: Optional[str] = None
+    receiver_phone: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    confirmation_photo_path: Optional[str] = None
+    confirmation_photo_url: Optional[str] = None
+    refund_reason: Optional[str] = None
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    user_username: Optional[str] = None
+    user_lang: Optional[str] = None
+
+
+class OyunsPlusVoucherRequestCreateResponse(OyunsPlusVoucherRequestResponse):
+    balance_after: int
+
+
+class OyunsPlusVoucherRequestsResponse(BaseModel):
+    requests: list[OyunsPlusVoucherRequestResponse] = Field(default_factory=list)
+
+
+class OyunsPlusVoucherConfirmRequest(BaseModel):
+    confirmation_photo_path: str = Field(..., min_length=1, max_length=500)
+
+
+class OyunsPlusVoucherRefundRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=2000)
+
+
+class OyunsPlusAdminUploadRequest(BaseModel):
+    asset_type: Literal["card", "confirmation"]
+    request_id: Optional[str] = None
+    extension: Literal["jpg", "jpeg", "png", "webp"] = "jpg"
+    mime_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
 
 
 class RegistrationRequest(BaseModel):

@@ -9,7 +9,6 @@ const api = axios.create({
 
 const JWT_STORAGE_KEY = 'oyuns_jwt_v2';
 const FUEL_ADMIN_KEY_STORAGE = 'fuel_admin_key';
-const OYUNS_SAGS_ADMIN_KEY_STORAGE = 'oyuns_sags_admin_key';
 export const DASHBOARD_KEY_STORAGE = 'oyuns_dashboard_key';
 
 export type AuthenticatedUser = {
@@ -122,10 +121,6 @@ const fuelAdminApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
 
-const oyunsSagsAdminApi = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || "/api",
-});
-
 const dashboardApi = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "/api",
 });
@@ -148,14 +143,6 @@ fuelAdminApi.interceptors.request.use(config => {
   const apiKey = localStorage.getItem(FUEL_ADMIN_KEY_STORAGE);
   if (apiKey) {
     config.headers['X-Fuel-Admin-Key'] = apiKey;
-  }
-  return config;
-});
-
-oyunsSagsAdminApi.interceptors.request.use(config => {
-  const apiKey = localStorage.getItem(OYUNS_SAGS_ADMIN_KEY_STORAGE);
-  if (apiKey) {
-    config.headers['X-Oyuns-Sags-Key'] = apiKey;
   }
   return config;
 });
@@ -682,16 +669,21 @@ export async function fetchOyunsPlusSummary(): Promise<OyunsPlusSummary> {
 }
 
 export interface OyunsPlusHistoryEntry {
-  id?: number;
+  id?: string;
   source_type: string;
   source_id?: string;
   points: number;
   rub_equivalent?: number;
   created_at?: string;
+  transaction_type: "earned" | "redeemed" | "refunded";
+  voucher_name?: string | null;
+  balance_after: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface OyunsPlusHistory {
   entries: OyunsPlusHistoryEntry[];
+  current_balance: number;
 }
 
 export async function fetchOyunsPlusHistory(): Promise<OyunsPlusHistory> {
@@ -699,294 +691,117 @@ export async function fetchOyunsPlusHistory(): Promise<OyunsPlusHistory> {
   return res.data as OyunsPlusHistory;
 }
 
+export interface OyunsPlusCard {
+  id: string;
+  name: string;
+  description: string;
+  points_price: number;
+  image_url: string;
+  image_path?: string | null;
+  is_active: boolean;
+  archived_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export async function fetchOyunsPlusCards(): Promise<{ cards: OyunsPlusCard[] }> {
+  const res = await api.get('/oyuns-plus/cards');
+  return res.data as { cards: OyunsPlusCard[] };
+}
+
+export interface OyunsPlusVoucherRequest {
+  id: string;
+  status: "pending" | "fulfilled" | "refunded";
+  card_id: string;
+  card_name: string;
+  points_spent: number;
+  receiver_name?: string | null;
+  receiver_phone?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  confirmation_photo_path?: string | null;
+  confirmation_photo_url?: string | null;
+  refund_reason?: string | null;
+  user_id?: number | null;
+  user_name?: string | null;
+  user_username?: string | null;
+  user_lang?: string | null;
+}
+
+export async function createOyunsPlusVoucherRequest(payload: {
+  card_id: string;
+  receiver_name: string;
+  receiver_phone: string;
+}) {
+  const res = await api.post('/oyuns-plus/requests', payload);
+  return res.data as OyunsPlusVoucherRequest & { balance_after: number };
+}
+
+export async function fetchAdminOyunsPlusCards(includeArchived = true): Promise<{ cards: OyunsPlusCard[] }> {
+  const res = await api.get(`/admin/oyuns-plus/cards?include_archived=${includeArchived ? 'true' : 'false'}`);
+  return res.data as { cards: OyunsPlusCard[] };
+}
+
+export async function createAdminOyunsPlusCard(payload: {
+  name: string;
+  description: string;
+  points_price: number;
+  image_url: string;
+  image_path?: string | null;
+  is_active: boolean;
+}) {
+  const res = await api.post('/admin/oyuns-plus/cards', payload);
+  return res.data as OyunsPlusCard;
+}
+
+export async function updateAdminOyunsPlusCard(cardId: string, payload: Partial<{
+  name: string;
+  description: string;
+  points_price: number;
+  image_url: string;
+  image_path: string | null;
+  is_active: boolean;
+}>) {
+  const res = await api.patch(`/admin/oyuns-plus/cards/${encodeURIComponent(cardId)}`, payload);
+  return res.data as OyunsPlusCard;
+}
+
+export async function archiveAdminOyunsPlusCard(cardId: string) {
+  const res = await api.post(`/admin/oyuns-plus/cards/${encodeURIComponent(cardId)}/archive`);
+  return res.data as OyunsPlusCard;
+}
+
+export async function restoreAdminOyunsPlusCard(cardId: string) {
+  const res = await api.post(`/admin/oyuns-plus/cards/${encodeURIComponent(cardId)}/restore`);
+  return res.data as OyunsPlusCard;
+}
+
+export async function presignAdminOyunsPlusUpload(payload: {
+  asset_type: "card" | "confirmation";
+  request_id?: string;
+  extension: "jpg" | "jpeg" | "png" | "webp";
+  mime_type: "image/jpeg" | "image/png" | "image/webp";
+}) {
+  const res = await api.post('/admin/oyuns-plus/uploads/presign', payload);
+  return res.data as { upload_url: string; public_url?: string | null; path: string; expires_in: number };
+}
+
+export async function fetchAdminOyunsPlusRequests(status = "pending"): Promise<{ requests: OyunsPlusVoucherRequest[] }> {
+  const res = await api.get(`/admin/oyuns-plus/requests?status=${encodeURIComponent(status)}`);
+  return res.data as { requests: OyunsPlusVoucherRequest[] };
+}
+
+export async function confirmAdminOyunsPlusRequest(requestId: string, confirmationPhotoPath: string) {
+  const res = await api.post(`/admin/oyuns-plus/requests/${encodeURIComponent(requestId)}/confirm`, { confirmation_photo_path: confirmationPhotoPath });
+  return res.data as OyunsPlusVoucherRequest;
+}
+
+export async function refundAdminOyunsPlusRequest(requestId: string, reason: string) {
+  const res = await api.post(`/admin/oyuns-plus/requests/${encodeURIComponent(requestId)}/refund`, { reason });
+  return res.data as { request: OyunsPlusVoucherRequest; balance_after: number };
+}
+
 export const OYUNS_PLUS_LOGO_DEFAULT_URL = 'https://ldolpsylyatkxqsgxhkn.supabase.co/storage/v1/object/public/Oyuns%20Finance/OYUNS%20Plus.png';
-
-export type TournamentCategory = 'men' | 'women';
-export type TournamentVenue = 'a_hall' | 'b_hall';
-export type TournamentGameStatus = 'scheduled' | 'live' | 'completed' | 'cancelled';
-
-export interface TournamentTeam {
-  id: string;
-  name: string;
-  short_name?: string;
-  category: TournamentCategory;
-  logo_url?: string;
-  is_active: boolean;
-  display_order: number;
-  votes_count: number;
-}
-
-export interface TournamentGame {
-  id: string;
-  category: TournamentCategory;
-  venue: TournamentVenue;
-  home_team_id: string;
-  away_team_id: string;
-  starts_at: string;
-  status: TournamentGameStatus;
-  home_score: number;
-  away_score: number;
-  is_featured: boolean;
-  home_team_name?: string;
-  away_team_name?: string;
-  home_team_logo_url?: string;
-  away_team_logo_url?: string;
-}
-
-export interface TournamentGroup {
-  id: string;
-  category: TournamentCategory;
-  name: string;
-  team_ids: string[];
-  display_order: number;
-  teams: TournamentTeam[];
-}
-
-export interface TournamentKnockoutMatch {
-  id: string;
-  round_key: string;
-  title: string;
-  home_team_id?: string | null;
-  away_team_id?: string | null;
-  home_label?: string | null;
-  away_label?: string | null;
-  home_score: number;
-  away_score: number;
-  status: TournamentGameStatus;
-  home_team_name?: string | null;
-  away_team_name?: string | null;
-  home_team_logo_url?: string | null;
-  away_team_logo_url?: string | null;
-}
-
-export interface TournamentKnockoutPhase {
-  category: TournamentCategory;
-  team_count: 4 | 8;
-  matches: TournamentKnockoutMatch[];
-}
-
-export interface TournamentGroupInput {
-  id?: string;
-  category: TournamentCategory;
-  name: string;
-  team_ids: string[];
-  display_order: number;
-}
-
-export interface TournamentKnockoutMatchInput {
-  id: string;
-  round_key: string;
-  title: string;
-  home_team_id?: string | null;
-  away_team_id?: string | null;
-  home_label?: string | null;
-  away_label?: string | null;
-  home_score: number;
-  away_score: number;
-  status: TournamentGameStatus;
-}
-
-export interface TournamentKnockoutPhaseInput {
-  category: TournamentCategory;
-  team_count: 4 | 8;
-  matches: TournamentKnockoutMatchInput[];
-}
-
-export interface TournamentVoteStatus {
-  category: TournamentCategory;
-  team_id?: string | null;
-  voted: boolean;
-}
-
-export interface TournamentOverview {
-  enabled: boolean;
-  logo_url?: string;
-  teams: TournamentTeam[];
-  games: TournamentGame[];
-  groups: TournamentGroup[];
-  knockout: TournamentKnockoutPhase[];
-  votes: TournamentVoteStatus[];
-}
-
-export interface TournamentVoteResponse {
-  ok: boolean;
-  message: string;
-  vote: TournamentVoteStatus;
-}
-
-export async function fetchTournamentOverview(params?: {
-  category?: TournamentCategory;
-  venue?: TournamentVenue;
-  status?: TournamentGameStatus;
-}): Promise<TournamentOverview> {
-  const qp = new URLSearchParams();
-  if (params?.category) qp.set('category', params.category);
-  if (params?.venue) qp.set('venue', params.venue);
-  if (params?.status) qp.set('status', params.status);
-  const query = qp.toString();
-  const res = await api.get(`/tournament/overview${query ? `?${query}` : ''}`);
-  const data = res.data as TournamentOverview;
-  return {
-    enabled: Boolean(data.enabled),
-    logo_url: data.logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL,
-    teams: Array.isArray(data.teams) ? data.teams : [],
-    games: Array.isArray(data.games) ? data.games : [],
-    groups: Array.isArray(data.groups) ? data.groups : [],
-    knockout: Array.isArray(data.knockout) ? data.knockout : [],
-    votes: Array.isArray(data.votes) ? data.votes : [],
-  };
-}
-
-export async function fetchTournamentMyVotes(): Promise<TournamentVoteStatus[]> {
-  const res = await api.get('/tournament/my-votes');
-  return Array.isArray(res.data) ? (res.data as TournamentVoteStatus[]) : [];
-}
-
-export async function submitTournamentVote(payload: { category: TournamentCategory; team_id: string }): Promise<TournamentVoteResponse> {
-  const res = await api.post('/tournament/vote', payload);
-  return res.data as TournamentVoteResponse;
-}
-
-export interface OyunsSagsAdminSettings {
-  oyuns_tournament_enabled: number;
-  oyuns_plus_logo_url: string;
-}
-
-export async function fetchOyunsSagsAdminTeams(params?: { category?: TournamentCategory; include_inactive?: boolean }): Promise<{ items: TournamentTeam[] }> {
-  const qp = new URLSearchParams();
-  if (params?.category) qp.set('category', params.category);
-  if (typeof params?.include_inactive === 'boolean') qp.set('include_inactive', String(params.include_inactive));
-  const query = qp.toString();
-  const res = await oyunsSagsAdminApi.get(`/oyuns-sags/admin/teams${query ? `?${query}` : ''}`);
-  return res.data as { items: TournamentTeam[] };
-}
-
-export async function createOyunsSagsAdminTeam(payload: {
-  name: string;
-  short_name?: string;
-  category: TournamentCategory;
-  logo_url?: string;
-  is_active?: boolean;
-  display_order?: number;
-}): Promise<TournamentTeam> {
-  const res = await oyunsSagsAdminApi.post('/oyuns-sags/admin/teams', payload);
-  return res.data as TournamentTeam;
-}
-
-export async function updateOyunsSagsAdminTeam(teamId: string, payload: Partial<{
-  name: string;
-  short_name: string;
-  category: TournamentCategory;
-  logo_url: string;
-  is_active: boolean;
-  display_order: number;
-}>): Promise<TournamentTeam> {
-  const res = await oyunsSagsAdminApi.put(`/oyuns-sags/admin/teams/${teamId}`, payload);
-  return res.data as TournamentTeam;
-}
-
-export async function deleteOyunsSagsAdminTeam(teamId: string): Promise<{ ok: boolean }> {
-  const res = await oyunsSagsAdminApi.delete(`/oyuns-sags/admin/teams/${teamId}`);
-  return res.data as { ok: boolean };
-}
-
-export async function fetchOyunsSagsAdminGames(params?: {
-  category?: TournamentCategory;
-  venue?: TournamentVenue;
-  status?: TournamentGameStatus;
-}): Promise<{ items: TournamentGame[] }> {
-  const qp = new URLSearchParams();
-  if (params?.category) qp.set('category', params.category);
-  if (params?.venue) qp.set('venue', params.venue);
-  if (params?.status) qp.set('status', params.status);
-  const query = qp.toString();
-  const res = await oyunsSagsAdminApi.get(`/oyuns-sags/admin/games${query ? `?${query}` : ''}`);
-  return res.data as { items: TournamentGame[] };
-}
-
-export async function createOyunsSagsAdminGame(payload: {
-  category: TournamentCategory;
-  venue: TournamentVenue;
-  home_team_id: string;
-  away_team_id: string;
-  starts_at: string;
-  status?: TournamentGameStatus;
-  home_score?: number;
-  away_score?: number;
-  is_featured?: boolean;
-}): Promise<TournamentGame> {
-  const res = await oyunsSagsAdminApi.post('/oyuns-sags/admin/games', payload);
-  return res.data as TournamentGame;
-}
-
-export async function updateOyunsSagsAdminGame(gameId: string, payload: Partial<{
-  category: TournamentCategory;
-  venue: TournamentVenue;
-  home_team_id: string;
-  away_team_id: string;
-  starts_at: string;
-  status: TournamentGameStatus;
-  home_score: number;
-  away_score: number;
-  is_featured: boolean;
-}>): Promise<TournamentGame> {
-  const res = await oyunsSagsAdminApi.put(`/oyuns-sags/admin/games/${gameId}`, payload);
-  return res.data as TournamentGame;
-}
-
-export async function deleteOyunsSagsAdminGame(gameId: string): Promise<{ ok: boolean }> {
-  const res = await oyunsSagsAdminApi.delete(`/oyuns-sags/admin/games/${gameId}`);
-  return res.data as { ok: boolean };
-}
-
-export interface OyunsSagsAdminStages {
-  groups: TournamentGroup[];
-  knockout: TournamentKnockoutPhase[];
-}
-
-export async function fetchOyunsSagsAdminStages(): Promise<OyunsSagsAdminStages> {
-  const res = await oyunsSagsAdminApi.get('/oyuns-sags/admin/stages');
-  const data = res.data as OyunsSagsAdminStages;
-  return {
-    groups: Array.isArray(data.groups) ? data.groups : [],
-    knockout: Array.isArray(data.knockout) ? data.knockout : [],
-  };
-}
-
-export async function updateOyunsSagsAdminStages(payload: Partial<{
-  groups: TournamentGroupInput[];
-  knockout: TournamentKnockoutPhaseInput[];
-}>): Promise<OyunsSagsAdminStages> {
-  const res = await oyunsSagsAdminApi.put('/oyuns-sags/admin/stages', payload);
-  const data = res.data as OyunsSagsAdminStages;
-  return {
-    groups: Array.isArray(data.groups) ? data.groups : [],
-    knockout: Array.isArray(data.knockout) ? data.knockout : [],
-  };
-}
-
-export async function fetchOyunsSagsAdminVotes(): Promise<{ items: TournamentTeam[]; total_votes: number }> {
-  const res = await oyunsSagsAdminApi.get('/oyuns-sags/admin/votes');
-  return res.data as { items: TournamentTeam[]; total_votes: number };
-}
-
-export async function fetchOyunsSagsAdminSettings(): Promise<OyunsSagsAdminSettings> {
-  const res = await oyunsSagsAdminApi.get('/oyuns-sags/admin/settings');
-  const data = res.data as OyunsSagsAdminSettings;
-  return {
-    oyuns_tournament_enabled: data.oyuns_tournament_enabled > 0 ? 1 : 0,
-    oyuns_plus_logo_url: data.oyuns_plus_logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL,
-  };
-}
-
-export async function updateOyunsSagsAdminSettings(payload: Partial<OyunsSagsAdminSettings>): Promise<OyunsSagsAdminSettings> {
-  const res = await oyunsSagsAdminApi.put('/oyuns-sags/admin/settings', payload);
-  const data = res.data as OyunsSagsAdminSettings;
-  return {
-    oyuns_tournament_enabled: data.oyuns_tournament_enabled > 0 ? 1 : 0,
-    oyuns_plus_logo_url: data.oyuns_plus_logo_url || OYUNS_PLUS_LOGO_DEFAULT_URL,
-  };
-}
 
 export interface AdminInboxItem {
   invoice: string;
@@ -1347,6 +1162,7 @@ export async function updateAppSettings(payload: Partial<AppSettings>): Promise<
 
 // ============= Gift Feature =============
 
+
 export interface GiftCard {
   id: string;
   name: string;
@@ -1370,6 +1186,7 @@ export interface GiftCreateInput {
   sender_receipt_url: string;
   from_name?: string;
 }
+
 
 export interface PendingGift {
   id: string;
