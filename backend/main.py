@@ -1270,24 +1270,25 @@ def _get_oyuns_plus_balance(client, user_id: int) -> int:
     return total
 
 
-def _normalize_oyuns_plus_phone(value: str) -> str:
+def _normalize_oyuns_plus_phone(value: str, country_code: str | None = None) -> str:
     """Normalize Mongolian and Russian mobile numbers to international format."""
     digits = re.sub(r"\D", "", str(value or ""))
-    if digits.startswith("976") and len(digits) == 11:
+    if country_code in (None, "mn") and digits.startswith("976") and len(digits) == 11:
         local_digits = digits[3:]
         if local_digits[0] in "6789":
             return f"+976{local_digits}"
 
     # Accept +7XXXXXXXXXX and the common Russian local form 8XXXXXXXXXX.
-    if len(digits) == 11 and digits[0] in "78" and digits[1] == "9":
+    if country_code in (None, "ru") and len(digits) == 11 and digits[0] in "78" and digits[1] == "9":
         return f"+7{digits[1:]}"
     # Also accept a Russian mobile number entered without its country prefix.
-    if len(digits) == 10 and digits[0] == "9":
+    if country_code in (None, "ru") and len(digits) == 10 and digits[0] == "9":
         return f"+7{digits}"
 
-    if len(digits) == 8 and digits[0] in "6789":
+    if country_code in (None, "mn") and len(digits) == 8 and digits[0] in "6789":
         return f"+976{digits}"
-    raise HTTPException(status_code=422, detail="Enter a valid Mongolian or Russian mobile phone number")
+    country_name = "Mongolian" if country_code == "mn" else "Russian" if country_code == "ru" else "Mongolian or Russian"
+    raise HTTPException(status_code=422, detail=f"Enter a valid {country_name} mobile phone number")
 
 
 def _oyuns_plus_rpc_error(exc: Exception) -> HTTPException:
@@ -1313,6 +1314,7 @@ def _oyuns_plus_card_response(row: dict) -> OyunsPlusCard:
         name=str(row.get("name") or ""),
         description=str(row.get("description") or ""),
         points_price=_safe_int(row.get("points_price"), 0),
+        country_code=str(row.get("country_code") or "mn"),
         image_url=str(row.get("image_url") or ""),
         image_path=row.get("image_path"),
         is_active=bool(row.get("is_active", True)),
@@ -1338,23 +1340,27 @@ def _oyuns_plus_request_response(row: dict, user_row: dict | None = None, client
     user_row = user_row or {}
     first_name = user_row.get("first_name") or ""
     last_name = user_row.get("last_name") or ""
+
+    def optional_text(value):
+        return str(value) if value is not None else None
+
     return OyunsPlusVoucherRequestResponse(
         id=str(row.get("id")),
         status=str(row.get("status") or "pending"),
         card_id=str(row.get("card_id")),
         card_name=str(row.get("card_name_snapshot") or ""),
         points_spent=_safe_int(row.get("points_spent"), 0),
-        receiver_name=row.get("receiver_name"),
-        receiver_phone=row.get("receiver_phone"),
-        created_at=row.get("created_at"),
-        updated_at=row.get("updated_at"),
-        confirmation_photo_path=row.get("confirmation_photo_path"),
+        receiver_name=optional_text(row.get("receiver_name")),
+        receiver_phone=optional_text(row.get("receiver_phone")),
+        created_at=optional_text(row.get("created_at")),
+        updated_at=optional_text(row.get("updated_at")),
+        confirmation_photo_path=optional_text(row.get("confirmation_photo_path")),
         confirmation_photo_url=_signed_oyuns_plus_confirmation_url(client, row.get("confirmation_photo_path")) if client else None,
-        refund_reason=row.get("refund_reason"),
-        user_id=user_row.get("id") or row.get("user_id"),
+        refund_reason=optional_text(row.get("refund_reason")),
+        user_id=_safe_int(user_row.get("id") or row.get("user_id"), 0) or None,
         user_name=(f"{first_name} {last_name}").strip() or None,
-        user_username=user_row.get("username"),
-        user_lang=user_row.get("lang"),
+        user_username=optional_text(user_row.get("username")),
+        user_lang=optional_text(user_row.get("lang")),
     )
 
 
@@ -4969,7 +4975,10 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
     receiver_name = payload.receiver_name.strip()
     if not receiver_name:
         raise HTTPException(status_code=422, detail="Receiver name is required")
-    receiver_phone = _normalize_oyuns_plus_phone(payload.receiver_phone)
+    card_lookup = client.table("oyuns_plus_cards").select("id,country_code").eq("id", card_id).limit(1).execute().data or []
+    if not card_lookup:
+        raise HTTPException(status_code=404, detail="CARD_NOT_AVAILABLE")
+    receiver_phone = _normalize_oyuns_plus_phone(payload.receiver_phone, str(card_lookup[0].get("country_code") or "mn"))
     try:
         result = client.rpc("create_oyuns_plus_voucher_request", {
             "p_user_id": user.id,
@@ -4988,15 +4997,26 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
     shift_admin_id = _get_current_shift_admin_id(client)
     if shift_admin_id:
         try:
+            settings = get_settings()
             send_user_notification(
                 shift_admin_id,
-                "🎁 <b>Шинэ Oyuns+ худалдан авалт!</b>\n\n"
-                f"🎟️ Карт: <b>{card_name}</b>\n"
+                "<b>Oyuns+ хүсэлт!</b>\n\n"
+                f"🎟️ Купоны төрөл: <b>{card_name}</b>\n"
                 f"👤 Хэрэглэгчийн ID: <code>{user.id}</code>\n"
                 f"🎯 Хүлээн авагч: <b>{receiver_name}</b>\n"
                 f"📞 Утас: <code>{receiver_phone}</code>\n"
                 f"⭐ Зарцуулсан оноо: <b>{_safe_int(result.get('points_spent'), 0):,}</b>\n\n"
-                "🔗 Админ хэсгийн Oyuns+ хүсэлтээс шалгана уу.",
+                "🔗 Админ самбраас тус хүсэлтийг шалгана уу.",
+                reply_markup=(
+                    {"inline_keyboard": [[{
+                        "text": "🔗 Oyuns+ хүсэлтийг нээх",
+                        "web_app": {"url": f"{settings.admin_panel_url}{'&' if '?' in settings.admin_panel_url else '?'}admin-tab=oyuns-plus"},
+                    }]]}
+                    if settings.admin_panel_url
+                    and settings.admin_panel_url.startswith("https://")
+                    and "localhost" not in settings.admin_panel_url
+                    else None
+                ),
             )
         except Exception:
             logger.exception("Failed to send Oyuns+ notification to shift admin %s", shift_admin_id)
@@ -5042,6 +5062,7 @@ async def admin_create_oyuns_plus_card(payload: OyunsPlusCardCreateRequest, admi
         "name": name,
         "description": payload.description.strip(),
         "points_price": payload.points_price,
+        "country_code": payload.country_code,
         "image_url": payload.image_url.strip(),
         "image_path": payload.image_path,
         "is_active": payload.is_active,
@@ -5140,7 +5161,12 @@ async def admin_oyuns_plus_upload_presign(payload: OyunsPlusAdminUploadRequest, 
 @app.get("/api/admin/oyuns-plus/requests", response_model=OyunsPlusVoucherRequestsResponse)
 async def admin_oyuns_plus_requests(status: str = "pending", admin=Depends(require_admin)):
     client = get_supabase()
-    query = client.table("oyuns_plus_voucher_requests").select("*")
+    # Keep this projection explicit: older production databases may contain
+    # additional columns or views that cannot be serialized consistently.
+    query = client.table("oyuns_plus_voucher_requests").select(
+        "id,user_id,card_id,card_name_snapshot,points_spent,receiver_name,receiver_phone,status,"
+        "created_at,updated_at,confirmation_photo_path,refund_reason"
+    )
     if status and status != "all":
         if status not in {"pending", "fulfilled", "refunded"}:
             raise HTTPException(status_code=422, detail="Invalid status")

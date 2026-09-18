@@ -22,6 +22,18 @@ def test_oyuns_plus_phone_rejects_non_mobile_numbers():
         raise AssertionError("expected invalid Mongolian mobile to be rejected")
 
 
+def test_oyuns_plus_phone_respects_card_country():
+    assert _normalize_oyuns_plus_phone("99112233", "mn") == "+97699112233"
+    assert _normalize_oyuns_plus_phone("9991234567", "ru") == "+79991234567"
+    for value, country in (("9991234567", "mn"), ("99112233", "ru")):
+        try:
+            _normalize_oyuns_plus_phone(value, country)
+        except HTTPException as exc:
+            assert exc.status_code == 422
+        else:
+            raise AssertionError(f"expected {country} phone validation to reject {value}")
+
+
 def test_history_entry_keeps_uuid_ids_and_resulting_balance():
     entry = OyunsPlusHistoryEntry(
         id="8c3c2e8d-2f57-4b09-947e-bf6d30e9d4fb",

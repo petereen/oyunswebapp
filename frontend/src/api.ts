@@ -696,6 +696,7 @@ export interface OyunsPlusCard {
   name: string;
   description: string;
   points_price: number;
+  country_code: "mn" | "ru";
   image_url: string;
   image_path?: string | null;
   is_active: boolean;
@@ -746,6 +747,7 @@ export async function createAdminOyunsPlusCard(payload: {
   name: string;
   description: string;
   points_price: number;
+  country_code: "mn" | "ru";
   image_url: string;
   image_path?: string | null;
   is_active: boolean;
@@ -758,6 +760,7 @@ export async function updateAdminOyunsPlusCard(cardId: string, payload: Partial<
   name: string;
   description: string;
   points_price: number;
+  country_code: "mn" | "ru";
   image_url: string;
   image_path: string | null;
   is_active: boolean;

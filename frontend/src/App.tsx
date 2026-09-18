@@ -57,11 +57,12 @@ export default function App() {
   const urlEditInvoice = queryParams.get("edit-invoice");
   const urlVerifyEmail = queryParams.has("verify-email");
   const urlOyunsPlusTab = requestedTab === "oyuns-plus";
+  const urlAdminOyunsPlus = queryParams.get("admin-tab") === "oyuns-plus";
 
   const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
   const entitlements = useEntitlements({ userId: user?.id, isAuthenticating });
   const isFetchingInitialData = useIsFetching() > 0;
-  const [view, setView] = useState<"client" | "admin">("client");
+  const [view, setView] = useState<"client" | "admin">(urlAdminOyunsPlus ? "admin" : "client");
   const initialActiveTab = urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0;
   const [activeTab, setActiveTab] = useState(initialActiveTab);
   const effectiveActiveTab = user ? activeTab : 0;
@@ -182,7 +183,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-surface-50 dark:bg-dark-900 p-4 pb-24 md:p-8 md:pb-24">
         <div className="max-w-6xl mx-auto">
-          <AdminPanel onExit={() => setView("client")} />
+          <AdminPanel onExit={() => setView("client")} initialTransactionTab={urlAdminOyunsPlus ? "gifts" : "inbox"} />
         </div>
         <BottomNavBar
           activeTab={-1}

@@ -1,6 +1,9 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Add Oyuns+ admin deep-link buttons and card country-specific phone validation (backend/main.py, backend/models.py, frontend/src/App.tsx, frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx, database migration)
+- [x] Keep the standalone Oyuns+ schema copy and phone-validation regression coverage aligned (database/add_oyuns_plus_vouchers.sql, backend/tests/test_oyuns_plus.py)
+- [x] Remove stray plain-text task notes that broke AdminInbox JSX parsing (frontend/src/components/AdminInbox.tsx)
 - [x] Route Oyuns+ admin notifications only to the active shift admin and make pending request listing resilient (backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Display red pending-request badges on admin verification, transaction, gift, and Oyuns+ buttons (frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminUsersContainer.tsx, frontend/src/components/AdminGiftTabs.tsx, frontend/src/components/admin/AdminPanelPrimitives.tsx)
 - [x] Replace the Oyuns+ “Түүх” label control with a three-dot button and add a 60-second email verification resend cooldown (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/EmailVerificationModal.tsx)
@@ -83,6 +86,9 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Add Oyuns+ admin deep-link buttons and card country-specific phone validation (backend/main.py, backend/models.py, frontend/src/App.tsx, frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx, database migration)
+- [x] Fix the Oyuns+ card country-code model annotation so the backend can compile and deploy (backend/models.py)
+- [x] Fix the Oyuns+ shift-admin notification inline keyboard syntax so the backend can compile (backend/main.py)
 - [x] Route Oyuns+ admin notifications only to the active shift admin and make pending request listing resilient (backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Add a shared red pending-request badge primitive for admin navigation buttons (frontend/src/components/admin/AdminPanelPrimitives.tsx)
 - [x] Add a live pending transaction count badge to the incoming-request admin button (frontend/src/pages/AdminPanel.tsx)

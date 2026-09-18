@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS oyuns_plus_cards (
     name VARCHAR(160) NOT NULL CHECK (char_length(trim(name)) BETWEEN 1 AND 160),
     description TEXT NOT NULL DEFAULT '' CHECK (char_length(description) <= 4000),
     points_price INTEGER NOT NULL CHECK (points_price > 0),
+    country_code VARCHAR(2) NOT NULL DEFAULT 'mn' CHECK (country_code IN ('mn', 'ru')),
     image_url TEXT NOT NULL,
     image_path TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,

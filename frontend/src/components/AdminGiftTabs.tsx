@@ -3,8 +3,8 @@ import { AdminGifts } from "./AdminGifts";
 import { AdminOyunsPlusRequests } from "./admin/AdminOyunsPlusRequests";
 import { AdminPendingBadge } from "./admin/AdminPanelPrimitives";
 
-export function AdminGiftTabs({ pendingGifts = 0, pendingOyunsPlus = 0 }: { pendingGifts?: number; pendingOyunsPlus?: number }) {
-  const [tab, setTab] = useState<"legacy" | "oyuns-plus">("legacy");
+export function AdminGiftTabs({ pendingGifts = 0, pendingOyunsPlus = 0, initialTab = "legacy" }: { pendingGifts?: number; pendingOyunsPlus?: number; initialTab?: "legacy" | "oyuns-plus" }) {
+  const [tab, setTab] = useState<"legacy" | "oyuns-plus">(initialTab);
 
   return (
     <div className="space-y-4">

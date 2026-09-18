@@ -33,25 +33,25 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function normalizePhone(value: string) {
+function normalizePhone(value: string, countryCode: "mn" | "ru") {
   const digits = value.replace(/\D/g, "");
-  if (digits.startsWith("976") && digits.length === 11 && /^[6-9]/.test(digits.slice(3))) {
+  if (countryCode === "mn" && digits.startsWith("976") && digits.length === 11 && /^[6-9]/.test(digits.slice(3))) {
     return `+976${digits.slice(3)}`;
   }
-  if (digits.length === 11 && /^[78]9/.test(digits)) {
+  if (countryCode === "ru" && digits.length === 11 && /^[78]9/.test(digits)) {
     return `+7${digits.slice(1)}`;
   }
-  if (digits.length === 10 && /^9/.test(digits)) {
+  if (countryCode === "ru" && digits.length === 10 && /^9/.test(digits)) {
     return `+7${digits}`;
   }
-  if (digits.length === 8 && /^[6-9]/.test(digits)) {
+  if (countryCode === "mn" && digits.length === 8 && /^[6-9]/.test(digits)) {
     return `+976${digits}`;
   }
   return "";
 }
 
-function validReceiverPhone(value: string) {
-  return normalizePhone(value) !== "";
+function validReceiverPhone(value: string, countryCode: "mn" | "ru") {
+  return normalizePhone(value, countryCode) !== "";
 }
 
 function formatPoints(value: number) {
@@ -272,7 +272,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
       setFormError(t("oyuns_plus.receiver_name_required"));
       return;
     }
-    if (!validReceiverPhone(receiverPhone)) {
+    if (!validReceiverPhone(receiverPhone, selectedCard.country_code)) {
       setFormError(t("oyuns_plus.receiver_phone_invalid"));
       return;
     }
@@ -280,7 +280,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
     requestMutation.mutate({
       card_id: selectedCard.id,
       receiver_name: receiverName.trim(),
-      receiver_phone: normalizePhone(receiverPhone),
+      receiver_phone: normalizePhone(receiverPhone, selectedCard.country_code),
     });
   };
 
@@ -352,7 +352,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
                   </button>
                   {showForm && <div className="oyuns-plus-receiver-form">
                     <label>{t("oyuns_plus.receiver_name")}<input value={receiverName} onChange={(event) => setReceiverName(event.target.value)} autoComplete="name" /></label>
-                    <label>{t("oyuns_plus.receiver_phone")}<input value={receiverPhone} onChange={(event) => setReceiverPhone(event.target.value)} inputMode="tel" placeholder="+976 99112233 / +7 999 123 45 67" /></label>
+                    <label>{t("oyuns_plus.receiver_phone")}<input value={receiverPhone} onChange={(event) => setReceiverPhone(event.target.value)} inputMode="tel" placeholder="Утасны дугаар" /></label>
                     {formError && <div className="oyuns-plus-error" role="alert">{formError}</div>}
                     <button type="button" onClick={submitRequest} disabled={requestMutation.isPending} className="oyuns-plus-primary-button">{requestMutation.isPending ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t("oyuns_plus.submit_request")}</button>
                   </div>}

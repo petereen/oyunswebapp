@@ -372,6 +372,7 @@ class OyunsPlusCard(BaseModel):
     name: str
     description: str = ""
     points_price: int
+    country_code: Literal["mn", "ru"] = "mn"
     image_url: str
     image_path: Optional[str] = None
     is_active: bool = True
@@ -388,6 +389,7 @@ class OyunsPlusCardCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
     description: str = Field(default="", max_length=4000)
     points_price: int = Field(..., gt=0)
+    country_code: Literal["mn", "ru"] = "mn"
     image_url: str = Field(..., min_length=1)
     image_path: Optional[str] = None
     is_active: bool = True
@@ -397,6 +399,7 @@ class OyunsPlusCardUpdateRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=160)
     description: Optional[str] = Field(default=None, max_length=4000)
     points_price: Optional[int] = Field(default=None, gt=0)
+    country_code: Optional[Literal["mn", "ru"]] = None
     image_url: Optional[str] = Field(default=None, min_length=1)
     image_path: Optional[str] = None
     is_active: Optional[bool] = None

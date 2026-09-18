@@ -43,13 +43,13 @@ const PersistentManual = memo(AdminManualTransaction);
 const PersistentGifts = memo(AdminGiftTabs);
 const PersistentSettings = memo(AdminSettingsContainer);
 
-interface Props { onExit?: () => void; }
+interface Props { onExit?: () => void; initialTransactionTab?: AdminTransactionTab; }
 
-export function AdminPanel({ onExit }: Props) {
+export function AdminPanel({ onExit, initialTransactionTab = "inbox" }: Props) {
   const [activeTab, setActiveTab] = useState<AdminTab>("inbox");
   const [visitedTabs, setVisitedTabs] = useState<Set<AdminTab>>(() => new Set(["inbox"]));
-  const [activeTransactionTab, setActiveTransactionTab] = useState<AdminTransactionTab>("inbox");
-  const [visitedTransactionTabs, setVisitedTransactionTabs] = useState<Set<AdminTransactionTab>>(() => new Set(["inbox"]));
+  const [activeTransactionTab, setActiveTransactionTab] = useState<AdminTransactionTab>(initialTransactionTab);
+  const [visitedTransactionTabs, setVisitedTransactionTabs] = useState<Set<AdminTransactionTab>>(() => new Set(["inbox", initialTransactionTab]));
   const [pendingCounts, setPendingCounts] = useState({ verifications: 0, transactions: 0, gifts: 0, oyunsPlus: 0 });
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export function AdminPanel({ onExit }: Props) {
       case "inbox": return <PersistentInbox />;
       case "history": return <PersistentHistory />;
       case "manual": return <PersistentManual onOpenInbox={openInbox} />;
-      case "gifts": return <PersistentGifts pendingGifts={pendingCounts.gifts} pendingOyunsPlus={pendingCounts.oyunsPlus} />;
+      case "gifts": return <PersistentGifts pendingGifts={pendingCounts.gifts} pendingOyunsPlus={pendingCounts.oyunsPlus} initialTab={initialTransactionTab === "gifts" ? "oyuns-plus" : "legacy"} />;
     }
   };
 
