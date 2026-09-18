@@ -1,6 +1,9 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Replace Oyuns Plus star points markers with the provided original VA+ SVG and remove the page eyebrow/refresh control (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/assets/oyuns-plus-points.svg)
+- [x] Extend Oyuns Plus tilt interaction to the opened coupon detail card (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
+- [x] Accept Russian phone number formats in the Oyuns+ coupon request creation workflow (frontend/src/pages/OyunsPlusTab.tsx, backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Add Oyuns+ voucher/card schema, storage buckets, and atomic redemption/refund SQL migration (database/)
 - [x] Add Oyuns+ user/admin API models, endpoints, validation, history balance metadata, and Telegram notifications (backend/main.py, backend/models.py, bot_translations.py)
 - [x] Build the Oyuns+ voucher grid, detail/purchase flow, balance/history refresh, and motion polish (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/)
@@ -71,6 +74,8 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Add Telegram alerts for Oyuns+ purchases and consolidated pending-work summaries on shift handover (backend/main.py)
+- [x] Accept Russian phone number formats in the Oyuns+ coupon request creation workflow (frontend/src/pages/OyunsPlusTab.tsx, backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Fix 500 when manually finalizing a group-managed transaction with proof photos (backend/main.py, backend/tests/test_exchange_group.py, frontend/src/components/AdminInbox.test.tsx)
 - [x] Hold the Telegram startup screen through cascading initial queries and match its loader to the square logo (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Keep Telegram WebApp startup screen visible until initial app data has loaded (frontend/src/App.tsx, frontend/src/index.css)

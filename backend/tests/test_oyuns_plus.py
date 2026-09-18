@@ -7,6 +7,9 @@ from models import OyunsPlusHistoryEntry
 def test_oyuns_plus_phone_normalizes_local_and_international_formats():
     assert _normalize_oyuns_plus_phone("9911 2233") == "+97699112233"
     assert _normalize_oyuns_plus_phone("+976-9911-2233") == "+97699112233"
+    assert _normalize_oyuns_plus_phone("+7 999 123 45 67") == "+79991234567"
+    assert _normalize_oyuns_plus_phone("8 (999) 123-45-67") == "+79991234567"
+    assert _normalize_oyuns_plus_phone("999 123 45 67") == "+79991234567"
 
 
 def test_oyuns_plus_phone_rejects_non_mobile_numbers():

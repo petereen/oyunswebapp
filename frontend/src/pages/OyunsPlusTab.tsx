@@ -1,6 +1,6 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronRight, Copy, Gift, History, Loader2, RefreshCw, Settings, Star, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Copy, Gift, History, Loader2, Settings, TrendingDown, TrendingUp, Users } from "lucide-react";
 import {
   createOyunsPlusVoucherRequest,
   fetchOyunsPlusCards,
@@ -13,6 +13,7 @@ import { SuccessCheck } from "../components/SuccessCheck";
 import { useLang } from "../i18n/useLang";
 import { queryKeys } from "../queryKeys";
 import { OyunsPlusSkeleton } from "../components/Skeleton";
+import oyunsPlusPoints from "../assets/oyuns-plus-points.svg";
 
 interface Props {
   userId?: number;
@@ -34,12 +35,23 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function normalizePhone(value: string) {
   const digits = value.replace(/\D/g, "");
-  return digits.startsWith("976") && digits.length === 11 ? digits.slice(3) : digits;
+  if (digits.startsWith("976") && digits.length === 11 && /^[6-9]/.test(digits.slice(3))) {
+    return `+976${digits.slice(3)}`;
+  }
+  if (digits.length === 11 && /^[78]9/.test(digits)) {
+    return `+7${digits.slice(1)}`;
+  }
+  if (digits.length === 10 && /^9/.test(digits)) {
+    return `+7${digits}`;
+  }
+  if (digits.length === 8 && /^[6-9]/.test(digits)) {
+    return `+976${digits}`;
+  }
+  return "";
 }
 
-function validMongolianPhone(value: string) {
-  const digits = normalizePhone(value);
-  return /^[6-9]\d{7}$/.test(digits);
+function validReceiverPhone(value: string) {
+  return normalizePhone(value) !== "";
 }
 
 function formatPoints(value: number) {
@@ -68,7 +80,11 @@ function historyLabel(entry: OyunsPlusHistoryEntry, t: (key: string, params?: Re
   return t("oyuns_plus.history_source_exchange");
 }
 
-function TiltShell({ card, onOpen }: { card: OyunsPlusCard; onOpen: (card: OyunsPlusCard, rect: DOMRect) => void }) {
+function PointsMark({ className = "" }: { className?: string }) {
+  return <img src={oyunsPlusPoints} alt="" aria-hidden="true" className={`oyuns-plus-points-mark ${className}`} />;
+}
+
+function TiltSurface({ children, className = "", onOpen }: { children: ReactNode; className?: string; onOpen?: (rect: DOMRect) => void }) {
   const shellRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef({ active: false, dragged: false, startX: 0, startY: 0 });
 
@@ -82,12 +98,12 @@ function TiltShell({ card, onOpen }: { card: OyunsPlusCard; onOpen: (card: Oyuns
     shell.style.setProperty("--oyuns-glare-y", "50%");
   };
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     pointerRef.current = { active: true, dragged: false, startX: event.clientX, startY: event.clientY };
     if (event.pointerType === "touch") event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const shell = shellRef.current;
     const pointer = pointerRef.current;
     if (!shell || !pointer.active) return;
@@ -104,44 +120,36 @@ function TiltShell({ card, onOpen }: { card: OyunsPlusCard; onOpen: (card: Oyuns
     shell.style.setProperty("--oyuns-glare-y", `${y * 100}%`);
   };
 
-  const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handlePointerUp = () => {
     const pointer = pointerRef.current;
     pointer.active = false;
     resetTilt();
-    if (!pointer.dragged && (event.pointerType === "mouse" || event.pointerType === "touch" || event.pointerType === "pen")) {
-      onOpen(card, event.currentTarget.getBoundingClientRect());
-    }
-  };
-
-  const handleKeyboardOpen = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onOpen(card, event.currentTarget.getBoundingClientRect());
-    }
+    if (!pointer.dragged) onOpen?.(shellRef.current?.getBoundingClientRect() ?? new DOMRect());
   };
 
   return (
-    <div ref={shellRef} className="oyuns-plus-tilt-shell" data-tilting="false">
-      <button
-        type="button"
-        className="oyuns-plus-card group"
-        aria-label={card.name}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={() => { pointerRef.current.active = false; resetTilt(); }}
-        onPointerLeave={() => { if (!pointerRef.current.active) resetTilt(); }}
-        onKeyDown={handleKeyboardOpen}
-      >
-        <span className="oyuns-plus-card-image-wrap">
-          <img src={card.image_url} alt="" className="oyuns-plus-card-image" loading="lazy" />
-          <span className="oyuns-plus-card-glare" aria-hidden="true" />
-          <span className="oyuns-plus-card-price">{formatPoints(card.points_price)} ⭐</span>
-        </span>
-        <span className="oyuns-plus-card-name">{card.name}</span>
-      </button>
+    <div ref={shellRef} className={`oyuns-plus-tilt-shell ${className}`} data-tilting="false" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={() => { pointerRef.current.active = false; resetTilt(); }} onPointerLeave={() => { if (!pointerRef.current.active) resetTilt(); }}>
+      {children}
     </div>
   );
+}
+
+function TiltShell({ card, onOpen }: { card: OyunsPlusCard; onOpen: (card: OyunsPlusCard, rect: DOMRect) => void }) {
+  return <TiltSurface onOpen={(rect) => onOpen(card, rect)}>
+    <button type="button" className="oyuns-plus-card group" aria-label={card.name} onKeyDown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        onOpen(card, event.currentTarget.getBoundingClientRect());
+      }
+    }}>
+      <span className="oyuns-plus-card-image-wrap">
+        <img src={card.image_url} alt="" className="oyuns-plus-card-image" loading="lazy" />
+        <span className="oyuns-plus-card-glare" aria-hidden="true" />
+        <span className="oyuns-plus-card-price"><span>{formatPoints(card.points_price)}</span><PointsMark /></span>
+      </span>
+      <span className="oyuns-plus-card-name">{card.name}</span>
+    </button>
+  </TiltSurface>;
 }
 
 export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
@@ -228,7 +236,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
       setFormError(t("oyuns_plus.receiver_name_required"));
       return;
     }
-    if (!validMongolianPhone(receiverPhone)) {
+    if (!validReceiverPhone(receiverPhone)) {
       setFormError(t("oyuns_plus.receiver_phone_invalid"));
       return;
     }
@@ -236,7 +244,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
     requestMutation.mutate({
       card_id: selectedCard.id,
       receiver_name: receiverName.trim(),
-      receiver_phone: `+976${normalizePhone(receiverPhone)}`,
+      receiver_phone: normalizePhone(receiverPhone),
     });
   };
 
@@ -256,7 +264,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
         <div className="oyuns-plus-balance-card">
           <div>
             <div className="oyuns-plus-eyebrow">{t("oyuns_plus.balance_label")}</div>
-            <div className={balanceStyle} aria-live="polite">{summaryQuery.isLoading ? "—" : formatPoints(balance)} <span>⭐</span></div>
+            <div className={balanceStyle} aria-live="polite">{summaryQuery.isLoading ? "—" : formatPoints(balance)} <PointsMark /></div>
           </div>
           <button type="button" onClick={() => setShowSettings(true)} className="oyuns-plus-settings-button" aria-label={t("oyuns_plus.settings_btn")}>
             <Settings className="h-4 w-4" />
@@ -269,9 +277,9 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
         <section className="oyuns-plus-settings-view" aria-label={t("oyuns_plus.settings_title")}>
           <button type="button" onClick={() => setShowSettings(false)} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {t("common.back")}</button>
           <div className="oyuns-plus-settings-card">
-            <div className="flex items-center gap-2"><Star className="h-4 w-4 text-gold-500" /><h2>{t("oyuns_plus.settings_title")}</h2></div>
+            <div className="flex items-center gap-2"><PointsMark className="oyuns-plus-settings-points-mark" /><h2>{t("oyuns_plus.settings_title")}</h2></div>
             <div className="oyuns-plus-settings-stats">
-              <div><span>{t("profile.oyuns_points")}</span><strong>{formatPoints(balance)}</strong></div>
+              <div><span>{t("profile.oyuns_points")}</span><strong>{formatPoints(balance)} <PointsMark /></strong></div>
               <div><span><Users className="inline h-3 w-3" /> {t("oyuns_plus.settings_invited")}</span><strong>{summaryQuery.data?.invited_verified ?? 0}/{summaryQuery.data?.invited_total ?? 0}</strong></div>
             </div>
           </div>
@@ -289,10 +297,11 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
       ) : selectedCard ? (
         <section className="oyuns-plus-detail-view" style={{ "--oyuns-detail-x": `${detailOrigin?.x ?? 50}px`, "--oyuns-detail-y": `${detailOrigin?.y ?? 50}px` } as CSSProperties}>
           <button type="button" onClick={() => { setSelectedCard(null); setRequestSuccess(null); }} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {t("common.back")}</button>
-          <div className="oyuns-plus-detail-card">
-            <img src={selectedCard.image_url} alt={selectedCard.name} className="oyuns-plus-detail-image" />
-            <div className="oyuns-plus-detail-content">
-              <div className="oyuns-plus-detail-price">{formatPoints(selectedCard.points_price)} ⭐</div>
+          <TiltSurface className="oyuns-plus-detail-tilt">
+            <div className="oyuns-plus-detail-card">
+              <img src={selectedCard.image_url} alt={selectedCard.name} className="oyuns-plus-detail-image" />
+              <div className="oyuns-plus-detail-content">
+              <div className="oyuns-plus-detail-price"><span>{formatPoints(selectedCard.points_price)}</span><PointsMark /></div>
               <h2>{selectedCard.name}</h2>
               <p>{selectedCard.description || t("oyuns_plus.no_description")}</p>
               {requestSuccess ? (
@@ -308,18 +317,19 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
                   </button>
                   {showForm && <div className="oyuns-plus-receiver-form">
                     <label>{t("oyuns_plus.receiver_name")}<input value={receiverName} onChange={(event) => setReceiverName(event.target.value)} autoComplete="name" /></label>
-                    <label>{t("oyuns_plus.receiver_phone")}<input value={receiverPhone} onChange={(event) => setReceiverPhone(event.target.value)} inputMode="tel" placeholder="+976 99112233" /></label>
+                    <label>{t("oyuns_plus.receiver_phone")}<input value={receiverPhone} onChange={(event) => setReceiverPhone(event.target.value)} inputMode="tel" placeholder="+976 99112233 / +7 999 123 45 67" /></label>
                     {formError && <div className="oyuns-plus-error" role="alert">{formError}</div>}
                     <button type="button" onClick={submitRequest} disabled={requestMutation.isPending} className="oyuns-plus-primary-button">{requestMutation.isPending ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t("oyuns_plus.submit_request")}</button>
                   </div>}
                 </>
               )}
+              </div>
             </div>
-          </div>
+          </TiltSurface>
         </section>
       ) : (
         <>
-          <div className="flex items-end justify-between gap-3"><div><div className="oyuns-plus-eyebrow">OYUNS ALL-IN-ONE</div><h1 className="oyuns-plus-heading">{t("oyuns_plus.vouchers_title")}</h1></div><button type="button" onClick={() => void cardsQuery.refetch()} className="oyuns-plus-icon-button" aria-label={t("common.refresh")}><RefreshCw className={`h-4 w-4 ${cardsQuery.isFetching ? "animate-spin" : ""}`} /></button></div>
+          <h1 className="oyuns-plus-heading">{t("oyuns_plus.vouchers_title")}</h1>
           {cardsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.cards_error")}</div> : cardsQuery.isLoading ? <OyunsPlusSkeleton /> : cards.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.cards_empty")}</p></div> : <div className="oyuns-plus-grid">{cards.map((card) => <TiltShell key={card.id} card={card} onOpen={openCard} />)}</div>}
           <div className="oyuns-plus-note">{t("oyuns_plus.vouchers_note")}</div>
         </>

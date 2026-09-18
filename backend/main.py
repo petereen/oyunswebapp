@@ -1271,13 +1271,23 @@ def _get_oyuns_plus_balance(client, user_id: int) -> int:
 
 
 def _normalize_oyuns_plus_phone(value: str) -> str:
-    """Normalize Mongolian mobile numbers to +976XXXXXXXX."""
+    """Normalize Mongolian and Russian mobile numbers to international format."""
     digits = re.sub(r"\D", "", str(value or ""))
     if digits.startswith("976") and len(digits) == 11:
-        digits = digits[3:]
-    if len(digits) != 8 or digits[0] not in "6789":
-        raise HTTPException(status_code=422, detail="Mongolian phone number must be 8 digits and start with 6, 7, 8, or 9")
-    return f"+976{digits}"
+        local_digits = digits[3:]
+        if local_digits[0] in "6789":
+            return f"+976{local_digits}"
+
+    # Accept +7XXXXXXXXXX and the common Russian local form 8XXXXXXXXXX.
+    if len(digits) == 11 and digits[0] in "78" and digits[1] == "9":
+        return f"+7{digits[1:]}"
+    # Also accept a Russian mobile number entered without its country prefix.
+    if len(digits) == 10 and digits[0] == "9":
+        return f"+7{digits}"
+
+    if len(digits) == 8 and digits[0] in "6789":
+        return f"+976{digits}"
+    raise HTTPException(status_code=422, detail="Enter a valid Mongolian or Russian mobile phone number")
 
 
 def _oyuns_plus_rpc_error(exc: Exception) -> HTTPException:
@@ -4964,6 +4974,18 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
 
     card_name = str(result.get("card_name") or "")
     try:
+        send_admin_notification(
+            "🎁 <b>Шинэ Oyuns+ худалдан авалт!</b>\n\n"
+            f"🎟️ Карт: <b>{card_name}</b>\n"
+            f"👤 Хэрэглэгчийн ID: <code>{user.id}</code>\n"
+            f"🎯 Хүлээн авагч: <b>{receiver_name}</b>\n"
+            f"📞 Утас: <code>{receiver_phone}</code>\n"
+            f"⭐ Зарцуулсан оноо: <b>{_safe_int(result.get('points_spent'), 0):,}</b>\n\n"
+            "🔗 Админ хэсгийн Oyuns+ хүсэлтээс шалгана уу."
+        )
+    except Exception:
+        logger.exception("Failed to send Oyuns+ admin purchase notification")
+    try:
         lang = _get_user_lang(user.id)
         send_user_notification(user.id, tb(lang, "notif_oyuns_plus_request_created", card_name=card_name))
     except Exception:
@@ -8018,6 +8040,66 @@ def _notify_pending_transaction_users_about_shift_change(client, message_text: s
     return len(notified_user_ids)
 
 
+def _notify_incoming_admin_about_pending_work(client, admin_id: int | None) -> int:
+    """Send one consolidated pending-work summary to the incoming shift admin."""
+    if not admin_id:
+        return 0
+
+    pending_sections: list[tuple[str, list[str]]] = []
+
+    try:
+        rows = client.table("transactions").select("*").eq("status", "pending").execute().data or []
+        lines = [
+            f"• <code>{row.get('invoice') or '—'}</code> — {row.get('amount') or 0} {row.get('currency_from') or ''} → {row.get('currency_to') or ''}"
+            for row in rows
+        ]
+        if lines:
+            pending_sections.append((f"💱 Гүйлгээ ({len(lines)})", lines))
+    except Exception as exc:
+        logger.warning("Failed to load pending transactions for admin shift summary: %s", exc)
+
+    try:
+        rows = client.table("gifts").select("*").eq("status", "pending_admin").execute().data or []
+        lines = [
+            f"• <code>{row.get('invoice') or '—'}</code> — {row.get('amount') or 0} {row.get('currency_from') or ''} → {row.get('currency_to') or ''}"
+            for row in rows
+        ]
+        if lines:
+            pending_sections.append((f"🎁 Бэлэг ({len(lines)})", lines))
+    except Exception as exc:
+        logger.warning("Failed to load pending gifts for admin shift summary: %s", exc)
+
+    try:
+        rows = client.table("oyuns_plus_voucher_requests").select("*").eq("status", "pending").execute().data or []
+        lines = [
+            f"• <b>{row.get('card_name_snapshot') or 'Oyuns+'}</b> — {row.get('receiver_name') or '—'} ({_safe_int(row.get('points_spent'), 0):,} оноо)"
+            for row in rows
+        ]
+        if lines:
+            pending_sections.append((f"⭐ Oyuns+ ({len(lines)})", lines))
+    except Exception as exc:
+        logger.warning("Failed to load pending Oyuns+ requests for admin shift summary: %s", exc)
+
+    if not pending_sections:
+        return 0
+
+    total = sum(len(lines) for _, lines in pending_sections)
+    message_lines = [f"📋 <b>Ээлж хүлээж авлаа — {total} хүлээгдэж буй ажил</b>", ""]
+    for title, lines in pending_sections:
+        message_lines.append(f"<b>{title}</b>")
+        message_lines.extend(lines[:50])
+        if len(lines) > 50:
+            message_lines.append(f"• … болон өөр {len(lines) - 50} хүсэлт")
+        message_lines.append("")
+    message_lines.append("🔗 <a href='https://oyunsadmin.pages.dev/'>Админ хэсэгт нээх</a>")
+
+    try:
+        send_user_notification(admin_id, "\n".join(message_lines))
+    except Exception as exc:
+        logger.warning("Failed to send pending-work summary to incoming admin %s: %s", admin_id, exc)
+    return total
+
+
 @app.get("/api/admin/users", response_model=AdminUsersResponse)
 async def get_admin_users(admin=Depends(require_admin)):
     """Get list of admin users for shift selection."""
@@ -8104,6 +8186,7 @@ async def open_shift(payload: ShiftOpenRequest, admin=Depends(require_admin)):
         "Таны гүйлгээг удахгүй хийх болно."
     )
     _notify_pending_transaction_users_about_shift_change(client, shift_change_message)
+    _notify_incoming_admin_about_pending_work(client, payload.admin_id)
     
     return {"ok": True, "message": f"Shift opened for admin {payload.admin_id}"}
 
@@ -8166,6 +8249,7 @@ async def transfer_shift(payload: ShiftTransferRequest, admin=Depends(require_ad
         "Таны гүйлгээг удахгүй хийх болно."
     )
     _notify_pending_transaction_users_about_shift_change(client, shift_change_message)
+    _notify_incoming_admin_about_pending_work(client, payload.to_admin_id)
     
     return {"ok": True, "message": f"Shift transferred from {payload.from_admin_id} to {payload.to_admin_id}"}
 
