@@ -1358,6 +1358,18 @@ def _oyuns_plus_request_response(row: dict, user_row: dict | None = None, client
     )
 
 
+def _get_current_shift_admin_id(client) -> int | None:
+    """Return the active shift admin, or None when no shift is open."""
+    try:
+        result = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
+        row = result.data[0] if result.data else None
+        admin_id = _safe_int(row.get("current_admin_id"), 0) if row else 0
+        return admin_id or None
+    except Exception as exc:
+        logger.warning("Unable to load the active shift admin: %s", exc)
+        return None
+
+
 def _generate_referral_code(length: int = 8) -> str:
     alphabet = string.ascii_uppercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
@@ -4973,18 +4985,23 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
         raise HTTPException(status_code=500, detail="Oyuns+ request was not created")
 
     card_name = str(result.get("card_name") or "")
-    try:
-        send_admin_notification(
-            "🎁 <b>Шинэ Oyuns+ худалдан авалт!</b>\n\n"
-            f"🎟️ Карт: <b>{card_name}</b>\n"
-            f"👤 Хэрэглэгчийн ID: <code>{user.id}</code>\n"
-            f"🎯 Хүлээн авагч: <b>{receiver_name}</b>\n"
-            f"📞 Утас: <code>{receiver_phone}</code>\n"
-            f"⭐ Зарцуулсан оноо: <b>{_safe_int(result.get('points_spent'), 0):,}</b>\n\n"
-            "🔗 Админ хэсгийн Oyuns+ хүсэлтээс шалгана уу."
-        )
-    except Exception:
-        logger.exception("Failed to send Oyuns+ admin purchase notification")
+    shift_admin_id = _get_current_shift_admin_id(client)
+    if shift_admin_id:
+        try:
+            send_user_notification(
+                shift_admin_id,
+                "🎁 <b>Шинэ Oyuns+ худалдан авалт!</b>\n\n"
+                f"🎟️ Карт: <b>{card_name}</b>\n"
+                f"👤 Хэрэглэгчийн ID: <code>{user.id}</code>\n"
+                f"🎯 Хүлээн авагч: <b>{receiver_name}</b>\n"
+                f"📞 Утас: <code>{receiver_phone}</code>\n"
+                f"⭐ Зарцуулсан оноо: <b>{_safe_int(result.get('points_spent'), 0):,}</b>\n\n"
+                "🔗 Админ хэсгийн Oyuns+ хүсэлтээс шалгана уу.",
+            )
+        except Exception:
+            logger.exception("Failed to send Oyuns+ notification to shift admin %s", shift_admin_id)
+    else:
+        logger.info("No active shift admin; skipping Oyuns+ purchase notification")
     try:
         lang = _get_user_lang(user.id)
         send_user_notification(user.id, tb(lang, "notif_oyuns_plus_request_created", card_name=card_name))
@@ -5132,7 +5149,22 @@ async def admin_oyuns_plus_requests(status: str = "pending", admin=Depends(requi
     user_ids = list({row.get("user_id") for row in rows if row.get("user_id") is not None})
     users = {}
     if user_ids:
-        users = {row["id"]: row for row in (client.table("users").select("id,first_name,last_name,username,lang").in_("id", user_ids).execute().data or [])}
+        try:
+            users = {
+                row["id"]: row
+                for row in (
+                    client.table("users")
+                    .select("id,first_name,last_name,username,lang")
+                    .in_("id", user_ids)
+                    .execute()
+                    .data
+                    or []
+                )
+            }
+        except Exception as exc:
+            # User enrichment is optional; a missing/legacy user row must not hide
+            # otherwise valid pending requests from the admin panel.
+            logger.warning("Unable to enrich Oyuns+ requests with user data: %s", exc)
     return OyunsPlusVoucherRequestsResponse(requests=[_oyuns_plus_request_response(row, users.get(row.get("user_id")), client) for row in rows])
 
 

@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Route Oyuns+ admin notifications only to the active shift admin and make pending request listing resilient (backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Display red pending-request badges on admin verification, transaction, gift, and Oyuns+ buttons (frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminUsersContainer.tsx, frontend/src/components/AdminGiftTabs.tsx, frontend/src/components/admin/AdminPanelPrimitives.tsx)
 - [x] Replace the Oyuns+ “Түүх” label control with a three-dot button and add a 60-second email verification resend cooldown (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/EmailVerificationModal.tsx)
 - [x] Standardize admin-panel density, refresh/toolbars, request count badges, empty states, and remove redundant admin copy (frontend/src/components/admin/AdminPanelPrimitives.tsx, frontend/src/components/AdminInbox.tsx, frontend/src/components/AdminHistory.tsx, frontend/src/components/AdminKyc.tsx, frontend/src/components/AdminUserSearch.tsx, frontend/src/components/AdminBankAccounts.tsx, frontend/src/components/AdminManualTransaction.tsx, frontend/src/components/AdminGiftTabs.tsx, frontend/src/components/AdminGifts.tsx, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx)
@@ -82,6 +83,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Route Oyuns+ admin notifications only to the active shift admin and make pending request listing resilient (backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Add a shared red pending-request badge primitive for admin navigation buttons (frontend/src/components/admin/AdminPanelPrimitives.tsx)
 - [x] Add a live pending transaction count badge to the incoming-request admin button (frontend/src/pages/AdminPanel.tsx)
 - [x] Load all admin pending-request counts from the always-mounted admin shell (frontend/src/pages/AdminPanel.tsx)

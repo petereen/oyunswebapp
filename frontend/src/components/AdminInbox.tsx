@@ -829,7 +829,12 @@ export function AdminInbox() {
           })}
           {approvedItems.length === 0 && (
             <AdminEmptyState>Баталгаажсан гүйлгээ байхгүй байна</AdminEmptyState>
-          )}
+1. Oyuns plus notifications for admins:
+
+only on shift admin should get the notification
+
+2. error in admin panel, request is successfully created from user's side but admin's side error appears
+3.          )}
         </div>
       </div>
 
