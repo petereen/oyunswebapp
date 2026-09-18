@@ -9,12 +9,12 @@ import {
   Building,
   ChevronDown,
   ChevronUp,
-  RefreshCw,
   FileText,
   Clock,
   ExternalLink,
 } from "lucide-react";
 import { fetchKycPending, kycAction, KycItem } from "../api";
+import { AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
 
 // No props needed - auth is removed
 export function AdminKyc() {
@@ -106,24 +106,10 @@ export function AdminKyc() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-maroon-600" />
-          Баталгаажуулалт хүлээж буй ({pending.length})
-        </h2>
-        <button
-          onClick={() => refetch()}
-          className="p-2 rounded-full bg-maroon-100 text-maroon-600 hover:bg-maroon-200 transition"
-        >
-          <RefreshCw className="w-5 h-5" />
-        </button>
-      </div>
+      <AdminSectionHeader icon={FileText} title="Баталгаажуулалт хүлээж буй" count={pending.length} action={<AdminRefreshButton onClick={() => void refetch()} loading={isLoading} label="KYC шинэчлэх" />} />
 
       {pending.length === 0 ? (
-        <div className="text-center py-12 bg-white/50 rounded-xl border border-maroon-100">
-          <CheckCircle2 className="w-12 h-12 mx-auto text-green-500 mb-2" />
-          <p className="text-slate-600">Хүлээгдэж буй баталгаажуулалт байхгүй байна</p>
-        </div>
+        <AdminEmptyState icon={CheckCircle2}>Хүлээгдэж буй баталгаажуулалт байхгүй байна</AdminEmptyState>
       ) : (
         <div className="space-y-3">
           {pending.map((item: KycItem) => {

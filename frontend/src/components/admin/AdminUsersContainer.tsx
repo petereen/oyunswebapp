@@ -19,7 +19,7 @@ export function AdminUsersContainer() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 rounded-xl bg-white/60 dark:bg-dark-800/70 p-1 border border-white/60 dark:border-dark-600" role="tablist" aria-label="Хэрэглэгчийн хэсэг">
+      <div className="admin-radio-group admin-radio-group--split" role="tablist" aria-label="Хэрэглэгчийн хэсэг">
         <button
           type="button"
           role="tab"
@@ -27,7 +27,7 @@ export function AdminUsersContainer() {
           aria-selected={activeView === "kyc"}
           aria-controls="admin-users-kyc-panel"
           onClick={() => selectView("kyc")}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${activeView === "kyc" ? "bg-maroon-600 text-white" : "text-maroon-700 dark:text-gold-400 hover:bg-maroon-50 dark:hover:bg-dark-700"}`}
+          className={`admin-radio ${activeView === "kyc" ? "admin-radio--active" : ""}`}
         >
           <FileText className="w-4 h-4" /> Баталгаажуулалт (KYC)
         </button>
@@ -38,7 +38,7 @@ export function AdminUsersContainer() {
           aria-selected={activeView === "search"}
           aria-controls="admin-users-search-panel"
           onClick={() => selectView("search")}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition ${activeView === "search" ? "bg-maroon-600 text-white" : "text-maroon-700 dark:text-gold-400 hover:bg-maroon-50 dark:hover:bg-dark-700"}`}
+          className={`admin-radio ${activeView === "search" ? "admin-radio--active" : ""}`}
         >
           <Search className="w-4 h-4" /> Хэрэглэгч хайх
         </button>

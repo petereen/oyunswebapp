@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { History, Search, Filter, ChevronLeft, ChevronRight, Copy, Check, ExternalLink } from "lucide-react";
 import { fetchAdminHistory, AdminHistoryItem } from "../api";
+import { ADMIN_CONTROL_CLASS, AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Бүгд" },
@@ -105,24 +106,11 @@ export function AdminHistory() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-maroon-700">
-          <History className="w-5 h-5" />
-          <span className="font-semibold">Гүйлгээний түүх</span>
-          <span className="text-sm text-slate-500">({total} гүйлгээ)</span>
-        </div>
-        <button
-          onClick={loadHistory}
-          className="text-sm text-maroon-600 hover:text-maroon-700"
-        >
-          Шинэчлэх
-        </button>
-      </div>
+    <div className="space-y-3">
+      <AdminSectionHeader icon={History} title="Гүйлгээний түүх" count={total} action={<AdminRefreshButton onClick={loadHistory} loading={loading} label="Түүх шинэчлэх" />} />
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -131,20 +119,20 @@ export function AdminHistory() {
             placeholder="Invoice, User ID, Нэр хайх..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-500"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-white/80 pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-maroon-400 dark:border-dark-600 dark:bg-dark-800"
           />
         </div>
         
         {/* Status Filter */}
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400" />
+          <Filter className="size-3.5 text-slate-400" />
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setPage(0);
             }}
-            className="px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-maroon-500"
+            className={`${ADMIN_CONTROL_CLASS} min-w-36 justify-between font-medium`}
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -159,7 +147,7 @@ export function AdminHistory() {
       {loading ? (
         <div className="text-center py-8 text-slate-500">Уншиж байна...</div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center py-8 text-slate-500">Гүйлгээ олдсонгүй</div>
+        <AdminEmptyState>Гүйлгээ олдсонгүй</AdminEmptyState>
       ) : (
         <div className="space-y-3">
           {filteredItems.map((item) => (

@@ -23,6 +23,7 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
   const [requestingCode, setRequestingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [codeRequested, setCodeRequested] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [alreadyVerified, setAlreadyVerified] = useState(isEmailVerified);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -31,7 +32,7 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
   const isConfigured = isSupabaseAuthConfigured();
 
   const handleRequestCode = async () => {
-    if (!isConfigured || requestingCode) return;
+    if (!isConfigured || requestingCode || resendCooldown > 0) return;
 
     const targetEmail = email.trim().toLowerCase();
     if (!EMAIL_REGEX.test(targetEmail)) {
@@ -68,6 +69,7 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
       }
 
       setCodeRequested(true);
+      setResendCooldown(60);
       setInfo(t("emailv.code_sent"));
     } catch (err: any) {
       console.error("Email OTP request error:", err);
@@ -76,6 +78,14 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
       setRequestingCode(false);
     }
   };
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   const handleVerifyCode = async () => {
     if (!isConfigured || verifyingCode) return;
@@ -208,7 +218,7 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
 
           <button
             onClick={handleRequestCode}
-            disabled={!isConfigured || requestingCode}
+            disabled={!isConfigured || requestingCode || resendCooldown > 0}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-maroon-600 text-white font-semibold hover:bg-maroon-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {requestingCode ? (
@@ -219,7 +229,7 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
             ) : (
               <>
                 <MessageSquareText className="w-4 h-4" />
-                {codeRequested ? t("emailv.resend") : t("emailv.send_code")}
+                {resendCooldown > 0 ? `${t("emailv.resend")} (${resendCooldown}s)` : codeRequested ? t("emailv.resend") : t("emailv.send_code")}
               </>
             )}
           </button>

@@ -10,6 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { searchUsers, UserSearchItem } from "../api";
+import { AdminEmptyState, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
 
 export function AdminUserSearch() {
   const [query, setQuery] = useState("");
@@ -54,14 +55,15 @@ export function AdminUserSearch() {
   return (
     <div className="space-y-4">
       {/* Search Bar */}
-      <div className="glass-card p-4 rounded-2xl border border-white/60">
-        <div className="flex gap-2">
+      <div className="glass-card rounded-2xl border border-white/60 p-4">
+        <AdminSectionHeader icon={Search} title="Хэрэглэгч хайх" />
+        <div className="mt-2 flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
               type="text"
               placeholder="Хайх: ID, нэр, утас, username..."
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-maroon-100 focus:ring-2 focus:ring-maroon-500 focus:border-maroon-500"
+              className="h-9 w-full rounded-lg border border-maroon-100 pl-9 pr-3 text-xs focus:border-maroon-500 focus:ring-2 focus:ring-maroon-500"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -70,12 +72,12 @@ export function AdminUserSearch() {
           <button
             onClick={handleSearch}
             disabled={loading}
-            className="px-4 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition disabled:opacity-50 flex items-center gap-2"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-maroon-600 px-3 text-xs font-semibold text-white transition hover:bg-maroon-700 disabled:opacity-50"
           >
             {loading ? (
-              <RefreshCw className="w-5 h-5 animate-spin" />
+              <RefreshCw className="size-3.5 animate-spin" />
             ) : (
-              <Search className="w-5 h-5" />
+              <Search className="size-3.5" />
             )}
             Хайх
           </button>
@@ -85,10 +87,7 @@ export function AdminUserSearch() {
       {/* Results */}
       <div className="space-y-3">
         {users.length === 0 && !loading && (
-          <div className="text-center py-12 bg-white/50 rounded-xl border border-maroon-100">
-            <User className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-            <p className="text-slate-500">Хэрэглэгч олдсонгүй</p>
-          </div>
+          <div className="rounded-xl border border-maroon-100 bg-white/50"><AdminEmptyState icon={User}>Хэрэглэгч олдсонгүй</AdminEmptyState></div>
         )}
 
         {users.map((user) => (

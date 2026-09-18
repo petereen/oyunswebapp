@@ -1,6 +1,6 @@
 import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronRight, Copy, Gift, History, Loader2, Settings, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Copy, Gift, History, Loader2, MoreHorizontal, TrendingDown, TrendingUp, Users } from "lucide-react";
 import {
   createOyunsPlusVoucherRequest,
   fetchOyunsPlusCards,
@@ -303,8 +303,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
             <div className={balanceStyle} aria-live="polite">{summaryQuery.isLoading ? "—" : formatPoints(balance)} <PointsMark /></div>
           </div>
           <button type="button" onClick={() => setShowSettings(true)} className="oyuns-plus-settings-button" aria-label={t("oyuns_plus.settings_btn")}>
-            <Settings className="h-4 w-4" />
-            <span>{t("oyuns_plus.history_button")}</span>
+            <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </div>

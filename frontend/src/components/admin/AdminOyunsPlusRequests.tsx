@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, RotateCcw, Upload } from "lucide-react";
+import { Check, ChevronDown, Gift, RotateCcw, Upload } from "lucide-react";
 import {
   confirmAdminOyunsPlusRequest,
   fetchAdminOyunsPlusRequests,
@@ -9,6 +9,7 @@ import {
   refundAdminOyunsPlusRequest,
 } from "../../api";
 import { queryKeys } from "../../queryKeys";
+import { ADMIN_CONTROL_CLASS, AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./AdminPanelPrimitives";
 
 const statuses = ["pending", "fulfilled", "refunded", "all"] as const;
 type Status = (typeof statuses)[number];
@@ -42,11 +43,15 @@ export function AdminOyunsPlusRequests() {
   const requests = requestsQuery.data?.requests ?? [];
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {statuses.map((item) => <button key={item} type="button" onClick={() => setStatus(item)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${status === item ? "bg-maroon-600 text-white" : "bg-slate-100 text-slate-600 dark:bg-dark-700 dark:text-ivory-300"}`}>{item === "all" ? "Бүгд" : item === "pending" ? "Хүлээгдэж буй" : item === "fulfilled" ? "Баталгаажсан" : "Буцаасан"}</button>)}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <AdminSectionHeader icon={Gift} title="OYUNS+ хүсэлтүүд" count={requests.length} />
+        <div className="flex flex-wrap items-center gap-1.5">
+          {statuses.map((item) => <button key={item} type="button" onClick={() => setStatus(item)} className={`${ADMIN_CONTROL_CLASS} h-8 rounded-full px-3 ${status === item ? "border-maroon-600 bg-maroon-600 text-white hover:bg-maroon-700 hover:text-white" : ""}`}>{item === "all" ? "Бүгд" : item === "pending" ? "Хүлээгдэж буй" : item === "fulfilled" ? "Баталгаажсан" : "Буцаасан"}</button>)}
+          <AdminRefreshButton onClick={() => void requestsQuery.refetch()} loading={requestsQuery.isFetching} label="OYUNS+ хүсэлт шинэчлэх" />
+        </div>
       </div>
       {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</p>}
-      {requestsQuery.isLoading ? <p className="text-sm text-slate-500">Ачаалж байна…</p> : requests.length === 0 ? <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-slate-500">Хүсэлт алга.</p> : requests.map((request) => {
+      {requestsQuery.isLoading ? <p className="py-6 text-center text-xs text-slate-400">Ачаалж байна…</p> : requests.length === 0 ? <AdminEmptyState>Хүсэлт алга.</AdminEmptyState> : requests.map((request) => {
         const open = selected === request.id;
         const pending = request.status === "pending";
         return <article key={request.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-dark-600 dark:bg-dark-800">

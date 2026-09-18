@@ -28,6 +28,7 @@ import {
   updateUserLabel,
 } from "../api";
 import { useAdminShiftContext } from "../hooks/useAdminShift";
+import { ADMIN_CONTROL_CLASS, AdminCountBadge, AdminEmptyState, AdminRefreshButton } from "./admin/AdminPanelPrimitives";
 
 const LABEL_PRESETS: { name: string; color: string; bg: string; border: string }[] = [
   { name: "Тэмдэглэл", color: "text-green-700", bg: "bg-green-100", border: "border-green-300" },
@@ -590,21 +591,10 @@ export function AdminInbox() {
   };
 
   return (
-    <div className="glass-card p-5 rounded-2xl border border-white/60 flex flex-col gap-3">
-      {/* Header */}
-      <div className="flex items-center justify-between text-maroon-700 font-semibold">
-        <span>Ирсэн гүйлгээний хүсэлтүүд</span>
-        <button
-          className="text-xs px-3 py-1 rounded-full bg-maroon-600 text-white"
-          onClick={load}
-          disabled={loading}
-        >
-          Дахин ачаалах
-        </button>
-      </div>
-
-      {/* Sort & Filter Bar */}
-      <div className="flex gap-2 text-sm">
+    <div className="glass-card flex flex-col gap-3 rounded-2xl border border-white/60 p-4 sm:p-5">
+      {/* Shared compact admin toolbar */}
+      <div className="flex flex-wrap items-center gap-2" data-slot="admin-toolbar">
+        <AdminRefreshButton onClick={load} loading={loading} label="Гүйлгээ шинэчлэх" />
         {/* Sort Dropdown */}
         <div className="relative">
           <button
@@ -612,14 +602,14 @@ export function AdminInbox() {
               setShowSortMenu(!showSortMenu);
               setShowFilterMenu(false);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-maroon-50 text-maroon-700 hover:bg-maroon-100"
+            className={ADMIN_CONTROL_CLASS}
           >
-            <ArrowUpDown className="w-4 h-4" />
+            <ArrowUpDown className="size-3.5" />
             Эрэмбэлэх
-            {showSortMenu ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {showSortMenu ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
           </button>
           {showSortMenu && (
-            <div className="absolute top-full left-0 mt-1 bg-white shadow-lg rounded-lg border z-10 min-w-[140px]">
+            <div className="absolute left-0 top-full z-20 mt-1 min-w-[160px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-dark-600 dark:bg-dark-800">
               {[
                 { value: "oldest", label: "Хуучин нь эхэндээ" },
                 { value: "newest", label: "Шинэ нь эхэндээ" },
@@ -632,8 +622,8 @@ export function AdminInbox() {
                     setSortBy(opt.value as SortOption);
                     setShowSortMenu(false);
                   }}
-                  className={`block w-full text-left px-3 py-2 hover:bg-maroon-50 ${
-                    sortBy === opt.value ? "bg-maroon-100 font-medium" : ""
+                  className={`block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-maroon-50 ${
+                    sortBy === opt.value ? "bg-maroon-100 font-medium text-maroon-700" : ""
                   }`}
                 >
                   {opt.label}
@@ -650,14 +640,14 @@ export function AdminInbox() {
               setShowFilterMenu(!showFilterMenu);
               setShowSortMenu(false);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-maroon-50 text-maroon-700 hover:bg-maroon-100"
+            className={ADMIN_CONTROL_CLASS}
           >
-            <Filter className="w-4 h-4" />
+            <Filter className="size-3.5" />
             Шүүх
-            {showFilterMenu ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {showFilterMenu ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
           </button>
           {showFilterMenu && (
-            <div className="absolute top-full left-0 mt-1 bg-white shadow-lg rounded-lg border z-10 min-w-[120px]">
+            <div className="absolute left-0 top-full z-20 mt-1 min-w-[130px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-dark-600 dark:bg-dark-800">
               {[
                 { value: "all", label: "Бүгд" },
                 { value: "buy", label: "(RUB→MNT)" },
@@ -669,8 +659,8 @@ export function AdminInbox() {
                     setFilterBy(opt.value as FilterOption);
                     setShowFilterMenu(false);
                   }}
-                  className={`block w-full text-left px-3 py-2 hover:bg-maroon-50 ${
-                    filterBy === opt.value ? "bg-maroon-100 font-medium" : ""
+                  className={`block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-maroon-50 ${
+                    filterBy === opt.value ? "bg-maroon-100 font-medium text-maroon-700" : ""
                   }`}
                 >
                   {opt.label}
@@ -684,13 +674,13 @@ export function AdminInbox() {
       {error && <div className="text-red-600 text-sm">{error}</div>}
 
       {/* SECTION 1: Pending - Waiting for Approval */}
-      <div className="border-2 border-amber-200 rounded-xl overflow-hidden">
-        <div className="bg-amber-50 px-4 py-2 border-b border-amber-200">
-          <h3 className="font-semibold text-amber-700 flex items-center gap-2">
+      <div className="overflow-hidden rounded-xl border border-amber-200">
+        <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-700">
             <Clock className="w-4 h-4" />
-            Хүлээгдэж буй ({pendingItems.length})
+            Хүлээгдэж буй
           </h3>
-          <p className="text-xs text-amber-600">Шалгаж баталгаажуулна уу</p>
+          <AdminCountBadge count={pendingItems.length} />
         </div>
         <div className="flex flex-col gap-2 bg-amber-50/30 p-3">
           {pendingItems.map((item) => {
@@ -736,19 +726,19 @@ export function AdminInbox() {
             );
           })}
           {pendingItems.length === 0 && (
-            <div className="text-sm text-slate-500 text-center py-4">Хүлээгдэж буй гүйлгээ байхгүй байна</div>
+            <AdminEmptyState>Хүлээгдэж буй гүйлгээ байхгүй байна</AdminEmptyState>
           )}
         </div>
       </div>
 
       {/* SECTION 2: Pre-approved - Ready for Transfer */}
-      <div className="border-2 border-green-200 rounded-xl overflow-hidden">
-        <div className="bg-green-50 px-4 py-2 border-b border-green-200">
-          <h3 className="font-semibold text-green-700 flex items-center gap-2">
+      <div className="overflow-hidden rounded-xl border border-green-200">
+        <div className="flex items-center justify-between gap-3 border-b border-green-200 bg-green-50 px-4 py-2.5">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-green-700">
             <ShieldCheck className="w-4 h-4" />
-            Урьдчилан баталгаажсан ({approvedItems.length})
+            Урьдчилан баталгаажсан
           </h3>
-          <p className="text-xs text-green-600">Гүйлгээ хийж, баримт оруулан баталгаажуулна уу</p>
+          <AdminCountBadge count={approvedItems.length} />
         </div>
         <div className="flex flex-col gap-2 bg-green-50/30 p-3">
           {approvedItems.map((item) => {
@@ -838,7 +828,7 @@ export function AdminInbox() {
             );
           })}
           {approvedItems.length === 0 && (
-            <div className="text-sm text-slate-500 text-center py-4">Баталгаажсан гүйлгээ байхгүй байна</div>
+            <AdminEmptyState>Баталгаажсан гүйлгээ байхгүй байна</AdminEmptyState>
           )}
         </div>
       </div>

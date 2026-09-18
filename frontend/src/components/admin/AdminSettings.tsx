@@ -17,6 +17,7 @@ import {
   updateAppSettings,
   updateExchangeGroupSettings,
 } from "../../api";
+import { AdminRefreshButton, AdminSectionHeader } from "./AdminPanelPrimitives";
 
 type NumericAppSettingsField =
   | "min_rub_amount"
@@ -166,7 +167,7 @@ export function AdminSettings() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between"><h3 className="text-lg font-semibold text-slate-800 dark:text-ivory-200 flex items-center gap-2"><Settings className="w-5 h-5 text-maroon-600" /> Системийн тохиргоо</h3><button onClick={() => void loadSettings()} className="p-2 text-slate-600 dark:text-ivory-300 hover:bg-slate-100 dark:hover:bg-dark-700 rounded-lg transition"><RefreshCw className="w-5 h-5" /></button></div>
+      <AdminSectionHeader icon={Settings} title="Системийн тохиргоо" action={<AdminRefreshButton onClick={() => void loadSettings()} loading={loading} label="Системийн тохиргоо шинэчлэх" />} />
       {error && <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-300 rounded-lg text-sm">{error}</div>}
 
       <details open className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl space-y-4">

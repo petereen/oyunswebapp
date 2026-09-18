@@ -25,6 +25,7 @@ import {
   AdminUser,
   requestPresignAdmin,
 } from "../api";
+import { AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
 
 interface EditingAccount extends Partial<AdminBankAccountFull> {
   isNew?: boolean;
@@ -164,30 +165,19 @@ export function AdminBankAccounts() {
   return (
     <div data-slot="admin-bank-accounts" className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-          <CreditCard className="w-5 h-5 text-maroon-600" />
-          Банкны дансны удирдлага
-        </h3>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={loadData}
-            aria-label="Данс шинэчлэх"
-            className="flex size-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
-          >
-            <RefreshCw className="size-5" />
-          </button>
+      <AdminSectionHeader icon={CreditCard} title="Банкны дансны удирдлага" count={accounts.length} action={
+        <div className="flex items-center gap-2">
+          <AdminRefreshButton onClick={loadData} loading={loading} label="Данс шинэчлэх" />
           <button
             type="button"
             onClick={handleAdd}
-            className="flex min-h-10 items-center gap-2 rounded-lg bg-maroon-600 px-4 py-2 text-white transition hover:bg-maroon-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-maroon-600 px-3 text-xs font-semibold text-white transition hover:bg-maroon-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="size-3.5" />
             Данс нэмэх
           </button>
         </div>
-      </div>
+      } />
 
       {error && (
         <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>
@@ -211,10 +201,7 @@ export function AdminBankAccounts() {
       {/* Accounts List */}
       <div className="flex flex-col gap-4">
         {accounts.length === 0 && !editingId && (
-          <div className="text-center py-12 bg-white/50 rounded-xl border border-maroon-100">
-            <CreditCard className="w-12 h-12 mx-auto text-slate-300 mb-2" />
-            <p className="text-slate-500">Данс бүртгэгдээгүй байна</p>
-          </div>
+          <div className="rounded-xl border border-maroon-100 bg-white/50"><AdminEmptyState icon={CreditCard}>Данс бүртгэгдээгүй байна</AdminEmptyState></div>
         )}
 
         {groupedAccounts.map((group) => {

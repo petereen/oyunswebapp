@@ -6,7 +6,6 @@ import {
   FileImage,
   RefreshCw,
   Search,
-  ShieldCheck,
   Trash2,
   Upload,
   UserRound,
@@ -257,16 +256,6 @@ export function AdminManualTransaction({ onOpenInbox }: Props) {
 
   return (
     <div className="space-y-4 font-['Montserrat'] text-[#231F20]">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-[#2D62EC]" />
-          <div>
-            <h2 className="font-bold">Гараар гүйлгээ үүсгэх</h2>
-            <p className="text-xs text-slate-500">Client-side алдаатай хүсэлтийг pending inbox-д сэргээнэ.</p>
-          </div>
-        </div>
-      </div>
-
       {error && <div className="flex items-start gap-2 rounded-xl border border-[#FF3B57]/30 bg-[#FF3B57]/5 p-3 text-sm text-[#FF3B57]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">

@@ -19,6 +19,7 @@ import {
   Check,
 } from "lucide-react";
 import { fetchAdminGifts, approveGift, rejectGift, requestPresign, AdminGift } from "../api";
+import { ADMIN_CONTROL_CLASS, AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
 
 export function AdminGifts() {
   const [gifts, setGifts] = useState<AdminGift[]>([]);
@@ -160,29 +161,15 @@ export function AdminGifts() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <AdminSectionHeader icon={Gift} title="Бэлгийн хүсэлтүүд" count={gifts.length} />
         <div className="flex items-center gap-2">
-          <Gift className="w-6 h-6 text-pink-500" />
-          <h2 className="text-xl font-bold text-maroon-700">Бэлгийн хүсэлтүүд</h2>
-        </div>
-        <button
-          onClick={loadGifts}
-          disabled={loading}
-          className="p-2 rounded-lg hover:bg-maroon-100 transition"
-        >
-          <RefreshCw className={`w-5 h-5 text-maroon-600 ${loading ? "animate-spin" : ""}`} />
-        </button>
-      </div>
-
-      {/* Filter */}
-      <div className="flex items-center gap-2">
-        <Filter className="w-4 h-4 text-slate-500" />
+          <Filter className="size-3.5 text-slate-400" />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-maroon-200 px-3 py-2 text-sm"
+          className={`${ADMIN_CONTROL_CLASS} min-w-36 justify-between font-medium`}
         >
           <option value="all">Бүгд</option>
           <option value="pending_recipient">Хүлээн авагч хүлээж байна</option>
@@ -191,6 +178,8 @@ export function AdminGifts() {
           <option value="completed">Амжилттай</option>
           <option value="rejected">Татгалзсан</option>
         </select>
+          <AdminRefreshButton onClick={loadGifts} loading={loading} label="Бэлгийн хүсэлт шинэчлэх" />
+        </div>
       </div>
 
       {/* Error */}
@@ -207,9 +196,7 @@ export function AdminGifts() {
           <Loader2 className="w-8 h-8 text-maroon-600 animate-spin" />
         </div>
       ) : gifts.length === 0 ? (
-        <div className="text-center py-12 text-slate-500">
-          Бэлгийн хүсэлт байхгүй
-        </div>
+        <AdminEmptyState>Бэлгийн хүсэлт байхгүй</AdminEmptyState>
       ) : (
         <div className="space-y-3">
           {gifts.map((gift) => (

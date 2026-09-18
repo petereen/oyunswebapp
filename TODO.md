@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Replace the Oyuns+ “Түүх” label control with a three-dot button and add a 60-second email verification resend cooldown (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/EmailVerificationModal.tsx)
+- [x] Standardize admin-panel density, refresh/toolbars, request count badges, empty states, and remove redundant admin copy (frontend/src/components/admin/AdminPanelPrimitives.tsx, frontend/src/components/AdminInbox.tsx, frontend/src/components/AdminHistory.tsx, frontend/src/components/AdminKyc.tsx, frontend/src/components/AdminUserSearch.tsx, frontend/src/components/AdminBankAccounts.tsx, frontend/src/components/AdminManualTransaction.tsx, frontend/src/components/AdminGiftTabs.tsx, frontend/src/components/AdminGifts.tsx, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx)
 - [x] Compact radio-style admin navigation with tab semantics, remove admin branding/header, and move logout into Settings with regression coverage (frontend/src/App.tsx, frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/index.css, frontend/src/pages/AdminPanel.test.tsx)
 - [x] Verify registration modal viewport behavior with frontend tests and production build
 - [x] Move the admin/user view switch into the sixth button of the main navbar (frontend/src/App.tsx, frontend/src/components/BottomNavBar.tsx)
@@ -79,6 +81,14 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Add shared compact admin refresh, section-header, count-badge, and subtle empty-state primitives (frontend/src/components/admin/AdminPanelPrimitives.tsx)
+- [x] Compact the transaction inbox toolbar, remove redundant request guidance/title copy, move counts into white top-right badges, and soften empty states (frontend/src/components/AdminInbox.tsx)
+- [x] Align transaction history with the shared section header, icon-only refresh, compact filter controls, and subtle empty state (frontend/src/components/AdminHistory.tsx)
+- [x] Apply the shared compact header, refresh, search, and empty-state treatment to KYC, user search, and bank-account admin views (frontend/src/components/AdminKyc.tsx, frontend/src/components/AdminUserSearch.tsx, frontend/src/components/AdminBankAccounts.tsx)
+- [x] Remove the redundant manual-transaction disclosure card and its client-side recovery copy (frontend/src/components/AdminManualTransaction.tsx)
+- [x] Standardize legacy gift and OYUNS+ request/card controls with compact filters, icon-only refresh, shared headers, and subtle empty states (frontend/src/components/AdminGifts.tsx, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx)
+- [x] Bring system settings and nested users/gifts tabs onto the same compact admin navigation and refresh treatment (frontend/src/components/admin/AdminSettings.tsx, frontend/src/components/admin/AdminUsersContainer.tsx, frontend/src/components/AdminGiftTabs.tsx, frontend/src/index.css)
+- [x] Apply the brand-blue color to the admin/user view switch in the bottom navigation (frontend/src/index.css)
 - [x] Keep registration dialogs within the viewport with independently scrollable form content and bottom-navigation clearance (frontend/src/components/RegistrationModal.tsx, frontend/src/components/QuickRegistrationModal.tsx, frontend/src/index.css)
 - [x] Add Telegram alerts for Oyuns+ purchases and consolidated pending-work summaries on shift handover (backend/main.py)
 - [x] Accept Russian phone number formats in the Oyuns+ coupon request creation workflow (frontend/src/pages/OyunsPlusTab.tsx, backend/main.py, backend/tests/test_oyuns_plus.py)
