@@ -29,4 +29,21 @@ describe("BottomNavBar", () => {
     fireEvent.click(tabs[2]);
     expect(onTabChange).toHaveBeenCalledWith(2);
   });
+
+  it("adds an admin switch as the sixth button for admins", () => {
+    const onSwitchView = vi.fn();
+    render(
+      <LangProvider>
+        <BottomNavBar activeTab={0} onTabChange={vi.fn()} isAdmin onSwitchView={onSwitchView} />
+      </LangProvider>,
+    );
+
+    const navigation = screen.getByRole("navigation", { name: "Primary navigation" });
+    const tabs = Array.from(navigation.querySelectorAll<HTMLButtonElement>("button"));
+
+    expect(tabs).toHaveLength(6);
+    expect(screen.getByRole("button", { name: "Админ" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Админ" }));
+    expect(onSwitchView).toHaveBeenCalledOnce();
+  });
 });

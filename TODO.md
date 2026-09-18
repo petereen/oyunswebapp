@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Move the admin/user view switch into the sixth button of the main navbar (frontend/src/App.tsx, frontend/src/components/BottomNavBar.tsx)
 - [x] Keep the Telegram Mini App header below fullscreen controls using Telegram content safe-area insets (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Update Oyuns+ price/points styling, remove the voucher header, and add gyroscope tilt to opened coupons (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
 - [x] Replace Oyuns Plus star points markers with the provided original VA+ SVG and remove the page eyebrow/refresh control (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/assets/oyuns-plus-points.svg)

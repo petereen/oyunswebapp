@@ -13,8 +13,6 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { DashboardPanel } from "./pages/DashboardPanel";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { useTelegramAuth } from "./hooks/useTelegramAuth";
-import { Shield } from "lucide-react";
-import { useLang } from "./i18n/useLang";
 import { DevToolbar } from "./components/DevToolbar";
 import { useEntitlements } from "./hooks/useEntitlements";
 
@@ -64,7 +62,6 @@ export default function App() {
   const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
   const entitlements = useEntitlements({ userId: user?.id, isAuthenticating });
   const isFetchingInitialData = useIsFetching() > 0;
-  const { t } = useLang();
   const [view, setView] = useState<"client" | "admin">("client");
   const initialActiveTab = urlOyunsPlusTab ? 3 : urlEditInvoice ? 1 : urlFuelOrderId ? 2 : 0;
   const [activeTab, setActiveTab] = useState(initialActiveTab);
@@ -184,7 +181,7 @@ export default function App() {
   // Admin view
   if (view === "admin" && isAdmin) {
     return (
-      <div className="min-h-screen bg-surface-50 dark:bg-dark-900 p-4 md:p-8">
+      <div className="min-h-screen bg-surface-50 dark:bg-dark-900 p-4 pb-24 md:p-8 md:pb-24">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
@@ -194,22 +191,19 @@ export default function App() {
                 className="h-10 w-auto object-contain"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setView("client")}
-                className="px-4 py-2 rounded-full text-sm font-semibold transition bg-white dark:bg-dark-700 text-maroon-600 dark:text-gold-400 hover:bg-maroon-50 dark:hover:bg-dark-600"
-              >
-                {t("app.user")}
-              </button>
-              <button
-                className="px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-1 transition bg-maroon-600 text-white"
-              >
-                <Shield className="w-4 h-4" /> {t("app.admin")}
-              </button>
-            </div>
           </div>
           <AdminPanel onExit={() => setView("client")} />
         </div>
+        <BottomNavBar
+          activeTab={-1}
+          onTabChange={(tab) => {
+            setView("client");
+            handleTabChange(tab);
+          }}
+          isAdmin
+          isAdminView
+          onSwitchView={() => setView("client")}
+        />
         <DevToolbar />
       </div>
     );
@@ -231,18 +225,6 @@ export default function App() {
       )}
       <div className="client-shell min-h-screen bg-surface-50 dark:bg-dark-900" aria-busy={showInitialLoadingScreen}>
       <main className="client-content max-w-lg mx-auto p-4 pt-telegram-safe pb-32">
-        {/* Admin toggle for admins */}
-        {isAdmin && (
-          <div className="flex justify-end mb-2">
-            <button
-              onClick={() => setView("admin")}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition bg-maroon-700 text-gold-400 hover:bg-maroon-600"
-            >
-              <Shield className="w-3.5 h-3.5" /> {t("app.admin")}
-            </button>
-          </div>
-        )}
-
         {/* Visited tabs remain mounted so local state and data observers survive navigation. */}
         {visitedTabs.has(0) && (
           <div className={showProfile || effectiveActiveTab !== 0 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 0}>
@@ -301,7 +283,14 @@ export default function App() {
       </main>
 
       {/* Bottom Nav */}
-      {user && <BottomNavBar activeTab={activeTab} onTabChange={handleTabChange} />}
+      {user && (
+        <BottomNavBar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          isAdmin={isAdmin}
+          onSwitchView={() => setView("admin")}
+        />
+      )}
 
       {/* Diagnostic Helper */}
       <DevToolbar />

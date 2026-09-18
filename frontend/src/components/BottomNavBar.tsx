@@ -1,4 +1,4 @@
-import { Home, ArrowLeftRight, LayoutGrid, BarChart3 } from "lucide-react";
+import { Home, ArrowLeftRight, LayoutGrid, BarChart3, Repeat2 } from "lucide-react";
 import LiquidGlass from "liquid-glass-react";
 import { OYUNS_PLUS_LOGO_DEFAULT_URL } from "../api";
 import { useLang } from "../i18n/useLang";
@@ -6,6 +6,9 @@ import { useLang } from "../i18n/useLang";
 interface Props {
   activeTab: number;
   onTabChange: (tab: number) => void;
+  isAdmin?: boolean;
+  isAdminView?: boolean;
+  onSwitchView?: () => void;
 }
 
 const tabKeys = [
@@ -16,9 +19,10 @@ const tabKeys = [
   { key: "nav.stats", icon: BarChart3, useLogo: false },
 ];
 
-export function BottomNavBar({ activeTab, onTabChange }: Props) {
+export function BottomNavBar({ activeTab, onTabChange, isAdmin = false, isAdminView = false, onSwitchView }: Props) {
   const { t } = useLang();
   const tabs = tabKeys.map(tk => ({ label: t(tk.key), icon: tk.icon, useLogo: tk.useLogo }));
+  const showViewSwitcher = isAdmin && onSwitchView;
   return (
     <nav data-slot="bottom-navigation" className="liquid-nav fixed bottom-0 left-0 right-0 z-50 px-3 pb-safe" aria-label="Primary navigation">
       <div data-slot="bottom-navigation-surface" className="liquid-nav-stage max-w-lg mx-auto mb-3">
@@ -66,6 +70,22 @@ export function BottomNavBar({ activeTab, onTabChange }: Props) {
                 </button>
               );
             })}
+            {showViewSwitcher && (
+              <button
+                type="button"
+                data-slot="bottom-navigation-item"
+                onClick={onSwitchView}
+                className="liquid-nav__item liquid-nav__item--switch"
+                aria-label={isAdminView ? t("app.user") : t("app.admin")}
+              >
+                <span data-slot="bottom-navigation-icon" className="liquid-nav__icon" aria-hidden="true">
+                  <Repeat2 className="h-[19px] w-[19px]" strokeWidth={2.2} />
+                </span>
+                <span data-slot="bottom-navigation-label" className="liquid-nav__label">
+                  {isAdminView ? t("app.user") : t("app.admin")}
+                </span>
+              </button>
+            )}
           </div>
         </LiquidGlass>
       </div>
