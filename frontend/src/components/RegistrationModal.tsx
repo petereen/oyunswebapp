@@ -247,8 +247,8 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 overflow-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl my-4">
+    <div className="registration-modal-overlay fixed inset-0 bg-black/60 flex items-center justify-center z-[100] overflow-auto">
+      <div className="registration-modal bg-white rounded-2xl max-w-lg w-full shadow-2xl flex flex-col min-h-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-maroon-600 to-maroon-500 p-5 text-white rounded-t-2xl">
           <div className="flex items-center justify-between">
@@ -273,7 +273,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-4 max-h-[70vh] overflow-auto">
+        <div className="registration-modal-content p-5 space-y-4">
           {/* RUB Bank Section - Optional */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">

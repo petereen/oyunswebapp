@@ -1,7 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
-- [x] Add extra Telegram native-controls clearance so the client header stays below the top menu buttons (frontend/src/App.tsx, frontend/src/index.css)
+- [x] Compact radio-style admin navigation with tab semantics, remove admin branding/header, and move logout into Settings with regression coverage (frontend/src/App.tsx, frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/index.css, frontend/src/pages/AdminPanel.test.tsx)
+- [x] Verify registration modal viewport behavior with frontend tests and production build
 - [x] Move the admin/user view switch into the sixth button of the main navbar (frontend/src/App.tsx, frontend/src/components/BottomNavBar.tsx)
 - [x] Keep the Telegram Mini App header below fullscreen controls using Telegram content safe-area insets (frontend/src/App.tsx, frontend/src/index.css)
 - [x] Update Oyuns+ price/points styling, remove the voucher header, and add gyroscope tilt to opened coupons (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
@@ -78,6 +79,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Keep registration dialogs within the viewport with independently scrollable form content and bottom-navigation clearance (frontend/src/components/RegistrationModal.tsx, frontend/src/components/QuickRegistrationModal.tsx, frontend/src/index.css)
 - [x] Add Telegram alerts for Oyuns+ purchases and consolidated pending-work summaries on shift handover (backend/main.py)
 - [x] Accept Russian phone number formats in the Oyuns+ coupon request creation workflow (frontend/src/pages/OyunsPlusTab.tsx, backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Fix 500 when manually finalizing a group-managed transaction with proof photos (backend/main.py, backend/tests/test_exchange_group.py, frontend/src/components/AdminInbox.test.tsx)

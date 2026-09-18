@@ -88,6 +88,71 @@
     background: rgba(19, 34, 58, 0.72);
   }
 
+  /* Compact admin navigation: a radio-group concept with one clear active state. */
+  .admin-radio-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding: 0.25rem;
+    border: 1px solid rgba(213, 214, 210, 0.72);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.56);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  }
+  .admin-radio-group--transactions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .admin-radio {
+    position: relative;
+    display: inline-flex;
+    min-width: 0;
+    min-height: 2.65rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid transparent;
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.65rem;
+    color: #1A44B8;
+    font-size: 0.76rem;
+    font-weight: 650;
+    line-height: 1.15;
+    text-align: center;
+    transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
+  }
+  .admin-radio::before {
+    width: 0.45rem;
+    height: 0.45rem;
+    flex: 0 0 auto;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    content: "";
+    opacity: 0.55;
+  }
+  .admin-radio:hover { background: rgba(219, 230, 254, 0.72); }
+  .admin-radio:focus-visible {
+    outline: 2px solid #6080FA;
+    outline-offset: 1px;
+  }
+  .admin-radio--active {
+    border-color: #1D4ED8;
+    background: #1D4ED8;
+    color: white;
+    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.2);
+  }
+  .admin-radio--active::before { border: 0; background: currentColor; opacity: 1; box-shadow: inset 0 0 0 2px #1D4ED8; }
+  .admin-radio--logout { color: #C43C53; }
+  .admin-radio--logout:hover { background: rgba(255, 235, 238, 0.8); }
+  .dark .admin-radio-group { border-color: rgba(147, 170, 253, 0.16); background: rgba(19, 34, 58, 0.72); }
+  .dark .admin-radio { color: #FFD54F; }
+  .dark .admin-radio:hover { background: rgba(45, 98, 236, 0.22); }
+  .dark .admin-radio--active { color: white; }
+  .dark .admin-radio--logout { color: #FF8798; }
+
+  @media (max-width: 520px) {
+    .admin-radio { min-height: 2.45rem; padding-inline: 0.35rem; font-size: 0.68rem; }
+    .admin-radio-group { gap: 0.25rem; }
+    .admin-radio::before { display: none; }
+  }
+
   .rate-glass-card {
     border: 1px solid rgba(255, 255, 255, 0.22);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 18px 42px rgba(29, 78, 216, 0.2);
@@ -507,16 +572,26 @@ html:not(.dark) .liquid-nav-glass .glass__warp {
   );
 }
 
-/* Telegram's native close/menu controls occupy more space than the device
-   safe area on fullscreen Mini Apps. Keep the first app card below them while
-   still respecting the live Telegram and browser-reported insets. */
-.pt-telegram-native-controls {
-  padding-top: max(
-    6rem,
-    calc(env(safe-area-inset-top, 0px) + 4rem),
-    calc(var(--tg-safe-area-inset-top, 0px) + 4rem),
-    calc(var(--tg-content-safe-area-inset-top, 0px) + 4rem)
-  );
+/* Keep registration dialogs inside the usable viewport, above the floating
+   bottom navigation. The card itself stays fixed while only its form content
+   scrolls, so the header and submit controls remain reachable. */
+.registration-modal-overlay {
+  box-sizing: border-box;
+  height: 100dvh;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem
+    calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain;
+}
+
+.registration-modal {
+  max-height: 100%;
+}
+
+.registration-modal-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 html {

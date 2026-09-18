@@ -18,7 +18,7 @@ describe("AdminPanel", () => {
     expect(screen.getAllByRole("tab")).toHaveLength(7);
     expect(screen.getByRole("tab", { name: "Гүйлгээ" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Хайлт" })).not.toBeInTheDocument();
-    expect(container.querySelector('[data-slot="transaction-tabs"]')).toHaveClass("grid-cols-4");
+    expect(container.querySelector('[data-slot="transaction-tabs"]')).toHaveClass("admin-radio-group--transactions");
 
     fireEvent.click(screen.getByRole("tab", { name: "Түүх" }));
     expect(screen.getByText("history-panel")).toBeVisible();
@@ -36,5 +36,13 @@ describe("AdminPanel", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Гараар үүсгэх" }));
     fireEvent.click(screen.getByRole("button", { name: "manual back to inbox" }));
     expect(screen.getByText("inbox-panel")).toBeVisible();
+  });
+
+  it("keeps logout inside the settings panel", () => {
+    const onExit = vi.fn();
+    render(<AdminPanel onExit={onExit} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Тохиргоо" }));
+    fireEvent.click(screen.getByRole("button", { name: "Гарах" }));
+    expect(onExit).toHaveBeenCalledOnce();
   });
 });

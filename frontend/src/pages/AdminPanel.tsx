@@ -4,7 +4,6 @@ import {
   Gift,
   LucideIcon,
   PlusCircle,
-  Shield,
   SlidersHorizontal,
   History,
   Users,
@@ -82,8 +81,8 @@ export function AdminPanel({ onExit }: Props) {
     switch (tab) {
       case "inbox":
         return (
-          <div className="space-y-4">
-            <div data-slot="transaction-tabs" className="grid grid-cols-4 gap-2" role="tablist" aria-label="Гүйлгээний хэсгүүд">
+          <div className="space-y-3">
+            <div data-slot="transaction-tabs" className="admin-radio-group admin-radio-group--transactions" role="tablist" aria-label="Гүйлгээний хэсгүүд">
               {ADMIN_TRANSACTION_TABS.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
@@ -94,7 +93,7 @@ export function AdminPanel({ onExit }: Props) {
                   aria-controls={`admin-transaction-panel-${key}`}
                   onClick={() => selectTransactionTab(key)}
                   data-slot="transaction-tab"
-                  className={`flex min-h-[4.25rem] min-w-0 flex-col items-center justify-center gap-1 rounded-[1.35rem] px-1 py-3 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon-400 sm:px-2 sm:text-sm ${activeTransactionTab === key ? "bg-maroon-600 text-white shadow-btn" : "bg-white/70 text-maroon-700 hover:bg-maroon-100 dark:bg-dark-800 dark:text-gold-400 dark:hover:bg-dark-700"}`}
+                  className={`admin-radio ${activeTransactionTab === key ? "admin-radio--active" : ""}`}
                 >
                   <Icon className="h-4 w-4" />
                   {label}
@@ -111,20 +110,15 @@ export function AdminPanel({ onExit }: Props) {
           </div>
         );
       case "users": return <PersistentUsers />;
-      case "settings": return <PersistentSettings />;
+      case "settings": return <PersistentSettings onExit={onExit} />;
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-maroon-700 dark:text-gold-400"><Shield className="w-5 h-5" /> Админ самбар</div>
-        <button onClick={onExit} className="text-sm text-slate-500 dark:text-ivory-400 hover:text-slate-700 dark:hover:text-ivory-200 underline">Гарах</button>
-      </div>
-
-      <div className="flex gap-2 flex-wrap" role="tablist" aria-label="Админ самбарын хэсгүүд">
+    <div className="space-y-3">
+      <div className="admin-radio-group" role="tablist" aria-label="Админ самбарын хэсгүүд">
         {ADMIN_TABS.map(({ key, label, icon: Icon }) => (
-          <button key={key} type="button" id={`admin-tab-${key}`} role="tab" aria-selected={activeTab === key} aria-controls={`admin-panel-${key}`} onClick={() => selectTab(key)} className={`flex-1 min-w-[110px] flex items-center justify-center gap-2 py-3 px-2 rounded-xl font-semibold transition ${activeTab === key ? "bg-maroon-600 text-white shadow-btn" : "bg-white/60 dark:bg-dark-800 text-maroon-700 dark:text-gold-400 hover:bg-maroon-100 dark:hover:bg-dark-700"}`}>
+          <button key={key} type="button" id={`admin-tab-${key}`} role="tab" aria-selected={activeTab === key} aria-controls={`admin-panel-${key}`} onClick={() => selectTab(key)} className={`admin-radio ${activeTab === key ? "admin-radio--active" : ""}`}>
             <Icon className="w-4 h-4" /> {label}
           </button>
         ))}

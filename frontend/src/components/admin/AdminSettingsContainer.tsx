@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Archive, ChevronDown, Clock3, CreditCard, Settings2, UserRoundCog } from "lucide-react";
+import { Archive, ChevronDown, Clock3, CreditCard, LogOut, Settings2, UserRoundCog } from "lucide-react";
 import { AdminBankAccounts } from "../AdminBankAccounts";
 import { AdminShiftBar } from "./AdminShiftBar";
 import { AdminSettings } from "./AdminSettings";
@@ -65,7 +65,7 @@ function SettingsDropdown({
   );
 }
 
-export function AdminSettingsContainer() {
+export function AdminSettingsContainer({ onExit }: { onExit?: () => void }) {
   const [openSections, setOpenSections] = useState<Set<SettingsSection>>(() => new Set(["shift"]));
 
   const toggleSection = (section: SettingsSection) => {
@@ -87,6 +87,12 @@ export function AdminSettingsContainer() {
           onToggle={() => toggleSection(section.key)}
         />
       ))}
+      {onExit && (
+        <button type="button" onClick={onExit} data-slot="admin-logout" className="admin-radio admin-radio--logout w-full justify-start border-dashed">
+          <LogOut className="h-4 w-4" />
+          Гарах
+        </button>
+      )}
     </div>
   );
 }

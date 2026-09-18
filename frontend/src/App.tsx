@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import oyunsLogo from "./assets/oyuns-logo.png";
 import oyunsIcon from "./assets/oyuns-icon.png";
 import { AdminPanel } from "./pages/AdminPanel";
 import { useIsFetching } from "@tanstack/react-query";
@@ -60,11 +59,6 @@ export default function App() {
   const urlOyunsPlusTab = requestedTab === "oyuns-plus";
 
   const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
-  const telegramWebApp = window.Telegram?.WebApp;
-  const isTelegramWebApp = Boolean(
-    telegramWebApp &&
-    (telegramWebApp.initData || window.location.hash.includes("tgWebAppData") || telegramWebApp.platform !== "unknown")
-  );
   const entitlements = useEntitlements({ userId: user?.id, isAuthenticating });
   const isFetchingInitialData = useIsFetching() > 0;
   const [view, setView] = useState<"client" | "admin">("client");
@@ -188,15 +182,6 @@ export default function App() {
     return (
       <div className="min-h-screen bg-surface-50 dark:bg-dark-900 p-4 pb-24 md:p-8 md:pb-24">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <img
-                src={oyunsLogo}
-                alt="OYUNS ALL-IN-ONE"
-                className="h-10 w-auto object-contain"
-              />
-            </div>
-          </div>
           <AdminPanel onExit={() => setView("client")} />
         </div>
         <BottomNavBar
@@ -229,7 +214,7 @@ export default function App() {
         </div>
       )}
       <div className="client-shell min-h-screen bg-surface-50 dark:bg-dark-900" aria-busy={showInitialLoadingScreen}>
-      <main className={`client-content max-w-lg mx-auto p-4 pt-telegram-safe${isTelegramWebApp ? " pt-telegram-native-controls" : ""} pb-32`}>
+      <main className="client-content max-w-lg mx-auto p-4 pt-telegram-safe pb-32">
         {/* Visited tabs remain mounted so local state and data observers survive navigation. */}
         {visitedTabs.has(0) && (
           <div className={showProfile || effectiveActiveTab !== 0 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 0}>
