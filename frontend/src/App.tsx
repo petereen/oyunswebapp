@@ -60,6 +60,11 @@ export default function App() {
   const urlOyunsPlusTab = requestedTab === "oyuns-plus";
 
   const { initData, user, isAuthenticating, authError, clearAuth, refreshAuth, needsBrowserLogin, startBrowserLogin } = useTelegramAuth();
+  const telegramWebApp = window.Telegram?.WebApp;
+  const isTelegramWebApp = Boolean(
+    telegramWebApp &&
+    (telegramWebApp.initData || window.location.hash.includes("tgWebAppData") || telegramWebApp.platform !== "unknown")
+  );
   const entitlements = useEntitlements({ userId: user?.id, isAuthenticating });
   const isFetchingInitialData = useIsFetching() > 0;
   const [view, setView] = useState<"client" | "admin">("client");
@@ -224,7 +229,7 @@ export default function App() {
         </div>
       )}
       <div className="client-shell min-h-screen bg-surface-50 dark:bg-dark-900" aria-busy={showInitialLoadingScreen}>
-      <main className="client-content max-w-lg mx-auto p-4 pt-telegram-safe pb-32">
+      <main className={`client-content max-w-lg mx-auto p-4 pt-telegram-safe${isTelegramWebApp ? " pt-telegram-native-controls" : ""} pb-32`}>
         {/* Visited tabs remain mounted so local state and data observers survive navigation. */}
         {visitedTabs.has(0) && (
           <div className={showProfile || effectiveActiveTab !== 0 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 0}>

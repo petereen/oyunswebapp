@@ -507,6 +507,18 @@ html:not(.dark) .liquid-nav-glass .glass__warp {
   );
 }
 
+/* Telegram's native close/menu controls occupy more space than the device
+   safe area on fullscreen Mini Apps. Keep the first app card below them while
+   still respecting the live Telegram and browser-reported insets. */
+.pt-telegram-native-controls {
+  padding-top: max(
+    6rem,
+    calc(env(safe-area-inset-top, 0px) + 4rem),
+    calc(var(--tg-safe-area-inset-top, 0px) + 4rem),
+    calc(var(--tg-content-safe-area-inset-top, 0px) + 4rem)
+  );
+}
+
 html {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
