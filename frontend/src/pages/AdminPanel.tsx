@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import {
   ArrowLeftRight,
   Gift,
@@ -14,6 +14,8 @@ import { AdminInbox } from "../components/AdminInbox";
 import { AdminManualTransaction } from "../components/AdminManualTransaction";
 import { AdminSettingsContainer } from "../components/admin/AdminSettingsContainer";
 import { AdminUsersContainer } from "../components/admin/AdminUsersContainer";
+import { fetchAdminGifts, fetchAdminOyunsPlusRequests, fetchInbox, fetchKycPending } from "../api";
+import { AdminPendingBadge } from "../components/admin/AdminPanelPrimitives";
 
 export type AdminTab = "inbox" | "users" | "settings";
 type AdminTransactionTab = "inbox" | "manual" | "history" | "gifts";
@@ -48,6 +50,33 @@ export function AdminPanel({ onExit }: Props) {
   const [visitedTabs, setVisitedTabs] = useState<Set<AdminTab>>(() => new Set(["inbox"]));
   const [activeTransactionTab, setActiveTransactionTab] = useState<AdminTransactionTab>("inbox");
   const [visitedTransactionTabs, setVisitedTransactionTabs] = useState<Set<AdminTransactionTab>>(() => new Set(["inbox"]));
+  const [pendingCounts, setPendingCounts] = useState({ verifications: 0, transactions: 0, gifts: 0, oyunsPlus: 0 });
+
+  useEffect(() => {
+    let active = true;
+    const refreshPendingCounts = async () => {
+      const [kycResult, inboxResult, giftsResult, oyunsPlusResult] = await Promise.allSettled([
+        fetchKycPending(),
+        fetchInbox(),
+        fetchAdminGifts("pending"),
+        fetchAdminOyunsPlusRequests("pending"),
+      ]);
+      if (!active) return;
+      setPendingCounts((current) => ({
+        verifications: kycResult.status === "fulfilled" ? kycResult.value.items.length : current.verifications,
+        transactions: inboxResult.status === "fulfilled" ? inboxResult.value.items.filter((item) => item.status === "pending").length : current.transactions,
+        gifts: giftsResult.status === "fulfilled" ? giftsResult.value.gifts.length : current.gifts,
+        oyunsPlus: oyunsPlusResult.status === "fulfilled" ? oyunsPlusResult.value.requests.length : current.oyunsPlus,
+      }));
+    };
+
+    void refreshPendingCounts();
+    const intervalId = window.setInterval(() => void refreshPendingCounts(), 30000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const selectTab = useCallback((tab: AdminTab) => {
     setActiveTab(tab);
@@ -73,7 +102,7 @@ export function AdminPanel({ onExit }: Props) {
       case "inbox": return <PersistentInbox />;
       case "history": return <PersistentHistory />;
       case "manual": return <PersistentManual onOpenInbox={openInbox} />;
-      case "gifts": return <PersistentGifts />;
+      case "gifts": return <PersistentGifts pendingGifts={pendingCounts.gifts} pendingOyunsPlus={pendingCounts.oyunsPlus} />;
     }
   };
 
@@ -96,7 +125,8 @@ export function AdminPanel({ onExit }: Props) {
                   className={`admin-radio ${activeTransactionTab === key ? "admin-radio--active" : ""}`}
                 >
                   <Icon className="h-4 w-4" />
-                  {label}
+                  <span>{label}</span>
+                  {key === "inbox" && <AdminPendingBadge count={pendingCounts.transactions} />}
                 </button>
               ))}
             </div>
@@ -109,7 +139,7 @@ export function AdminPanel({ onExit }: Props) {
             </div>
           </div>
         );
-      case "users": return <PersistentUsers />;
+      case "users": return <PersistentUsers pendingCount={pendingCounts.verifications} />;
       case "settings": return <PersistentSettings onExit={onExit} />;
     }
   };

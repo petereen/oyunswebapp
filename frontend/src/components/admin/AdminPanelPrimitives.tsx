@@ -39,6 +39,20 @@ export function AdminCountBadge({ count }: { count: number }) {
   );
 }
 
+export function AdminPendingBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+
+  return (
+    <span
+      data-slot="admin-pending-badge"
+      aria-label={`${count} pending request${count === 1 ? "" : "s"}`}
+      className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[0.65rem] font-bold leading-none text-white shadow-sm"
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 export function AdminEmptyState({
   children,
   icon: Icon,

@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Display red pending-request badges on admin verification, transaction, gift, and Oyuns+ buttons (frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminUsersContainer.tsx, frontend/src/components/AdminGiftTabs.tsx, frontend/src/components/admin/AdminPanelPrimitives.tsx)
 - [x] Replace the Oyuns+ “Түүх” label control with a three-dot button and add a 60-second email verification resend cooldown (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/EmailVerificationModal.tsx)
 - [x] Standardize admin-panel density, refresh/toolbars, request count badges, empty states, and remove redundant admin copy (frontend/src/components/admin/AdminPanelPrimitives.tsx, frontend/src/components/AdminInbox.tsx, frontend/src/components/AdminHistory.tsx, frontend/src/components/AdminKyc.tsx, frontend/src/components/AdminUserSearch.tsx, frontend/src/components/AdminBankAccounts.tsx, frontend/src/components/AdminManualTransaction.tsx, frontend/src/components/AdminGiftTabs.tsx, frontend/src/components/AdminGifts.tsx, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx)
 - [x] Compact radio-style admin navigation with tab semantics, remove admin branding/header, and move logout into Settings with regression coverage (frontend/src/App.tsx, frontend/src/pages/AdminPanel.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/index.css, frontend/src/pages/AdminPanel.test.tsx)
@@ -81,6 +82,14 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Add a shared red pending-request badge primitive for admin navigation buttons (frontend/src/components/admin/AdminPanelPrimitives.tsx)
+- [x] Add a live pending transaction count badge to the incoming-request admin button (frontend/src/pages/AdminPanel.tsx)
+- [x] Load all admin pending-request counts from the always-mounted admin shell (frontend/src/pages/AdminPanel.tsx)
+- [x] Pass shell-loaded pending counts into lazy-mounted admin request button groups (frontend/src/pages/AdminPanel.tsx)
+- [x] Add a live pending verification count badge to the KYC admin button (frontend/src/components/admin/AdminUsersContainer.tsx)
+- [x] Reuse the admin-shell verification count in the lazy-mounted KYC button group (frontend/src/components/admin/AdminUsersContainer.tsx)
+- [x] Add live pending gift and Oyuns+ request count badges to their admin buttons (frontend/src/components/AdminGiftTabs.tsx)
+- [x] Reuse the admin-shell gift counts in the lazy-mounted gift button group (frontend/src/components/AdminGiftTabs.tsx)
 - [x] Add shared compact admin refresh, section-header, count-badge, and subtle empty-state primitives (frontend/src/components/admin/AdminPanelPrimitives.tsx)
 - [x] Compact the transaction inbox toolbar, remove redundant request guidance/title copy, move counts into white top-right badges, and soften empty states (frontend/src/components/AdminInbox.tsx)
 - [x] Align transaction history with the shared section header, icon-only refresh, compact filter controls, and subtle empty state (frontend/src/components/AdminHistory.tsx)

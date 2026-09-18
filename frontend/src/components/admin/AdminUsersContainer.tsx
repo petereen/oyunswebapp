@@ -2,10 +2,11 @@ import { useState } from "react";
 import { FileText, Search } from "lucide-react";
 import { AdminKyc } from "../AdminKyc";
 import { AdminUserSearch } from "../AdminUserSearch";
+import { AdminPendingBadge } from "./AdminPanelPrimitives";
 
 type UserView = "kyc" | "search";
 
-export function AdminUsersContainer() {
+export function AdminUsersContainer({ pendingCount = 0 }: { pendingCount?: number }) {
   const [activeView, setActiveView] = useState<UserView>("kyc");
   const [visitedViews, setVisitedViews] = useState<Set<UserView>>(() => new Set(["kyc"]));
 
@@ -29,7 +30,9 @@ export function AdminUsersContainer() {
           onClick={() => selectView("kyc")}
           className={`admin-radio ${activeView === "kyc" ? "admin-radio--active" : ""}`}
         >
-          <FileText className="w-4 h-4" /> Баталгаажуулалт (KYC)
+          <FileText className="w-4 h-4" />
+          <span>Баталгаажуулалт (KYC)</span>
+          <AdminPendingBadge count={pendingCount} />
         </button>
         <button
           type="button"
