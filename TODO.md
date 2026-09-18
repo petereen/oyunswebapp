@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Keep the Telegram Mini App header below fullscreen controls using Telegram content safe-area insets (frontend/src/App.tsx, frontend/src/index.css)
+- [x] Update Oyuns+ price/points styling, remove the voucher header, and add gyroscope tilt to opened coupons (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
 - [x] Replace Oyuns Plus star points markers with the provided original VA+ SVG and remove the page eyebrow/refresh control (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/assets/oyuns-plus-points.svg)
 - [x] Extend Oyuns Plus tilt interaction to the opened coupon detail card (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
 - [x] Accept Russian phone number formats in the Oyuns+ coupon request creation workflow (frontend/src/pages/OyunsPlusTab.tsx, backend/main.py, backend/tests/test_oyuns_plus.py)

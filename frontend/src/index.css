@@ -275,7 +275,7 @@
 .oyuns-plus-balance-card { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; border-radius: 1.35rem; padding: 0.8rem 0.95rem; color: white; background: linear-gradient(135deg, #0B172A 0%, #2D62EC 100%); box-shadow: 0 10px 24px rgba(45, 98, 236, 0.2); }
 .oyuns-plus-eyebrow { color: rgba(35, 31, 32, 0.54); font-size: 0.65rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
 .oyuns-plus-balance-card .oyuns-plus-eyebrow { color: rgba(255,255,255,0.68); }
-.oyuns-plus-balance { display: inline-flex; align-items: center; gap: 0.35rem; color: #FFCC00; font-size: 1.7rem; font-weight: 800; line-height: 1.05; transition: transform var(--oyuns-motion-fast) var(--oyuns-motion-ease), opacity var(--oyuns-motion-fast) ease; }
+.oyuns-plus-balance { display: inline-flex; align-items: center; gap: 0.35rem; color: #FF9B45; font-size: 1.7rem; font-weight: 800; line-height: 1.05; transition: transform var(--oyuns-motion-fast) var(--oyuns-motion-ease), opacity var(--oyuns-motion-fast) ease; }
 .oyuns-plus-balance-pulse { transform: scale(1.06); }
 .oyuns-plus-points-mark { display: inline-block; width: 1.35rem; height: 0.7rem; object-fit: contain; vertical-align: middle; }
 .oyuns-plus-settings-points-mark { width: 1.35rem; height: 0.7rem; }
@@ -297,7 +297,7 @@
 .oyuns-plus-card-image { display: block; width: 100%; height: 100%; object-fit: cover; }
 .oyuns-plus-card-glare { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at var(--oyuns-glare-x, 50%) var(--oyuns-glare-y, 50%), rgba(255,255,255,0.42), transparent 42%); transition: opacity var(--oyuns-motion-quick) ease; }
 .oyuns-plus-tilt-shell[data-tilting="true"] .oyuns-plus-card-glare { opacity: 1; }
-.oyuns-plus-card-price { display: inline-flex; align-items: center; gap: 0.22rem; position: absolute; right: 0.45rem; top: 0.45rem; border-radius: 999px; padding: 0.28rem 0.48rem; color: #231F20; background: #FFCC00; font-size: 0.62rem; font-weight: 800; box-shadow: 0 2px 8px rgba(35,31,32,0.15); }
+.oyuns-plus-card-price { display: inline-flex; align-items: center; gap: 0.22rem; position: absolute; right: 0.45rem; top: 0.45rem; border-radius: 999px; padding: 0.28rem 0.48rem; color: #231F20; background: #FFFFFF; font-size: 0.62rem; font-weight: 800; box-shadow: 0 2px 8px rgba(35,31,32,0.15); }
 .oyuns-plus-card-price .oyuns-plus-points-mark { width: 1.15rem; height: 0.58rem; }
 .oyuns-plus-card-name { display: block; overflow: hidden; margin-top: 0.48rem; color: #231F20; font-size: 0.76rem; font-weight: 700; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .dark .oyuns-plus-card-name { color: #E6E0D2; }
@@ -316,7 +316,7 @@
 .dark .oyuns-plus-detail-content h2 { color: #E6E0D2; }
 .oyuns-plus-detail-content p { margin-top: 0.5rem; color: rgba(35,31,32,0.7); font-size: 0.8rem; line-height: 1.55; white-space: pre-line; }
 .dark .oyuns-plus-detail-content p { color: rgba(230,224,210,0.7); }
-.oyuns-plus-detail-price { display: inline-flex; align-items: center; gap: 0.25rem; border-radius: 999px; padding: 0.3rem 0.6rem; color: #231F20; background: #FFCC00; font-size: 0.7rem; font-weight: 800; }
+.oyuns-plus-detail-price { display: inline-flex; align-items: center; gap: 0.25rem; border-radius: 999px; padding: 0.3rem 0.6rem; color: #231F20; background: #FFFFFF; font-size: 0.7rem; font-weight: 800; }
 .oyuns-plus-detail-price .oyuns-plus-points-mark { width: 1.35rem; height: 0.68rem; }
 .oyuns-plus-detail-tilt { margin-top: 0.1rem; }
 .oyuns-plus-primary-button { display: flex; min-height: 2.8rem; width: 100%; align-items: center; justify-content: center; margin-top: 1rem; border: 0; border-radius: 0.9rem; padding: 0.7rem 0.85rem; color: white; background: #2D62EC; font-size: 0.78rem; font-weight: 700; box-shadow: 0 6px 16px rgba(45,98,236,0.24); transition: transform var(--oyuns-motion-quick) ease-out, opacity var(--oyuns-motion-quick) ease, background var(--oyuns-motion-quick) ease; }
@@ -339,7 +339,7 @@
 .oyuns-plus-settings-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.85rem; }
 .oyuns-plus-settings-stats > div { display: grid; gap: 0.25rem; border-radius: 0.9rem; padding: 0.7rem; background: rgba(255,255,255,0.12); }
 .oyuns-plus-settings-stats span { color: rgba(255,255,255,0.68); font-size: 0.65rem; }
-.oyuns-plus-settings-stats strong { color: #FFCC00; font-size: 1.15rem; }
+.oyuns-plus-settings-stats strong { color: #FF9B45; font-size: 1.15rem; }
 .oyuns-plus-panel { padding: 0.9rem; }
 .oyuns-plus-panel-title { margin-bottom: 0.65rem; color: #231F20; font-size: 0.8rem; font-weight: 800; }
 .dark .oyuns-plus-panel-title { color: #E6E0D2; }
@@ -355,7 +355,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .oyuns-plus-card, .oyuns-plus-card-glare, .oyuns-plus-balance, .oyuns-plus-detail-view, .oyuns-plus-settings-view, .oyuns-plus-receiver-form, .oyuns-plus-primary-button, .oyuns-plus-back-button, .oyuns-plus-settings-button, .oyuns-plus-secondary-button, .oyuns-plus-icon-button { animation: none !important; transition-duration: 1ms !important; transform: none !important; }
+  .oyuns-plus-card, .oyuns-plus-card-glare, .oyuns-plus-balance, .oyuns-plus-detail-tilt, .oyuns-plus-detail-view, .oyuns-plus-settings-view, .oyuns-plus-receiver-form, .oyuns-plus-primary-button, .oyuns-plus-back-button, .oyuns-plus-settings-button, .oyuns-plus-secondary-button, .oyuns-plus-icon-button { animation: none !important; transition-duration: 1ms !important; transform: none !important; }
   .oyuns-plus-card-glare { opacity: 0 !important; }
 }
 
@@ -490,6 +490,17 @@ html:not(.dark) .liquid-nav-glass .glass__warp {
 
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Telegram's fullscreen header controls can overlap the webview. Telegram
+   exposes the required content inset separately from the device notch inset. */
+.pt-telegram-safe {
+  padding-top: max(
+    1rem,
+    env(safe-area-inset-top, 0px),
+    var(--tg-safe-area-inset-top, 0px),
+    var(--tg-content-safe-area-inset-top, 0px)
+  );
 }
 
 html {

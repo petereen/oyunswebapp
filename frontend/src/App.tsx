@@ -230,7 +230,7 @@ export default function App() {
         </div>
       )}
       <div className="client-shell min-h-screen bg-surface-50 dark:bg-dark-900" aria-busy={showInitialLoadingScreen}>
-      <main className="client-content max-w-lg mx-auto p-4 pb-32">
+      <main className="client-content max-w-lg mx-auto p-4 pt-telegram-safe pb-32">
         {/* Admin toggle for admins */}
         {isAdmin && (
           <div className="flex justify-end mb-2">

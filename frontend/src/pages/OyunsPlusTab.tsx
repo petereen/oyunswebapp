@@ -84,9 +84,19 @@ function PointsMark({ className = "" }: { className?: string }) {
   return <img src={oyunsPlusPoints} alt="" aria-hidden="true" className={`oyuns-plus-points-mark ${className}`} />;
 }
 
-function TiltSurface({ children, className = "", onOpen }: { children: ReactNode; className?: string; onOpen?: (rect: DOMRect) => void }) {
+function requestDeviceOrientationPermission() {
+  const orientationEvent = window.DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+    requestPermission?: () => Promise<"granted" | "denied">;
+  };
+  if (typeof orientationEvent?.requestPermission === "function") {
+    void orientationEvent.requestPermission().catch(() => undefined);
+  }
+}
+
+function TiltSurface({ children, className = "", onOpen, useDeviceOrientation = false }: { children: ReactNode; className?: string; onOpen?: (rect: DOMRect) => void; useDeviceOrientation?: boolean }) {
   const shellRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef({ active: false, dragged: false, startX: 0, startY: 0 });
+  const orientationBaselineRef = useRef<{ beta: number; gamma: number } | null>(null);
 
   const resetTilt = () => {
     const shell = shellRef.current;
@@ -97,6 +107,31 @@ function TiltSurface({ children, className = "", onOpen }: { children: ReactNode
     shell.style.setProperty("--oyuns-glare-x", "50%");
     shell.style.setProperty("--oyuns-glare-y", "50%");
   };
+
+  useEffect(() => {
+    if (!useDeviceOrientation) return undefined;
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      if (event.beta == null || event.gamma == null) return;
+      const baseline = orientationBaselineRef.current ?? { beta: event.beta, gamma: event.gamma };
+      orientationBaselineRef.current = baseline;
+      const beta = Math.max(-30, Math.min(30, event.beta - baseline.beta));
+      const gamma = Math.max(-30, Math.min(30, event.gamma - baseline.gamma));
+      const shell = shellRef.current;
+      if (!shell || pointerRef.current.active) return;
+      shell.dataset.tilting = "true";
+      shell.style.setProperty("--oyuns-tilt-x", `${beta * -0.22}deg`);
+      shell.style.setProperty("--oyuns-tilt-y", `${gamma * 0.22}deg`);
+      shell.style.setProperty("--oyuns-glare-x", `${50 + gamma * 1.3}%`);
+      shell.style.setProperty("--oyuns-glare-y", `${50 + beta * 1.3}%`);
+    };
+
+    window.addEventListener("deviceorientation", handleOrientation);
+    return () => {
+      window.removeEventListener("deviceorientation", handleOrientation);
+      orientationBaselineRef.current = null;
+    };
+  }, [useDeviceOrientation]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     pointerRef.current = { active: true, dragged: false, startX: event.clientX, startY: event.clientY };
@@ -223,6 +258,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
   const cards = cardsQuery.data?.cards || [];
 
   const openCard = (card: OyunsPlusCard, rect: DOMRect) => {
+    requestDeviceOrientationPermission();
     setDetailOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
     setSelectedCard(card);
     setShowForm(false);
@@ -297,7 +333,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
       ) : selectedCard ? (
         <section className="oyuns-plus-detail-view" style={{ "--oyuns-detail-x": `${detailOrigin?.x ?? 50}px`, "--oyuns-detail-y": `${detailOrigin?.y ?? 50}px` } as CSSProperties}>
           <button type="button" onClick={() => { setSelectedCard(null); setRequestSuccess(null); }} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {t("common.back")}</button>
-          <TiltSurface className="oyuns-plus-detail-tilt">
+          <TiltSurface className="oyuns-plus-detail-tilt" useDeviceOrientation>
             <div className="oyuns-plus-detail-card">
               <img src={selectedCard.image_url} alt={selectedCard.name} className="oyuns-plus-detail-image" />
               <div className="oyuns-plus-detail-content">
@@ -329,7 +365,6 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
         </section>
       ) : (
         <>
-          <h1 className="oyuns-plus-heading">{t("oyuns_plus.vouchers_title")}</h1>
           {cardsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.cards_error")}</div> : cardsQuery.isLoading ? <OyunsPlusSkeleton /> : cards.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.cards_empty")}</p></div> : <div className="oyuns-plus-grid">{cards.map((card) => <TiltShell key={card.id} card={card} onOpen={openCard} />)}</div>}
           <div className="oyuns-plus-note">{t("oyuns_plus.vouchers_note")}</div>
         </>
