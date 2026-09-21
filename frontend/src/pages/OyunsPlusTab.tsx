@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronRight, Copy, Gift, History, Loader2, MoreHorizontal, Tag, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Copy, Gift, History, Loader2, Tag, TrendingDown, TrendingUp, Users } from "lucide-react";
 import {
   createOyunsPlusVoucherRequest,
   fetchOyunsPlusBrandCoupons,
@@ -109,8 +109,8 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
   const [copied, setCopied] = useState(false);
 
   const summaryQuery = useQuery({ queryKey: userId ? queryKeys.oyunsPlus.summary(userId) : ["oyuns-plus", "summary", "anonymous"], queryFn: fetchOyunsPlusSummary, enabled: Boolean(userId), staleTime: 0 });
-  const brandsQuery = useQuery({ queryKey: queryKeys.oyunsPlus.brands, queryFn: fetchOyunsPlusBrands, enabled: Boolean(userId) && !selectedBrand, staleTime: 60_000 });
-  const couponsQuery = useQuery({ queryKey: selectedBrand ? queryKeys.oyunsPlus.brandCoupons(selectedBrand.id) : ["oyuns-plus", "brands", "none", "coupons"], queryFn: () => fetchOyunsPlusBrandCoupons(selectedBrand!.id), enabled: Boolean(userId && selectedBrand), staleTime: 60_000 });
+  const brandsQuery = useQuery({ queryKey: queryKeys.oyunsPlus.brands, queryFn: fetchOyunsPlusBrands, enabled: Boolean(userId) && !selectedBrand, staleTime: 0, refetchOnMount: "always" });
+  const couponsQuery = useQuery({ queryKey: selectedBrand ? queryKeys.oyunsPlus.brandCoupons(selectedBrand.id) : ["oyuns-plus", "brands", "none", "coupons"], queryFn: () => fetchOyunsPlusBrandCoupons(selectedBrand!.id), enabled: Boolean(userId && selectedBrand), staleTime: 0, refetchOnMount: "always" });
   const historyQuery = useQuery({ queryKey: userId ? queryKeys.oyunsPlus.history(userId) : ["oyuns-plus", "history", "anonymous"], queryFn: fetchOyunsPlusHistory, enabled: Boolean(userId) && showSettings, staleTime: 0 });
 
   useEffect(() => {
@@ -174,17 +174,6 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
 
   return <div className="oyuns-plus-page space-y-4">
     <div className="oyuns-plus-balance-sticky oyuns-plus-membership-hero">
-      <div className="oyuns-plus-membership-summary">
-        <div>
-          <div className="oyuns-plus-eyebrow">{t("oyuns_plus.balance_label")}</div>
-          <div className="oyuns-plus-membership-total" aria-live="polite">
-            {summaryQuery.isLoading ? "—" : formatPoints(balance)} <span>{lang === "mn" ? "ОНОО" : "БАЛЛЫ"}</span>
-          </div>
-        </div>
-        <button type="button" onClick={() => setShowSettings(true)} className="oyuns-plus-settings-button" aria-label={t("oyuns_plus.settings_btn")}>
-          <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-        </button>
-      </div>
       <OyunsPlusMembershipCard
         logoSvg={oyunsPlusPoints}
         userName={userName}
@@ -192,9 +181,6 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
         pointsLabel={lang === "mn" ? "ОНОО" : "БАЛЛЫ"}
         referralCode={summaryQuery.data?.referral_code || ""}
         onMenuOpen={() => setShowSettings(true)}
-        orientationLabel={lang === "mn" ? "Хөдөлгөөн асаах" : "Включить движение"}
-        orientationEnabledLabel={lang === "mn" ? "Хөдөлгөөн идэвхтэй" : "Движение включено"}
-        orientationDeniedLabel={lang === "mn" ? "Хөдөлгөөн боломжгүй" : "Движение недоступно"}
       />
     </div>
 

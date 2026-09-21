@@ -12,7 +12,7 @@ export const GLARE_OPACITY_ACTIVE = 0.13;
 export const CARD_RETURN_DURATION_MS = 500;
 
 type Tilt = { x: number; y: number };
-type OrientationStatus = "unsupported" | "idle" | "enabled" | "denied";
+type OrientationStatus = "unsupported" | "enabled" | "denied";
 
 type DeviceOrientationConstructor = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<PermissionState>;
@@ -28,9 +28,6 @@ export interface OyunsPlusMembershipCardProps {
   onMenuOpen: () => void;
   cardHolderLabel?: string;
   referralLabel?: string;
-  orientationLabel?: string;
-  orientationEnabledLabel?: string;
-  orientationDeniedLabel?: string;
   className?: string;
 }
 
@@ -74,9 +71,6 @@ export function OyunsPlusMembershipCard({
   onMenuOpen,
   cardHolderLabel = "CARD HOLDER",
   referralLabel = "REFERRAL CODE",
-  orientationLabel = "Enable motion",
-  orientationEnabledLabel = "Motion enabled",
-  orientationDeniedLabel = "Motion unavailable",
   className = "",
 }: OyunsPlusMembershipCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -160,6 +154,7 @@ export function OyunsPlusMembershipCard({
     pointerMovedRef.current = false;
     pointerStartRef.current = { x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.pointerType !== "mouse" && orientationStatus !== "enabled" && "DeviceOrientationEvent" in window) void requestOrientation();
     driveFromPointer(event);
   };
 
@@ -214,7 +209,8 @@ export function OyunsPlusMembershipCard({
 
   useEffect(() => {
     const isTouchDevice = navigator.maxTouchPoints > 0 || window.matchMedia?.("(pointer: coarse)").matches;
-    if (isTouchDevice && "DeviceOrientationEvent" in window) setOrientationStatus("idle");
+    if (!isTouchDevice || !("DeviceOrientationEvent" in window)) return;
+    void requestOrientation();
   }, []);
 
   useEffect(() => {
@@ -298,18 +294,6 @@ export function OyunsPlusMembershipCard({
         </span>
       </div>
 
-      {orientationStatus !== "unsupported" && (
-        <button
-          type="button"
-          className="oyuns-plus-orientation-button"
-          data-slot="oyuns-plus-orientation-button"
-          onClick={requestOrientation}
-          aria-pressed={orientationStatus === "enabled"}
-        >
-          <span className="oyuns-plus-orientation-button__dot" aria-hidden="true" />
-          {orientationStatus === "enabled" ? orientationEnabledLabel : orientationStatus === "denied" ? orientationDeniedLabel : orientationLabel}
-        </button>
-      )}
     </div>
   );
 }

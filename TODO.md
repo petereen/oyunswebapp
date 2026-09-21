@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Refresh the Oyuns+ brand and coupon catalog when returning to the client view so newly activated offers are visible (frontend/src/pages/OyunsPlusTab.tsx)
+- [x] Remove the duplicate Oyuns+ balance header, enable mobile gyro by default, and refine the membership card into a shinier gold holographic finish (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/index.css)
 - [x] Replace the OYUNS+ balance visual with an interactive holographic membership card (frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/pages/OyunsPlusTab.tsx)
 - [x] Remove the OYUNS+ catalog heading and decorative gift icon (frontend/src/pages/OyunsPlusTab.tsx)
 - [x] Add brand/coupon schema migration with hidden legacy holding brand (database/, supabase/migrations/)
@@ -95,6 +97,8 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Refresh the Oyuns+ brand and coupon catalog when returning to the client view so newly activated offers are visible (frontend/src/pages/OyunsPlusTab.tsx)
+- [x] Remove the duplicate Oyuns+ balance header, enable mobile gyro by default, and refine the membership card into a shinier gold holographic finish (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/index.css)
 - [x] Remove the OYUNS+ catalog heading and decorative gift icon (frontend/src/pages/OyunsPlusTab.tsx)
 - [x] Add Oyuns+ refund conflict recovery, optional confirmation explanation persistence, and active filter contrast fix (backend/main.py, backend/models.py, frontend/src/api.ts, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, database/)
 - [x] Add Oyuns+ admin deep-link buttons and card country-specific phone validation (backend/main.py, backend/models.py, frontend/src/App.tsx, frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx, database migration)

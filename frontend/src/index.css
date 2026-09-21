@@ -339,19 +339,10 @@
 .oyuns-plus-membership-card-shell {
   display: grid;
   justify-items: center;
-  gap: 0.45rem;
   min-width: 0;
   perspective: 900px;
 }
-.oyuns-plus-membership-hero { display: grid; gap: 0.65rem; }
-.oyuns-plus-membership-summary { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.15rem 0.15rem 0.05rem; }
-.oyuns-plus-membership-total { display: flex; align-items: baseline; gap: 0.35rem; margin-top: 0.2rem; color: #231F20; font-size: 1.1rem; font-weight: 800; line-height: 1; }
-.dark .oyuns-plus-membership-total { color: #E6E0D2; }
-.oyuns-plus-membership-total span { color: rgba(35,31,32,0.52); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; }
-.dark .oyuns-plus-membership-total span { color: rgba(230,224,210,0.56); }
-.oyuns-plus-membership-summary .oyuns-plus-settings-button { min-width: 2.45rem; min-height: 2.25rem; border-color: rgba(45,98,236,0.18); color: #2D62EC; background: rgba(255,255,255,0.72); box-shadow: 0 4px 12px rgba(35,31,32,0.06); }
-.oyuns-plus-membership-summary .oyuns-plus-settings-button span { margin-top: -0.45rem; font-size: 1rem; letter-spacing: 0.1em; line-height: 1; }
-.dark .oyuns-plus-membership-summary .oyuns-plus-settings-button { border-color: rgba(147,170,253,0.22); color: #93AAFD; background: rgba(26,26,26,0.72); }
+.oyuns-plus-membership-hero { display: block; }
 .oyuns-plus-membership-card {
   --oyuns-tilt-x: 0deg;
   --oyuns-tilt-y: 0deg;
@@ -359,10 +350,10 @@
   --oyuns-sheen-y: 50%;
   --oyuns-glare-x: 50%;
   --oyuns-glare-y: 50%;
-  --oyuns-sheen-opacity-idle: 0.14;
-  --oyuns-sheen-opacity-active: 0.23;
-  --oyuns-glare-opacity-idle: 0.06;
-  --oyuns-glare-opacity-active: 0.13;
+  --oyuns-sheen-opacity-idle: 0.22;
+  --oyuns-sheen-opacity-active: 0.5;
+  --oyuns-glare-opacity-idle: 0.1;
+  --oyuns-glare-opacity-active: 0.3;
   --oyuns-card-return-duration: 500ms;
   position: relative;
   display: block;
@@ -371,11 +362,11 @@
   aspect-ratio: 1.586 / 1;
   overflow: hidden;
   isolation: isolate;
-  border: 1px solid rgba(147, 170, 253, 0.28);
+  border: 1px solid rgba(255, 225, 123, 0.7);
   border-radius: clamp(1.15rem, 4vw, 1.65rem);
-  color: white;
-  background: #0B172A;
-  box-shadow: 0 18px 34px rgba(11, 23, 42, 0.22), 0 4px 10px rgba(45, 98, 236, 0.12), inset 0 1px 0 rgba(255,255,255,0.2);
+  color: #fff8dc;
+  background: #6f4504;
+  box-shadow: 0 18px 34px rgba(113, 70, 5, 0.24), 0 5px 14px rgba(255, 184, 28, 0.22), inset 0 1px 0 rgba(255,255,255,0.48);
   cursor: pointer;
   transform: rotateX(var(--oyuns-tilt-x)) rotateY(var(--oyuns-tilt-y));
   transform-style: preserve-3d;
@@ -386,10 +377,10 @@
 }
 .oyuns-plus-membership-card[data-active="true"] {
   transition: none;
-  box-shadow: 0 24px 42px rgba(11, 23, 42, 0.27), 0 8px 18px rgba(45, 98, 236, 0.16), inset 0 1px 0 rgba(255,255,255,0.25);
+  box-shadow: 0 24px 42px rgba(113, 70, 5, 0.3), 0 8px 20px rgba(255, 184, 28, 0.28), inset 0 1px 0 rgba(255,255,255,0.56);
 }
 .oyuns-plus-membership-card:focus-visible {
-  outline: 3px solid rgba(45, 98, 236, 0.72);
+  outline: 3px solid rgba(255, 204, 0, 0.82);
   outline-offset: 4px;
 }
 .oyuns-plus-membership-card__base,
@@ -404,32 +395,33 @@
 .oyuns-plus-membership-card__base {
   z-index: -4;
   background:
-    radial-gradient(circle at 15% 12%, rgba(96, 128, 250, 0.2), transparent 34%),
-    linear-gradient(135deg, #0B172A 0%, #12345F 48%, #0B1E3B 100%);
+    radial-gradient(circle at 12% 8%, rgba(255, 248, 184, 0.88), transparent 28%),
+    radial-gradient(circle at 82% 92%, rgba(255, 159, 28, 0.58), transparent 35%),
+    linear-gradient(118deg, #3b2103 0%, #996008 17%, #f1c84b 35%, #815006 50%, #d79b17 64%, #ffe38a 77%, #6c3d03 100%);
 }
 .oyuns-plus-membership-card__base::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(120deg, rgba(255,255,255,0.12), transparent 20%, transparent 78%, rgba(147,170,253,0.12));
-  opacity: 0.65;
+  background: linear-gradient(120deg, rgba(255,255,255,0.45), transparent 18%, transparent 64%, rgba(255, 221, 102, 0.34));
+  opacity: 0.82;
 }
 .oyuns-plus-membership-card__sheen {
   z-index: -2;
   background:
-    linear-gradient(122deg, transparent 25%, rgba(255,255,255,0.06) 43%, rgba(168, 212, 216, 0.13) 50%, rgba(255,255,255,0.04) 56%, transparent 72%),
-    linear-gradient(135deg, rgba(147,170,253,0.09), transparent 45%, rgba(255,255,255,0.06));
+    linear-gradient(112deg, transparent 16%, rgba(255, 245, 183, 0.18) 28%, rgba(255,255,255,0.92) 39%, rgba(255, 212, 64, 0.72) 44%, rgba(255, 146, 190, 0.28) 50%, rgba(106, 215, 255, 0.24) 56%, rgba(255,255,255,0.64) 62%, transparent 78%),
+    linear-gradient(135deg, rgba(255, 244, 174, 0.42), transparent 38%, rgba(255, 255, 255, 0.26) 64%, rgba(255, 157, 39, 0.34));
   background-position: var(--oyuns-sheen-x) var(--oyuns-sheen-y), center;
   background-size: 240% 240%, 100% 100%;
-  mix-blend-mode: overlay;
+  mix-blend-mode: screen;
   opacity: var(--oyuns-sheen-opacity-idle);
   transition: opacity 260ms ease;
 }
 .oyuns-plus-membership-card[data-active="true"] .oyuns-plus-membership-card__sheen { opacity: var(--oyuns-sheen-opacity-active); }
 .oyuns-plus-membership-card__glare {
   z-index: -1;
-  background: radial-gradient(circle at var(--oyuns-glare-x) var(--oyuns-glare-y), rgba(255,255,255,0.42), rgba(255,255,255,0.1) 14%, transparent 43%);
-  mix-blend-mode: overlay;
+  background: radial-gradient(circle at var(--oyuns-glare-x) var(--oyuns-glare-y), rgba(255,255,255,0.78), rgba(255, 232, 135, 0.32) 18%, transparent 48%);
+  mix-blend-mode: screen;
   opacity: var(--oyuns-glare-opacity-idle);
   transition: opacity 260ms ease;
 }
@@ -464,11 +456,6 @@
 .oyuns-plus-membership-card__field { display: grid; min-width: 0; gap: 0.35rem; }
 .oyuns-plus-membership-card__field--right { justify-items: end; text-align: right; }
 .oyuns-plus-membership-card__field-value { max-width: 15rem; overflow: hidden; color: rgba(255,255,255,0.93); font-size: clamp(0.65rem, 2vw, 0.85rem); font-weight: 700; letter-spacing: 0.08em; line-height: 1.1; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-.oyuns-plus-orientation-button { display: inline-flex; align-items: center; gap: 0.38rem; border: 0; padding: 0.15rem 0.3rem; color: rgba(35,31,32,0.54); background: transparent; font: inherit; font-size: 0.62rem; font-weight: 700; }
-.dark .oyuns-plus-orientation-button { color: rgba(230,224,210,0.58); }
-.oyuns-plus-orientation-button:focus-visible { border-radius: 0.4rem; outline: 2px solid rgba(45,98,236,0.5); outline-offset: 2px; }
-.oyuns-plus-orientation-button__dot { width: 0.42rem; height: 0.42rem; border-radius: 999px; background: #2D62EC; box-shadow: 0 0 0 3px rgba(45,98,236,0.12); }
-.oyuns-plus-orientation-button[aria-pressed="true"] .oyuns-plus-orientation-button__dot { background: #00C885; box-shadow: 0 0 0 3px rgba(0,200,133,0.12); }
 .oyuns-plus-balance-sticky { position: sticky; top: 0; z-index: 10; padding-top: 0.15rem; padding-bottom: 0.35rem; background: color-mix(in srgb, #FAFAF6 86%, transparent); backdrop-filter: blur(14px) saturate(135%); }
 .dark .oyuns-plus-balance-sticky { background: color-mix(in srgb, #111111 84%, transparent); }
 .oyuns-plus-balance-card { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; border-radius: 1.35rem; padding: 0.8rem 0.95rem; color: white; background: linear-gradient(135deg, #0B172A 0%, #2D62EC 100%); box-shadow: 0 10px 24px rgba(45, 98, 236, 0.2); }
