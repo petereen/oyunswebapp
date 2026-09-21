@@ -1,6 +1,13 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Add brand/coupon schema migration with hidden legacy holding brand (database/, supabase/migrations/)
+- [x] Add brand/coupon APIs, models, and atomic purchase-limit enforcement (backend/main.py, backend/models.py, frontend/src/api.ts)
+- [x] Replace the Oyuns+ user catalog with brand list → coupon list → existing purchase flow (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
+- [x] Replace flat Oyuns+ admin card management with nested brand and coupon CRUD (frontend/src/components/admin/, frontend/src/components/admin/AdminSettingsContainer.tsx)
+- [x] Add frontend regression coverage and verify frontend tests, typecheck, and production build
+- [ ] Run backend regression tests in an environment with the project dependencies installed
+- [x] Fix Oyuns+ refund conflict handling, optional confirmation explanation, and active filter contrast (backend/main.py, backend/models.py, frontend/src/api.ts, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, database/)
 - [x] Add Oyuns+ admin deep-link buttons and card country-specific phone validation (backend/main.py, backend/models.py, frontend/src/App.tsx, frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx, database migration)
 - [x] Keep the standalone Oyuns+ schema copy and phone-validation regression coverage aligned (database/add_oyuns_plus_vouchers.sql, backend/tests/test_oyuns_plus.py)
 - [x] Remove stray plain-text task notes that broke AdminInbox JSX parsing (frontend/src/components/AdminInbox.tsx)
@@ -86,6 +93,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Add Oyuns+ refund conflict recovery, optional confirmation explanation persistence, and active filter contrast fix (backend/main.py, backend/models.py, frontend/src/api.ts, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, database/)
 - [x] Add Oyuns+ admin deep-link buttons and card country-specific phone validation (backend/main.py, backend/models.py, frontend/src/App.tsx, frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx, database migration)
 - [x] Fix the Oyuns+ card country-code model annotation so the backend can compile and deploy (backend/models.py)
 - [x] Fix the Oyuns+ shift-admin notification inline keyboard syntax so the backend can compile (backend/main.py)

@@ -385,6 +385,95 @@ class OyunsPlusCardsResponse(BaseModel):
     cards: list[OyunsPlusCard] = Field(default_factory=list)
 
 
+class OyunsPlusBrand(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    logo_url: Optional[str] = None
+    logo_path: Optional[str] = None
+    is_active: bool = True
+    sort_order: int = 0
+    offer_count: int = 0
+    archived_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class OyunsPlusCoupon(BaseModel):
+    id: str
+    brand_id: str
+    name: str
+    description: str = ""
+    value_type: Optional[Literal["amount", "percentage"]] = None
+    discount_value: Optional[Decimal] = None
+    currency_code: Optional[Literal["MNT", "RUB"]] = None
+    points_price: int
+    country_code: Literal["mn", "ru"] = "mn"
+    total_purchase_limit: Optional[int] = None
+    purchase_count: int = 0
+    remaining_purchase_count: Optional[int] = None
+    is_sold_out: bool = False
+    expires_at: Optional[str] = None
+    needs_review: bool = False
+    is_active: bool = True
+    archived_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class OyunsPlusBrandsResponse(BaseModel):
+    brands: list[OyunsPlusBrand] = Field(default_factory=list)
+
+
+class OyunsPlusCouponsResponse(BaseModel):
+    brand: OyunsPlusBrand
+    coupons: list[OyunsPlusCoupon] = Field(default_factory=list)
+
+
+class OyunsPlusBrandCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=160)
+    description: str = Field(default="", max_length=2000)
+    logo_url: Optional[str] = Field(default=None, max_length=2000)
+    logo_path: Optional[str] = Field(default=None, max_length=500)
+    is_active: bool = True
+    sort_order: int = Field(default=0, ge=0)
+
+
+class OyunsPlusBrandUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    logo_url: Optional[str] = Field(default=None, max_length=2000)
+    logo_path: Optional[str] = Field(default=None, max_length=500)
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = Field(default=None, ge=0)
+
+
+class OyunsPlusCouponCreateRequest(BaseModel):
+    brand_id: str
+    name: str = Field(..., min_length=1, max_length=160)
+    description: str = Field(default="", max_length=4000)
+    value_type: Literal["amount", "percentage"]
+    discount_value: Decimal = Field(..., gt=0)
+    points_price: int = Field(..., gt=0)
+    country_code: Literal["mn", "ru"] = "mn"
+    total_purchase_limit: Optional[int] = Field(default=None, gt=0)
+    expires_at: Optional[datetime] = None
+    is_active: bool = True
+
+
+class OyunsPlusCouponUpdateRequest(BaseModel):
+    brand_id: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    description: Optional[str] = Field(default=None, max_length=4000)
+    value_type: Optional[Literal["amount", "percentage"]] = None
+    discount_value: Optional[Decimal] = Field(default=None, gt=0)
+    points_price: Optional[int] = Field(default=None, gt=0)
+    country_code: Optional[Literal["mn", "ru"]] = None
+    total_purchase_limit: Optional[int] = Field(default=None, gt=0)
+    expires_at: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
 class OyunsPlusCardCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=160)
     description: str = Field(default="", max_length=4000)
@@ -423,6 +512,7 @@ class OyunsPlusVoucherRequestResponse(BaseModel):
     updated_at: Optional[str] = None
     confirmation_photo_path: Optional[str] = None
     confirmation_photo_url: Optional[str] = None
+    confirmation_note: Optional[str] = None
     refund_reason: Optional[str] = None
     user_id: Optional[int] = None
     user_name: Optional[str] = None
@@ -440,6 +530,7 @@ class OyunsPlusVoucherRequestsResponse(BaseModel):
 
 class OyunsPlusVoucherConfirmRequest(BaseModel):
     confirmation_photo_path: str = Field(..., min_length=1, max_length=500)
+    explanation: Optional[str] = Field(default=None, max_length=2000)
 
 
 class OyunsPlusVoucherRefundRequest(BaseModel):
@@ -447,8 +538,9 @@ class OyunsPlusVoucherRefundRequest(BaseModel):
 
 
 class OyunsPlusAdminUploadRequest(BaseModel):
-    asset_type: Literal["card", "confirmation"]
+    asset_type: Literal["card", "confirmation", "brand_logo"]
     request_id: Optional[str] = None
+    brand_id: Optional[str] = None
     extension: Literal["jpg", "jpeg", "png", "webp"] = "jpg"
     mime_type: Literal["image/jpeg", "image/png", "image/webp"] = "image/jpeg"
 

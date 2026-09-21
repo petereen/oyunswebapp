@@ -1,7 +1,16 @@
 from fastapi import HTTPException
 from types import SimpleNamespace
 
-from main import _get_current_shift_admin_id, _normalize_oyuns_plus_phone, _oyuns_plus_rpc_error
+from decimal import Decimal
+
+from main import (
+    _get_current_shift_admin_id,
+    _normalize_oyuns_plus_phone,
+    _oyuns_plus_coupon_response,
+    _oyuns_plus_expired,
+    _oyuns_plus_rpc_error,
+    _validate_oyuns_plus_coupon_value,
+)
 from models import OyunsPlusHistoryEntry
 
 
@@ -49,6 +58,45 @@ def test_history_entry_keeps_uuid_ids_and_resulting_balance():
 def test_rpc_error_maps_conflicting_redemption_to_409():
     error = _oyuns_plus_rpc_error(RuntimeError("REQUEST_NOT_PENDING"))
     assert error.status_code == 409
+
+
+def test_rpc_error_maps_sold_out_and_expired_coupons_to_conflict():
+    assert _oyuns_plus_rpc_error(RuntimeError("CARD_SOLD_OUT")).status_code == 409
+    assert _oyuns_plus_rpc_error(RuntimeError("CARD_EXPIRED")).status_code == 409
+
+
+def test_coupon_value_validation_accepts_amount_and_percentage_ranges():
+    _validate_oyuns_plus_coupon_value("amount", Decimal("1000"))
+    _validate_oyuns_plus_coupon_value("percentage", Decimal("25.5"))
+    for value_type, value in (("percentage", 100.01), ("amount", 0), ("unknown", 10)):
+        try:
+            _validate_oyuns_plus_coupon_value(value_type, value)
+        except Exception:
+            pass
+        else:
+            raise AssertionError("expected invalid coupon value to be rejected")
+
+
+def test_coupon_response_derives_currency_and_remaining_inventory():
+    coupon = _oyuns_plus_coupon_response({
+        "id": "coupon-1",
+        "brand_id": "brand-1",
+        "name": "Coffee",
+        "value_type": "amount",
+        "discount_value": "1500",
+        "points_price": 50,
+        "country_code": "mn",
+        "total_purchase_limit": 3,
+        "is_active": True,
+    }, purchase_count=2)
+    assert coupon.currency_code == "MNT"
+    assert coupon.remaining_purchase_count == 1
+    assert coupon.is_sold_out is False
+
+
+def test_coupon_expiry_parser_handles_expired_and_open_values():
+    assert _oyuns_plus_expired("2020-01-01T00:00:00+00:00") is True
+    assert _oyuns_plus_expired(None) is False
 
 
 def test_current_shift_admin_id_returns_active_admin_only():

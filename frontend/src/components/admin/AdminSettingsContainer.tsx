@@ -17,7 +17,7 @@ const SETTINGS_SECTIONS: Array<{
   { key: "hours", label: "Ажлын цаг", description: "Үйлчилгээ ажиллах цагийн хуваарь", icon: Clock3 },
   { key: "accounts", label: "Данс", description: "Банкны дансны удирдлага", icon: CreditCard },
   { key: "system", label: "Системийн тохиргоо", description: "Лимит, Telegram болон OYUNS Plus", icon: Settings2 },
-  { key: "oyuns-plus-cards", label: "OYUNS+ эрхүүд", description: "Эрх үүсгэх, засах, архивлах", icon: Archive },
+  { key: "oyuns-plus-cards", label: "OYUNS+ брэнд ба купон", description: "Брэнд, лого, купон удирдах", icon: Archive },
 ];
 
 function SettingsDropdown({

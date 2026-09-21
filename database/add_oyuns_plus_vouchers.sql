@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS oyuns_plus_voucher_requests (
     points_spent INTEGER NOT NULL CHECK (points_spent > 0),
     status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'fulfilled', 'refunded')),
     confirmation_photo_path TEXT,
+    confirmation_note TEXT CHECK (char_length(confirmation_note) <= 2000),
     refund_reason TEXT,
     fulfilled_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
     refunded_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
@@ -146,7 +147,8 @@ $$;
 CREATE OR REPLACE FUNCTION fulfill_oyuns_plus_voucher_request(
     p_request_id UUID,
     p_admin_id BIGINT,
-    p_confirmation_photo_path TEXT
+    p_confirmation_photo_path TEXT,
+    p_confirmation_note TEXT DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -174,6 +176,7 @@ BEGIN
     UPDATE oyuns_plus_voucher_requests
     SET status = 'fulfilled',
         confirmation_photo_path = trim(p_confirmation_photo_path),
+        confirmation_note = NULLIF(trim(p_confirmation_note), ''),
         fulfilled_by = p_admin_id,
         fulfilled_at = NOW(),
         updated_at = NOW()

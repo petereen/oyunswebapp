@@ -21,6 +21,8 @@ export const queryKeys = {
     shiftContext: ["admin", "shift-context"] as const,
     workingHours: ["admin", "working-hours"] as const,
     oyunsPlusCards: ["admin", "oyuns-plus", "cards"] as const,
+    oyunsPlusBrands: ["admin", "oyuns-plus", "brands"] as const,
+    oyunsPlusBrandCoupons: (brandId: string) => ["admin", "oyuns-plus", "brands", brandId, "coupons"] as const,
     oyunsPlusRequests: (status: string) => ["admin", "oyuns-plus", "requests", status] as const,
   },
   userPromos: (userId: number) => ["user", "promos", userId] as const,
@@ -31,6 +33,8 @@ export const queryKeys = {
   oyunsPlus: {
     summary: (userId: number) => ["oyuns-plus", "summary", userId] as const,
     history: (userId: number) => ["oyuns-plus", "history", userId] as const,
+    brands: ["oyuns-plus", "brands"] as const,
+    brandCoupons: (brandId: string) => ["oyuns-plus", "brands", brandId, "coupons"] as const,
   },
   ratesHistory: (days: number) => ["rates", "history", days] as const,
 } as const;

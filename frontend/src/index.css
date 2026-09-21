@@ -353,6 +353,43 @@
 .oyuns-plus-icon-button { display: grid; place-items: center; min-width: 2.4rem; min-height: 2.4rem; border-radius: 0.9rem; color: #2D62EC; background: white; box-shadow: 0 2px 10px rgba(35,31,32,0.08); transition: transform var(--oyuns-motion-quick) ease-out, color var(--oyuns-motion-quick) ease, background var(--oyuns-motion-quick) ease; }
 .dark .oyuns-plus-icon-button { background: #1A1A1A; color: #93AAFD; }
 .oyuns-plus-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+.oyuns-plus-catalog-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.25rem 0.15rem 0.1rem; }
+.oyuns-plus-catalog-heading h1 { margin-top: 0.2rem; color: #231F20; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.03em; }
+.dark .oyuns-plus-catalog-heading h1 { color: #E6E0D2; }
+.oyuns-plus-brand-list, .oyuns-plus-coupon-list { display: grid; gap: 0.65rem; }
+.oyuns-plus-brand-row, .oyuns-plus-coupon-row { display: flex; width: 100%; align-items: center; gap: 0.8rem; border: 1px solid rgba(213,214,210,0.76); border-radius: 1.15rem; padding: 0.72rem 0.78rem; color: #231F20; background: rgba(255,255,255,0.8); text-align: left; box-shadow: 0 5px 16px rgba(35,31,32,0.045); transition: transform var(--oyuns-motion-quick) ease-out, border-color var(--oyuns-motion-quick) ease, box-shadow var(--oyuns-motion-quick) ease; }
+.oyuns-plus-brand-row:hover, .oyuns-plus-coupon-row:hover { border-color: rgba(45,98,236,0.42); box-shadow: 0 8px 20px rgba(45,98,236,0.09); }
+.oyuns-plus-brand-row:active, .oyuns-plus-coupon-row:active { transform: scale(0.99); }
+.dark .oyuns-plus-brand-row, .dark .oyuns-plus-coupon-row { border-color: #333b4a; color: #E6E0D2; background: rgba(26,26,26,0.82); }
+.oyuns-plus-brand-row:focus-visible, .oyuns-plus-coupon-row:focus-visible { outline: 3px solid rgba(45,98,236,0.35); outline-offset: 2px; }
+.oyuns-plus-brand-logo { display: grid; width: 3.25rem; height: 3.25rem; flex: 0 0 3.25rem; place-items: center; overflow: hidden; border-radius: 1rem; object-fit: contain; background: rgba(45,98,236,0.08); color: #2D62EC; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; }
+.oyuns-plus-brand-logo--small { width: 2.2rem; height: 2.2rem; flex-basis: 2.2rem; border-radius: 0.7rem; font-size: 0.55rem; }
+.oyuns-plus-brand-logo--fallback { background: linear-gradient(145deg, #0B172A, #2D62EC); color: white; }
+.oyuns-plus-brand-row-copy, .oyuns-plus-coupon-row-copy { display: grid; min-width: 0; flex: 1; gap: 0.16rem; }
+.oyuns-plus-brand-row-copy strong, .oyuns-plus-coupon-row-copy strong { overflow: hidden; font-size: 0.84rem; font-weight: 800; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.oyuns-plus-brand-row-copy span { overflow: hidden; color: rgba(35,31,32,0.62); font-size: 0.68rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.dark .oyuns-plus-brand-row-copy span { color: rgba(230,224,210,0.62); }
+.oyuns-plus-brand-row-copy small, .oyuns-plus-coupon-row-copy small { color: rgba(35,31,32,0.5); font-size: 0.62rem; }
+.dark .oyuns-plus-brand-row-copy small, .dark .oyuns-plus-coupon-row-copy small { color: rgba(230,224,210,0.52); }
+.oyuns-plus-row-chevron { width: 1rem; height: 1rem; flex: 0 0 1rem; color: rgba(45,98,236,0.65); }
+.oyuns-plus-coupon-row { gap: 0.55rem; }
+.oyuns-plus-coupon-row-copy > span { color: #2D62EC; font-size: 0.72rem; font-weight: 800; }
+.oyuns-plus-coupon-row-price { display: grid; min-width: 4.8rem; justify-items: end; gap: 0.12rem; color: #231F20; font-size: 0.75rem; font-weight: 800; white-space: nowrap; }
+.oyuns-plus-coupon-row-price .oyuns-plus-points-mark { width: 1.45rem; height: 0.72rem; }
+.dark .oyuns-plus-coupon-row-price { color: #E6E0D2; }
+.oyuns-plus-coupon-row-price small { color: #FF3B57; font-size: 0.57rem; font-weight: 800; }
+.oyuns-plus-coupon-row--sold-out { border-color: rgba(255,59,87,0.24); background: rgba(255,59,87,0.035); }
+.oyuns-plus-coupon-row--sold-out .oyuns-plus-coupon-row-copy > span { color: rgba(35,31,32,0.5); }
+.oyuns-plus-brand-view { display: grid; gap: 0.8rem; }
+.oyuns-plus-brand-header { display: flex; align-items: center; gap: 0.75rem; border-radius: 1.25rem; padding: 0.8rem; background: linear-gradient(135deg, rgba(11,23,42,0.98), rgba(45,98,236,0.94)); color: white; box-shadow: 0 10px 24px rgba(45,98,236,0.16); }
+.oyuns-plus-brand-header h2 { font-size: 1.05rem; font-weight: 800; }
+.oyuns-plus-brand-header p { margin-top: 0.18rem; color: rgba(255,255,255,0.7); font-size: 0.68rem; line-height: 1.4; }
+.oyuns-plus-coupon-detail-card { padding: 0.85rem; }
+.oyuns-plus-coupon-detail-brand { display: flex; align-items: center; gap: 0.55rem; color: rgba(35,31,32,0.58); font-size: 0.7rem; font-weight: 800; }
+.dark .oyuns-plus-coupon-detail-brand { color: rgba(230,224,210,0.6); }
+.oyuns-plus-discount-badge { display: inline-flex; align-items: center; gap: 0.28rem; width: fit-content; margin-top: 0.7rem; border-radius: 999px; padding: 0.32rem 0.58rem; color: white; background: #2D62EC; font-size: 0.68rem; font-weight: 800; }
+.oyuns-plus-expiry { margin-top: 0.6rem; color: rgba(35,31,32,0.58); font-size: 0.68rem; }
+.dark .oyuns-plus-expiry { color: rgba(230,224,210,0.62); }
 .oyuns-plus-tilt-shell { perspective: 900px; min-width: 0; }
 .oyuns-plus-detail-tilt { transform: rotateX(var(--oyuns-tilt-x, 0deg)) rotateY(var(--oyuns-tilt-y, 0deg)); transform-style: preserve-3d; transition: transform var(--oyuns-motion-quick) var(--oyuns-motion-ease); touch-action: pan-y; }
 .oyuns-plus-detail-tilt[data-tilting="true"] { transition-duration: 80ms; }

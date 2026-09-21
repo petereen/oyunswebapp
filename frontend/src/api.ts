@@ -705,9 +705,64 @@ export interface OyunsPlusCard {
   updated_at?: string | null;
 }
 
+export interface OyunsPlusBrand {
+  id: string;
+  name: string;
+  description: string;
+  logo_url?: string | null;
+  logo_path?: string | null;
+  is_active: boolean;
+  sort_order: number;
+  offer_count: number;
+  archived_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface OyunsPlusCoupon {
+  id: string;
+  brand_id: string;
+  name: string;
+  description: string;
+  value_type?: "amount" | "percentage" | null;
+  discount_value?: number | string | null;
+  currency_code?: "MNT" | "RUB" | null;
+  points_price: number;
+  country_code: "mn" | "ru";
+  total_purchase_limit?: number | null;
+  purchase_count: number;
+  remaining_purchase_count?: number | null;
+  is_sold_out: boolean;
+  expires_at?: string | null;
+  needs_review: boolean;
+  is_active: boolean;
+  archived_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface OyunsPlusBrandCatalog {
+  brands: OyunsPlusBrand[];
+}
+
+export interface OyunsPlusCouponCatalog {
+  brand: OyunsPlusBrand;
+  coupons: OyunsPlusCoupon[];
+}
+
 export async function fetchOyunsPlusCards(): Promise<{ cards: OyunsPlusCard[] }> {
   const res = await api.get('/oyuns-plus/cards');
   return res.data as { cards: OyunsPlusCard[] };
+}
+
+export async function fetchOyunsPlusBrands(): Promise<OyunsPlusBrandCatalog> {
+  const res = await api.get('/oyuns-plus/brands');
+  return res.data as OyunsPlusBrandCatalog;
+}
+
+export async function fetchOyunsPlusBrandCoupons(brandId: string): Promise<OyunsPlusCouponCatalog> {
+  const res = await api.get(`/oyuns-plus/brands/${encodeURIComponent(brandId)}/coupons`);
+  return res.data as OyunsPlusCouponCatalog;
 }
 
 export interface OyunsPlusVoucherRequest {
@@ -722,6 +777,7 @@ export interface OyunsPlusVoucherRequest {
   updated_at?: string | null;
   confirmation_photo_path?: string | null;
   confirmation_photo_url?: string | null;
+  confirmation_note?: string | null;
   refund_reason?: string | null;
   user_id?: number | null;
   user_name?: string | null;
@@ -756,6 +812,92 @@ export async function createAdminOyunsPlusCard(payload: {
   return res.data as OyunsPlusCard;
 }
 
+export async function fetchAdminOyunsPlusBrands(includeArchived = true): Promise<OyunsPlusBrandCatalog> {
+  const res = await api.get(`/admin/oyuns-plus/brands?include_archived=${includeArchived ? 'true' : 'false'}`);
+  return res.data as OyunsPlusBrandCatalog;
+}
+
+export async function createAdminOyunsPlusBrand(payload: {
+  name: string;
+  description: string;
+  logo_url?: string | null;
+  logo_path?: string | null;
+  is_active: boolean;
+  sort_order: number;
+}) {
+  const res = await api.post('/admin/oyuns-plus/brands', payload);
+  return res.data as OyunsPlusBrand;
+}
+
+export async function updateAdminOyunsPlusBrand(brandId: string, payload: Partial<{
+  name: string;
+  description: string;
+  logo_url: string | null;
+  logo_path: string | null;
+  is_active: boolean;
+  sort_order: number;
+}>) {
+  const res = await api.patch(`/admin/oyuns-plus/brands/${encodeURIComponent(brandId)}`, payload);
+  return res.data as OyunsPlusBrand;
+}
+
+export async function archiveAdminOyunsPlusBrand(brandId: string) {
+  const res = await api.post(`/admin/oyuns-plus/brands/${encodeURIComponent(brandId)}/archive`);
+  return res.data as OyunsPlusBrand;
+}
+
+export async function restoreAdminOyunsPlusBrand(brandId: string) {
+  const res = await api.post(`/admin/oyuns-plus/brands/${encodeURIComponent(brandId)}/restore`);
+  return res.data as OyunsPlusBrand;
+}
+
+export async function fetchAdminOyunsPlusBrandCoupons(brandId: string, includeArchived = true): Promise<OyunsPlusCouponCatalog> {
+  const res = await api.get(`/admin/oyuns-plus/brands/${encodeURIComponent(brandId)}/coupons?include_archived=${includeArchived ? 'true' : 'false'}`);
+  return res.data as OyunsPlusCouponCatalog;
+}
+
+export async function createAdminOyunsPlusCoupon(payload: {
+  brand_id: string;
+  name: string;
+  description: string;
+  value_type: "amount" | "percentage";
+  discount_value: number;
+  points_price: number;
+  country_code: "mn" | "ru";
+  total_purchase_limit?: number | null;
+  expires_at?: string | null;
+  is_active: boolean;
+}) {
+  const res = await api.post(`/admin/oyuns-plus/brands/${encodeURIComponent(payload.brand_id)}/coupons`, payload);
+  return res.data as OyunsPlusCoupon;
+}
+
+export async function updateAdminOyunsPlusCoupon(couponId: string, payload: Partial<{
+  brand_id: string;
+  name: string;
+  description: string;
+  value_type: "amount" | "percentage";
+  discount_value: number;
+  points_price: number;
+  country_code: "mn" | "ru";
+  total_purchase_limit: number | null;
+  expires_at: string | null;
+  is_active: boolean;
+}>) {
+  const res = await api.patch(`/admin/oyuns-plus/coupons/${encodeURIComponent(couponId)}`, payload);
+  return res.data as OyunsPlusCoupon;
+}
+
+export async function archiveAdminOyunsPlusCoupon(couponId: string) {
+  const res = await api.post(`/admin/oyuns-plus/coupons/${encodeURIComponent(couponId)}/archive`);
+  return res.data as OyunsPlusCoupon;
+}
+
+export async function restoreAdminOyunsPlusCoupon(couponId: string) {
+  const res = await api.post(`/admin/oyuns-plus/coupons/${encodeURIComponent(couponId)}/restore`);
+  return res.data as OyunsPlusCoupon;
+}
+
 export async function updateAdminOyunsPlusCard(cardId: string, payload: Partial<{
   name: string;
   description: string;
@@ -780,8 +922,9 @@ export async function restoreAdminOyunsPlusCard(cardId: string) {
 }
 
 export async function presignAdminOyunsPlusUpload(payload: {
-  asset_type: "card" | "confirmation";
+  asset_type: "card" | "confirmation" | "brand_logo";
   request_id?: string;
+  brand_id?: string;
   extension: "jpg" | "jpeg" | "png" | "webp";
   mime_type: "image/jpeg" | "image/png" | "image/webp";
 }) {
@@ -794,8 +937,11 @@ export async function fetchAdminOyunsPlusRequests(status = "pending"): Promise<{
   return res.data as { requests: OyunsPlusVoucherRequest[] };
 }
 
-export async function confirmAdminOyunsPlusRequest(requestId: string, confirmationPhotoPath: string) {
-  const res = await api.post(`/admin/oyuns-plus/requests/${encodeURIComponent(requestId)}/confirm`, { confirmation_photo_path: confirmationPhotoPath });
+export async function confirmAdminOyunsPlusRequest(requestId: string, confirmationPhotoPath: string, explanation?: string) {
+  const res = await api.post(`/admin/oyuns-plus/requests/${encodeURIComponent(requestId)}/confirm`, {
+    confirmation_photo_path: confirmationPhotoPath,
+    explanation: explanation?.trim() || undefined,
+  });
   return res.data as OyunsPlusVoucherRequest;
 }
 
