@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Replace the OYUNS+ balance visual with an interactive holographic membership card (frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/pages/OyunsPlusTab.tsx)
+- [x] Remove the OYUNS+ catalog heading and decorative gift icon (frontend/src/pages/OyunsPlusTab.tsx)
 - [x] Add brand/coupon schema migration with hidden legacy holding brand (database/, supabase/migrations/)
 - [x] Add brand/coupon APIs, models, and atomic purchase-limit enforcement (backend/main.py, backend/models.py, frontend/src/api.ts)
 - [x] Replace the Oyuns+ user catalog with brand list → coupon list → existing purchase flow (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
@@ -93,6 +95,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Remove the OYUNS+ catalog heading and decorative gift icon (frontend/src/pages/OyunsPlusTab.tsx)
 - [x] Add Oyuns+ refund conflict recovery, optional confirmation explanation persistence, and active filter contrast fix (backend/main.py, backend/models.py, frontend/src/api.ts, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, database/)
 - [x] Add Oyuns+ admin deep-link buttons and card country-specific phone validation (backend/main.py, backend/models.py, frontend/src/App.tsx, frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx, database migration)
 - [x] Fix the Oyuns+ card country-code model annotation so the backend can compile and deploy (backend/models.py)

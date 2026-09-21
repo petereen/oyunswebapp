@@ -257,6 +257,7 @@ export default function App() {
           <div className={showProfile || effectiveActiveTab !== 3 ? "hidden" : "block"} aria-hidden={showProfile || effectiveActiveTab !== 3}>
               <OyunsPlusTab
                 userId={user?.id}
+                userName={[entitlements.profile?.user?.first_name, entitlements.profile?.user?.last_name].filter(Boolean).join(" ") || user?.first_name || ""}
                 verificationLevel={entitlements.verificationLevel}
                 emailVerificationPending={entitlements.emailVerificationPending}
                 emailAddress={entitlements.profile?.user?.email}

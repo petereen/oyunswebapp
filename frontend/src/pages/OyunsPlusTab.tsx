@@ -15,10 +15,12 @@ import { SuccessCheck } from "../components/SuccessCheck";
 import { useLang } from "../i18n/useLang";
 import { queryKeys } from "../queryKeys";
 import { OyunsPlusSkeleton } from "../components/Skeleton";
+import { OyunsPlusMembershipCard } from "../components/OyunsPlusMembershipCard";
 import oyunsPlusPoints from "../assets/oyuns-plus-points.svg";
 
 interface Props {
   userId?: number;
+  userName?: string;
   verificationLevel?: number;
   emailVerificationPending?: boolean;
   emailAddress?: string;
@@ -93,7 +95,7 @@ function CouponRow({ coupon, onOpen, t, lang }: { coupon: OyunsPlusCoupon; onOpe
   return <button type="button" onClick={onOpen} className={`oyuns-plus-coupon-row ${coupon.is_sold_out ? "oyuns-plus-coupon-row--sold-out" : ""}`}><span className="oyuns-plus-coupon-row-copy"><strong>{coupon.name}</strong><span>{formatDiscount(coupon)}</span>{coupon.expires_at && <small>{t("oyuns_plus.expires", { date: formatDate(coupon.expires_at, lang) })}</small>}</span><span className="oyuns-plus-coupon-row-price"><span>{formatPoints(coupon.points_price)}</span><PointsMark />{coupon.is_sold_out && <small>{t("oyuns_plus.sold_out")}</small>}</span><ChevronRight className="oyuns-plus-row-chevron" aria-hidden="true" /></button>;
 }
 
-export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
+export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }: Props) {
   const { t, lang } = useLang();
   const queryClient = useQueryClient();
   const [selectedBrand, setSelectedBrand] = useState<OyunsPlusBrand | null>(null);
@@ -105,7 +107,6 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
   const [formError, setFormError] = useState("");
   const [requestSuccess, setRequestSuccess] = useState<{ name: string; balance: number } | null>(null);
   const [copied, setCopied] = useState(false);
-  const [balancePulse, setBalancePulse] = useState(false);
 
   const summaryQuery = useQuery({ queryKey: userId ? queryKeys.oyunsPlus.summary(userId) : ["oyuns-plus", "summary", "anonymous"], queryFn: fetchOyunsPlusSummary, enabled: Boolean(userId), staleTime: 0 });
   const brandsQuery = useQuery({ queryKey: queryKeys.oyunsPlus.brands, queryFn: fetchOyunsPlusBrands, enabled: Boolean(userId) && !selectedBrand, staleTime: 60_000 });
@@ -129,8 +130,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
     mutationFn: createOyunsPlusVoucherRequest,
     onSuccess: async (result) => {
       setRequestSuccess({ name: result.card_name, balance: result.balance_after });
-      setShowForm(false); setReceiverName(""); setReceiverPhone(""); setFormError(""); setBalancePulse(true);
-      window.setTimeout(() => setBalancePulse(false), 450);
+      setShowForm(false); setReceiverName(""); setReceiverPhone(""); setFormError("");
       if (userId) {
         queryClient.setQueryData(queryKeys.oyunsPlus.summary(userId), (current: typeof summaryQuery.data) => current ? { ...current, points_balance: result.balance_after } : current);
         await Promise.all([
@@ -172,10 +172,31 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
     void navigator.clipboard.writeText(summaryQuery.data.referral_code).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1800); });
   };
 
-  const balanceStyle = balancePulse ? "oyuns-plus-balance oyuns-plus-balance-pulse" : "oyuns-plus-balance";
-
   return <div className="oyuns-plus-page space-y-4">
-    <div className="oyuns-plus-balance-sticky"><div className="oyuns-plus-balance-card"><div><div className="oyuns-plus-eyebrow">{t("oyuns_plus.balance_label")}</div><div className={balanceStyle} aria-live="polite">{summaryQuery.isLoading ? "—" : formatPoints(balance)} <PointsMark /></div></div><button type="button" onClick={() => setShowSettings(true)} className="oyuns-plus-settings-button" aria-label={t("oyuns_plus.settings_btn")}><MoreHorizontal className="h-5 w-5" aria-hidden="true" /></button></div></div>
+    <div className="oyuns-plus-balance-sticky oyuns-plus-membership-hero">
+      <div className="oyuns-plus-membership-summary">
+        <div>
+          <div className="oyuns-plus-eyebrow">{t("oyuns_plus.balance_label")}</div>
+          <div className="oyuns-plus-membership-total" aria-live="polite">
+            {summaryQuery.isLoading ? "—" : formatPoints(balance)} <span>{lang === "mn" ? "ОНОО" : "БАЛЛЫ"}</span>
+          </div>
+        </div>
+        <button type="button" onClick={() => setShowSettings(true)} className="oyuns-plus-settings-button" aria-label={t("oyuns_plus.settings_btn")}>
+          <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+      <OyunsPlusMembershipCard
+        logoSvg={oyunsPlusPoints}
+        userName={userName}
+        points={summaryQuery.isLoading ? "—" : formatPoints(balance)}
+        pointsLabel={lang === "mn" ? "ОНОО" : "БАЛЛЫ"}
+        referralCode={summaryQuery.data?.referral_code || ""}
+        onMenuOpen={() => setShowSettings(true)}
+        orientationLabel={lang === "mn" ? "Хөдөлгөөн асаах" : "Включить движение"}
+        orientationEnabledLabel={lang === "mn" ? "Хөдөлгөөн идэвхтэй" : "Движение включено"}
+        orientationDeniedLabel={lang === "mn" ? "Хөдөлгөөн боломжгүй" : "Движение недоступно"}
+      />
+    </div>
 
     {showSettings ? <section className="oyuns-plus-settings-view" aria-label={t("oyuns_plus.settings_title")}>
       <button type="button" onClick={() => setShowSettings(false)} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {t("common.back")}</button>
@@ -190,7 +211,7 @@ export function OyunsPlusTab({ userId, isProfileLoading = false }: Props) {
     </section> : selectedBrand ? <section className="oyuns-plus-brand-view">
       <button type="button" onClick={backFromBrand} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {t("oyuns_plus.all_brands")}</button><div className="oyuns-plus-brand-header"><BrandLogo brand={selectedBrandData || selectedBrand} /><div><h2>{selectedBrandData?.name || selectedBrand.name}</h2>{selectedBrandData?.description && <p>{selectedBrandData.description}</p>}</div></div>
       {couponsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.coupons_error")}</div> : couponsQuery.isLoading ? <div className="oyuns-plus-coupon-list"><OyunsPlusSkeleton /></div> : coupons.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.coupons_empty")}</p></div> : <div className="oyuns-plus-coupon-list">{coupons.map((coupon) => <CouponRow key={coupon.id} coupon={coupon} onOpen={() => openCoupon(coupon)} t={t} lang={lang} />)}</div>}
-    </section> : <><div className="oyuns-plus-catalog-heading"><div><div className="oyuns-plus-eyebrow">{t("oyuns_plus.balance_label")}</div><h1>{t("oyuns_plus.brands_title")}</h1></div><Gift className="h-5 w-5 text-[#2D62EC]" aria-hidden="true" /></div>{brandsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.brands_error")}</div> : brandsQuery.isLoading ? <OyunsPlusSkeleton /> : brands.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.brands_empty")}</p></div> : <div className="oyuns-plus-brand-list">{brands.map((brand) => <BrandRow key={brand.id} brand={brand} onOpen={() => openBrand(brand)} t={t} />)}</div>}<div className="oyuns-plus-note">{t("oyuns_plus.vouchers_note")}</div></>}
+    </section> : <>{brandsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.brands_error")}</div> : brandsQuery.isLoading ? <OyunsPlusSkeleton /> : brands.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.brands_empty")}</p></div> : <div className="oyuns-plus-brand-list">{brands.map((brand) => <BrandRow key={brand.id} brand={brand} onOpen={() => openBrand(brand)} t={t} />)}</div>}<div className="oyuns-plus-note">{t("oyuns_plus.vouchers_note")}</div></>}
   </div>;
 }
 

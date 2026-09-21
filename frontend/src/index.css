@@ -336,6 +336,139 @@
    the compositor; the pointer handler writes only these custom values. */
 .oyuns-plus-page { color: #231F20; }
 .dark .oyuns-plus-page { color: #E6E0D2; }
+.oyuns-plus-membership-card-shell {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  perspective: 900px;
+}
+.oyuns-plus-membership-hero { display: grid; gap: 0.65rem; }
+.oyuns-plus-membership-summary { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.15rem 0.15rem 0.05rem; }
+.oyuns-plus-membership-total { display: flex; align-items: baseline; gap: 0.35rem; margin-top: 0.2rem; color: #231F20; font-size: 1.1rem; font-weight: 800; line-height: 1; }
+.dark .oyuns-plus-membership-total { color: #E6E0D2; }
+.oyuns-plus-membership-total span { color: rgba(35,31,32,0.52); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; }
+.dark .oyuns-plus-membership-total span { color: rgba(230,224,210,0.56); }
+.oyuns-plus-membership-summary .oyuns-plus-settings-button { min-width: 2.45rem; min-height: 2.25rem; border-color: rgba(45,98,236,0.18); color: #2D62EC; background: rgba(255,255,255,0.72); box-shadow: 0 4px 12px rgba(35,31,32,0.06); }
+.oyuns-plus-membership-summary .oyuns-plus-settings-button span { margin-top: -0.45rem; font-size: 1rem; letter-spacing: 0.1em; line-height: 1; }
+.dark .oyuns-plus-membership-summary .oyuns-plus-settings-button { border-color: rgba(147,170,253,0.22); color: #93AAFD; background: rgba(26,26,26,0.72); }
+.oyuns-plus-membership-card {
+  --oyuns-tilt-x: 0deg;
+  --oyuns-tilt-y: 0deg;
+  --oyuns-sheen-x: 50%;
+  --oyuns-sheen-y: 50%;
+  --oyuns-glare-x: 50%;
+  --oyuns-glare-y: 50%;
+  --oyuns-sheen-opacity-idle: 0.14;
+  --oyuns-sheen-opacity-active: 0.23;
+  --oyuns-glare-opacity-idle: 0.06;
+  --oyuns-glare-opacity-active: 0.13;
+  --oyuns-card-return-duration: 500ms;
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 34rem;
+  aspect-ratio: 1.586 / 1;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid rgba(147, 170, 253, 0.28);
+  border-radius: clamp(1.15rem, 4vw, 1.65rem);
+  color: white;
+  background: #0B172A;
+  box-shadow: 0 18px 34px rgba(11, 23, 42, 0.22), 0 4px 10px rgba(45, 98, 236, 0.12), inset 0 1px 0 rgba(255,255,255,0.2);
+  cursor: pointer;
+  transform: rotateX(var(--oyuns-tilt-x)) rotateY(var(--oyuns-tilt-y));
+  transform-style: preserve-3d;
+  transition: transform var(--oyuns-card-return-duration) var(--oyuns-motion-ease), box-shadow var(--oyuns-card-return-duration) var(--oyuns-motion-ease);
+  touch-action: none;
+  user-select: none;
+  will-change: transform;
+}
+.oyuns-plus-membership-card[data-active="true"] {
+  transition: none;
+  box-shadow: 0 24px 42px rgba(11, 23, 42, 0.27), 0 8px 18px rgba(45, 98, 236, 0.16), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.oyuns-plus-membership-card:focus-visible {
+  outline: 3px solid rgba(45, 98, 236, 0.72);
+  outline-offset: 4px;
+}
+.oyuns-plus-membership-card__base,
+.oyuns-plus-membership-card__sheen,
+.oyuns-plus-membership-card__glare,
+.oyuns-plus-membership-card__noise,
+.oyuns-plus-membership-card__content {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.oyuns-plus-membership-card__base {
+  z-index: -4;
+  background:
+    radial-gradient(circle at 15% 12%, rgba(96, 128, 250, 0.2), transparent 34%),
+    linear-gradient(135deg, #0B172A 0%, #12345F 48%, #0B1E3B 100%);
+}
+.oyuns-plus-membership-card__base::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255,255,255,0.12), transparent 20%, transparent 78%, rgba(147,170,253,0.12));
+  opacity: 0.65;
+}
+.oyuns-plus-membership-card__sheen {
+  z-index: -2;
+  background:
+    linear-gradient(122deg, transparent 25%, rgba(255,255,255,0.06) 43%, rgba(168, 212, 216, 0.13) 50%, rgba(255,255,255,0.04) 56%, transparent 72%),
+    linear-gradient(135deg, rgba(147,170,253,0.09), transparent 45%, rgba(255,255,255,0.06));
+  background-position: var(--oyuns-sheen-x) var(--oyuns-sheen-y), center;
+  background-size: 240% 240%, 100% 100%;
+  mix-blend-mode: overlay;
+  opacity: var(--oyuns-sheen-opacity-idle);
+  transition: opacity 260ms ease;
+}
+.oyuns-plus-membership-card[data-active="true"] .oyuns-plus-membership-card__sheen { opacity: var(--oyuns-sheen-opacity-active); }
+.oyuns-plus-membership-card__glare {
+  z-index: -1;
+  background: radial-gradient(circle at var(--oyuns-glare-x) var(--oyuns-glare-y), rgba(255,255,255,0.42), rgba(255,255,255,0.1) 14%, transparent 43%);
+  mix-blend-mode: overlay;
+  opacity: var(--oyuns-glare-opacity-idle);
+  transition: opacity 260ms ease;
+}
+.oyuns-plus-membership-card[data-active="true"] .oyuns-plus-membership-card__glare { opacity: var(--oyuns-glare-opacity-active); }
+.oyuns-plus-membership-card__noise {
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  opacity: 0.18;
+}
+.oyuns-plus-membership-card__content {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(1rem, 5vw, 1.7rem);
+  transform: translateZ(28px);
+  transform-style: preserve-3d;
+}
+.oyuns-plus-membership-card__topline,
+.oyuns-plus-membership-card__footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.oyuns-plus-membership-card__title { padding-top: 0.15rem; font-size: clamp(0.66rem, 1.8vw, 0.82rem); font-weight: 800; letter-spacing: 0.18em; line-height: 1; }
+.oyuns-plus-membership-card__logo { position: relative; display: block; width: clamp(3.8rem, 15vw, 6.2rem); aspect-ratio: 1.81 / 1; flex: 0 0 auto; transform: translateZ(10px); }
+.oyuns-plus-membership-card__logo img { display: block; width: 100%; height: 100%; object-fit: contain; filter: grayscale(1) brightness(0) invert(1); opacity: 0.58; }
+.oyuns-plus-membership-card__logo-shimmer { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 25%, rgba(255,255,255,0.68) 47%, transparent 64%); background-size: 250% 100%; background-position: var(--oyuns-sheen-x) center; mix-blend-mode: screen; opacity: 0.22; transform: translateZ(4px); transition: opacity 260ms ease; }
+.oyuns-plus-membership-card[data-active="true"] .oyuns-plus-membership-card__logo-shimmer { opacity: 0.45; }
+.oyuns-plus-membership-card__points { display: grid; gap: 0.3rem; margin-top: 0.3rem; transform: translateZ(34px); }
+.oyuns-plus-membership-card__points-value { overflow: hidden; font-size: clamp(1.6rem, 7vw, 3rem); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: clamp(0.1em, 1.8vw, 0.18em); line-height: 0.98; text-overflow: ellipsis; white-space: nowrap; }
+.oyuns-plus-membership-card__points-label,
+.oyuns-plus-membership-card__field-label { color: rgba(255,255,255,0.56); font-size: clamp(0.48rem, 1.5vw, 0.6rem); font-weight: 700; letter-spacing: 0.16em; line-height: 1.1; text-transform: uppercase; }
+.oyuns-plus-membership-card__footer { align-items: flex-end; transform: translateZ(30px); }
+.oyuns-plus-membership-card__field { display: grid; min-width: 0; gap: 0.35rem; }
+.oyuns-plus-membership-card__field--right { justify-items: end; text-align: right; }
+.oyuns-plus-membership-card__field-value { max-width: 15rem; overflow: hidden; color: rgba(255,255,255,0.93); font-size: clamp(0.65rem, 2vw, 0.85rem); font-weight: 700; letter-spacing: 0.08em; line-height: 1.1; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.oyuns-plus-orientation-button { display: inline-flex; align-items: center; gap: 0.38rem; border: 0; padding: 0.15rem 0.3rem; color: rgba(35,31,32,0.54); background: transparent; font: inherit; font-size: 0.62rem; font-weight: 700; }
+.dark .oyuns-plus-orientation-button { color: rgba(230,224,210,0.58); }
+.oyuns-plus-orientation-button:focus-visible { border-radius: 0.4rem; outline: 2px solid rgba(45,98,236,0.5); outline-offset: 2px; }
+.oyuns-plus-orientation-button__dot { width: 0.42rem; height: 0.42rem; border-radius: 999px; background: #2D62EC; box-shadow: 0 0 0 3px rgba(45,98,236,0.12); }
+.oyuns-plus-orientation-button[aria-pressed="true"] .oyuns-plus-orientation-button__dot { background: #00C885; box-shadow: 0 0 0 3px rgba(0,200,133,0.12); }
 .oyuns-plus-balance-sticky { position: sticky; top: 0; z-index: 10; padding-top: 0.15rem; padding-bottom: 0.35rem; background: color-mix(in srgb, #FAFAF6 86%, transparent); backdrop-filter: blur(14px) saturate(135%); }
 .dark .oyuns-plus-balance-sticky { background: color-mix(in srgb, #111111 84%, transparent); }
 .oyuns-plus-balance-card { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; border-radius: 1.35rem; padding: 0.8rem 0.95rem; color: white; background: linear-gradient(135deg, #0B172A 0%, #2D62EC 100%); box-shadow: 0 10px 24px rgba(45, 98, 236, 0.2); }
@@ -458,7 +591,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .oyuns-plus-card, .oyuns-plus-card-glare, .oyuns-plus-balance, .oyuns-plus-detail-tilt, .oyuns-plus-detail-view, .oyuns-plus-settings-view, .oyuns-plus-receiver-form, .oyuns-plus-primary-button, .oyuns-plus-back-button, .oyuns-plus-settings-button, .oyuns-plus-secondary-button, .oyuns-plus-icon-button { animation: none !important; transition-duration: 1ms !important; transform: none !important; }
+  .oyuns-plus-membership-card, .oyuns-plus-membership-card__sheen, .oyuns-plus-membership-card__glare, .oyuns-plus-membership-card__logo-shimmer, .oyuns-plus-card, .oyuns-plus-card-glare, .oyuns-plus-balance, .oyuns-plus-detail-tilt, .oyuns-plus-detail-view, .oyuns-plus-settings-view, .oyuns-plus-receiver-form, .oyuns-plus-primary-button, .oyuns-plus-back-button, .oyuns-plus-settings-button, .oyuns-plus-secondary-button, .oyuns-plus-icon-button { animation: none !important; transition-duration: 1ms !important; transform: none !important; }
+  .oyuns-plus-membership-card__glare { opacity: 0 !important; }
   .oyuns-plus-card-glare { opacity: 0 !important; }
 }
 
