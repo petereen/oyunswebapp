@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Make the client catalog derive visibility from valid active coupon data, including older rows with a null review flag (backend/main.py, backend/tests/test_oyuns_plus.py)
+- [x] Preserve the original navy Oyuns+ card surface and limit the gold holographic treatment to the logo accent (frontend/src/index.css)
 - [x] Refresh the Oyuns+ brand and coupon catalog when returning to the client view so newly activated offers are visible (frontend/src/pages/OyunsPlusTab.tsx)
 - [x] Remove the duplicate Oyuns+ balance header, enable mobile gyro by default, and refine the membership card into a shinier gold holographic finish (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/index.css)
 - [x] Replace the OYUNS+ balance visual with an interactive holographic membership card (frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/pages/OyunsPlusTab.tsx)
@@ -97,6 +99,8 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Make the client catalog derive visibility from valid active coupon data, including older rows with a null review flag (backend/main.py, backend/tests/test_oyuns_plus.py)
+- [x] Preserve the original navy Oyuns+ card surface and limit the gold holographic treatment to the logo accent (frontend/src/index.css)
 - [x] Refresh the Oyuns+ brand and coupon catalog when returning to the client view so newly activated offers are visible (frontend/src/pages/OyunsPlusTab.tsx)
 - [x] Remove the duplicate Oyuns+ balance header, enable mobile gyro by default, and refine the membership card into a shinier gold holographic finish (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/index.css)
 - [x] Remove the OYUNS+ catalog heading and decorative gift icon (frontend/src/pages/OyunsPlusTab.tsx)

@@ -7,6 +7,7 @@ from main import (
     _get_current_shift_admin_id,
     _normalize_oyuns_plus_phone,
     _oyuns_plus_coupon_response,
+    _oyuns_plus_coupon_is_public,
     _oyuns_plus_expired,
     _oyuns_plus_rpc_error,
     _validate_oyuns_plus_coupon_value,
@@ -75,6 +76,19 @@ def test_coupon_value_validation_accepts_amount_and_percentage_ranges():
             pass
         else:
             raise AssertionError("expected invalid coupon value to be rejected")
+
+
+def test_public_coupon_visibility_accepts_valid_legacy_false_or_null_review_flags():
+    base = {
+        "is_active": True,
+        "archived_at": None,
+        "value_type": "amount",
+        "discount_value": "1500",
+    }
+    assert _oyuns_plus_coupon_is_public({**base, "needs_review": False}) is True
+    assert _oyuns_plus_coupon_is_public({**base, "needs_review": None}) is True
+    assert _oyuns_plus_coupon_is_public({**base, "needs_review": True}) is False
+    assert _oyuns_plus_coupon_is_public({**base, "needs_review": False, "value_type": None}) is False
 
 
 def test_coupon_response_derives_currency_and_remaining_inventory():

@@ -1404,6 +1404,25 @@ def _validate_oyuns_plus_coupon_value(value_type: str | None, discount_value) ->
         raise HTTPException(status_code=422, detail="discount_value is outside the allowed range")
 
 
+def _oyuns_plus_coupon_is_public(row: dict) -> bool:
+    """Return whether a coupon has enough valid data to enter the user catalog."""
+    if not bool(row.get("is_active", True)) or row.get("archived_at") is not None:
+        return False
+
+    review_value = row.get("needs_review", False)
+    if review_value is True or (isinstance(review_value, str) and review_value.strip().lower() == "true"):
+        return False
+
+    value_type = row.get("value_type")
+    if value_type not in {"amount", "percentage"}:
+        return False
+    try:
+        discount_value = Decimal(str(row.get("discount_value")))
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+    return discount_value > 0 and (value_type == "amount" or discount_value <= 100)
+
+
 def _oyuns_plus_purchase_counts(client, card_ids: list[str]) -> dict[str, int]:
     if not card_ids:
         return {}
@@ -5058,15 +5077,14 @@ async def oyuns_plus_brands(user=Depends(get_jwt_authenticated_user)):
     ).data or []
     coupon_rows = (
         client.table("oyuns_plus_cards")
-        .select("id,brand_id,is_active,archived_at,needs_review,expires_at")
+        .select("id,brand_id,is_active,archived_at,needs_review,value_type,discount_value,expires_at")
         .eq("is_active", True)
-        .eq("needs_review", False)
         .is_("archived_at", "null")
         .execute()
     ).data or []
     counts: dict[str, int] = {}
     for row in coupon_rows:
-        if not _oyuns_plus_expired(row.get("expires_at")):
+        if _oyuns_plus_coupon_is_public(row) and not _oyuns_plus_expired(row.get("expires_at")):
             brand_id = str(row.get("brand_id") or "")
             if brand_id:
                 counts[brand_id] = counts.get(brand_id, 0) + 1
@@ -5097,12 +5115,11 @@ async def oyuns_plus_brand_coupons(brand_id: str, user=Depends(get_jwt_authentic
         .select("id,brand_id,name,description,value_type,discount_value,points_price,country_code,total_purchase_limit,expires_at,needs_review,is_active,archived_at,created_at,updated_at")
         .eq("brand_id", normalized_brand_id)
         .eq("is_active", True)
-        .eq("needs_review", False)
         .is_("archived_at", "null")
         .order("created_at", desc=True)
         .execute()
     ).data or []
-    rows = [row for row in rows if not _oyuns_plus_expired(row.get("expires_at"))]
+    rows = [row for row in rows if _oyuns_plus_coupon_is_public(row) and not _oyuns_plus_expired(row.get("expires_at"))]
     counts = _oyuns_plus_purchase_counts(client, [str(row.get("id")) for row in rows])
     brand = _oyuns_plus_brand_response(brand_rows[0], len(rows))
     return OyunsPlusCouponsResponse(
