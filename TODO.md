@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Hide the Oyuns+ holo card in brand/coupon views and animate catalog navigation (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/pages/OyunsPlusTab.test.tsx, frontend/src/index.css)
+- [x] Replace the Oyuns Plus purchase CTA text with the coupon price and Oyuns Plus icon (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/pages/OyunsPlusTab.test.tsx, frontend/src/index.css)
 - [x] Make the client catalog derive visibility from valid active coupon data, including older rows with a null review flag (backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Preserve the original navy Oyuns+ card surface and limit the gold holographic treatment to the logo accent (frontend/src/index.css)
 - [x] Refresh the Oyuns+ brand and coupon catalog when returning to the client view so newly activated offers are visible (frontend/src/pages/OyunsPlusTab.tsx)

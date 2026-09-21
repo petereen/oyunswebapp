@@ -319,7 +319,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "oyuns_plus.brands_empty": { ru: "Пока нет доступных предложений.", mn: "Одоогоор авах боломжтой урамшуулал алга байна." },
   "oyuns_plus.brands_error": { ru: "Не удалось загрузить бренды.", mn: "Брэндүүдийг ачаалж чадсангүй." },
   "oyuns_plus.all_brands": { ru: "Все бренды", mn: "Бүх брэнд" },
-  "oyuns_plus.offer_count": { ru: "Предложений: {count}", mn: "{count} санал" },
+  "oyuns_plus.offer_count": { ru: "Предложений: {count}", mn: "{count} купон" },
   "oyuns_plus.coupons_empty": { ru: "У этого бренда пока нет предложений.", mn: "Энэ брэндэд одоогоор санал алга байна." },
   "oyuns_plus.coupons_error": { ru: "Не удалось загрузить предложения.", mn: "Саналуудыг ачаалж чадсангүй." },
   "oyuns_plus.expires": { ru: "До {date}", mn: "{date} хүртэл" },

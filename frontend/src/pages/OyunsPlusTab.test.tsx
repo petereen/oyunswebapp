@@ -43,12 +43,15 @@ describe("OyunsPlusTab brand-first catalog", () => {
     renderPage();
     const brand = await screen.findByRole("button", { name: /Blue Coffee/ });
     fireEvent.click(brand);
+    expect(document.querySelector('[data-slot="oyuns-plus-membership-card"]')).not.toBeInTheDocument();
     const coupon = await screen.findByRole("button", { name: /Latte/ });
     expect(coupon).toBeInTheDocument();
     fireEvent.click(coupon);
     expect(await screen.findByRole("heading", { name: "Latte" })).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="oyuns-plus-membership-card"]')).not.toBeInTheDocument();
     expect(screen.getByText("1,500 MNT")).toBeInTheDocument();
-    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getAllByText("100")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "100" })).toBeInTheDocument();
   });
 
   it("keeps sold-out coupons visible and disables purchase", async () => {
