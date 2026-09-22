@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 import asyncio
+import html
 import logging
 import math
 import json
@@ -7659,6 +7660,105 @@ async def update_user_label(
         raise HTTPException(status_code=404, detail="User not found")
     
     return {"ok": True}
+
+
+def _broadcast_html(markdown: str, user: dict) -> str:
+    """Convert the composer subset to Telegram-safe HTML at send time."""
+    text = markdown.replace("{first_name}", str(user.get("first_name") or "хэрэглэгч"))
+    text = text.replace("{last_name}", str(user.get("last_name") or ""))
+    text = text.replace("{username}", str(user.get("username") or ""))
+    escaped = html.escape(text, quote=False)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"_([^_]+)_", r"<i>\1</i>", escaped)
+    return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', escaped)
+
+
+@app.post("/api/admin/broadcasts/send")
+async def send_admin_broadcast(payload: dict, admin=Depends(require_admin)):
+    """Create and immediately dispatch a manual broadcast through Telegram."""
+    body = str(payload.get("body_markdown") or "").strip()
+    if not body or len(body) > 4000:
+        raise HTTPException(status_code=400, detail="Message must be between 1 and 4,000 characters")
+
+    audience_type = str(payload.get("audience_type") or "")
+    if audience_type not in {"all", "active", "segment", "custom"}:
+        raise HTTPException(status_code=400, detail="Invalid broadcast audience")
+
+    audience_filter = payload.get("audience_filter") or {}
+    if not isinstance(audience_filter, dict):
+        raise HTTPException(status_code=400, detail="Invalid audience filter")
+    if audience_type == "custom":
+        try:
+            ids = sorted({int(value) for value in audience_filter.get("ids", [])})
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Custom audience IDs must be integers")
+        if not ids or any(value <= 0 for value in ids):
+            raise HTTPException(status_code=400, detail="Custom audience requires at least one Telegram ID")
+        audience_filter = {"ids": ids}
+
+    client = get_supabase()
+    users_query = client.table("users").select("id,first_name,last_name,username,broadcast_active,broadcast_retry_at")
+    if audience_type == "active":
+        users_query = users_query.eq("broadcast_active", True)
+    elif audience_type == "segment":
+        segment = str(audience_filter.get("segment") or "").strip()
+        if not segment:
+            raise HTTPException(status_code=400, detail="Segment audience requires a segment")
+        users_query = users_query.eq("admin_label", segment)
+    elif audience_type == "custom":
+        users_query = users_query.in_("id", audience_filter["ids"])
+
+    users = users_query.execute().data or []
+    if audience_type == "custom":
+        found = {int(user["id"]) for user in users}
+        missing = [user_id for user_id in audience_filter["ids"] if user_id not in found]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Telegram ID not registered: {missing[0]}")
+
+    broadcast = client.table("broadcasts").insert({
+        "broadcast_type": "manual",
+        "body_markdown": body,
+        "audience_type": audience_type,
+        "audience_filter": audience_filter,
+        "status": "sending",
+        "total_recipients": len(users),
+        "created_by": admin.id,
+    }).execute().data
+    if not broadcast:
+        raise HTTPException(status_code=500, detail="Could not create broadcast record")
+    broadcast_id = broadcast[0]["id"]
+
+    delivered = 0
+    for user in users:
+        user_id = int(user["id"])
+        delivery = {"broadcast_id": broadcast_id, "user_id": user_id, "status": "failed"}
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{get_settings().bot_token}/sendMessage",
+                json={"chat_id": user_id, "text": _broadcast_html(body, user), "parse_mode": "HTML"},
+                timeout=15,
+            )
+            result = response.json()
+            if response.status_code != 200 or not result.get("ok"):
+                raise RuntimeError(result.get("description") or "Telegram rejected the message")
+            delivered += 1
+            delivery.update({
+                "status": "delivered",
+                "telegram_message_id": result.get("result", {}).get("message_id"),
+                "delivered_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as exc:
+            delivery["error_message"] = str(exc)[:1000]
+            logger.warning("Broadcast %s failed for %s: %s", broadcast_id, user_id, exc)
+        client.table("broadcast_deliveries").insert(delivery).execute()
+
+    final_status = "sent" if delivered else "failed"
+    updated = client.table("broadcasts").update({
+        "status": final_status,
+        "delivered_count": delivered,
+        "sent_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", broadcast_id).execute().data
+    return updated[0] if updated else {**broadcast[0], "status": final_status, "delivered_count": delivered}
 
 
 @app.get("/api/admin/history", response_model=AdminHistoryResponse)

@@ -23,6 +23,25 @@ export type AuthSession = {
   user: AuthenticatedUser;
 };
 
+export type AdminBroadcastSendPayload = {
+  body_markdown: string;
+  audience_type: "all" | "active" | "segment" | "custom";
+  audience_filter?: { segment?: string; ids?: number[] };
+};
+
+export type AdminBroadcastSendResponse = {
+  id: string;
+  status: "queued" | "sending" | "sent" | "failed";
+  total_recipients: number;
+  delivered_count: number;
+  sent_at?: string | null;
+};
+
+export async function sendAdminBroadcast(payload: AdminBroadcastSendPayload): Promise<AdminBroadcastSendResponse> {
+  const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", payload);
+  return response.data;
+}
+
 export type TelegramBrowserAuthChallenge = {
   client_id: string;
   nonce: string;

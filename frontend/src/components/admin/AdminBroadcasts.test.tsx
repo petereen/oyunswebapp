@@ -1,6 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AdminBroadcasts } from "./AdminBroadcasts";
+
+vi.mock("../../api", () => ({
+  sendAdminBroadcast: vi.fn().mockResolvedValue({ id: "broadcast-1", status: "sent", total_recipients: 1, delivered_count: 1, sent_at: "2026-09-22T09:17:00Z" }),
+}));
 
 vi.mock("./AdminPanelPrimitives", () => ({
   AdminRefreshButton: ({ onClick }: { onClick: () => void }) => <button type="button" onClick={onClick}>Refresh</button>,
@@ -8,7 +12,7 @@ vi.mock("./AdminPanelPrimitives", () => ({
 }));
 
 describe("AdminBroadcasts", () => {
-  it("requires a second confirmation step before queueing a manual broadcast", () => {
+  it("requires a second confirmation step before sending a manual broadcast", async () => {
     render(<AdminBroadcasts />);
 
     fireEvent.click(screen.getByRole("button", { name: "Prepare broadcast" }));
@@ -19,8 +23,8 @@ describe("AdminBroadcasts", () => {
     expect(screen.getByText(/Confirm & Send дарсны дараа/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Confirm & Send" }));
 
-    expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("Broadcast дараалалд нэмэгдлээ.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true"));
+    expect(screen.getByText(/Broadcast илгээгдлээ/)).toBeInTheDocument();
   });
 
   it("keeps Current Rate Broadcast protected and creates editable rules", () => {

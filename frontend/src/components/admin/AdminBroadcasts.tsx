@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { AdminRefreshButton, AdminSectionHeader } from "./AdminPanelPrimitives";
+import { sendAdminBroadcast } from "../../api";
 
 type BroadcastView = "composer" | "automated" | "history";
 type Audience = "all" | "active" | "tier-1" | "custom";
@@ -262,10 +263,31 @@ export function AdminBroadcasts() {
     }
     setConfirmSend(false); setPreviewOpen(true);
   };
-  const sendBroadcast = () => {
-    const id = `BR-${new Date().toISOString().slice(2, 10).replaceAll("-", "")}-${String(history.length + 1).padStart(3, "0")}`;
-    setHistory((current) => [{ id, type: "manual", snippet: previewText(message).slice(0, 110), mediaUrl: media?.url, audience: audienceLabel, sentAt: new Date().toISOString(), status: "queued", delivered: 0, readRate: 0 }, ...current]);
-    setPreviewOpen(false); setConfirmSend(false); setView("history"); flash("Broadcast дараалалд нэмэгдлээ.");
+  const sendBroadcast = async () => {
+    if (media) { flash("Одоогоор текст broadcast илгээх боломжтой."); return; }
+    try {
+      const result = await sendAdminBroadcast({
+        body_markdown: message,
+        audience_type: audience === "tier-1" ? "segment" : audience,
+        audience_filter: audience === "custom"
+          ? { ids: parseTelegramIds(customAudience).map(Number) }
+          : audience === "tier-1" ? { segment: "tier-1" } : {},
+      });
+      setHistory((current) => [{
+        id: result.id,
+        type: "manual",
+        snippet: previewText(message).slice(0, 110),
+        audience: audienceLabel,
+        sentAt: result.sent_at || new Date().toISOString(),
+        status: result.status,
+        delivered: result.delivered_count,
+        readRate: 0,
+      }, ...current]);
+      setPreviewOpen(false); setConfirmSend(false); setView("history");
+      flash(result.status === "sent" ? `Broadcast илгээгдлээ (${result.delivered_count}/${result.total_recipients}).` : "Broadcast илгээгдсэнгүй.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Broadcast илгээхэд алдаа гарлаа.");
+    }
   };
 
   const insertMessageToken = (value: string) => {

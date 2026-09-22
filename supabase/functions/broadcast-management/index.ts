@@ -12,7 +12,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
-type AudienceType = "all" | "active" | "segment";
+type AudienceType = "all" | "active" | "segment" | "custom";
 type BroadcastAction = "history" | "rules" | "create_manual" | "send_manual" | "upsert_rule" | "archive_rule" | "delete_rule";
 
 class BroadcastError extends Error {
@@ -50,8 +50,8 @@ function requireAdmin(request: Request) {
 }
 
 function validateAudience(value: unknown): AudienceType {
-  if (value === "all" || value === "active" || value === "segment") return value;
-  throw new BroadcastError("audience_type must be all, active, or segment");
+  if (value === "all" || value === "active" || value === "segment" || value === "custom") return value;
+  throw new BroadcastError("audience_type must be all, active, segment, or custom");
 }
 
 function renderTemplate(template: string, user: Record<string, unknown>) {
@@ -84,6 +84,11 @@ async function recipientQuery(audienceType: AudienceType, audienceFilter: Record
   let query = "?select=id,first_name,last_name,username,broadcast_active,broadcast_retry_at";
   if (audienceType === "active") query += "&broadcast_active=eq.true";
   if (audienceType === "segment" && typeof audienceFilter.segment === "string") query += `&admin_label=eq.${encodeURIComponent(audienceFilter.segment)}`;
+  if (audienceType === "custom") {
+    const ids = Array.isArray(audienceFilter.ids) ? audienceFilter.ids.map(Number).filter((id) => Number.isInteger(id) && id > 0) : [];
+    if (!ids.length) throw new BroadcastError("Custom audience requires at least one Telegram ID");
+    query += `&id=in.(${ids.join(",")})`;
+  }
   const users = await supabaseRequest<Array<Record<string, unknown>>>("users", {}, query);
   const now = Date.now();
   return users.filter((user) => {

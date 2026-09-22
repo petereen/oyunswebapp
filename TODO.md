@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Connect manual Broadcast Management sends to authenticated backend delivery (frontend/src/components/admin/AdminBroadcasts.tsx, backend/main.py, supabase/migrations/)
 - [x] Complete the Broadcast Management module after full regression verification
 - [x] Schedule the daily rate broadcast during the 11:00 Ulaanbaatar time hour (oyunsbot.py)
 - [x] Hide the Oyuns+ holo card in brand/coupon views and animate catalog navigation (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/pages/OyunsPlusTab.test.tsx, frontend/src/index.css)
@@ -103,6 +104,8 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Wire manual broadcasts to authenticated Telegram delivery with per-recipient audit results and custom-audience support (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/api.ts, backend/main.py, supabase/functions/broadcast-management/index.ts, supabase/migrations/)
+- [x] Diagnose queued manual broadcast as a frontend-only mock with no backend/Telegram dispatch
 - [x] Keep broadcast edit, delete, and preview dialogs above the fixed navbar (frontend/src/components/admin/AdminBroadcasts.tsx)
 - [x] Make broadcast preview concise, insert message tokens at the caret, and render bold/link markdown in the preview (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/components/admin/AdminBroadcasts.test.tsx)
 - [x] Add custom broadcast audiences with Telegram IDs separated by spaces, commas, or new lines (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/components/admin/AdminBroadcasts.test.tsx)
