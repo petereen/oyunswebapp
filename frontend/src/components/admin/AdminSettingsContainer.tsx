@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Archive, ChevronDown, Clock3, CreditCard, LogOut, Settings2, UserRoundCog } from "lucide-react";
+import { Archive, BellRing, ChevronDown, Clock3, CreditCard, LogOut, Settings2, UserRoundCog } from "lucide-react";
 import { AdminBankAccounts } from "../AdminBankAccounts";
 import { AdminShiftBar } from "./AdminShiftBar";
 import { AdminSettings } from "./AdminSettings";
 import { AdminOyunsPlusCards } from "./AdminOyunsPlusCards";
+import { AdminBroadcasts } from "./AdminBroadcasts";
 
-type SettingsSection = "shift" | "hours" | "accounts" | "system" | "oyuns-plus-cards";
+type SettingsSection = "shift" | "hours" | "accounts" | "system" | "oyuns-plus-cards" | "broadcasts";
 
 const SETTINGS_SECTIONS: Array<{
   key: SettingsSection;
@@ -18,6 +19,7 @@ const SETTINGS_SECTIONS: Array<{
   { key: "accounts", label: "Данс", description: "Банкны дансны удирдлага", icon: CreditCard },
   { key: "system", label: "Системийн тохиргоо", description: "Лимит, Telegram болон OYUNS Plus", icon: Settings2 },
   { key: "oyuns-plus-cards", label: "OYUNS+ брэнд ба купон", description: "Брэнд, лого, купон удирдах", icon: Archive },
+  { key: "broadcasts", label: "Broadcast management", description: "Manual, automated болон илгээсэн түүх", icon: BellRing },
 ];
 
 function SettingsDropdown({
@@ -59,6 +61,7 @@ function SettingsDropdown({
           {section.key === "accounts" && <AdminBankAccounts />}
           {section.key === "system" && <AdminSettings />}
           {section.key === "oyuns-plus-cards" && <AdminOyunsPlusCards />}
+          {section.key === "broadcasts" && <AdminBroadcasts />}
         </div>
       </div>
     </section>

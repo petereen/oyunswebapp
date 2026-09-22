@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Complete the Broadcast Management module after full regression verification
+- [x] Schedule the daily rate broadcast during the 11:00 Ulaanbaatar time hour (oyunsbot.py)
 - [x] Hide the Oyuns+ holo card in brand/coupon views and animate catalog navigation (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/pages/OyunsPlusTab.test.tsx, frontend/src/index.css)
 - [x] Replace the Oyuns Plus purchase CTA text with the coupon price and Oyuns Plus icon (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/pages/OyunsPlusTab.test.tsx, frontend/src/index.css)
 - [x] Make the client catalog derive visibility from valid active coupon data, including older rows with a null review flag (backend/main.py, backend/tests/test_oyuns_plus.py)
@@ -101,6 +103,10 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Add the Broadcast Management admin UI with manual composer, live preview, confirmation, automated rules, and history views (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/index.css)
+- [x] Add broadcast rules, dispatch history, delivery metrics schema, and protected Current Rate seed (supabase/migrations/20260922000000_add_broadcast_management.sql)
+- [x] Add the Supabase Edge Function action adapter and broadcast architecture/API/state-machine documentation (supabase/functions/broadcast-management/index.ts, BROADCAST_MANAGEMENT.md)
+- [x] Add focused Broadcast Management interaction regression coverage (frontend/src/components/admin/AdminBroadcasts.test.tsx)
 - [x] Make the client catalog derive visibility from valid active coupon data, including older rows with a null review flag (backend/main.py, backend/tests/test_oyuns_plus.py)
 - [x] Preserve the original navy Oyuns+ card surface and limit the gold holographic treatment to the logo accent (frontend/src/index.css)
 - [x] Refresh the Oyuns+ brand and coupon catalog when returning to the client view so newly activated offers are visible (frontend/src/pages/OyunsPlusTab.tsx)

@@ -5900,7 +5900,7 @@ def broadcast_rates(message):
     print(f"✅ Broadcast by {sender_id}: {success} sent, {failed} failed")
 
 
-# ── Scheduled daily broadcast (10:00–11:00 MSK, once per day, batched) ──
+# ── Scheduled daily broadcast (11:00–12:00 Ulaanbaatar time, once per day, batched) ──
 _last_auto_broadcast_date = None          # tracks the date of the last auto-broadcast
 BROADCAST_BATCH_SIZE = 15                 # users per batch
 BROADCAST_BATCH_DELAY = 1.0               # seconds between batches
@@ -5940,16 +5940,16 @@ def _build_broadcast_caption() -> str | None:
     )
 
 def _auto_broadcast_loop():
-    """Background thread: send once between 10:00 and 11:00 MSK each day."""
+    """Background thread: send once during the 11:00 Ulaanbaatar hour each day."""
     global _last_auto_broadcast_date
     while True:
         try:
-            now_msk = datetime.now(MOSCOW_TZ)
-            today = now_msk.date()
+            now_ub = datetime.now(UB_TZ)
+            today = now_ub.date()
 
-            if 10 <= now_msk.hour < 11 and _last_auto_broadcast_date != today:
+            if now_ub.hour == 11 and _last_auto_broadcast_date != today:
                 _last_auto_broadcast_date = today
-                print(f"📡 AutoBroadcast triggered at {now_msk.strftime('%H:%M')} MSK")
+                print(f"📡 AutoBroadcast triggered at {now_ub.strftime('%H:%M')} Ulaanbaatar time")
 
                 caption = _build_broadcast_caption()
                 if not caption:
@@ -5974,7 +5974,7 @@ def _auto_broadcast_loop():
                 try:
                     bot.send_message(
                         1932946217,
-                        f"📡 Автомат broadcast дууслаа ({now_msk.strftime('%H:%M')} MSK)\n"
+                        f"📡 Автомат broadcast дууслаа ({now_ub.strftime('%H:%M')} Ulaanbaatar time)\n"
                         f"📤 Амжилттай: {success}\n❌ Алдаатай: {failed}",
                     )
                 except Exception:
@@ -6114,7 +6114,7 @@ def initialize_bot():
     # ── Start scheduled auto-broadcast thread ──
     broadcast_thread = threading.Thread(target=_auto_broadcast_loop, daemon=True)
     broadcast_thread.start()
-    print("✅ Auto-broadcast scheduler started (10:00–11:00 MSK daily)")
+    print("✅ Auto-broadcast scheduler started (11:00–12:00 Ulaanbaatar time daily)")
 
 def run_bot() -> None:
     """Initialize the bot and keep the incoming-update listener resilient."""
