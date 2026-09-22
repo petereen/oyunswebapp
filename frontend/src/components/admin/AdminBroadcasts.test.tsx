@@ -41,4 +41,33 @@ describe("AdminBroadcasts", () => {
 
     expect(screen.getByText("Weekend reminder")).toBeInTheDocument();
   });
+
+  it("accepts custom Telegram IDs separated by spaces, commas, or new lines", () => {
+    render(<AdminBroadcasts />);
+
+    fireEvent.change(screen.getByLabelText("Audience"), { target: { value: "custom" } });
+    fireEvent.change(screen.getByLabelText("Custom Telegram IDs"), { target: { value: "123, 456\n789" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare broadcast" }));
+
+    expect(screen.getByText("Custom audience · 3 Telegram IDs")).toBeInTheDocument();
+  });
+
+  it("inserts formatting tokens at the textarea selection and renders markdown in the preview", () => {
+    render(<AdminBroadcasts />);
+
+    const messageInput = screen.getByLabelText("Message body") as HTMLTextAreaElement;
+    fireEvent.change(messageInput, { target: { value: "Сайн байна уу" } });
+    messageInput.setSelectionRange(5, 5);
+    fireEvent.click(screen.getByRole("button", { name: "Bold" }));
+
+    expect(messageInput).toHaveValue("Сайн **текст**байна уу");
+
+    fireEvent.change(messageInput, { target: { value: "**текст** [сайт](https://example.com)" } });
+    expect(screen.getByText("Preview")).toBeInTheDocument();
+    expect(screen.getByText("текст").tagName).toBe("STRONG");
+    expect(screen.getByRole("link", { name: "сайт" })).toHaveAttribute("href", "https://example.com");
+    expect(screen.queryByText("Live preview")).not.toBeInTheDocument();
+    expect(screen.queryByText("1:1 message view")).not.toBeInTheDocument();
+    expect(screen.queryByText("live", { exact: true })).not.toBeInTheDocument();
+  });
 });

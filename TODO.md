@@ -103,6 +103,10 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Keep broadcast edit, delete, and preview dialogs above the fixed navbar (frontend/src/components/admin/AdminBroadcasts.tsx)
+- [x] Make broadcast preview concise, insert message tokens at the caret, and render bold/link markdown in the preview (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/components/admin/AdminBroadcasts.test.tsx)
+- [x] Add custom broadcast audiences with Telegram IDs separated by spaces, commas, or new lines (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/components/admin/AdminBroadcasts.test.tsx)
+- [x] Remove the Messaging control room broadcast promo card (frontend/src/components/admin/AdminBroadcasts.tsx)
 - [x] Add the Broadcast Management admin UI with manual composer, live preview, confirmation, automated rules, and history views (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/components/admin/AdminSettingsContainer.tsx, frontend/src/index.css)
 - [x] Add broadcast rules, dispatch history, delivery metrics schema, and protected Current Rate seed (supabase/migrations/20260922000000_add_broadcast_management.sql)
 - [x] Add the Supabase Edge Function action adapter and broadcast architecture/API/state-machine documentation (supabase/functions/broadcast-management/index.ts, BROADCAST_MANAGEMENT.md)
