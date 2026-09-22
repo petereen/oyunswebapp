@@ -39,6 +39,15 @@ export type AdminBroadcastSendResponse = {
 };
 
 export async function sendAdminBroadcast(payload: AdminBroadcastSendPayload): Promise<AdminBroadcastSendResponse> {
+  if (!payload.media) {
+    const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", {
+      body_markdown: payload.body_markdown,
+      audience_type: payload.audience_type,
+      audience_filter: payload.audience_filter || {},
+    });
+    return response.data;
+  }
+
   const requestBody = new FormData();
   requestBody.append("body_markdown", payload.body_markdown);
   requestBody.append("audience_type", payload.audience_type);
