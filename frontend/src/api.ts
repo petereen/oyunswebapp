@@ -27,6 +27,7 @@ export type AdminBroadcastSendPayload = {
   body_markdown: string;
   audience_type: "all" | "active" | "segment" | "custom";
   audience_filter?: { segment?: string; ids?: number[] };
+  media?: File;
 };
 
 export type AdminBroadcastSendResponse = {
@@ -38,7 +39,13 @@ export type AdminBroadcastSendResponse = {
 };
 
 export async function sendAdminBroadcast(payload: AdminBroadcastSendPayload): Promise<AdminBroadcastSendResponse> {
-  const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", payload);
+  const requestBody = new FormData();
+  requestBody.append("body_markdown", payload.body_markdown);
+  requestBody.append("audience_type", payload.audience_type);
+  requestBody.append("audience_filter", JSON.stringify(payload.audience_filter || {}));
+  if (payload.media) requestBody.append("media", payload.media, payload.media.name);
+
+  const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", requestBody);
   return response.data;
 }
 

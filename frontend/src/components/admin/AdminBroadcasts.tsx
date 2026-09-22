@@ -211,7 +211,7 @@ export function AdminBroadcasts() {
   const [message, setMessage] = useState("{greeting}, {first_name}!\n\nӨнөөдрийн ханш шинэчлэгдлээ. Апп-аас хамгийн сүүлийн мэдээллээ хараарай.");
   const [audience, setAudience] = useState<Audience>("all");
   const [customAudience, setCustomAudience] = useState("");
-  const [media, setMedia] = useState<{ name: string; url: string } | null>(null);
+  const [media, setMedia] = useState<{ file: File; name: string; url: string } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
   const [sending, setSending] = useState(false);
@@ -240,7 +240,7 @@ export function AdminBroadcasts() {
     if (!file) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) { flash("PNG, JPG эсвэл WebP зураг сонгоно уу."); return; }
     if (file.size > 5 * 1024 * 1024) { flash("Зургийн хэмжээ 5MB-аас бага байх ёстой."); return; }
-    setMedia({ name: file.name, url: URL.createObjectURL(file) });
+    setMedia({ file, name: file.name, url: URL.createObjectURL(file) });
   };
 
   const filteredRules = rules.filter((rule) => showArchived ? rule.status === "archived" : rule.status !== "archived");
@@ -266,7 +266,6 @@ export function AdminBroadcasts() {
   };
   const sendBroadcast = async () => {
     if (sending) return;
-    if (media) { flash("Одоогоор текст broadcast илгээх боломжтой."); return; }
     setSending(true);
     setPreviewOpen(false);
     setConfirmSend(false);
@@ -278,6 +277,7 @@ export function AdminBroadcasts() {
         audience_filter: audience === "custom"
           ? { ids: parseTelegramIds(customAudience).map(Number) }
           : audience === "tier-1" ? { segment: "tier-1" } : {},
+        media: media?.file,
       });
       setHistory((current) => [{
         id: result.id,
@@ -285,7 +285,7 @@ export function AdminBroadcasts() {
         snippet: previewText(message).slice(0, 110),
         audience: audienceLabel,
         sentAt: result.sent_at || new Date().toISOString(),
-        status: result.status,
+        status: result.status === "sending" ? "queued" : result.status,
         delivered: result.delivered_count,
         readRate: 0,
       }, ...current]);

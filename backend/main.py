@@ -7674,8 +7674,25 @@ def _broadcast_html(markdown: str, user: dict) -> str:
 
 
 @app.post("/api/admin/broadcasts/send")
-async def send_admin_broadcast(payload: dict, admin=Depends(require_admin)):
+async def send_admin_broadcast(request: Request, admin=Depends(require_admin)):
     """Create and immediately dispatch a manual broadcast through Telegram."""
+    media_file = None
+    if "multipart/form-data" in request.headers.get("content-type", ""):
+        form = await request.form()
+        raw_filter = form.get("audience_filter") or "{}"
+        try:
+            audience_filter = json.loads(str(raw_filter))
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Invalid audience filter") from exc
+        payload = {
+            "body_markdown": form.get("body_markdown"),
+            "audience_type": form.get("audience_type"),
+            "audience_filter": audience_filter,
+        }
+        media_file = form.get("media")
+    else:
+        payload = await request.json()
+
     body = str(payload.get("body_markdown") or "").strip()
     if not body or len(body) > 4000:
         raise HTTPException(status_code=400, detail="Message must be between 1 and 4,000 characters")
@@ -7687,6 +7704,13 @@ async def send_admin_broadcast(payload: dict, admin=Depends(require_admin)):
     audience_filter = payload.get("audience_filter") or {}
     if not isinstance(audience_filter, dict):
         raise HTTPException(status_code=400, detail="Invalid audience filter")
+    if media_file is not None and not hasattr(media_file, "read"):
+        raise HTTPException(status_code=400, detail="Invalid media attachment")
+    media_bytes = await media_file.read() if media_file is not None else None
+    if media_bytes is not None and len(media_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Media attachment must be 5MB or smaller")
+    if media_bytes is not None and len(body) > 1024:
+        raise HTTPException(status_code=400, detail="Photo captions must be 1,024 characters or less")
     if audience_type == "custom":
         try:
             ids = sorted({int(value) for value in audience_filter.get("ids", [])})
@@ -7697,7 +7721,9 @@ async def send_admin_broadcast(payload: dict, admin=Depends(require_admin)):
         audience_filter = {"ids": ids}
 
     client = get_supabase()
-    users_query = client.table("users").select("id,first_name,last_name,username,broadcast_active,broadcast_retry_at")
+    # Keep the base recipient query compatible with deployments that predate the
+    # optional broadcast delivery-state columns.
+    users_query = client.table("users").select("id,first_name,last_name,username")
     if audience_type == "active":
         users_query = users_query.eq("broadcast_active", True)
     elif audience_type == "segment":
@@ -7733,11 +7759,20 @@ async def send_admin_broadcast(payload: dict, admin=Depends(require_admin)):
         user_id = int(user["id"])
         delivery = {"broadcast_id": broadcast_id, "user_id": user_id, "status": "failed"}
         try:
-            response = requests.post(
-                f"https://api.telegram.org/bot{get_settings().bot_token}/sendMessage",
-                json={"chat_id": user_id, "text": _broadcast_html(body, user), "parse_mode": "HTML"},
-                timeout=15,
-            )
+            telegram_url = f"https://api.telegram.org/bot{get_settings().bot_token}/"
+            if media_bytes is not None:
+                response = requests.post(
+                    f"{telegram_url}sendPhoto",
+                    data={"chat_id": user_id, "caption": _broadcast_html(body, user), "parse_mode": "HTML"},
+                    files={"photo": (getattr(media_file, "filename", "broadcast.jpg"), media_bytes, getattr(media_file, "content_type", "image/jpeg"))},
+                    timeout=15,
+                )
+            else:
+                response = requests.post(
+                    f"{telegram_url}sendMessage",
+                    json={"chat_id": user_id, "text": _broadcast_html(body, user), "parse_mode": "HTML"},
+                    timeout=15,
+                )
             result = response.json()
             if response.status_code != 200 or not result.get("ok"):
                 raise RuntimeError(result.get("description") or "Telegram rejected the message")

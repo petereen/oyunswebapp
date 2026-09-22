@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Fix broadcast photo preview interaction and no-photo send 500 (frontend/src/components/admin/AdminBroadcasts.tsx, backend/main.py)
+- [x] Verify broadcast regression tests, backend syntax, and frontend production build
 - [x] Make Confirm & Send failures and in-flight state visible (frontend/src/components/admin/AdminBroadcasts.tsx)
 - [x] Connect manual Broadcast Management sends to authenticated backend delivery (frontend/src/components/admin/AdminBroadcasts.tsx, backend/main.py, supabase/migrations/)
 - [x] Complete the Broadcast Management module after full regression verification

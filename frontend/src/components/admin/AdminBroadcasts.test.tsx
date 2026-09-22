@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AdminBroadcasts } from "./AdminBroadcasts";
+import { sendAdminBroadcast } from "../../api";
 
 vi.mock("../../api", () => ({
   sendAdminBroadcast: vi.fn().mockResolvedValue({ id: "broadcast-1", status: "sent", total_recipients: 1, delivered_count: 1, sent_at: "2026-09-22T09:17:00Z" }),
@@ -73,5 +74,21 @@ describe("AdminBroadcasts", () => {
     expect(screen.queryByText("Live preview")).not.toBeInTheDocument();
     expect(screen.queryByText("1:1 message view")).not.toBeInTheDocument();
     expect(screen.queryByText("live", { exact: true })).not.toBeInTheDocument();
+  });
+
+  it("previews and sends an attached photo", async () => {
+    render(<AdminBroadcasts />);
+
+    const photo = new File(["image"], "notice.jpg", { type: "image/jpeg" });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [photo] } });
+    expect(screen.getByAltText("Broadcast attachment preview")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Prepare broadcast" }));
+    expect(screen.getByText("1 image")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm & Send" }));
+
+    await waitFor(() => expect(sendAdminBroadcast).toHaveBeenCalledWith(expect.objectContaining({ media: photo })));
   });
 });
