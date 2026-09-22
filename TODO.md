@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Make Confirm & Send failures and in-flight state visible (frontend/src/components/admin/AdminBroadcasts.tsx)
 - [x] Connect manual Broadcast Management sends to authenticated backend delivery (frontend/src/components/admin/AdminBroadcasts.tsx, backend/main.py, supabase/migrations/)
 - [x] Complete the Broadcast Management module after full regression verification
 - [x] Schedule the daily rate broadcast during the 11:00 Ulaanbaatar time hour (oyunsbot.py)
@@ -104,6 +105,7 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Diagnose hidden broadcast error toast and missing in-flight feedback behind the confirmation modal
 - [x] Wire manual broadcasts to authenticated Telegram delivery with per-recipient audit results and custom-audience support (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/api.ts, backend/main.py, supabase/functions/broadcast-management/index.ts, supabase/migrations/)
 - [x] Diagnose queued manual broadcast as a frontend-only mock with no backend/Telegram dispatch
 - [x] Keep broadcast edit, delete, and preview dialogs above the fixed navbar (frontend/src/components/admin/AdminBroadcasts.tsx)

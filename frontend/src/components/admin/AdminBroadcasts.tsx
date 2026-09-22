@@ -214,6 +214,7 @@ export function AdminBroadcasts() {
   const [media, setMedia] = useState<{ name: string; url: string } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
+  const [sending, setSending] = useState(false);
   const [toast, setToast] = useState("");
   const [rules, setRules] = useState(INITIAL_RULES);
   const [showArchived, setShowArchived] = useState(false);
@@ -264,7 +265,12 @@ export function AdminBroadcasts() {
     setConfirmSend(false); setPreviewOpen(true);
   };
   const sendBroadcast = async () => {
+    if (sending) return;
     if (media) { flash("Одоогоор текст broadcast илгээх боломжтой."); return; }
+    setSending(true);
+    setPreviewOpen(false);
+    setConfirmSend(false);
+    flash("Broadcast илгээгдэж байна…");
     try {
       const result = await sendAdminBroadcast({
         body_markdown: message,
@@ -283,10 +289,12 @@ export function AdminBroadcasts() {
         delivered: result.delivered_count,
         readRate: 0,
       }, ...current]);
-      setPreviewOpen(false); setConfirmSend(false); setView("history");
+      setView("history");
       flash(result.status === "sent" ? `Broadcast илгээгдлээ (${result.delivered_count}/${result.total_recipients}).` : "Broadcast илгээгдсэнгүй.");
     } catch (error) {
       flash(error instanceof Error ? error.message : "Broadcast илгээхэд алдаа гарлаа.");
+    } finally {
+      setSending(false);
     }
   };
 
