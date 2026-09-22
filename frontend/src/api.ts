@@ -39,23 +39,28 @@ export type AdminBroadcastSendResponse = {
 };
 
 export async function sendAdminBroadcast(payload: AdminBroadcastSendPayload): Promise<AdminBroadcastSendResponse> {
-  if (!payload.media) {
-    const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", {
-      body_markdown: payload.body_markdown,
-      audience_type: payload.audience_type,
-      audience_filter: payload.audience_filter || {},
-    });
+  try {
+    if (!payload.media) {
+      const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", {
+        body_markdown: payload.body_markdown,
+        audience_type: payload.audience_type,
+        audience_filter: payload.audience_filter || {},
+      });
+      return response.data;
+    }
+
+    const requestBody = new FormData();
+    requestBody.append("body_markdown", payload.body_markdown);
+    requestBody.append("audience_type", payload.audience_type);
+    requestBody.append("audience_filter", JSON.stringify(payload.audience_filter || {}));
+    requestBody.append("media", payload.media, payload.media.name);
+    const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", requestBody);
     return response.data;
+  } catch (error: any) {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) throw new Error(detail);
+    throw error;
   }
-
-  const requestBody = new FormData();
-  requestBody.append("body_markdown", payload.body_markdown);
-  requestBody.append("audience_type", payload.audience_type);
-  requestBody.append("audience_filter", JSON.stringify(payload.audience_filter || {}));
-  if (payload.media) requestBody.append("media", payload.media, payload.media.name);
-
-  const response = await api.post<AdminBroadcastSendResponse>("/admin/broadcasts/send", requestBody);
-  return response.data;
 }
 
 export type TelegramBrowserAuthChallenge = {

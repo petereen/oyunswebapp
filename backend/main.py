@@ -7673,6 +7673,18 @@ def _broadcast_html(markdown: str, user: dict) -> str:
     return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', escaped)
 
 
+def _is_missing_broadcast_schema_error(exc: Exception) -> bool:
+    """Allow delivery to continue when an older deployment lacks audit tables."""
+    message = str(exc).lower()
+    return any(marker in message for marker in (
+        "pgrst205",
+        "pgrst204",
+        "relation \"broadcast",
+        "could not find the table 'public.broadcast",
+        "column .*broadcast",
+    ))
+
+
 @app.post("/api/admin/broadcasts/send")
 async def send_admin_broadcast(request: Request, admin=Depends(require_admin)):
     """Create and immediately dispatch a manual broadcast through Telegram."""
@@ -7734,25 +7746,41 @@ async def send_admin_broadcast(request: Request, admin=Depends(require_admin)):
     elif audience_type == "custom":
         users_query = users_query.in_("id", audience_filter["ids"])
 
-    users = users_query.execute().data or []
+    try:
+        users = users_query.execute().data or []
+    except Exception as exc:
+        logger.exception("Broadcast recipient lookup failed")
+        raise HTTPException(status_code=503, detail=f"Could not load broadcast recipients: {str(exc)[:300]}") from exc
     if audience_type == "custom":
         found = {int(user["id"]) for user in users}
         missing = [user_id for user_id in audience_filter["ids"] if user_id not in found]
         if missing:
             raise HTTPException(status_code=400, detail=f"Telegram ID not registered: {missing[0]}")
 
-    broadcast = client.table("broadcasts").insert({
-        "broadcast_type": "manual",
-        "body_markdown": body,
-        "audience_type": audience_type,
-        "audience_filter": audience_filter,
-        "status": "sending",
-        "total_recipients": len(users),
-        "created_by": admin.id,
-    }).execute().data
-    if not broadcast:
-        raise HTTPException(status_code=500, detail="Could not create broadcast record")
-    broadcast_id = broadcast[0]["id"]
+    audit_enabled = True
+    try:
+        broadcast = client.table("broadcasts").insert({
+            "broadcast_type": "manual",
+            "body_markdown": body,
+            "audience_type": audience_type,
+            "audience_filter": audience_filter,
+            "status": "sending",
+            "total_recipients": len(users),
+            "created_by": admin.id,
+        }).execute().data
+        if not broadcast:
+            raise RuntimeError("Could not create broadcast record")
+        broadcast_id = broadcast[0]["id"]
+    except Exception as exc:
+        logger.exception("Broadcast audit record creation failed")
+        if not _is_missing_broadcast_schema_error(exc):
+            raise HTTPException(status_code=503, detail=f"Could not create broadcast record: {str(exc)[:300]}") from exc
+        # Older production databases may not have received the broadcast
+        # management migration yet. Delivery should still work; history will
+        # become available automatically once the migration is applied.
+        audit_enabled = False
+        broadcast = [{"id": f"local-{uuid.uuid4()}"}]
+        broadcast_id = broadcast[0]["id"]
 
     delivered = 0
     for user in users:
@@ -7785,14 +7813,27 @@ async def send_admin_broadcast(request: Request, admin=Depends(require_admin)):
         except Exception as exc:
             delivery["error_message"] = str(exc)[:1000]
             logger.warning("Broadcast %s failed for %s: %s", broadcast_id, user_id, exc)
-        client.table("broadcast_deliveries").insert(delivery).execute()
+        if audit_enabled:
+            try:
+                client.table("broadcast_deliveries").insert(delivery).execute()
+            except Exception as exc:
+                logger.exception("Broadcast delivery audit write failed for %s", user_id)
+                if not _is_missing_broadcast_schema_error(exc):
+                    raise HTTPException(status_code=503, detail=f"Could not save broadcast delivery: {str(exc)[:300]}") from exc
 
     final_status = "sent" if delivered else "failed"
-    updated = client.table("broadcasts").update({
-        "status": final_status,
-        "delivered_count": delivered,
-        "sent_at": datetime.now(timezone.utc).isoformat(),
-    }).eq("id", broadcast_id).execute().data
+    updated = []
+    if audit_enabled:
+        try:
+            updated = client.table("broadcasts").update({
+                "status": final_status,
+                "delivered_count": delivered,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", broadcast_id).execute().data
+        except Exception as exc:
+            logger.exception("Broadcast audit record update failed")
+            if not _is_missing_broadcast_schema_error(exc):
+                raise HTTPException(status_code=503, detail=f"Could not finalize broadcast record: {str(exc)[:300]}") from exc
     return updated[0] if updated else {**broadcast[0], "status": final_status, "delivered_count": delivered}
 
 

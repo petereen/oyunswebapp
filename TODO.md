@@ -1,6 +1,8 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Diagnose and fix the persistent production broadcast API 500 (backend/main.py, supabase/migrations/)
+- [ ] Deploy the broadcast API fallback and verify a live send
 - [x] Fix deployed broadcast 500 compatibility for JSON text sends (frontend/src/api.ts, backend/main.py)
 - [x] Fix broadcast photo preview interaction and no-photo send 500 (frontend/src/components/admin/AdminBroadcasts.tsx, backend/main.py)
 - [x] Verify broadcast regression tests, backend syntax, and frontend production build
