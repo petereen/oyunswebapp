@@ -760,3 +760,87 @@ html {
 /* Hide scrollbar but keep scrollable */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Standalone finance dashboard styles. Keep these tokens scoped so the
+   customer and operations surfaces retain their existing appearance. */
+.finance-dashboard {
+  --finance-blue: #2D62EC;
+  --finance-ink: #231F20;
+  --finance-navy: #0B172A;
+  --finance-success: #00C885;
+  --finance-alert: #FF3B57;
+  --finance-surface: #FFFFFF;
+  color-scheme: light;
+  accent-color: var(--finance-blue);
+  background-color: #F7F9FC;
+  color: var(--finance-ink);
+}
+
+.dark .finance-dashboard {
+  --finance-surface: #111827;
+  color-scheme: dark;
+  background-color: var(--finance-navy);
+  color: #E7EDF7;
+}
+
+.finance-dashboard .bg-maroon-600 { background-color: var(--finance-blue); }
+.finance-dashboard .hover\:bg-maroon-700:hover { background-color: #2454D3; }
+.finance-dashboard .text-maroon-600 { color: var(--finance-blue); }
+.finance-dashboard .border-maroon-600 { border-color: var(--finance-blue); }
+.finance-dashboard .border-maroon-300 { border-color: color-mix(in srgb, var(--finance-blue) 32%, white); }
+.finance-dashboard .bg-maroon-50 { background-color: color-mix(in srgb, var(--finance-blue) 7%, white); }
+.finance-dashboard .text-emerald-600,
+.finance-dashboard .text-emerald-700 { color: var(--finance-success); }
+.finance-dashboard .dark\:text-emerald-400:is(.dark *) { color: #34D399; }
+.finance-dashboard .text-rose-600,
+.finance-dashboard .text-rose-700 { color: var(--finance-alert); }
+.finance-dashboard .dark\:text-rose-400:is(.dark *) { color: #FDA4AF; }
+
+.finance-dashboard .finance-tabs button,
+.finance-dashboard button,
+.finance-dashboard a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(45, 98, 236, 0.12);
+}
+
+.finance-dashboard button:focus-visible,
+.finance-dashboard a:focus-visible,
+.finance-dashboard input:focus-visible,
+.finance-dashboard select:focus-visible,
+.finance-dashboard summary:focus-visible {
+  outline: 2px solid var(--finance-blue);
+  outline-offset: 2px;
+}
+
+.finance-dashboard .finance-panel {
+  background: var(--finance-surface);
+  box-shadow: 0 1px 3px rgba(35, 31, 32, 0.04);
+}
+
+.finance-dashboard .finance-input {
+  min-height: 2.5rem;
+  color: inherit;
+  border-color: #D7DDE7;
+  background-color: #FFFFFF;
+}
+
+.dark .finance-dashboard .finance-input {
+  border-color: #46536A;
+  background-color: #172338;
+}
+
+.finance-dashboard .finance-help summary { list-style-position: inside; }
+.finance-dashboard .finance-dialog-content { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.finance-dashboard .finance-dialog { overscroll-behavior: contain; }
+.finance-dashboard [aria-hidden="true"] { pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .finance-dashboard *,
+  .finance-dashboard *::before,
+  .finance-dashboard *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -19,6 +19,8 @@ import {
   upsertBalanceDaily,
 } from "../api";
 
+export type { DashboardTimeZone } from "../api";
+
 type ProfitPeriod = "today" | "7d" | "month" | "year" | "custom";
 
 const PROFIT_PERIODS: { key: ProfitPeriod; label: string }[] = [
@@ -30,13 +32,12 @@ const PROFIT_PERIODS: { key: ProfitPeriod; label: string }[] = [
 ];
 
 const BALANCE_ADMIN_STORAGE = "oyuns_dashboard_balance_admin_id";
-const DASHBOARD_TIMEZONE_STORAGE = "oyuns_dashboard_timezone";
-const PANEL_CLASS = "bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm p-4 md:p-5";
-const INPUT_CLASS = "w-full rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 px-3 py-2 text-sm tabular-nums outline-none focus:ring-2 focus:ring-maroon-500";
+const PANEL_CLASS = "finance-panel bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm p-4 md:p-5";
+const INPUT_CLASS = "finance-input w-full rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 px-3 py-2 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-maroon-500";
 
 const DASHBOARD_TIMEZONES: { key: DashboardTimeZone; label: string; short: string; iana: string }[] = [
-  { key: "moscow", label: "Moscow time", short: "MSK", iana: "Europe/Moscow" },
-  { key: "ub", label: "UB time", short: "UB", iana: "Asia/Ulaanbaatar" },
+  { key: "moscow", label: "Москвагийн цаг", short: "MSK", iana: "Europe/Moscow" },
+  { key: "ub", label: "Улаанбаатарын цаг", short: "UB", iana: "Asia/Ulaanbaatar" },
 ];
 
 function dashboardTimeZoneConfig(timeZone: DashboardTimeZone) {
@@ -148,11 +149,6 @@ function readStoredBalanceAdminId() {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function readStoredDashboardTimeZone(): DashboardTimeZone {
-  const stored = localStorage.getItem(DASHBOARD_TIMEZONE_STORAGE);
-  return stored === "ub" ? "ub" : "moscow";
-}
-
 function adminLabel(admins: DashboardAdminOption[], adminId: number | null | undefined) {
   if (adminId == null) return "Хуваарилаагүй";
   const match = admins.find((admin) => admin.admin_id === adminId);
@@ -181,53 +177,19 @@ function accountDifference(account: Pick<TreasuryAccount, "prev_balance" | "rub_
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function BalanceProfitPage({ onLogout, pageTabs }: { onLogout: () => void; pageTabs?: React.ReactNode }) {
-  const [dashboardTimeZone, setDashboardTimeZone] = useState<DashboardTimeZone>(() => readStoredDashboardTimeZone());
-
-  useEffect(() => {
-    localStorage.setItem(DASHBOARD_TIMEZONE_STORAGE, dashboardTimeZone);
-  }, [dashboardTimeZone]);
-
+export function BalanceProfitPage({
+  activePage,
+  dashboardTimeZone,
+}: {
+  activePage: "balance" | "profit";
+  dashboardTimeZone: DashboardTimeZone;
+}) {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-dark-900 text-slate-800 dark:text-ivory-200">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-5 space-y-5">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-maroon-600 flex items-center justify-center">
-              <Wallet className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold leading-tight">Баланс ба Ашиг · Oyuns AIO Bot</h1>
-              <p className="text-xs text-slate-500 dark:text-ivory-400">Баланс бүртгэл ба ашгийн тооцоо</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-            <div className="w-full sm:w-auto">{pageTabs}</div>
-            <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-1">
-              {DASHBOARD_TIMEZONES.map((option) => (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setDashboardTimeZone(option.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${dashboardTimeZone === option.key
-                    ? "bg-maroon-600 text-white shadow"
-                    : "text-slate-500 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"}`}
-                  title={option.label}
-                >
-                  {option.short}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={onLogout}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-sm font-medium hover:bg-slate-100 dark:hover:bg-dark-700 transition"
-            >
-              <LogOut className="w-4 h-4" /> Гарах
-            </button>
-          </div>
-        </div>
-
+    <div className="space-y-5">
+      <div className={activePage === "balance" ? "" : "hidden"} aria-hidden={activePage !== "balance"}>
         <BalanceSection dashboardTimeZone={dashboardTimeZone} />
+      </div>
+      <div className={activePage === "profit" ? "" : "hidden"} aria-hidden={activePage !== "profit"}>
         <ProfitSection dashboardTimeZone={dashboardTimeZone} />
       </div>
     </div>
@@ -278,18 +240,19 @@ function BalanceSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTim
   return (
     <div className={PANEL_CLASS}>
       <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
-          <Wallet className="w-5 h-5 text-maroon-600 dark:text-gold-400" />
-          <h2 className="text-base font-bold">Баланс бүртгэл</h2>
+        <div>
+          <h2 className="text-lg font-bold">Өдрийн баланс</h2>
+          <p className="text-xs text-slate-500 dark:text-ivory-400">Тооцоолсон дүнг бодит банкны үлдэгдэлтэй тулгана.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <label className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600">
-            <UserCog className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-medium text-slate-500 dark:text-ivory-400">Админ</span>
+            <UserCog aria-hidden="true" className="w-4 h-4 text-slate-400" />
             <select
+              aria-label="Админ сонгох"
+              name="balance-admin"
               value={selectedAdminId ?? ""}
               onChange={(e) => setSelectedAdminId(e.target.value ? Number(e.target.value) : null)}
-              className="bg-transparent text-sm font-semibold outline-none cursor-pointer"
+              className="finance-input bg-transparent text-sm font-semibold cursor-pointer"
             >
               <option value="">Бүх админ</option>
               {(balanceQ.data?.admins || []).map((admin) => (
@@ -300,41 +263,45 @@ function BalanceSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTim
             </select>
           </label>
           <div className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 px-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600">
-            <Calendar className="w-4 h-4 text-slate-400" />
+            <Calendar aria-hidden="true" className="w-4 h-4 text-slate-400" />
             <span className="text-xs tabular-nums">{balanceQ.data?.date || todayIso(dashboardTimeZone)} <span className="text-slate-400">({timeZoneMeta.short})</span></span>
           </div>
           <button
+            type="button"
+            aria-expanded={historyOpen}
+            aria-label={historyOpen ? "Өдрийн тооцооны түүх хаах" : "Өдрийн тооцооны түүх нээх"}
             onClick={() => setHistoryOpen((current) => !current)}
             className={`h-10 w-10 inline-flex items-center justify-center rounded-xl border transition ${historyOpen
               ? "border-maroon-300 bg-maroon-50 text-maroon-700 dark:border-gold-500/40 dark:bg-dark-700"
               : "border-slate-200 bg-slate-50 text-slate-500 dark:border-dark-600 dark:bg-dark-700 dark:text-ivory-300"}`}
-            title="Өдрийн тооцооны түүх"
           >
-            <History className="w-4 h-4" />
+            <History aria-hidden="true" className="w-4 h-4" />
           </button>
           <button
-            onClick={() => balanceQ.refetch()}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition"
+            type="button"
+            onClick={() => void balanceQ.refetch()}
+            disabled={balanceQ.isFetching}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${balanceQ.isFetching ? "animate-spin" : ""}`} /> Шинэчлэх
+            <RefreshCw aria-hidden="true" className={`w-3.5 h-3.5 ${balanceQ.isFetching ? "animate-spin" : ""}`} /> Шинэчлэх
           </button>
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3 leading-relaxed">
-        <b>Өмнөх баланс</b> нь өмнөх өдрөөс автоматаар шилжинэ.
-        <b>Руб→төг</b>, <b>Төг→руб</b> дүнг систем тухайн админы амжилттай transaction-уудаас автоматаар уншина.
-        <b>Бусад орлого/зарлага</b> нь таг, тайлбартай <b>+/- мөрөөр</b> тусдаа бүртгэгдэнэ.
-        Систем <b>Өмнөх баланс + Руб→төг − Төг→руб</b> томьёогоор <b>Тооцоолсон дүн</b>-г бодно.
-        <b>Оруулсан баланс</b> нь тухайн банк дансанд байгаа бодит мөнгө, харин <b>Зөрүү = Тооцоолсон дүн − Оруулсан баланс</b>.
-        <b>{timeZoneMeta.label}-аар өдөр дуусахад Тооцоолсон дүн автоматаар маргаашийн "Өмнөх баланс" болж шилжинэ.</b>
-      </p>
+      <details className="finance-help mb-4 rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/40 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-slate-700 dark:text-ivory-200">Балансын тооцоолол</summary>
+        <div className="mt-2 space-y-1 text-xs leading-relaxed text-slate-600 dark:text-ivory-300">
+          <p><b>Тооцоолсон дүн</b> = өмнөх баланс + руб→төг − төг→руб. <b>Бусад орлого/зарлага</b> тусдаа бүртгэгддэг бөгөөд энэ томьёонд орохгүй.</p>
+          <p><b>Зөрүү</b> = тооцоолсон дүн − оруулсан баланс. Дараагийн өдрийн эхний баланс нь өмнөх өдрийн оруулсан дүн байвал түүнийг, үгүй бол тооцоолсон дүнг ашиглана.</p>
+        </div>
+      </details>
 
       {historyOpen && (
         <div className="mb-4">
           {historyQ.error ? (
-            <div className="text-sm text-red-500 px-4 py-3 rounded-2xl border border-red-200 bg-red-50">
-              {getApiErrorDetail(historyQ.error, "Балансын түүх ачаалж чадсангүй.")}
+            <div role="alert" className="text-sm text-red-600 dark:text-red-400 px-4 py-3 rounded-2xl border border-red-200 bg-red-50 dark:bg-red-900/20">
+              <p>{getApiErrorDetail(historyQ.error, "Балансын түүх ачаалж чадсангүй.")}</p>
+              <button type="button" onClick={() => void historyQ.refetch()} className="mt-2 rounded-lg border border-current px-3 py-2 text-xs font-semibold">Дахин ачаалах</button>
             </div>
           ) : (
             <BalanceHistoryPanel
@@ -347,8 +314,9 @@ function BalanceSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTim
       )}
 
       {balanceQ.error ? (
-        <div className="text-sm text-red-500 py-6 text-center px-4">
-          {getApiErrorDetail(balanceQ.error, "Баланс ачаалж чадсангүй.")}
+        <div role="alert" className="text-sm text-red-600 dark:text-red-400 py-6 text-center px-4">
+          <p>{getApiErrorDetail(balanceQ.error, "Баланс ачаалж чадсангүй.")}</p>
+          <button type="button" onClick={() => void balanceQ.refetch()} className="mt-3 rounded-lg border border-current px-3 py-2 text-xs font-semibold">Дахин ачаалах</button>
         </div>
       ) : balanceQ.isLoading || !balanceQ.data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-maroon-600 animate-spin" /></div>
@@ -374,8 +342,6 @@ function BalanceBody({
   const showAdminScopedDetails = selectedAdminId != null;
   return (
     <div className="space-y-5">
-      <div className="text-sm font-semibold">Ерөнхий тооцоолуур</div>
-
       <div className="flex flex-col gap-1 text-xs text-slate-500 dark:text-ivory-400 md:flex-row md:items-center md:justify-between">
         <div>
           Харагдаж буй дүн: <span className="font-semibold text-slate-700 dark:text-ivory-200">{viewLabel}</span>
@@ -385,18 +351,21 @@ function BalanceBody({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-3">
-        <BalanceStat label="Өмнөх өдрийн баланс" value={fmtRub(data.prev_balance_total)} />
-        <BalanceStat label="Өнөөдрийн руб→төг" value={fmtRub(data.rub_to_mnt_rub)} tone="pos" />
-        <BalanceStat label="Өнөөдрийн төг→руб" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
-        <BalanceStat label="Бусад орлого/зарлага" value={fmtRub(data.adjustment_total)} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <BalanceStat label="Тооцоолсон дүн" value={fmtRub(data.total_balance)} accent />
         <BalanceStat label="Оруулсан баланс" value={fmtRub(data.entered_balance_total)} />
         <BalanceStat
-          label="Зөрүү"
+          label="Зөрүү · тооцоолсон − оруулсан"
           value={data.difference_total == null ? "—" : fmtRub(data.difference_total)}
           tone={data.difference_total == null ? undefined : data.difference_total > 0 ? "pos" : data.difference_total < 0 ? "neg" : undefined}
         />
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <BalanceStat label="Өмнөх баланс" value={fmtRub(data.prev_balance_total)} />
+        <BalanceStat label="Руб→төг" value={fmtRub(data.rub_to_mnt_rub)} tone="pos" />
+        <BalanceStat label="Төг→руб" value={fmtRub(data.mnt_to_rub_rub)} tone="neg" />
+        <BalanceStat label="Бусад орлого/зарлага" value={fmtRub(data.adjustment_total)} />
       </div>
 
       {showAdminScopedDetails && data.missing_entered_balance_count > 0 && (
@@ -766,6 +735,7 @@ function BalanceAdjustmentsPanel({
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (adjustableAccounts.some((account) => account.id === formAccountId)) return;
@@ -777,6 +747,7 @@ function BalanceAdjustmentsPanel({
     const parsedAmount = Number(amount);
     if (!selectedAccount?.admin_id || !tag.trim() || !Number.isFinite(parsedAmount) || parsedAmount === 0) return;
     setSaving(true);
+    setActionMessage(null);
     try {
       await createBalanceAdjustment({
         admin_id: selectedAccount.admin_id,
@@ -790,6 +761,8 @@ function BalanceAdjustmentsPanel({
       setTag("");
       setDescription("");
       onChanged();
+    } catch (error) {
+      setActionMessage(getApiErrorDetail(error, "Орлого/зарлагын мөр хадгалж чадсангүй. Дахин оролдоно уу."));
     } finally {
       setSaving(false);
     }
@@ -798,9 +771,12 @@ function BalanceAdjustmentsPanel({
   const remove = async (adjustment: BalanceAdjustment) => {
     if (!window.confirm(`"${adjustment.tag}" мөрийг устгах уу?`)) return;
     setDeletingId(adjustment.id);
+    setActionMessage(null);
     try {
       await deleteBalanceAdjustment(adjustment.id);
       onChanged();
+    } catch (error) {
+      setActionMessage(getApiErrorDetail(error, "Орлого/зарлагын мөр устгаж чадсангүй. Дахин оролдоно уу."));
     } finally {
       setDeletingId(null);
     }
@@ -858,6 +834,7 @@ function BalanceAdjustmentsPanel({
       )}
 
       <div className="space-y-2">
+        {actionMessage && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{actionMessage}</p>}
         {adjustments.length === 0 ? (
           <div className="py-6 text-center text-sm text-slate-400 rounded-2xl border border-dashed border-slate-200 dark:border-dark-600">
             Бусад орлого/зарлагын мөр алга байна.
@@ -878,6 +855,8 @@ function BalanceAdjustmentsPanel({
               </div>
             </div>
             <button
+              type="button"
+              aria-label={`“${adjustment.tag}” орлого/зарлагын мөр устгах`}
               onClick={() => remove(adjustment)}
               disabled={deletingId === adjustment.id}
               className="self-start md:self-center px-3 py-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition disabled:opacity-50"
@@ -925,6 +904,7 @@ function TreasuryAccountsTable({
   });
   const [drafts, setDrafts] = useState<Record<string, AcctDraft>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showNewAccountForm, setShowNewAccountForm] = useState(false);
   const [newName, setNewName] = useState("");
@@ -984,6 +964,7 @@ function TreasuryAccountsTable({
   const save = async (account: TreasuryAccount) => {
     const draft = draftOf(account);
     setBusyId(account.id);
+    setActionMessage(null);
     try {
       await updateTreasuryAccount(account.id, {
         name: draft.name,
@@ -998,6 +979,8 @@ function TreasuryAccountsTable({
         return next;
       });
       onChanged();
+    } catch (error) {
+      setActionMessage(getApiErrorDetail(error, `“${account.name}” дансны өөрчлөлтийг хадгалж чадсангүй. Дахин оролдоно уу.`));
     } finally {
       setBusyId(null);
     }
@@ -1006,9 +989,12 @@ function TreasuryAccountsTable({
   const remove = async (account: TreasuryAccount) => {
     if (!window.confirm(`"${account.name}" дансыг устгах уу?`)) return;
     setBusyId(account.id);
+    setActionMessage(null);
     try {
       await deleteTreasuryAccount(account.id);
       onChanged();
+    } catch (error) {
+      setActionMessage(getApiErrorDetail(error, `“${account.name}” дансыг устгаж чадсангүй. Дахин оролдоно уу.`));
     } finally {
       setBusyId(null);
     }
@@ -1017,6 +1003,7 @@ function TreasuryAccountsTable({
   const add = async () => {
     if (!newName.trim()) return;
     setAdding(true);
+    setActionMessage(null);
     try {
       await createTreasuryAccount({
         name: newName.trim(),
@@ -1032,6 +1019,8 @@ function TreasuryAccountsTable({
       setNewAdminBankId("");
       setShowNewAccountForm(false);
       onChanged();
+    } catch (error) {
+      setActionMessage(getApiErrorDetail(error, "Данс нэмэж чадсангүй. Дахин оролдоно уу."));
     } finally {
       setAdding(false);
     }
@@ -1052,6 +1041,7 @@ function TreasuryAccountsTable({
 
   return (
     <div className="space-y-4">
+      {actionMessage && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{actionMessage}</p>}
       <div className="grid gap-3 md:hidden">
         {accounts.map((account) => {
           const draft = draftOf(account);
@@ -1076,11 +1066,11 @@ function TreasuryAccountsTable({
               <div className="grid grid-cols-1 gap-3">
                 <label>
                   <div className="text-[10px] text-slate-400 mb-1">Дансны нэр</div>
-                  <input className={INPUT_CLASS} value={draft.name} onChange={(e) => setDraft(account.id, { name: e.target.value })} />
+                  <input aria-label={`“${account.name}” дансны нэр`} className={INPUT_CLASS} value={draft.name} onChange={(e) => setDraft(account.id, { name: e.target.value })} />
                 </label>
                 <label>
                   <div className="text-[10px] text-slate-400 mb-1">Хариуцсан админ</div>
-                  <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value, admin_bank_id: "" })}>
+                  <select aria-label={`“${account.name}” дансны админ`} className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value, admin_bank_id: "" })}>
                     <option value="">Хуваарилаагүй</option>
                     {admins.map((admin) => (
                       <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
@@ -1089,7 +1079,7 @@ function TreasuryAccountsTable({
                 </label>
                 <label>
                   <div className="text-[10px] text-slate-400 mb-1">Холбосон банк</div>
-                  <select className={INPUT_CLASS} value={draft.admin_bank_id} onChange={(e) => setDraft(account.id, { admin_bank_id: e.target.value })}>
+                  <select aria-label={`“${account.name}” холбосон банк`} className={INPUT_CLASS} value={draft.admin_bank_id} onChange={(e) => setDraft(account.id, { admin_bank_id: e.target.value })}>
                     <option value="">Сонгоогүй</option>
                     {availableBanksForAdmin(draft.admin_id, draft.admin_bank_id).map((bank) => (
                       <option key={bank.id} value={bank.id}>{formatAdminBankOption(bank)}</option>
@@ -1115,7 +1105,7 @@ function TreasuryAccountsTable({
                   </label>
                   <label>
                     <div className="text-[10px] text-slate-400 mb-1">Оруулсан баланс</div>
-                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.entered_balance} onChange={(e) => setDraft(account.id, { entered_balance: e.target.value })} placeholder="Бодит үлдэгдэл" />
+                    <input type="number" aria-label={`“${account.name}” оруулсан баланс`} className={`${INPUT_CLASS} text-right`} value={draft.entered_balance} onChange={(e) => setDraft(account.id, { entered_balance: e.target.value })} placeholder="Бодит үлдэгдэл" />
                   </label>
                 </div>
               </div>
@@ -1128,8 +1118,10 @@ function TreasuryAccountsTable({
                 >
                   {busyId === account.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Хадгалах
                 </button>
-                <button
-                  onClick={() => remove(account)}
+                  <button
+                    type="button"
+                    aria-label={`“${account.name}” данс устгах`}
+                    onClick={() => remove(account)}
                   disabled={busyId === account.id}
                   className="px-3 py-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
                 >
@@ -1171,10 +1163,10 @@ function TreasuryAccountsTable({
               return (
                 <tr key={account.id} className="border-b border-slate-100 dark:border-dark-700">
                   <td className="py-2 pr-2 min-w-[180px]">
-                    <input className={INPUT_CLASS} value={draft.name} onChange={(e) => setDraft(account.id, { name: e.target.value })} />
+                    <input aria-label={`“${account.name}” дансны нэр`} className={INPUT_CLASS} value={draft.name} onChange={(e) => setDraft(account.id, { name: e.target.value })} />
                   </td>
                   <td className="py-2 px-2 min-w-[180px]">
-                    <select className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value, admin_bank_id: "" })}>
+                    <select aria-label={`“${account.name}” дансны админ`} className={INPUT_CLASS} value={draft.admin_id} onChange={(e) => setDraft(account.id, { admin_id: e.target.value, admin_bank_id: "" })}>
                       <option value="">Хуваарилаагүй</option>
                       {admins.map((admin) => (
                         <option key={admin.admin_id} value={admin.admin_id}>{admin.name || `ID ${admin.admin_id}`}</option>
@@ -1182,7 +1174,7 @@ function TreasuryAccountsTable({
                     </select>
                   </td>
                   <td className="py-2 px-2 min-w-[260px]">
-                    <select className={INPUT_CLASS} value={draft.admin_bank_id} onChange={(e) => setDraft(account.id, { admin_bank_id: e.target.value })}>
+                    <select aria-label={`“${account.name}” холбосон банк`} className={INPUT_CLASS} value={draft.admin_bank_id} onChange={(e) => setDraft(account.id, { admin_bank_id: e.target.value })}>
                       <option value="">Сонгоогүй</option>
                       {availableBanksForAdmin(draft.admin_id, draft.admin_bank_id).map((bank) => (
                         <option key={bank.id} value={bank.id}>{formatAdminBankOption(bank)}</option>
@@ -1197,12 +1189,14 @@ function TreasuryAccountsTable({
                   </td>
                   <td className="py-2 px-2 text-right tabular-nums font-semibold">{fmtRub(subtotal)}</td>
                   <td className="py-2 px-2 w-36">
-                    <input type="number" className={`${INPUT_CLASS} text-right`} value={draft.entered_balance} onChange={(e) => setDraft(account.id, { entered_balance: e.target.value })} placeholder="Бодит үлдэгдэл" />
+                    <input type="number" aria-label={`“${account.name}” оруулсан баланс`} className={`${INPUT_CLASS} text-right`} value={draft.entered_balance} onChange={(e) => setDraft(account.id, { entered_balance: e.target.value })} placeholder="Бодит үлдэгдэл" />
                   </td>
                   <td className={`py-2 px-2 text-right tabular-nums font-semibold ${difference == null ? "text-slate-400" : difference > 0 ? "text-emerald-600 dark:text-emerald-400" : difference < 0 ? "text-rose-600 dark:text-rose-400" : "text-slate-700 dark:text-ivory-200"}`}>{difference == null ? "—" : fmtRub(difference)}</td>
                   <td className="py-2 pl-2">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
+                        type="button"
+                        aria-label={`“${account.name}” дансны үлдэгдэл хадгалах`}
                         onClick={() => save(account)}
                         disabled={!isDirty(account) || busyId === account.id}
                         className="p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-30 hover:bg-maroon-700 transition"
@@ -1211,6 +1205,8 @@ function TreasuryAccountsTable({
                         {busyId === account.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                       </button>
                       <button
+                        type="button"
+                        aria-label={`“${account.name}” данс устгах`}
                         onClick={() => remove(account)}
                         disabled={busyId === account.id}
                         className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
@@ -1247,7 +1243,7 @@ function TreasuryAccountsTable({
                   <Plus className={`w-4 h-4 transition-transform ${showNewAccountForm ? "rotate-45" : ""}`} />
                 </span>
                 <span>
-                  <span className="block text-sm font-semibold text-slate-800 dark:text-ivory-100">New bank account</span>
+                  <span className="block text-sm font-semibold text-slate-800 dark:text-ivory-100">Шинэ данс</span>
                   <span className="block text-xs text-slate-400">Одоо байгаа данс нэмэх формыг нээх</span>
                 </span>
               </span>
@@ -1341,11 +1337,12 @@ function ProfitSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTime
   const [custom, setCustom] = useState({ start: "", end: "" });
   const [showTransactions, setShowTransactions] = useState(false);
   const range = useMemo(() => profitRange(period, custom, dashboardTimeZone), [period, custom, dashboardTimeZone]);
+  const invalidCustomRange = period === "custom" && Boolean(custom.start && custom.end && custom.end < custom.start);
 
   const profitQ = useQuery({
     queryKey: ["dashboard-profit", range.start, range.end, dashboardTimeZone],
     queryFn: () => fetchProfit({ start: range.start, end: range.end, tz: dashboardTimeZone }),
-    enabled: period !== "custom" || Boolean(custom.start),
+    enabled: !invalidCustomRange && (period !== "custom" || Boolean(custom.start)),
     staleTime: 30_000,
   });
 
@@ -1354,56 +1351,62 @@ function ProfitSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTime
   };
 
   return (
-    <div className={PANEL_CLASS}>
-      <div className="flex flex-col gap-3 mb-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
-          <Calculator className="w-5 h-5 text-maroon-600 dark:text-gold-400" />
-          <h2 className="text-base font-bold">Ашгийн тооцоо</h2>
+    <section className={`${PANEL_CLASS} space-y-4`} aria-labelledby="profit-heading">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 id="profit-heading" className="text-lg font-bold">Ашгийн тайлан</h2>
+          <p className="text-xs text-slate-500 dark:text-ivory-400">Валют солилцоо болон тийзийн ашгийг сонгосон хугацаагаар харуулна.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1 bg-slate-50 dark:bg-dark-700 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
-            {PROFIT_PERIODS.map((periodOption) => (
-              <button
-                key={periodOption.key}
-                onClick={() => setPeriod(periodOption.key)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                  period === periodOption.key ? "bg-maroon-600 text-white shadow" : "text-slate-600 dark:text-ivory-400 hover:bg-slate-200 dark:hover:bg-dark-600"
-                }`}
-              >
-                {periodOption.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="space-y-1 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+            Хугацаа
+            <select name="profit-period" value={period} onChange={(e) => setPeriod(e.target.value as ProfitPeriod)} className={`${INPUT_CLASS} min-w-36`}>
+              {PROFIT_PERIODS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+            </select>
+          </label>
           {period === "custom" && (
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-dark-700 p-1.5 rounded-2xl border border-slate-200 dark:border-dark-600">
-              <input type="date" value={custom.start} onChange={(e) => setCustom((current) => ({ ...current, start: e.target.value }))} className="bg-transparent text-xs p-1 outline-none" />
-              <span className="text-slate-400 text-xs">→</span>
-              <input type="date" value={custom.end} onChange={(e) => setCustom((current) => ({ ...current, end: e.target.value }))} className="bg-transparent text-xs p-1 outline-none" />
-            </div>
+            <>
+              <label className="space-y-1 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+                Эхлэх огноо
+                <input type="date" name="profit-start" value={custom.start} max={custom.end || undefined} onChange={(e) => setCustom((current) => ({ ...current, start: e.target.value }))} className={INPUT_CLASS} />
+              </label>
+              <label className="space-y-1 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+                Дуусах огноо
+                <input type="date" name="profit-end" value={custom.end} min={custom.start || undefined} onChange={(e) => setCustom((current) => ({ ...current, end: e.target.value }))} className={INPUT_CLASS} />
+              </label>
+            </>
           )}
           <button
+            type="button"
             onClick={() => setShowTransactions(true)}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition"
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-dark-700 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-dark-600 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
           >
             Жагсаалт харах
           </button>
         </div>
       </div>
 
-      <div className="text-[11px] text-slate-500 dark:text-ivory-400 mb-4 leading-relaxed bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3">
-        <b>Ашигийн томьёо:</b><br />
-        Руб→Төг: ( өртөг ханш − rate ) × руб дүн &nbsp;·&nbsp;
-        Төг→Руб: ( rate − өртөг ханш ) × руб дүн &nbsp;·&nbsp;
-        Онгоцны тийз: ( current exchange rate − өртөг ханш ) × руб дүн
-        <br />
-        <span className="text-slate-400">
-          Руб дүн: руб→төг бол анхны руб дүн, төг→руб болон тийз дээр amount ÷ rate. өртөг ханш = USD ханш ÷ black ханш. Ашиг ₮-өөр.
-        </span>
-      </div>
+      <details className="finance-help rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/40 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-slate-700 dark:text-ivory-200">Ашгийн тооцоолол</summary>
+        <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-ivory-300">
+          Руб→төг: (өртөг ханш − rate) × руб дүн. Төг→руб болон тийз: (rate − өртөг ханш) × руб дүн. Төг→руб болон тийзийн руб дүн amount ÷ rate. Өртөг ханш = USD ханш ÷ black ханш. Ашиг төгрөгөөр.
+        </p>
+      </details>
+
+      <nav aria-label="Ашгийн хэрэгслүүд" className="flex flex-wrap gap-2 text-xs">
+        <a href="#ticket-sales" className="rounded-full border border-slate-200 dark:border-dark-600 px-3 py-2 font-semibold text-slate-600 dark:text-ivory-300 hover:bg-slate-100 dark:hover:bg-dark-700">Тийзийн борлуулалт</a>
+        <a href="#cost-rates" className="rounded-full border border-slate-200 dark:border-dark-600 px-3 py-2 font-semibold text-slate-600 dark:text-ivory-300 hover:bg-slate-100 dark:hover:bg-dark-700">Өртөг ханш</a>
+      </nav>
+
+      {invalidCustomRange && <p role="alert" className="text-xs text-red-600 dark:text-red-400">Эхлэх огноо дуусах огнооноос хойш байж болохгүй.</p>}
+      {period === "custom" && !custom.start && <p className="text-xs text-slate-500 dark:text-ivory-400">Эхлэх огноог сонгож ашгийг харах.</p>}
 
       {profitQ.error ? (
-        <div className="text-sm text-red-500 py-6 text-center">Ашиг тооцоолж чадсангүй.</div>
-      ) : profitQ.isLoading || !profitQ.data ? (
+        <div role="alert" className="text-sm text-red-600 dark:text-red-400 py-6 text-center">
+          <p>{getApiErrorDetail(profitQ.error, "Ашиг тооцоолж чадсангүй.")}</p>
+          <button type="button" onClick={() => void profitQ.refetch()} className="mt-3 rounded-lg border border-current px-3 py-2 text-xs font-semibold">Дахин тооцоолох</button>
+        </div>
+      ) : invalidCustomRange || (period === "custom" && !custom.start) ? null : profitQ.isLoading || !profitQ.data ? (
         <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-maroon-600 animate-spin" /></div>
       ) : (
         <ProfitBody data={profitQ.data} />
@@ -1419,7 +1422,7 @@ function ProfitSection({ dashboardTimeZone }: { dashboardTimeZone: DashboardTime
           onClose={() => setShowTransactions(false)}
         />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1434,6 +1437,35 @@ function ProfitTransactionsModal({
 }) {
   const [sortBy, setSortBy] = useState<"timestamp" | "invoice_id">("timestamp");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"));
+    focusable()[0]?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      if (!elements.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === elements[0]) {
+        event.preventDefault();
+        elements[elements.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === elements[elements.length - 1]) {
+        event.preventDefault();
+        elements[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => dialog.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   const txQ = useQuery({
     queryKey: ["dashboard-profit-transactions", range.start, range.end, dashboardTimeZone],
@@ -1470,35 +1502,40 @@ function ProfitTransactionsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="profit-transactions-title" tabIndex={-1} className="finance-dialog w-full max-w-6xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 shadow-2xl flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-dark-600">
           <div>
-            <div className="text-sm font-bold">Ашгийн дэлгэрэнгүй жагсаалт</div>
+            <h3 id="profit-transactions-title" className="text-sm font-bold">Ашгийн дэлгэрэнгүй жагсаалт</h3>
             <div className="text-xs text-slate-500 dark:text-ivory-400">Нийт мөр: {txQ.data?.count ?? 0}</div>
           </div>
           <button
+            type="button"
+            aria-label="Жагсаалт хаах"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-700 transition"
-            title="Хаах"
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
           >
-            <X className="w-4 h-4" />
+            <X aria-hidden="true" className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-4 overflow-auto">
+        <div className="finance-dialog-content p-4 overflow-auto">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-xs text-slate-500 dark:text-ivory-400">Эрэмбэлэх:</span>
             <button
+              type="button"
               onClick={() => setSortBy("timestamp")}
+              aria-pressed={sortBy === "timestamp"}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${sortBy === "timestamp"
                 ? "bg-maroon-600 text-white"
                 : "bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-300 hover:bg-slate-200 dark:hover:bg-dark-600"}`}
             >
-              Timestamp
+              Огноо
             </button>
             <button
+              type="button"
               onClick={() => setSortBy("invoice_id")}
+              aria-pressed={sortBy === "invoice_id"}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${sortBy === "invoice_id"
                 ? "bg-maroon-600 text-white"
                 : "bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-300 hover:bg-slate-200 dark:hover:bg-dark-600"}`}
@@ -1506,7 +1543,9 @@ function ProfitTransactionsModal({
               Invoice ID
             </button>
             <button
+              type="button"
               onClick={toggleSortDir}
+              aria-label={sortDir === "asc" ? "Эрэмбэ өсөхөөр солих" : "Эрэмбэ буурахаар солих"}
               className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-dark-700 text-slate-600 dark:text-ivory-300 hover:bg-slate-200 dark:hover:bg-dark-600 transition"
             >
               {sortDir === "asc" ? "Өсөх" : "Буурах"}
@@ -1514,7 +1553,10 @@ function ProfitTransactionsModal({
           </div>
 
           {txQ.error ? (
-            <div className="text-sm text-red-500 py-8 text-center">Дэлгэрэнгүй жагсаалт ачаалж чадсангүй.</div>
+            <div role="alert" className="text-sm text-red-600 dark:text-red-400 py-8 text-center">
+              <p>{getApiErrorDetail(txQ.error, "Дэлгэрэнгүй жагсаалт ачаалж чадсангүй.")}</p>
+              <button type="button" onClick={() => void txQ.refetch()} className="mt-3 rounded-lg border border-current px-3 py-2 text-xs font-semibold">Дахин ачаалах</button>
+            </div>
           ) : txQ.isLoading || !txQ.data ? (
             <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 text-maroon-600 animate-spin" /></div>
           ) : txQ.data.items.length === 0 ? (
@@ -1522,6 +1564,7 @@ function ProfitTransactionsModal({
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
+                <caption className="sr-only">Сонгосон хугацааны ашгийн мөрүүд</caption>
                 <thead>
                   <tr className="text-left text-slate-500 dark:text-ivory-400 border-b border-slate-200 dark:border-dark-600">
                     <th className="py-2 pr-2 font-medium">Invoice/ID</th>
@@ -1577,7 +1620,7 @@ function ProfitBody({ data }: { data: ProfitSummary }) {
           <div>
             <b>{data.missing_rate_dates.length}</b> өдөрт өртөг ханш оруулаагүй тул тооцоонд ороогүй:
             <span className="font-mono"> {data.missing_rate_dates.slice(0, 12).join(", ")}{data.missing_rate_dates.length > 12 ? "…" : ""}</span>
-            <div className="mt-0.5 text-amber-600/80">Доорх "Өртөг ханш" хэсэгт тухайн өдрүүдийн ханшийг оруулна уу.</div>
+            <div className="mt-0.5 text-amber-700 dark:text-amber-300">Эдгээр өдрийн ханшийг <a className="font-semibold underline underline-offset-2" href="#cost-rates">Өртөг ханш</a> хэсэгт оруулна уу.</div>
           </div>
         </div>
       )}
@@ -1682,10 +1725,13 @@ function PlaneTicketSalesManager({
   const remove = async (sale: PlaneTicketSale) => {
     if (!window.confirm(`${sale.sale_date} өдрийн тийзийн борлуулалтыг устгах уу?`)) return;
     setDeletingId(sale.id);
+    setMessage(null);
     try {
       await deletePlaneTicketSale(sale.id);
       await salesQ.refetch();
       onSaved();
+    } catch (error) {
+      setMessage(getApiErrorDetail(error, "Тийзийн борлуулалт устгаж чадсангүй. Дахин оролдоно уу."));
     } finally {
       setDeletingId(null);
     }
@@ -1695,10 +1741,10 @@ function PlaneTicketSalesManager({
   const canSave = soldPriceValue > 0 && manualExchangeRate != null && costRatePreview != null && !saving;
 
   return (
-    <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700 space-y-4">
+    <section id="ticket-sales" aria-labelledby="ticket-sales-heading" className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700 space-y-4 scroll-mt-4">
       <div className="flex items-center gap-2">
-        <Plane className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
-        <h3 className="text-sm font-bold">Онгоцны тийзийн борлуулалт</h3>
+        <Plane aria-hidden="true" className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
+        <h3 id="ticket-sales-heading" className="text-base font-bold">Тийзийн борлуулалт</h3>
       </div>
 
       <p className="text-[11px] text-slate-500 dark:text-ivory-400 leading-relaxed bg-slate-50 dark:bg-dark-700/50 rounded-xl p-3">
@@ -1731,6 +1777,7 @@ function PlaneTicketSalesManager({
             <input className={INPUT_CLASS} placeholder="Нэмэлт тэмдэглэл" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
           <button
+            type="button"
             onClick={save}
             disabled={!canSave}
             className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
@@ -1751,17 +1798,20 @@ function PlaneTicketSalesManager({
             {saleDate}-наас өмнөх өртөг ханш олдсонгүй. Эхлээд доорх хэсэгт өртөг ханш хадгална уу.
           </div>
         )}
-        {message && <div className="text-xs text-slate-500 dark:text-ivory-400">{message}</div>}
+        {message && <div role={message.includes("чадсангүй") || message.includes("алдаа") ? "alert" : "status"} className="text-xs text-slate-600 dark:text-ivory-300">{message}</div>}
       </div>
 
       {salesQ.error ? (
-        <div className="text-sm text-red-500 py-4 text-center">Тийзийн борлуулалт ачаалж чадсангүй.</div>
+        <div role="alert" className="text-sm text-red-600 dark:text-red-400 py-4 text-center">
+          <p>{getApiErrorDetail(salesQ.error, "Тийзийн борлуулалт ачаалж чадсангүй.")}</p>
+          <button type="button" onClick={() => void salesQ.refetch()} className="mt-2 rounded-lg border border-current px-3 py-2 text-xs font-semibold">Дахин ачаалах</button>
+        </div>
       ) : salesQ.isLoading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-maroon-600 animate-spin" /></div>
       ) : (
         <PlaneTicketSalesList data={salesQ.data as PlaneTicketSalesResponse} onDelete={remove} deletingId={deletingId} />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1789,6 +1839,8 @@ function PlaneTicketSalesList({
                 <div className="font-semibold">{sale.sale_date}</div>
               </div>
               <button
+                type="button"
+                aria-label={`${sale.sale_date} өдрийн тийзийн борлуулалт устгах`}
                 onClick={() => onDelete(sale)}
                 disabled={deletingId === sale.id}
                 className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
@@ -1834,6 +1886,8 @@ function PlaneTicketSalesList({
                 <td className="py-2 px-2 text-slate-500 dark:text-ivory-300">{sale.note || "—"}</td>
                 <td className="py-2 pl-2 text-right">
                   <button
+                    type="button"
+                    aria-label={`${sale.sale_date} өдрийн тийзийн борлуулалт устгах`}
                     onClick={() => onDelete(sale)}
                     disabled={deletingId === sale.id}
                     className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 hover:bg-rose-200 transition"
@@ -2012,12 +2066,12 @@ function CostRateManager({
 
     const timer = window.setTimeout(() => {
       void saveCostRate({ date, usd_rate: usdRate, black_rate: blackRate })
-        .then(() => {
-          void refetchRates();
-          onSaved();
-        })
-        .catch(() => {
-          // The manual save action remains available if an automatic save fails.
+      .then(() => {
+        void refetchRates();
+        onSaved();
+      })
+        .catch((error) => {
+          setRateMsg(getApiErrorDetail(error, "Өртөг ханш автоматаар хадгалагдсангүй. Хадгалах товчийг ашиглан дахин оролдоно уу."));
         });
     }, 700);
     return () => window.clearTimeout(timer);
@@ -2035,6 +2089,9 @@ function CostRateManager({
       setRateMsg(null);
       await ratesQ.refetch();
       onSaved();
+      setRateMsg(`${date}-ны өртөг ханшийг хадгаллаа.`);
+    } catch (error) {
+      setRateMsg(getApiErrorDetail(error, "Өртөг ханш хадгалж чадсангүй. Дахин оролдоно уу."));
     } finally {
       setSaving(false);
     }
@@ -2081,10 +2138,10 @@ function CostRateManager({
   };
 
   return (
-    <div className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700">
+    <section id="cost-rates" aria-labelledby="cost-rates-heading" className="mt-5 pt-5 border-t border-slate-100 dark:border-dark-700 scroll-mt-4">
       <div className="flex items-center gap-2 mb-3">
-        <TrendingUp className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
-        <h3 className="text-sm font-bold">Өртөг ханш (USD ханш ÷ black ханш)</h3>
+        <TrendingUp aria-hidden="true" className="w-4 h-4 text-maroon-600 dark:text-gold-400" />
+        <h3 id="cost-rates-heading" className="text-base font-bold">Өртөг ханш</h3>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
@@ -2097,6 +2154,8 @@ function CostRateManager({
           <div className="flex gap-1">
             <input type="number" className={INPUT_CLASS} placeholder="0" value={black} onChange={(e) => setBlack(e.target.value)} />
             <button
+              type="button"
+              aria-label="Google Sheets-ээс black ханш татах"
               onClick={fetchBlack}
               disabled={fetchingRate}
               className="px-3 rounded-xl bg-slate-100 dark:bg-dark-700 hover:bg-slate-200 transition shrink-0"
@@ -2117,6 +2176,8 @@ function CostRateManager({
           </div>
         </div>
         <button
+          type="button"
+          aria-label="Өртөг ханш хадгалах"
           onClick={save}
           disabled={!costPreview || saving}
           className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
@@ -2126,9 +2187,7 @@ function CostRateManager({
       </div>
 
       <div className="mt-3 rounded-2xl border border-slate-100 dark:border-dark-700 bg-slate-50 dark:bg-dark-700/30 p-3">
-        <div className="text-[11px] text-slate-500 dark:text-ivory-400 mb-2">
-          Нэг хугацаанд ижил USD ханш оруулах
-        </div>
+        <h4 className="text-xs font-semibold text-slate-700 dark:text-ivory-200 mb-2">Хугацаанд ижил USD ханш оруулах</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
           <label>
             <div className="text-[10px] text-slate-400 mb-1">Эхлэх огноо</div>
@@ -2143,8 +2202,9 @@ function CostRateManager({
             <input type="number" className={INPUT_CLASS} placeholder="0" value={periodUsd} onChange={(e) => setPeriodUsd(e.target.value)} />
           </label>
           <button
+            type="button"
             onClick={savePeriodUsd}
-            disabled={!periodStart || !periodEnd || !(Number(periodUsd) > 0) || savingPeriod}
+            disabled={!periodStart || !periodEnd || periodEnd < periodStart || !(Number(periodUsd) > 0) || savingPeriod}
             className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-maroon-600 text-white text-sm font-semibold hover:bg-maroon-700 transition disabled:opacity-40"
           >
             {savingPeriod ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Period USD хадгалах
@@ -2152,7 +2212,21 @@ function CostRateManager({
         </div>
       </div>
 
-      {rateMsg && <div className="text-[11px] text-slate-500 dark:text-ivory-400 mt-2">{rateMsg}</div>}
+      {periodStart && periodEnd && periodEnd < periodStart && <p role="alert" className="text-xs text-red-600 dark:text-red-400 mt-2">Эхлэх огноо дуусах огнооноос хойш байж болохгүй.</p>}
+      {rateMsg && <div role={rateMsg.includes("алдаа") || rateMsg.includes("чадсангүй") ? "alert" : "status"} className="text-xs text-slate-600 dark:text-ivory-300 mt-2">{rateMsg}</div>}
+
+      {ratesQ.error && (
+        <div role="alert" className="text-xs text-red-600 dark:text-red-400">
+          {getApiErrorDetail(ratesQ.error, "Өртөг ханшийн жагсаалт ачаалж чадсангүй.")}
+          <button type="button" onClick={() => void ratesQ.refetch()} className="ml-2 rounded-lg border border-current px-2.5 py-1.5 font-semibold">Дахин ачаалах</button>
+        </div>
+      )}
+      {historicalBlackRatesQ.error && (
+        <div role="alert" className="text-xs text-red-600 dark:text-red-400">
+          Black ханшийн түүх ачаалж чадсангүй.
+          <button type="button" onClick={() => void historicalBlackRatesQ.refetch()} className="ml-2 rounded-lg border border-current px-2.5 py-1.5 font-semibold">Дахин ачаалах</button>
+        </div>
+      )}
 
       <div className="mt-4 grid gap-3 md:hidden">
         {listingRates.map((rate) => {
@@ -2171,6 +2245,7 @@ function CostRateManager({
               {isEditing ? (
                 <div className="flex items-center gap-1 mt-1">
                   <input
+                    aria-label={`${rate.rate_date} өдрийн USD ханш`}
                     autoFocus
                     type="number"
                     min="0.0001"
@@ -2181,6 +2256,8 @@ function CostRateManager({
                     onKeyDown={(e) => { if (e.key === "Enter") void saveHistoricalRate(rate.rate_date, blackRate); }}
                   />
                   <button
+                    type="button"
+                    aria-label={`${rate.rate_date} өдрийн USD ханш хадгалах`}
                     onClick={() => void saveHistoricalRate(rate.rate_date, blackRate)}
                     disabled={!(usdValue > 0) || !(blackRate > 0) || isSaving}
                     className="p-2 rounded-xl bg-maroon-600 text-white disabled:opacity-40"
@@ -2191,6 +2268,8 @@ function CostRateManager({
                 </div>
               ) : (
                 <button
+                  type="button"
+                  aria-label={`${rate.rate_date} өдрийн USD ханш засах`}
                   onClick={() => { setHistoricalUsd((current) => ({ ...current, [rate.rate_date]: usdDraft })); setEditingUsdDate(rate.rate_date); }}
                   className="mt-1 inline-flex items-center gap-1 font-semibold text-left hover:text-maroon-600 dark:hover:text-gold-400"
                   title="USD ханшийг гараар оруулах"
@@ -2233,6 +2312,7 @@ function CostRateManager({
                   {isEditing ? (
                     <div className="flex items-center justify-end gap-1">
                       <input
+                        aria-label={`${rate.rate_date} өдрийн USD ханш`}
                         autoFocus
                         type="number"
                         min="0.0001"
@@ -2243,6 +2323,8 @@ function CostRateManager({
                         onKeyDown={(e) => { if (e.key === "Enter") void saveHistoricalRate(rate.rate_date, blackRate); }}
                       />
                       <button
+                        type="button"
+                        aria-label={`${rate.rate_date} өдрийн USD ханш хадгалах`}
                         onClick={() => void saveHistoricalRate(rate.rate_date, blackRate)}
                         disabled={!(usdValue > 0) || !(blackRate > 0) || isSaving}
                         className="p-1.5 rounded-lg bg-maroon-600 text-white disabled:opacity-40"
@@ -2253,6 +2335,8 @@ function CostRateManager({
                     </div>
                   ) : (
                     <button
+                      type="button"
+                      aria-label={`${rate.rate_date} өдрийн USD ханш засах`}
                       onClick={() => { setHistoricalUsd((current) => ({ ...current, [rate.rate_date]: usdDraft })); setEditingUsdDate(rate.rate_date); }}
                       className="inline-flex items-center gap-1 hover:text-maroon-600 dark:hover:text-gold-400"
                       title="USD ханшийг гараар оруулах"
@@ -2272,6 +2356,6 @@ function CostRateManager({
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }

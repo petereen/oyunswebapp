@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Activity, ArrowDownLeft, ArrowUpRight, BarChart3, Calendar, Clock, Download, Gauge,
+  Activity, ArrowDownLeft, ArrowUpRight, BarChart3, Clock, Download, Gauge,
   Lock, LogOut, RefreshCw, Search, TrendingUp, UserCog, Users, Wallet, Eye, EyeOff, Loader2,
 } from "lucide-react";
 import {
@@ -13,10 +13,23 @@ import {
   fetchDashboardData, verifyDashboardKey,
 } from "../api";
 import { useTheme } from "../hooks/useTheme";
-import { BalanceProfitPage } from "./BalanceProfitPage";
+import oyunsIcon from "../assets/oyuns-icon.png";
+import { BalanceProfitPage, DashboardTimeZone } from "./BalanceProfitPage";
 
 type PeriodKey = "today" | "7d" | "30d" | "90d" | "month" | "year" | "all" | "custom";
-type DashboardPage = "balance" | "stats";
+type DashboardPage = "balance" | "profit" | "transactions";
+
+const DASHBOARD_VIEW_PARAM = "dashboard-tab";
+const DASHBOARD_TIMEZONE_STORAGE = "oyuns_dashboard_timezone";
+
+function readDashboardPage(): DashboardPage {
+  const value = new URLSearchParams(window.location.search).get(DASHBOARD_VIEW_PARAM);
+  return value === "profit" || value === "transactions" ? value : "balance";
+}
+
+function readDashboardTimeZone(): DashboardTimeZone {
+  return localStorage.getItem(DASHBOARD_TIMEZONE_STORAGE) === "ub" ? "ub" : "moscow";
+}
 
 const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "Өнөөдөр" },
@@ -167,32 +180,35 @@ export function DashboardPanel() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-dark-900 p-4">
         <div className="w-full max-w-sm bg-white dark:bg-dark-800 rounded-3xl shadow-xl border border-slate-200 dark:border-dark-600 p-7">
           <div className="flex flex-col items-center text-center mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-maroon-600 flex items-center justify-center mb-3">
-              <BarChart3 className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-xl font-bold text-slate-800 dark:text-ivory-200">Гүйлгээ · Самбар</h1>
-            <p className="text-sm text-slate-500 dark:text-ivory-400 mt-1">Oyuns AIO Bot · статистик</p>
+            <img src={oyunsIcon} alt="OYUNS" width={56} height={56} className="w-14 h-14 rounded-2xl mb-3" />
+            <h1 className="text-xl font-bold text-slate-800 dark:text-ivory-200">OYUNS Санхүүгийн самбар</h1>
+            <p className="text-sm text-slate-500 dark:text-ivory-400 mt-1">Үргэлжлүүлэхийн тулд нэвтрэх түлхүүрээ оруулна уу.</p>
           </div>
-          <label className="text-xs font-medium text-slate-500 dark:text-ivory-400">Нэвтрэх түлхүүр</label>
+          <label htmlFor="dashboard-key" className="text-xs font-medium text-slate-500 dark:text-ivory-400">Нэвтрэх түлхүүр</label>
           <div className="relative mt-1">
             <input
+              id="dashboard-key"
+              name="dashboard-key"
+              autoComplete="current-password"
               type={showKey ? "text" : "password"}
               value={keyInput}
               onChange={(e) => setKeyInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              placeholder="••••••••"
-              className="w-full rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-slate-800 dark:text-ivory-200 p-3 pr-10 text-sm focus:ring-2 focus:ring-maroon-500 focus:border-transparent"
+              placeholder="Нэвтрэх түлхүүр"
+              className="w-full rounded-xl border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-slate-800 dark:text-ivory-200 p-3 pr-10 text-sm focus-visible:ring-2 focus-visible:ring-maroon-500 focus-visible:border-transparent"
             />
             <button
+              type="button"
+              aria-label={showKey ? "Түлхүүр нуух" : "Түлхүүр харуулах"}
               onClick={() => setShowKey((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              type="button"
             >
               {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
-          {authError && <p className="text-xs text-red-500 mt-2">{authError}</p>}
+          {authError && <p role="alert" className="text-xs text-red-500 mt-2">{authError}</p>}
           <button
+            type="button"
             onClick={handleLogin}
             disabled={loggingIn}
             className="w-full mt-4 flex items-center justify-center gap-2 py-3 rounded-xl bg-maroon-600 text-white font-semibold hover:bg-maroon-700 transition disabled:opacity-50"
@@ -200,9 +216,6 @@ export function DashboardPanel() {
             {loggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
             Нэвтрэх
           </button>
-          <p className="text-[11px] text-slate-400 dark:text-ivory-400 text-center mt-4">
-            Телеграм нэвтрэлтгүй · зөвхөн түлхүүрээр
-          </p>
         </div>
       </div>
     );
@@ -213,42 +226,102 @@ export function DashboardPanel() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageTabs({ page, setPage }: { page: DashboardPage; setPage: (p: DashboardPage) => void }) {
+function AuthedDashboard({ theme, onLogout }: { theme: string; onLogout: () => void }) {
+  const [page, setPage] = useState<DashboardPage>(readDashboardPage);
+  const [timeZone, setTimeZone] = useState<DashboardTimeZone>(readDashboardTimeZone);
   const tabs: { key: DashboardPage; label: string }[] = [
-    { key: "balance", label: "Баланс ба Ашиг" },
-    { key: "stats", label: "Статистик" },
+    { key: "balance", label: "Баланс" },
+    { key: "profit", label: "Ашиг" },
+    { key: "transactions", label: "Гүйлгээ" },
   ];
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_TIMEZONE_STORAGE, timeZone);
+  }, [timeZone]);
+
+  useEffect(() => {
+    const onPopState = () => setPage(readDashboardPage());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const navigatePage = (nextPage: DashboardPage) => {
+    const url = new URL(window.location.href);
+    if (nextPage === "balance") url.searchParams.delete(DASHBOARD_VIEW_PARAM);
+    else url.searchParams.set(DASHBOARD_VIEW_PARAM, nextPage);
+    window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    setPage(nextPage);
+  };
+
   return (
-    <div className="flex w-full sm:w-auto items-center gap-1 bg-white dark:bg-dark-800 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          onClick={() => setPage(t.key)}
-          className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
-            page === t.key
-              ? "bg-maroon-600 text-white shadow"
-              : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"
-          }`}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div className="finance-dashboard min-h-screen bg-slate-50 dark:bg-dark-900 text-slate-800 dark:text-ivory-200">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
+        <header className="mb-5 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <img src={oyunsIcon} alt="OYUNS" width={40} height={40} className="h-10 w-10 rounded-xl" />
+              <div className="min-w-0">
+                <h1 className="truncate text-base md:text-lg font-bold leading-tight">OYUNS Санхүү</h1>
+                <p className="text-xs text-slate-500 dark:text-ivory-400">Баланс, ашиг, гүйлгээний хяналт</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-dark-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              <LogOut aria-hidden="true" className="h-4 w-4" /> Гарах
+            </button>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <nav aria-label="Санхүүгийн самбар" className="finance-tabs flex w-full sm:w-auto items-center gap-1 rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  aria-current={page === tab.key ? "page" : undefined}
+                  onClick={() => navigatePage(tab.key)}
+                  className={`min-h-10 flex-1 sm:flex-none px-4 rounded-xl text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${page === tab.key ? "bg-maroon-600 text-white shadow-sm" : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+            {page !== "transactions" && (
+              <fieldset className="flex items-center gap-1 rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-1">
+                <legend className="sr-only">Таймзон</legend>
+                {([{ key: "moscow", label: "Москва · MSK" }, { key: "ub", label: "Улаанбаатар · UB" }] as const).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    aria-pressed={timeZone === option.key}
+                    onClick={() => setTimeZone(option.key)}
+                    className={`min-h-10 px-3 rounded-xl text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${timeZone === option.key ? "bg-maroon-600 text-white" : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </fieldset>
+            )}
+          </div>
+        </header>
+
+        <main id="dashboard-main">
+          <div className={page === "transactions" ? "hidden" : ""} aria-hidden={page === "transactions"}>
+            <BalanceProfitPage activePage={page === "profit" ? "profit" : "balance"} dashboardTimeZone={timeZone} />
+          </div>
+          <div className={page === "transactions" ? "" : "hidden"} aria-hidden={page !== "transactions"}>
+            <DashboardContent theme={theme} active={page === "transactions"} />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
 
-function AuthedDashboard({ theme, onLogout }: { theme: string; onLogout: () => void }) {
-  const [page, setPage] = useState<DashboardPage>("balance");
-  const pageTabs = <PageTabs page={page} setPage={setPage} />;
-  if (page === "stats") {
-    return <DashboardContent theme={theme} onLogout={onLogout} pageTabs={pageTabs} />;
-  }
-  return <BalanceProfitPage onLogout={onLogout} pageTabs={pageTabs} />;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DashboardContent({ theme, onLogout, pageTabs }: { theme: string; onLogout: () => void; pageTabs?: React.ReactNode }) {
+function DashboardContent({ theme, active }: { theme: string; active: boolean }) {
   const [period, setPeriod] = useState<PeriodKey>("30d");
   const [custom, setCustom] = useState({ start: "", end: "" });
   const [statusFilter, setStatusFilter] = useState<DashboardStatusFilter>("all");
@@ -256,6 +329,7 @@ function DashboardContent({ theme, onLogout, pageTabs }: { theme: string; onLogo
   const [search, setSearch] = useState("");
 
   const range = useMemo(() => computeRange(period, custom), [period, custom]);
+  const invalidCustomRange = period === "custom" && Boolean(custom.start && custom.end && custom.end < custom.start);
 
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ["dashboard-transactions", range.start, range.end, range.granularity, statusFilter, adminId],
@@ -263,7 +337,7 @@ function DashboardContent({ theme, onLogout, pageTabs }: { theme: string; onLogo
       start: range.start, end: range.end, granularity: range.granularity,
       status: statusFilter, admin_id: adminId ?? undefined,
     }),
-    enabled: period !== "custom" || Boolean(custom.start),
+    enabled: active && !invalidCustomRange && (period !== "custom" || Boolean(custom.start)),
     staleTime: 60_000,
   });
 
@@ -271,111 +345,72 @@ function DashboardContent({ theme, onLogout, pageTabs }: { theme: string; onLogo
   const gridColor = theme === "dark" ? "#334155" : "#e2e8f0";
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-dark-900 text-slate-800 dark:text-ivory-200">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-5">
-        {/* Header */}
-        <div className="flex flex-col gap-3 mb-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-maroon-600 flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg md:text-xl font-bold leading-tight">Гүйлгээ · Oyuns AIO Bot</h1>
-              <p className="text-xs text-slate-500 dark:text-ivory-400">Гүйлгээний статистик самбар</p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {pageTabs}
-            <button
-              onClick={() => refetch()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-sm font-medium hover:bg-slate-100 dark:hover:bg-dark-700 transition"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} /> Шинэчлэх
-            </button>
-            <button
-              onClick={onLogout}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-sm font-medium hover:bg-slate-100 dark:hover:bg-dark-700 transition"
-            >
-              <LogOut className="w-4 h-4" /> Гарах
-            </button>
-          </div>
+    <section className="space-y-4" aria-labelledby="transactions-heading">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 id="transactions-heading" className="text-lg font-bold">Гүйлгээний статистик</h2>
+          <p className="text-xs text-slate-500 dark:text-ivory-400">Дүн, төлөв, гүйцэтгэл ба бүртгэл.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-600 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-dark-700 transition disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+        >
+          <RefreshCw aria-hidden="true" className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} /> Шинэчлэх
+        </button>
+      </div>
 
-        {/* Filters */}
-        <div className="flex flex-col gap-3 mb-5">
-          {/* Period selector */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1 bg-white dark:bg-dark-800 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
-              {PERIODS.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => setPeriod(p.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                    period === p.key
-                      ? "bg-maroon-600 text-white shadow"
-                      : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {period === "custom" && (
-              <div className="flex items-center gap-2 bg-white dark:bg-dark-800 p-1.5 rounded-2xl border border-slate-200 dark:border-dark-600">
-                <Calendar className="w-4 h-4 text-slate-400 ml-1" />
-                <input type="date" value={custom.start} onChange={(e) => setCustom((c) => ({ ...c, start: e.target.value }))} className="bg-transparent text-xs p-1.5 outline-none" />
-                <span className="text-slate-400 text-xs">→</span>
-                <input type="date" value={custom.end} onChange={(e) => setCustom((c) => ({ ...c, end: e.target.value }))} className="bg-transparent text-xs p-1.5 outline-none" />
-              </div>
-            )}
-          </div>
+      <div className="finance-filterbar grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-3">
+        <label className="space-y-1.5 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+          Хугацаа
+          <select name="transaction-period" value={period} onChange={(e) => setPeriod(e.target.value as PeriodKey)} className="finance-input w-full">
+            {PERIODS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+          </select>
+        </label>
+        {period === "custom" ? (
+          <>
+            <label className="space-y-1.5 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+              Эхлэх огноо
+              <input type="date" name="transaction-start" value={custom.start} max={custom.end || undefined} onChange={(e) => setCustom((current) => ({ ...current, start: e.target.value }))} className="finance-input w-full" />
+            </label>
+            <label className="space-y-1.5 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+              Дуусах огноо
+              <input type="date" name="transaction-end" value={custom.end} min={custom.start || undefined} onChange={(e) => setCustom((current) => ({ ...current, end: e.target.value }))} className="finance-input w-full" />
+            </label>
+          </>
+        ) : null}
+        <label className="space-y-1.5 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+          Төлөв
+          <select name="transaction-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as DashboardStatusFilter)} className="finance-input w-full">
+            {STATUS_OPTIONS.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+          </select>
+        </label>
+        <label className="space-y-1.5 text-xs font-semibold text-slate-600 dark:text-ivory-300">
+          Админ
+          <select name="transaction-admin" value={adminId ?? ""} onChange={(e) => setAdminId(e.target.value ? Number(e.target.value) : null)} className="finance-input w-full">
+            <option value="">Бүх админ</option>
+            {(data?.admins || []).map((a) => <option key={a.admin_id} value={a.admin_id}>{a.name || `ID ${a.admin_id}`}</option>)}
+          </select>
+        </label>
+      </div>
 
-          {/* Status + admin filter */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-1 bg-white dark:bg-dark-800 p-1 rounded-2xl border border-slate-200 dark:border-dark-600">
-              {STATUS_OPTIONS.map((o) => (
-                <button
-                  key={o.key}
-                  onClick={() => setStatusFilter(o.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                    statusFilter === o.key
-                      ? "bg-slate-800 text-white dark:bg-ivory-200 dark:text-dark-900 shadow"
-                      : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 bg-white dark:bg-dark-800 px-2 py-1 rounded-2xl border border-slate-200 dark:border-dark-600">
-              <UserCog className="w-4 h-4 text-slate-400" />
-              <select
-                value={adminId ?? ""}
-                onChange={(e) => setAdminId(e.target.value ? Number(e.target.value) : null)}
-                className="bg-transparent text-xs font-semibold py-1.5 pr-1 outline-none cursor-pointer"
-              >
-                <option value="">Бүх админ</option>
-                {(data?.admins || []).map((a) => (
-                  <option key={a.admin_id} value={a.admin_id}>{a.name || `ID ${a.admin_id}`}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
+      {invalidCustomRange && <p role="alert" className="text-xs text-red-600 dark:text-red-400">Эхлэх огноо дуусах огнооноос хойш байж болохгүй.</p>}
+      {period === "custom" && !custom.start && <p className="text-xs text-slate-500 dark:text-ivory-400">Эхлэх огноог сонгож гүйлгээг харах.</p>}
 
-        {error ? (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-2xl text-sm">
-            Мэдээлэл ачаалж чадсангүй. Түлхүүр / холболтоо шалгаад дахин оролдоно уу.
+      {error ? (
+          <div role="alert" className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded-2xl text-sm">
+            <p>Мэдээлэл ачаалж чадсангүй. Холболтоо шалгаад дахин оролдоно уу.</p>
+            <button type="button" onClick={() => void refetch()} className="mt-3 rounded-lg border border-current px-3 py-2 text-xs font-semibold">Дахин ачаалах</button>
           </div>
-        ) : isLoading || !data ? (
+      ) : invalidCustomRange || (period === "custom" && !custom.start) ? null : isLoading || !data ? (
           <div className="flex items-center justify-center py-24">
-            <Loader2 className="w-10 h-10 text-maroon-600 animate-spin" />
+            <Loader2 aria-label="Ачаалж байна" className="w-10 h-10 text-maroon-600 animate-spin" />
           </div>
         ) : (
           <DashboardBody data={data} axisColor={axisColor} gridColor={gridColor} search={search} setSearch={setSearch} />
         )}
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -385,10 +420,10 @@ function StatCard({ icon, label, value, sub, accent }: {
   icon: React.ReactNode; label: string; value: string; sub?: string; accent?: string;
 }) {
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 p-4 shadow-sm">
+    <div className="finance-panel bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-500 dark:text-ivory-400">{label}</span>
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${accent || "bg-maroon-50 dark:bg-maroon-900/30 text-maroon-600 dark:text-maroon-300"}`}>
+        <div aria-hidden="true" className={`w-8 h-8 rounded-xl flex items-center justify-center ${accent || "bg-maroon-50 dark:bg-maroon-900/30 text-maroon-600 dark:text-maroon-300"}`}>
           {icon}
         </div>
       </div>
@@ -399,14 +434,15 @@ function StatCard({ icon, label, value, sub, accent }: {
 }
 
 function ChartCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+  const titleId = useId();
   return (
-    <div className="bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 p-4 shadow-sm">
+    <section aria-labelledby={titleId} className="finance-panel bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-maroon-600 dark:text-gold-400">{icon}</span>
-        <h3 className="text-sm font-bold">{title}</h3>
+        <span aria-hidden="true" className="text-maroon-600 dark:text-gold-400">{icon}</span>
+        <h3 id={titleId} className="text-sm font-bold">{title}</h3>
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -441,7 +477,6 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard icon={<Wallet className="w-4 h-4" />} label="Нийт гүйлгээний дүн" value={fmtRub(s.total_volume_rub)} sub={`${fmtNum(s.valid_count)} идэвхтэй гүйлгээ`} />
-        <StatCard icon={<Activity className="w-4 h-4" />} label="Амжилттай гүйлгээ" value={fmtRub(s.completed_volume_rub)} sub={`${fmtNum(s.completed_count)} амжилттай`} accent="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" />
         <StatCard icon={<BarChart3 className="w-4 h-4" />} label="Нийт гүйлгээний тоо" value={fmtNum(s.total_count)} sub={`дундаж ${fmtRub(s.avg_transaction_rub)}`} />
         <StatCard icon={<Clock className="w-4 h-4" />} label="Дундаж хугацаа" value={fmtDuration(s.avg_duration_minutes)} sub="амжилттай гүйлгээ" accent="bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400" />
         <StatCard icon={<ArrowDownLeft className="w-4 h-4" />} label="Авах (RUB→MNT)" value={fmtRub(s.buy_volume_rub)} sub={`${fmtNum(s.buy_count)} гүйлгээ`} accent="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" />
@@ -598,36 +633,41 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
       )}
 
       {/* Transactions table */}
-      <div className="bg-white dark:bg-dark-800 rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm overflow-hidden">
+      <div className="finance-panel rounded-2xl border border-slate-200 dark:border-dark-600 shadow-sm overflow-hidden">
         <div className="flex flex-col gap-3 p-4 border-b border-slate-200 dark:border-dark-600 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold">Гүйлгээнүүд</h3>
             <span className="text-xs text-slate-500 dark:text-ivory-400">
-              {fmtNum(filteredRows.length)} / {fmtNum(data.row_count)}{data.truncated ? " (20мянгаар хязгаарласан)" : ""}
+              {fmtNum(filteredRows.length)} / {fmtNum(data.row_count)} мөр
+              {data.truncated ? <span className="text-amber-700 dark:text-amber-300"> · ачаалалт 20,000 мөрөөр хязгаарлагдсан</span> : null}
             </span>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative w-full sm:w-auto">
-              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search aria-hidden="true" className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
+                aria-label="Invoice ID, хэрэглэгч, админ эсвэл promo кодоор хайх"
+                name="transaction-search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Хайх: Invoice ID / хэрэглэгч / админ"
-                className="pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 text-xs w-full sm:w-60 outline-none focus:ring-2 focus:ring-maroon-500"
+                className="finance-input pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 text-xs w-full sm:w-60"
               />
             </div>
             <button
+              type="button"
+              aria-label={`CSV татах · ${fmtNum(filteredRows.length)} мөр`}
               onClick={() => exportCsv(filteredRows)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-xs font-semibold hover:bg-maroon-700 transition"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-maroon-600 text-white text-xs font-semibold hover:bg-maroon-700 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
-              <Download className="w-4 h-4" /> CSV
+              <Download aria-hidden="true" className="w-4 h-4" /> CSV
             </button>
           </div>
         </div>
 
         <div>
           {filteredRows.length === 0 ? (
-            <div className="py-12 text-center text-sm text-slate-400">Шүүлтэнд тохирох гүйлгээ алга.</div>
+              <div className="py-12 text-center text-sm text-slate-500 dark:text-ivory-400">Шүүлтэд тохирох гүйлгээ алга. Хугацаа, төлөв, админ эсвэл хайлтаа өөрчилнө үү.</div>
           ) : (
             <>
               <div className="md:hidden divide-y divide-slate-100 dark:divide-dark-700">
@@ -638,6 +678,7 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
 
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-xs">
+                  <caption className="sr-only">Гүйлгээний бүртгэл</caption>
                   <thead>
                     <tr className="text-left text-slate-500 dark:text-ivory-400 bg-slate-50 dark:bg-dark-700/50">
                       <th className="px-4 py-2.5 font-medium">Invoice ID</th>
@@ -689,10 +730,11 @@ function DashboardBody({ data, axisColor, gridColor, search, setSearch }: {
               </div>
 
               {filteredRows.length > 500 && (
-                <div className="py-3 text-center text-[11px] text-slate-400 border-t border-slate-100 dark:border-dark-700">
-                  Эхний 500 мөр харагдаж байна · бүгдийг CSV-ээр татна уу ({fmtNum(filteredRows.length)}).
+                <div className="py-3 px-4 text-center text-[11px] text-slate-500 dark:text-ivory-400 border-t border-slate-100 dark:border-dark-700">
+                  Эхний 500 мөрийг харуулж байна. CSV нь хайлтад таарсан {fmtNum(filteredRows.length)} ачаалсан мөрийг татна.
                 </div>
               )}
+              {data.truncated && <p className="border-t border-slate-100 dark:border-dark-700 px-4 py-3 text-center text-[11px] text-amber-700 dark:text-amber-300">Серверээс ирсэн жагсаалт 20,000 мөрөөр хязгаарлагдсан тул түүнээс хойших гүйлгээ CSV-д орохгүй.</p>}
             </>
           )}
         </div>

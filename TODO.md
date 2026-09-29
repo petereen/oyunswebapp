@@ -1,6 +1,13 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Rework standalone dashboard shell into persistent Balance, Profit, and Transactions areas (frontend/src/pages/DashboardPanel.tsx)
+- [x] Simplify Balance layout and make financial action feedback/accessibility complete (frontend/src/pages/BalanceProfitPage.tsx)
+- [x] Simplify Profit and Transactions layouts while preserving current data and workflows (frontend/src/pages/BalanceProfitPage.tsx, frontend/src/pages/DashboardPanel.tsx)
+- [x] Add dashboard regression coverage for authentication, navigation, finance actions, filters, and exports (frontend/src/pages/DashboardPanel.test.tsx, frontend/src/pages/BalanceProfitPage.test.tsx)
+- [x] Apply scoped OYUNS design tokens and responsive dashboard styles (frontend/src/index.css)
+- [x] Run frontend tests, typecheck, and production build
+- [ ] Verify the deployed dashboard with an authorized test key (hostname DNS did not resolve in this environment; retry when access is available)
 - [x] Diagnose and fix the persistent production broadcast API 500 (backend/main.py, supabase/migrations/)
 - [ ] Deploy the broadcast API fallback and verify a live send
 - [x] Fix deployed broadcast 500 compatibility for JSON text sends (frontend/src/api.ts, backend/main.py)
@@ -110,6 +117,9 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Reconcile the standalone finance dashboard around Balance, Profit, and Transactions while preserving existing API behavior (frontend/src/pages/DashboardPanel.tsx, frontend/src/pages/BalanceProfitPage.tsx)
+- [x] Add dashboard regression coverage for navigation, draft retention, balance changes/history, profit/ticket/rate actions, transaction filters, search, and CSV limits (frontend/src/pages/DashboardPanel.test.tsx, frontend/src/pages/BalanceProfitPage.test.tsx)
+- [x] Verify frontend tests, TypeScript, and production build for the finance dashboard
 - [x] Diagnose hidden broadcast error toast and missing in-flight feedback behind the confirmation modal
 - [x] Wire manual broadcasts to authenticated Telegram delivery with per-recipient audit results and custom-audience support (frontend/src/components/admin/AdminBroadcasts.tsx, frontend/src/api.ts, backend/main.py, supabase/functions/broadcast-management/index.ts, supabase/migrations/)
 - [x] Diagnose queued manual broadcast as a frontend-only mock with no backend/Telegram dispatch
