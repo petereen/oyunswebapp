@@ -28,7 +28,8 @@ function readDashboardPage(): DashboardPage {
 }
 
 function readDashboardTimeZone(): DashboardTimeZone {
-  return localStorage.getItem(DASHBOARD_TIMEZONE_STORAGE) === "ub" ? "ub" : "moscow";
+  const savedTimeZone = localStorage.getItem(DASHBOARD_TIMEZONE_STORAGE);
+  return savedTimeZone === "moscow" ? "moscow" : "ub";
 }
 
 const PERIODS: { key: PeriodKey; label: string }[] = [
@@ -259,9 +260,9 @@ function AuthedDashboard({ theme, onLogout }: { theme: string; onLogout: () => v
         <header className="mb-5 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <img src={oyunsIcon} alt="OYUNS" width={40} height={40} className="h-10 w-10 rounded-xl" />
+              <img src={oyunsIcon} alt="OYUNS" width={40} height={40} className="h-10 w-10 rounded-xl object-contain" />
               <div className="min-w-0">
-                <h1 className="truncate text-base md:text-lg font-bold leading-tight">OYUNS Санхүү</h1>
+                <h1 className="truncate text-base md:text-lg font-bold leading-tight">OYUNS BOT Dashboard</h1>
                 <p className="text-xs text-slate-500 dark:text-ivory-400">Баланс, ашиг, гүйлгээний хяналт</p>
               </div>
             </div>

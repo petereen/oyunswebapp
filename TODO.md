@@ -117,6 +117,8 @@
 - [ ] Verify backend tests and frontend production build
 
 ## Completed Tasks
+- [x] Default the dashboard timezone to Ulaanbaatar while preserving an explicitly saved Moscow choice (frontend/src/pages/DashboardPanel.tsx)
+- [x] Preserve the dashboard logo's aspect ratio with object-fit contain (frontend/src/pages/DashboardPanel.tsx)
 - [x] Reconcile the standalone finance dashboard around Balance, Profit, and Transactions while preserving existing API behavior (frontend/src/pages/DashboardPanel.tsx, frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Add dashboard regression coverage for navigation, draft retention, balance changes/history, profit/ticket/rate actions, transaction filters, search, and CSV limits (frontend/src/pages/DashboardPanel.test.tsx, frontend/src/pages/BalanceProfitPage.test.tsx)
 - [x] Verify frontend tests, TypeScript, and production build for the finance dashboard
