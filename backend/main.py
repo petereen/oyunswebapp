@@ -7086,6 +7086,18 @@ async def admin_action(
         except Exception:
             dispatch_exists = False
             dispatch_status = None
+    # A dispatch only owns the transaction while it is approved. If the
+    # transaction went back to pending/waiting_edit (e.g. after a user edit),
+    # the leftover dispatch row is stale: drop it so it neither blocks admin
+    # actions nor gets sent to the group after a later traditional approval.
+    if dispatch_exists and (trx.get("status") or "").lower() in ("pending", "waiting_edit"):
+        try:
+            client.table("exchange_group_dispatches").delete().eq("invoice", payload.invoice).execute()
+        except Exception as exc:
+            logger.error("Could not remove stale group dispatch for %s: %s", payload.invoice, exc)
+            raise HTTPException(status_code=500, detail="Could not clear stale Telegram group dispatch") from exc
+        dispatch_exists = False
+        dispatch_status = None
     group_dispatch_requested = payload.processing_mode == "group"
     manual_group_confirmation_requested = payload.processing_mode == "group_manual"
     group_approval_performed = False

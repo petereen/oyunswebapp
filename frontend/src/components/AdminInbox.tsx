@@ -142,6 +142,8 @@ export function AdminInbox() {
   const [photoZoom, setPhotoZoom] = useState(1);
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
+  const [rejectError, setRejectError] = useState("");
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
   const [rejectBillUrls, setRejectBillUrls] = useState<string[]>([]);
   const [rejectUploading, setRejectUploading] = useState(false);
   const [confirmModal, setConfirmModal] = useState<InboxItem | null>(null);
@@ -329,6 +331,7 @@ export function AdminInbox() {
       await load();
     } catch (err) {
       console.error("Revert to pending error:", err);
+      setError(getAdminActionError(err, "Гүйлгээг буцаахад алдаа гарлаа"));
     }
   };
 
@@ -345,11 +348,14 @@ export function AdminInbox() {
       await load();
     } catch (err) {
       console.error("Set waiting_edit error:", err);
+      setError(getAdminActionError(err, "Засвар шаардахад алдаа гарлаа"));
     }
   };
 
   const handleReject = async () => {
-    if (!rejectModal) return;
+    if (!rejectModal || rejectSubmitting) return;
+    setRejectError("");
+    setRejectSubmitting(true);
     try {
       await adminAction({
         invoice: rejectModal,
@@ -363,6 +369,9 @@ export function AdminInbox() {
       await load();
     } catch (err) {
       console.error("Rejection error:", err);
+      setRejectError(getAdminActionError(err, "Гүйлгээг татгалзахад алдаа гарлаа"));
+    } finally {
+      setRejectSubmitting(false);
     }
   };
 
@@ -1495,12 +1504,19 @@ export function AdminInbox() {
               </label>
             </div>
 
+            {rejectError && (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {rejectError}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button
                 onClick={() => {
                   setRejectModal(null);
                   setRejectComment("");
                   setRejectBillUrls([]);
+                  setRejectError("");
                 }}
                 className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
               >
@@ -1508,7 +1524,7 @@ export function AdminInbox() {
               </button>
               <button
                 onClick={handleReject}
-                disabled={rejectUploading}
+                disabled={rejectUploading || rejectSubmitting}
                 className="flex-1 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Татгалзах
