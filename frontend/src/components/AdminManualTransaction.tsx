@@ -13,6 +13,7 @@ import {
 import {
   AdminBankAccountFull,
   ManualTransactionUser,
+  createManualDriverTransaction,
   createManualTransaction,
   fetchAllAdminBankAccounts,
   fetchRates,
@@ -68,7 +69,184 @@ interface Props {
   onOpenInbox: () => void;
 }
 
-export function AdminManualTransaction({ onOpenInbox }: Props) {
+async function uploadBillImage(file: File, folder: string): Promise<string> {
+  const prepared = await prepareImageForUpload(file);
+  const path = `manual/${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${(prepared.file.name.split(".").pop() || "jpg").replace(/[^a-z0-9]/gi, "")}`;
+  const presigned = await requestPresign({ bucket: "bills", path });
+  const uploadResponse = await fetch(presigned.upload_url, {
+    method: "PUT",
+    body: prepared.file,
+    headers: prepared.mimeType ? { "Content-Type": prepared.mimeType } : undefined,
+  });
+  if (!uploadResponse.ok || !presigned.public_url) throw new Error("Receipt upload failed");
+  return presigned.public_url;
+}
+
+type ReceiptListProps = {
+  title: string;
+  label: string;
+  urls: string[];
+  uploading: boolean;
+  onFiles: (files: File[]) => void;
+  onRemove: (index: number) => void;
+};
+
+function ReceiptSection({ title, label, urls, uploading, onFiles, onRemove }: ReceiptListProps) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+      <label className="mb-2 block text-sm font-semibold">{title}</label>
+      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#2D62EC]/40 p-5 text-sm font-semibold text-[#2D62EC] hover:bg-[#2D62EC]/5"><Upload className="h-5 w-5" />{uploading ? "Upload хийж байна…" : "Зураг сонгох"}<input type="file" accept="image/*" multiple className="hidden" disabled={uploading} onChange={(event) => { onFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} /></label>
+      {urls.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2">{urls.map((url, index) => <div key={url} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2 text-xs"><FileImage className="h-4 w-4 text-[#2D62EC]" /><a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-[#2D62EC]">{label} {index + 1}</a><button onClick={() => onRemove(index)} className="text-[#FF3B57]" aria-label="Remove receipt"><Trash2 className="h-4 w-4" /></button></div>)}</div>}
+    </section>
+  );
+}
+
+function DriverManualForm({ onOpenInbox }: Props) {
+  const [driverName, setDriverName] = useState("");
+  const [direction, setDirection] = useState<Direction>("buy");
+  const [liveRates, setLiveRates] = useState({ buy_rate: 0, sell_rate: 0 });
+  const [exchangeRate, setExchangeRate] = useState("");
+  const [rateTouched, setRateTouched] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [paymentUrls, setPaymentUrls] = useState<string[]>([]);
+  const [transferUrls, setTransferUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState<{ invoice: string; amount: number; currency: string } | null>(null);
+
+  useEffect(() => {
+    fetchRates()
+      .then((rates) => setLiveRates({ buy_rate: rates.buy_rate, sell_rate: rates.sell_rate }))
+      .catch(() => setError("Live rate ачаалж чадсангүй."));
+  }, []);
+
+  useEffect(() => {
+    if (!rateTouched) {
+      const nextRate = direction === "buy" ? liveRates.buy_rate : liveRates.sell_rate;
+      setExchangeRate(nextRate ? String(nextRate) : "");
+    }
+  }, [direction, liveRates, rateTouched]);
+
+  const sourceCurrency = direction === "buy" ? "RUB" : "MNT";
+  const destinationCurrency = direction === "buy" ? "MNT" : "RUB";
+  const numericAmount = Number(amount);
+  const numericRate = Number(exchangeRate);
+  const convertedAmount = numericAmount > 0 && numericRate > 0
+    ? direction === "buy" ? numericAmount * numericRate : numericAmount / numericRate
+    : 0;
+
+  const upload = async (files: File[], setUrls: (update: (current: string[]) => string[]) => void) => {
+    setUploading(true);
+    setError("");
+    try {
+      for (const file of files) {
+        const url = await uploadBillImage(file, "driver");
+        setUrls((current) => [...current, url]);
+      }
+    } catch {
+      setError("Баримтын зураг upload хийж чадсангүй.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const submit = async () => {
+    const validationError =
+      !driverName.trim() ? "Жолоочийн нэрийг бөглөнө үү."
+      : !numericAmount || numericAmount <= 0 ? "Дүн 0-ээс их байх ёстой."
+      : !numericRate || numericRate <= 0 ? "Ханш 0-ээс их байх ёстой."
+      : paymentUrls.length === 0 ? "Дор хаяж нэг төлбөрийн баримт upload хийнэ үү."
+      : transferUrls.length === 0 ? "Дор хаяж нэг шилжүүлсэн баримт upload хийнэ үү."
+      : "";
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await createManualDriverTransaction({
+        driver_name: driverName.trim(),
+        direction,
+        amount: numericAmount,
+        exchange_rate: numericRate,
+        receipt_paths: paymentUrls,
+        transfer_receipt_paths: transferUrls,
+      });
+      setSuccess({ invoice: result.invoice, amount: result.converted_amount, currency: result.currency_to });
+    } catch (submitError: any) {
+      setError(submitError?.response?.data?.detail || "Гүйлгээ бүртгэхэд алдаа гарлаа.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reset = () => {
+    setDriverName("");
+    setAmount("");
+    setPaymentUrls([]);
+    setTransferUrls([]);
+    setSuccess(null);
+    setError("");
+    setRateTouched(false);
+  };
+
+  if (success) {
+    return (
+      <div className="rounded-2xl border border-[#00C885]/30 bg-white p-6 text-center shadow-card font-['Montserrat']">
+        <CheckCircle2 className="mx-auto mb-3 h-14 w-14 text-[#00C885]" />
+        <h2 className="text-xl font-bold text-[#231F20]">Гүйлгээ баталгаажиж бүртгэгдлээ</h2>
+        <p className="mt-2 text-sm text-slate-600">Invoice: <span className="font-mono font-semibold">{success.invoice}</span></p>
+        <p className="mt-1 text-sm text-slate-600">Шилжүүлсэн дүн: {success.amount.toLocaleString()} {success.currency}</p>
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <button onClick={onOpenInbox} className="rounded-xl bg-[#2D62EC] px-4 py-3 font-semibold text-white">Inbox харах</button>
+          <button onClick={reset} className="rounded-xl border border-[#2D62EC] px-4 py-3 font-semibold text-[#2D62EC]">Дахин бүртгэх</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 font-['Montserrat'] text-[#231F20]">
+      {error && <div className="flex items-start gap-2 rounded-xl border border-[#FF3B57]/30 bg-[#FF3B57]/5 p-3 text-sm text-[#FF3B57]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+        <label className="mb-2 block text-sm font-semibold">1. Нэр</label>
+        <input value={driverName} onChange={(event) => setDriverName(event.target.value)} placeholder="Овог нэр эсвэл Facebook нэр" className="input-modern" />
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+        <label className="mb-2 block text-sm font-semibold">2. Чиглэл ба ханш</label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(["buy", "sell"] as Direction[]).map((value) => (
+            <button key={value} onClick={() => { setDirection(value); setRateTouched(false); }} className={`rounded-xl border-2 p-3 text-left ${direction === value ? "border-[#2D62EC] bg-[#2D62EC]/5" : "border-slate-200"}`}>
+              <div className="font-semibold">{value === "buy" ? "RUB → MNT" : "MNT → RUB"}</div>
+              <div className="text-xs text-slate-500">{value === "buy" ? "Төгрөг авах" : "Рубль авах"}</div>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">Дүн ({sourceCurrency})<input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" min="0" step="0.01" className="input-modern mt-1" /></label>
+          <label className="text-sm">Гараар тохируулах ханш<input value={exchangeRate} onChange={(event) => { setExchangeRate(event.target.value); setRateTouched(true); }} type="number" min="0" step="0.0001" className="input-modern mt-1" /></label>
+        </div>
+        <div className="mt-3 rounded-xl bg-[#00C885]/10 p-3 text-sm">Тооцоолол: <strong>{convertedAmount > 0 ? convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"} {destinationCurrency}</strong></div>
+      </section>
+
+      <ReceiptSection title="3. Төлбөрийн баримт" label="Төлбөр" urls={paymentUrls} uploading={uploading} onFiles={(files) => void upload(files, setPaymentUrls)} onRemove={(index) => setPaymentUrls((current) => current.filter((_, i) => i !== index))} />
+      <ReceiptSection title="4. Шилжүүлсэн баримт" label="Шилжүүлэг" urls={transferUrls} uploading={uploading} onFiles={(files) => void upload(files, setTransferUrls)} onRemove={(index) => setTransferUrls((current) => current.filter((_, i) => i !== index))} />
+
+      <section className="rounded-2xl border border-[#2D62EC]/20 bg-[#2D62EC]/5 p-5">
+        <div className="mb-3 text-sm font-semibold">Шалгах мэдээлэл</div>
+        <div className="grid gap-2 text-sm sm:grid-cols-2"><span>Жолооч: {driverName.trim() || "—"}</span><span>Чиглэл: {sourceCurrency} → {destinationCurrency}</span><span>Дүн: {amount || "—"} {sourceCurrency}</span><span>Ханш: {exchangeRate || "—"}</span><span>Очих дүн: {convertedAmount ? `${convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${destinationCurrency}` : "—"}</span><span>Төлбөрийн баримт: {paymentUrls.length} файл</span><span>Шилжүүлсэн баримт: {transferUrls.length} файл</span></div>
+      </section>
+
+      <button onClick={submit} disabled={submitting || uploading} className="w-full rounded-xl bg-[#00C885] py-3 font-semibold text-white shadow-btn disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <span className="inline-flex items-center gap-2"><RefreshCw className="h-4 w-4 animate-spin" /> Бүртгэж байна…</span> : "Баталгаажсан гүйлгээ бүртгэх"}</button>
+    </div>
+  );
+}
+
+function PersonManualForm({ onOpenInbox }: Props) {
   const [telegramId, setTelegramId] = useState("");
   const [user, setUser] = useState<ManualTransactionUser | null>(null);
   const [userFound, setUserFound] = useState<boolean | null>(null);
@@ -310,6 +488,25 @@ export function AdminManualTransaction({ onOpenInbox }: Props) {
       </section>
 
       <button onClick={submit} disabled={submitting || uploading} className="w-full rounded-xl bg-[#2D62EC] py-3 font-semibold text-white shadow-btn disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <span className="inline-flex items-center gap-2"><RefreshCw className="h-4 w-4 animate-spin" /> Үүсгэж байна…</span> : "Pending хүсэлт үүсгэх"}</button>
+    </div>
+  );
+}
+
+type ManualKind = "person" | "driver";
+
+export function AdminManualTransaction({ onOpenInbox }: Props) {
+  const [kind, setKind] = useState<ManualKind>("person");
+  return (
+    <div className="space-y-4 font-['Montserrat'] text-[#231F20]">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+        <label className="text-sm font-semibold">Төрөл
+          <select value={kind} onChange={(event) => setKind(event.target.value as ManualKind)} className="input-modern mt-1">
+            <option value="person">Хувь хүн</option>
+            <option value="driver">Жолооч</option>
+          </select>
+        </label>
+      </section>
+      {kind === "person" ? <PersonManualForm onOpenInbox={onOpenInbox} /> : <DriverManualForm onOpenInbox={onOpenInbox} />}
     </div>
   );
 }

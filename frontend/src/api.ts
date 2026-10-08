@@ -1151,6 +1151,21 @@ export async function createManualTransaction(payload: ManualTransactionCreateIn
   return res.data as ManualTransactionCreateResponse;
 }
 
+export interface ManualDriverTransactionCreateInput {
+  driver_name: string;
+  direction: "buy" | "sell";
+  amount: number;
+  exchange_rate: number;
+  receipt_paths: string[];
+  transfer_receipt_paths: string[];
+  transaction_at?: string;
+}
+
+export async function createManualDriverTransaction(payload: ManualDriverTransactionCreateInput): Promise<ManualTransactionCreateResponse> {
+  const res = await api.post('/admin/transactions/manual/driver', payload);
+  return res.data as ManualTransactionCreateResponse;
+}
+
 export async function fetchKycPending(): Promise<{ items: KycItem[] }> {
   const res = await api.get('/admin/kyc');
   return res.data as { items: KycItem[] };

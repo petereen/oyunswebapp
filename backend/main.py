@@ -53,6 +53,7 @@ from models import (
     ExchangeCreateRequest,
     ExchangeCreateResponse,
     ExchangeResubmitRequest,
+    ManualDriverTransactionCreateRequest,
     ManualTransactionCreateRequest,
     ManualTransactionCreateResponse,
     ManualTransactionUserResponse,
@@ -8427,6 +8428,124 @@ async def create_manual_transaction(
         id=str(transaction.get("id")),
         invoice=invoice,
         status="pending",
+        currency_from=currency_from,
+        currency_to=currency_to,
+        amount=payload.amount,
+        rate=payload.exchange_rate,
+        converted_amount=converted_amount,
+        timestamp=transaction_at,
+        is_manual=True,
+    )
+
+
+@app.post("/api/admin/transactions/manual/driver", response_model=ManualTransactionCreateResponse)
+async def create_manual_driver_transaction(
+    payload: ManualDriverTransactionCreateRequest,
+    admin=Depends(require_admin_user),
+):
+    """Log an already-completed driver transaction; it is stored as successful immediately.
+
+    Drivers have no Telegram account, so the row is attributed to the logging admin
+    and the driver's name is kept in ``admin_comment``. No user notifications are sent.
+    """
+    client = get_supabase()
+    now = datetime.now(timezone.utc)
+    direction = payload.direction
+    currency_from = "RUB" if direction == "buy" else "MNT"
+    currency_to = "MNT" if direction == "buy" else "RUB"
+    driver_name = payload.driver_name.strip()
+    if not driver_name:
+        raise HTTPException(status_code=400, detail="Driver name is required")
+
+    if payload.transaction_at is not None:
+        if payload.transaction_at.tzinfo is None:
+            raise HTTPException(status_code=400, detail="transaction_at must include a timezone")
+        transaction_at = payload.transaction_at.astimezone(timezone.utc)
+        if transaction_at > now + timedelta(minutes=5):
+            raise HTTPException(status_code=400, detail="transaction_at cannot be in the future")
+    else:
+        transaction_at = now
+
+    receipt_paths = list(dict.fromkeys(path.strip() for path in payload.receipt_paths if path and path.strip()))
+    transfer_paths = list(dict.fromkeys(path.strip() for path in payload.transfer_receipt_paths if path and path.strip()))
+    if not receipt_paths or not transfer_paths:
+        raise HTTPException(status_code=400, detail="Payment and transfer receipts are required")
+
+    from zoneinfo import ZoneInfo
+
+    invoice = generate_invoice(now.astimezone(ZoneInfo("Europe/Moscow")))
+    converted_amount = (
+        payload.amount * payload.exchange_rate
+        if direction == "buy"
+        else payload.amount / payload.exchange_rate
+    ).quantize(Decimal("0.01"))
+    insert_payload = {
+        "user_id": admin.id,
+        "invoice": invoice,
+        "amount": str(payload.amount),
+        "currency_from": currency_from,
+        "currency_to": currency_to,
+        "rate": str(payload.exchange_rate),
+        "status": "successful",
+        "timestamp": transaction_at.isoformat(),
+        "bill_url": json.dumps(receipt_paths),
+        "receipt_id": receipt_paths[0],
+        "admin_bill_url": json.dumps(transfer_paths),
+        "admin_bill_submitted_at": now.isoformat(),
+        "admin_comment": f"Жолооч: {driver_name}",
+        "bank_details": "",
+        "receipt_submitted_at": now.isoformat(),
+        "completed_at": now.isoformat(),
+        "completed_by_admin": admin.id,
+        "completion_duration_minutes": 0,
+        "is_manual": True,
+        "manual_created_by_admin_id": admin.id,
+        "manual_created_at": now.isoformat(),
+    }
+    if direction == "buy":
+        insert_payload["buy_rate"] = str(payload.exchange_rate)
+    else:
+        insert_payload["sell_rate"] = str(payload.exchange_rate)
+
+    try:
+        transaction_result = client.table("transactions").insert(insert_payload).execute()
+        if not transaction_result.data:
+            raise RuntimeError("Transaction insert returned no row")
+        transaction = transaction_result.data[0]
+    except Exception as exc:
+        logger.exception("Failed to create manual driver transaction: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create transaction") from exc
+
+    try:
+        _log_required_admin_action(
+            client,
+            admin_user_id=admin.id,
+            action_type="transaction_manual_driver_create",
+            target_type="transaction",
+            target_id=invoice,
+            details={
+                "manual": True,
+                "driver_name": driver_name,
+                "direction": direction,
+                "rate": str(payload.exchange_rate),
+                "amount": str(payload.amount),
+                "transaction_at": transaction_at.isoformat(),
+                "receipt_count": len(receipt_paths),
+                "transfer_receipt_count": len(transfer_paths),
+            },
+            created_at=now,
+        )
+    except Exception as exc:
+        try:
+            client.table("transactions").delete().eq("id", transaction.get("id")).execute()
+        except Exception:
+            logger.exception("Failed to roll back manual driver transaction %s after audit failure", invoice)
+        raise HTTPException(status_code=500, detail="Failed to record transaction audit") from exc
+
+    return ManualTransactionCreateResponse(
+        id=str(transaction.get("id")),
+        invoice=invoice,
+        status="successful",
         currency_from=currency_from,
         currency_to=currency_to,
         amount=payload.amount,

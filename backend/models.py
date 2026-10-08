@@ -142,6 +142,16 @@ class ManualTransactionCreateResponse(BaseModel):
     is_manual: bool = True
 
 
+class ManualDriverTransactionCreateRequest(BaseModel):
+    driver_name: str = Field(..., min_length=1, max_length=200)
+    direction: Literal["buy", "sell"]
+    amount: Decimal = Field(..., gt=0)
+    exchange_rate: Decimal = Field(..., gt=0)
+    receipt_paths: list[str] = Field(..., min_length=1)
+    transfer_receipt_paths: list[str] = Field(..., min_length=1)
+    transaction_at: Optional[datetime] = None
+
+
 class ManualTransactionUserResponse(BaseModel):
     found: bool
     user: Optional[dict] = None
