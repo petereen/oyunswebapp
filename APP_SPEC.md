@@ -573,7 +573,7 @@ The target deployment has four logical workloads:
 - `admin-web`: separate operations/dashboard bundle; never packaged in the customer mobile app;
 - `gateway`: TLS termination and routing for API and retained web administration. Native binaries are distributed through the iOS App Store and Google Play and are not served by this stack.
 
-Dokploy joins the API, worker, separate operations web app, and gateway to the project network with collision-resistant aliases. `api.oyuns.mn` serves JSON, `dashboard.oyuns.mn` serves only the separate finance/operations application, and `links.oyuns.mn` hosts Apple App Site Association and Android Digital Asset Links files plus safe store fallbacks. The gateway expects upstream platform TLS termination.
+Dokploy joins the API, worker, separate operations web app, and gateway to the project network with collision-resistant aliases. `api.oyuns.mn` serves JSON, `bot-dashboard.oyuns.mn` serves only the separate finance/operations application, and `links.oyuns.mn` hosts Apple App Site Association and Android Digital Asset Links files plus safe store fallbacks. The gateway expects upstream platform TLS termination.
 
 Workers use Postgres rows as durable queues with `FOR UPDATE SKIP LOCKED`, leases, idempotency keys, exponential backoff, and dead-letter state. Business mutations and outbox insertion occur in one database transaction. A real migration runner is mandatory in deployment.
 
@@ -856,7 +856,7 @@ The canonical link origin is `https://links.oyuns.mn`. iOS Universal Links and A
 
 Deep-link dispatch is centralized, allowlisted, and typed. It never executes arbitrary URLs or trusts role/resource data from the link itself.
 
-The following are deliberately **not** customer-app routes: `/staff/fuel`, `/dashboard`, `dashboard.oyuns.mn`, exchange-admin surfaces, KYC approval surfaces, and treasury/profit paths. They are owned by the separate operations applications documented in §4.
+The following are deliberately **not** customer-app routes: `/staff/fuel`, `/dashboard`, `bot-dashboard.oyuns.mn`, exchange-admin surfaces, KYC approval surfaces, and treasury/profit paths. They are owned by the separate operations applications documented in §4.
 
 ### 5.3 Main user screen inventory
 

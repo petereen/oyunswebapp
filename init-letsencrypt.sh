@@ -10,11 +10,11 @@ else
   DOCKER_COMPOSE="docker-compose"
 fi
 
-default_domains=(app.oyuns.mn dashboard.oyuns.mn)
+default_domains=(app.oyuns.mn bot-dashboard.oyuns.mn)
 
 # Optional override for emergency or staged issuance.
 # Example:
-#   LE_DOMAINS="app.oyuns.mn dashboard.oyuns.mn" bash ./init-letsencrypt.sh
+#   LE_DOMAINS="app.oyuns.mn bot-dashboard.oyuns.mn" bash ./init-letsencrypt.sh
 if [ -n "$LE_DOMAINS" ]; then
   read -r -a domains <<< "$LE_DOMAINS"
 else

@@ -23,7 +23,7 @@ export default function App() {
   const hostname = window.location.hostname.toLowerCase();
   const allowedHosts = new Set([
     "app.oyuns.mn",
-    "dashboard.oyuns.mn",
+    "bot-dashboard.oyuns.mn",
     "localhost",
     "127.0.0.1",
     "::1",
@@ -38,7 +38,7 @@ export default function App() {
         <div className="w-full max-w-md rounded-2xl bg-white dark:bg-dark-800 p-6 text-center shadow-lg">
           <h1 className="text-xl font-bold text-maroon-700 dark:text-gold-400 mb-2">Unavailable Host</h1>
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            This app is only available on app.oyuns.mn and dashboard.oyuns.mn.
+            This app is only available on app.oyuns.mn and bot-dashboard.oyuns.mn.
           </p>
         </div>
       </div>
@@ -46,7 +46,7 @@ export default function App() {
   }
 
   // Standalone analytics dashboard without Telegram auth
-  if (hostname === "dashboard.oyuns.mn" || normalizedPath === "/dashboard") return <DashboardPanel />;
+  if (hostname === "bot-dashboard.oyuns.mn" || normalizedPath === "/dashboard") return <DashboardPanel />;
 
   // Check URL for fuel admin panel
   const isFuelAdmin = queryParams.has("fuel-admin");
