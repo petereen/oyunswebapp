@@ -403,9 +403,21 @@ class OyunsPlusBrand(BaseModel):
     description: str = ""
     logo_url: Optional[str] = None
     logo_path: Optional[str] = None
+    cover_url: Optional[str] = None
+    cover_path: Optional[str] = None
+    category: str = ""
+    address: str = ""
+    map_url: Optional[str] = None
+    website_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    facebook_url: Optional[str] = None
+    phone: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
     offer_count: int = 0
+    available_count: int = 0
+    min_points_price: Optional[int] = None
+    max_points_price: Optional[int] = None
     archived_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -416,6 +428,7 @@ class OyunsPlusCoupon(BaseModel):
     brand_id: str
     name: str
     description: str = ""
+    badge_label: Optional[str] = None
     value_type: Optional[Literal["amount", "percentage"]] = None
     discount_value: Optional[Decimal] = None
     currency_code: Optional[Literal["MNT", "RUB"]] = None
@@ -447,6 +460,15 @@ class OyunsPlusBrandCreateRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
     logo_url: Optional[str] = Field(default=None, max_length=2000)
     logo_path: Optional[str] = Field(default=None, max_length=500)
+    cover_url: Optional[str] = Field(default=None, max_length=2000)
+    cover_path: Optional[str] = Field(default=None, max_length=500)
+    category: str = Field(default="", max_length=160)
+    address: str = Field(default="", max_length=500)
+    map_url: Optional[str] = Field(default=None, max_length=2000)
+    website_url: Optional[str] = Field(default=None, max_length=2000)
+    instagram_url: Optional[str] = Field(default=None, max_length=2000)
+    facebook_url: Optional[str] = Field(default=None, max_length=2000)
+    phone: Optional[str] = Field(default=None, max_length=40)
     is_active: bool = True
     sort_order: int = Field(default=0, ge=0)
 
@@ -456,6 +478,15 @@ class OyunsPlusBrandUpdateRequest(BaseModel):
     description: Optional[str] = Field(default=None, max_length=2000)
     logo_url: Optional[str] = Field(default=None, max_length=2000)
     logo_path: Optional[str] = Field(default=None, max_length=500)
+    cover_url: Optional[str] = Field(default=None, max_length=2000)
+    cover_path: Optional[str] = Field(default=None, max_length=500)
+    category: Optional[str] = Field(default=None, max_length=160)
+    address: Optional[str] = Field(default=None, max_length=500)
+    map_url: Optional[str] = Field(default=None, max_length=2000)
+    website_url: Optional[str] = Field(default=None, max_length=2000)
+    instagram_url: Optional[str] = Field(default=None, max_length=2000)
+    facebook_url: Optional[str] = Field(default=None, max_length=2000)
+    phone: Optional[str] = Field(default=None, max_length=40)
     is_active: Optional[bool] = None
     sort_order: Optional[int] = Field(default=None, ge=0)
 
@@ -464,6 +495,7 @@ class OyunsPlusCouponCreateRequest(BaseModel):
     brand_id: str
     name: str = Field(..., min_length=1, max_length=160)
     description: str = Field(default="", max_length=4000)
+    badge_label: Optional[str] = Field(default=None, max_length=40)
     value_type: Literal["amount", "percentage"]
     discount_value: Decimal = Field(..., gt=0)
     points_price: int = Field(..., gt=0)
@@ -477,6 +509,7 @@ class OyunsPlusCouponUpdateRequest(BaseModel):
     brand_id: Optional[str] = None
     name: Optional[str] = Field(default=None, min_length=1, max_length=160)
     description: Optional[str] = Field(default=None, max_length=4000)
+    badge_label: Optional[str] = Field(default=None, max_length=40)
     value_type: Optional[Literal["amount", "percentage"]] = None
     discount_value: Optional[Decimal] = Field(default=None, gt=0)
     points_price: Optional[int] = Field(default=None, gt=0)
@@ -550,7 +583,7 @@ class OyunsPlusVoucherRefundRequest(BaseModel):
 
 
 class OyunsPlusAdminUploadRequest(BaseModel):
-    asset_type: Literal["card", "confirmation", "brand_logo"]
+    asset_type: Literal["card", "confirmation", "brand_logo", "brand_cover"]
     request_id: Optional[str] = None
     brand_id: Optional[str] = None
     extension: Literal["jpg", "jpeg", "png", "webp"] = "jpg"

@@ -11,6 +11,7 @@ import requests
 import uuid
 import re
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -1376,16 +1377,36 @@ def _oyuns_plus_expired(value) -> bool:
         return False
 
 
-def _oyuns_plus_brand_response(row: dict, offer_count: int = 0) -> OyunsPlusBrand:
+OYUNS_PLUS_BRAND_PUBLIC_COLUMNS = (
+    "id,name,description,logo_url,logo_path,cover_url,cover_path,category,address,map_url,"
+    "website_url,instagram_url,facebook_url,phone,is_active,sort_order,archived_at,created_at,updated_at"
+)
+OYUNS_PLUS_BRAND_LINK_FIELDS = ("map_url", "website_url", "instagram_url", "facebook_url")
+
+
+def _oyuns_plus_brand_response(row: dict, offer_count: int = 0, stats: dict | None = None) -> OyunsPlusBrand:
+    stats = stats or {}
     return OyunsPlusBrand(
         id=str(row.get("id")),
         name=str(row.get("name") or ""),
         description=str(row.get("description") or ""),
         logo_url=row.get("logo_url"),
         logo_path=row.get("logo_path"),
+        cover_url=row.get("cover_url") or None,
+        cover_path=row.get("cover_path"),
+        category=str(row.get("category") or ""),
+        address=str(row.get("address") or ""),
+        map_url=row.get("map_url") or None,
+        website_url=row.get("website_url") or None,
+        instagram_url=row.get("instagram_url") or None,
+        facebook_url=row.get("facebook_url") or None,
+        phone=row.get("phone") or None,
         is_active=bool(row.get("is_active", True)),
         sort_order=_safe_int(row.get("sort_order"), 0),
-        offer_count=offer_count,
+        offer_count=stats.get("offer_count", offer_count),
+        available_count=stats.get("available_count", 0),
+        min_points_price=stats.get("min_points_price"),
+        max_points_price=stats.get("max_points_price"),
         archived_at=row.get("archived_at"),
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
@@ -1403,6 +1424,7 @@ def _oyuns_plus_coupon_response(row: dict, purchase_count: int = 0) -> OyunsPlus
         brand_id=str(row.get("brand_id")),
         name=str(row.get("name") or ""),
         description=str(row.get("description") or ""),
+        badge_label=(str(row.get("badge_label") or "").strip() or None),
         value_type=value_type if value_type in {"amount", "percentage"} else None,
         discount_value=row.get("discount_value"),
         currency_code=("MNT" if country_code == "mn" else "RUB") if value_type == "amount" else None,
@@ -1449,6 +1471,63 @@ def _oyuns_plus_coupon_is_public(row: dict) -> bool:
     except (InvalidOperation, TypeError, ValueError):
         return False
     return discount_value > 0 and (value_type == "amount" or discount_value <= 100)
+
+
+def _oyuns_plus_brand_stats(coupon_rows: list[dict], purchase_counts: dict[str, int]) -> dict[str, dict]:
+    """Summarize public coupons per brand: total, still purchasable, and price range of the purchasable ones."""
+    stats: dict[str, dict] = {}
+    for row in coupon_rows:
+        brand_id = str(row.get("brand_id") or "")
+        if not brand_id:
+            continue
+        entry = stats.setdefault(brand_id, {"offer_count": 0, "available_count": 0, "min_points_price": None, "max_points_price": None})
+        entry["offer_count"] += 1
+        limit = row.get("total_purchase_limit")
+        if limit is not None and purchase_counts.get(str(row.get("id")), 0) >= _safe_int(limit, 0):
+            continue
+        price = _safe_int(row.get("points_price"), 0)
+        entry["available_count"] += 1
+        entry["min_points_price"] = price if entry["min_points_price"] is None else min(entry["min_points_price"], price)
+        entry["max_points_price"] = price if entry["max_points_price"] is None else max(entry["max_points_price"], price)
+    return stats
+
+
+def _normalize_oyuns_plus_link(value, field: str) -> str | None:
+    """Accept bare domains by assuming https, but never store non-web schemes such as javascript:."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", text):
+        text = f"https://{text.lstrip('/')}"
+    parsed = urlparse(text)
+    try:
+        hostname = parsed.hostname or ""
+        parsed.port
+    except ValueError:
+        hostname = ""
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or not re.fullmatch(r"[\w-]+(\.[\w-]+)+", hostname)
+        or any(ch.isspace() for ch in text)
+    ):
+        raise HTTPException(status_code=422, detail=f"{field} must be a valid http(s) link")
+    return text
+
+
+def _clean_oyuns_plus_brand_profile(values: dict) -> dict:
+    """Trim optional profile fields in-place so blank inputs clear the stored value."""
+    for field in OYUNS_PLUS_BRAND_LINK_FIELDS:
+        if field in values:
+            values[field] = _normalize_oyuns_plus_link(values[field], field)
+    for field in ("category", "address"):
+        if field in values:
+            values[field] = str(values[field] or "").strip()
+    if "category" in values:
+        values["category"] = ", ".join(part.strip() for part in values["category"].split(",") if part.strip())
+    for field in ("phone", "cover_url"):
+        if field in values:
+            values[field] = str(values[field] or "").strip() or None
+    return values
 
 
 def _oyuns_plus_purchase_counts(client, card_ids: list[str]) -> dict[str, int]:
@@ -5098,7 +5177,7 @@ async def oyuns_plus_brands(user=Depends(get_jwt_authenticated_user)):
     client = get_supabase()
     brand_rows = (
         client.table("oyuns_plus_brands")
-        .select("id,name,description,logo_url,logo_path,is_active,sort_order,archived_at,created_at,updated_at")
+        .select(OYUNS_PLUS_BRAND_PUBLIC_COLUMNS)
         .eq("is_active", True)
         .is_("archived_at", "null")
         .order("sort_order")
@@ -5107,18 +5186,15 @@ async def oyuns_plus_brands(user=Depends(get_jwt_authenticated_user)):
     ).data or []
     coupon_rows = (
         client.table("oyuns_plus_cards")
-        .select("id,brand_id,is_active,archived_at,needs_review,value_type,discount_value,expires_at")
+        .select("id,brand_id,is_active,archived_at,needs_review,value_type,discount_value,expires_at,points_price,total_purchase_limit")
         .eq("is_active", True)
         .is_("archived_at", "null")
         .execute()
     ).data or []
-    counts: dict[str, int] = {}
-    for row in coupon_rows:
-        if _oyuns_plus_coupon_is_public(row) and not _oyuns_plus_expired(row.get("expires_at")):
-            brand_id = str(row.get("brand_id") or "")
-            if brand_id:
-                counts[brand_id] = counts.get(brand_id, 0) + 1
-    brands = [_oyuns_plus_brand_response(row, counts.get(str(row.get("id")), 0)) for row in brand_rows]
+    coupon_rows = [row for row in coupon_rows if _oyuns_plus_coupon_is_public(row) and not _oyuns_plus_expired(row.get("expires_at"))]
+    purchase_counts = _oyuns_plus_purchase_counts(client, [str(row.get("id")) for row in coupon_rows])
+    stats = _oyuns_plus_brand_stats(coupon_rows, purchase_counts)
+    brands = [_oyuns_plus_brand_response(row, stats=stats.get(str(row.get("id")))) for row in brand_rows]
     return OyunsPlusBrandsResponse(brands=[brand for brand in brands if brand.offer_count > 0])
 
 
@@ -5131,7 +5207,7 @@ async def oyuns_plus_brand_coupons(brand_id: str, user=Depends(get_jwt_authentic
         raise HTTPException(status_code=422, detail="brand_id must be a UUID") from exc
     brand_rows = (
         client.table("oyuns_plus_brands")
-        .select("id,name,description,logo_url,logo_path,is_active,sort_order,archived_at,created_at,updated_at")
+        .select(OYUNS_PLUS_BRAND_PUBLIC_COLUMNS)
         .eq("id", normalized_brand_id)
         .eq("is_active", True)
         .is_("archived_at", "null")
@@ -5142,7 +5218,7 @@ async def oyuns_plus_brand_coupons(brand_id: str, user=Depends(get_jwt_authentic
         raise HTTPException(status_code=404, detail="BRAND_NOT_AVAILABLE")
     rows = (
         client.table("oyuns_plus_cards")
-        .select("id,brand_id,name,description,value_type,discount_value,points_price,country_code,total_purchase_limit,expires_at,needs_review,is_active,archived_at,created_at,updated_at")
+        .select("id,brand_id,name,description,badge_label,value_type,discount_value,points_price,country_code,total_purchase_limit,expires_at,needs_review,is_active,archived_at,created_at,updated_at")
         .eq("brand_id", normalized_brand_id)
         .eq("is_active", True)
         .is_("archived_at", "null")
@@ -5151,7 +5227,7 @@ async def oyuns_plus_brand_coupons(brand_id: str, user=Depends(get_jwt_authentic
     ).data or []
     rows = [row for row in rows if _oyuns_plus_coupon_is_public(row) and not _oyuns_plus_expired(row.get("expires_at"))]
     counts = _oyuns_plus_purchase_counts(client, [str(row.get("id")) for row in rows])
-    brand = _oyuns_plus_brand_response(brand_rows[0], len(rows))
+    brand = _oyuns_plus_brand_response(brand_rows[0], stats=_oyuns_plus_brand_stats(rows, counts).get(normalized_brand_id))
     return OyunsPlusCouponsResponse(
         brand=brand,
         coupons=[_oyuns_plus_coupon_response(row, counts.get(str(row.get("id")), 0)) for row in rows],
@@ -5280,11 +5356,16 @@ async def admin_create_oyuns_plus_brand(payload: OyunsPlusBrandCreateRequest, ad
     logo_url = (payload.logo_url or "").strip() or None
     if payload.is_active and not logo_url:
         raise HTTPException(status_code=422, detail="An active brand requires a logo")
+    profile = _clean_oyuns_plus_brand_profile(payload.model_dump(include={
+        "cover_url", "cover_path", "category", "address", "map_url",
+        "website_url", "instagram_url", "facebook_url", "phone",
+    }))
     row = client.table("oyuns_plus_brands").insert({
         "name": name,
         "description": payload.description.strip(),
         "logo_url": logo_url,
         "logo_path": payload.logo_path,
+        **profile,
         "is_active": payload.is_active,
         "sort_order": payload.sort_order,
         "created_by": admin.id,
@@ -5315,6 +5396,7 @@ async def admin_update_oyuns_plus_brand(brand_id: str, payload: OyunsPlusBrandUp
         updates["description"] = str(updates["description"] or "").strip()
     if "logo_url" in updates:
         updates["logo_url"] = str(updates["logo_url"] or "").strip() or None
+    _clean_oyuns_plus_brand_profile(updates)
     merged_logo = updates.get("logo_url", existing.get("logo_url"))
     merged_active = updates.get("is_active", existing.get("is_active", True))
     if merged_active and not merged_logo:
@@ -5395,6 +5477,7 @@ async def admin_create_oyuns_plus_coupon(brand_id: str, payload: OyunsPlusCoupon
         "brand_id": brand_id,
         "name": payload.name.strip(),
         "description": payload.description.strip(),
+        "badge_label": (payload.badge_label or "").strip() or None,
         "value_type": payload.value_type,
         "discount_value": str(payload.discount_value),
         "points_price": payload.points_price,
@@ -5430,6 +5513,8 @@ async def admin_update_oyuns_plus_coupon(coupon_id: str, payload: OyunsPlusCoupo
             raise HTTPException(status_code=422, detail="Coupon name is required")
     if "description" in updates:
         updates["description"] = str(updates["description"] or "").strip()
+    if "badge_label" in updates:
+        updates["badge_label"] = str(updates["badge_label"] or "").strip() or None
     if "discount_value" in updates and updates["discount_value"] is not None:
         updates["discount_value"] = str(updates["discount_value"])
     if "expires_at" in updates:
@@ -5592,9 +5677,9 @@ async def admin_oyuns_plus_upload_presign(payload: OyunsPlusAdminUploadRequest, 
     if payload.asset_type == "card":
         bucket = OYUNS_PLUS_CARD_BUCKET
         path = f"cards/{uuid.uuid4()}.{ext}"
-    elif payload.asset_type == "brand_logo":
+    elif payload.asset_type in {"brand_logo", "brand_cover"}:
         if not payload.brand_id:
-            raise HTTPException(status_code=422, detail="brand_id is required for brand logos")
+            raise HTTPException(status_code=422, detail="brand_id is required for brand images")
         try:
             brand_id = str(uuid.UUID(payload.brand_id))
         except ValueError as exc:
@@ -5603,7 +5688,8 @@ async def admin_oyuns_plus_upload_presign(payload: OyunsPlusAdminUploadRequest, 
         if not brand_row:
             raise HTTPException(status_code=404, detail="Brand not found")
         bucket = OYUNS_PLUS_CARD_BUCKET
-        path = f"brands/{brand_id}/{uuid.uuid4()}.{ext}"
+        prefix = "cover-" if payload.asset_type == "brand_cover" else ""
+        path = f"brands/{brand_id}/{prefix}{uuid.uuid4()}.{ext}"
     else:
         if not payload.request_id:
             raise HTTPException(status_code=422, detail="request_id is required for confirmation photos")
@@ -5624,7 +5710,7 @@ async def admin_oyuns_plus_upload_presign(payload: OyunsPlusAdminUploadRequest, 
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return PresignResponse(
         upload_url=signed_url,
-        public_url=public_url(client, bucket, path) if payload.asset_type in {"card", "brand_logo"} else None,
+        public_url=public_url(client, bucket, path) if payload.asset_type in {"card", "brand_logo", "brand_cover"} else None,
         expires_in=ttl,
         path=path,
     )

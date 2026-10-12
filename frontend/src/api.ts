@@ -749,7 +749,19 @@ export interface OyunsPlusCard {
   updated_at?: string | null;
 }
 
-export interface OyunsPlusBrand {
+export interface OyunsPlusBrandProfile {
+  cover_url?: string | null;
+  cover_path?: string | null;
+  category?: string;
+  address?: string;
+  map_url?: string | null;
+  website_url?: string | null;
+  instagram_url?: string | null;
+  facebook_url?: string | null;
+  phone?: string | null;
+}
+
+export interface OyunsPlusBrand extends OyunsPlusBrandProfile {
   id: string;
   name: string;
   description: string;
@@ -758,6 +770,9 @@ export interface OyunsPlusBrand {
   is_active: boolean;
   sort_order: number;
   offer_count: number;
+  available_count?: number;
+  min_points_price?: number | null;
+  max_points_price?: number | null;
   archived_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -768,6 +783,7 @@ export interface OyunsPlusCoupon {
   brand_id: string;
   name: string;
   description: string;
+  badge_label?: string | null;
   value_type?: "amount" | "percentage" | null;
   discount_value?: number | string | null;
   currency_code?: "MNT" | "RUB" | null;
@@ -861,7 +877,7 @@ export async function fetchAdminOyunsPlusBrands(includeArchived = true): Promise
   return res.data as OyunsPlusBrandCatalog;
 }
 
-export async function createAdminOyunsPlusBrand(payload: {
+export async function createAdminOyunsPlusBrand(payload: OyunsPlusBrandProfile & {
   name: string;
   description: string;
   logo_url?: string | null;
@@ -873,7 +889,7 @@ export async function createAdminOyunsPlusBrand(payload: {
   return res.data as OyunsPlusBrand;
 }
 
-export async function updateAdminOyunsPlusBrand(brandId: string, payload: Partial<{
+export async function updateAdminOyunsPlusBrand(brandId: string, payload: Partial<OyunsPlusBrandProfile & {
   name: string;
   description: string;
   logo_url: string | null;
@@ -904,6 +920,7 @@ export async function createAdminOyunsPlusCoupon(payload: {
   brand_id: string;
   name: string;
   description: string;
+  badge_label?: string | null;
   value_type: "amount" | "percentage";
   discount_value: number;
   points_price: number;
@@ -920,6 +937,7 @@ export async function updateAdminOyunsPlusCoupon(couponId: string, payload: Part
   brand_id: string;
   name: string;
   description: string;
+  badge_label: string | null;
   value_type: "amount" | "percentage";
   discount_value: number;
   points_price: number;
@@ -966,7 +984,7 @@ export async function restoreAdminOyunsPlusCard(cardId: string) {
 }
 
 export async function presignAdminOyunsPlusUpload(payload: {
-  asset_type: "card" | "confirmation" | "brand_logo";
+  asset_type: "card" | "confirmation" | "brand_logo" | "brand_cover";
   request_id?: string;
   brand_id?: string;
   extension: "jpg" | "jpeg" | "png" | "webp";

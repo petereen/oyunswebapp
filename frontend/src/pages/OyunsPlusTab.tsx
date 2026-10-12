@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronRight, Copy, Gift, History, Loader2, Tag, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { ArrowLeft, Check, Copy, Gift, History, Loader2, Tag, TrendingDown, TrendingUp, Users } from "lucide-react";
 import {
   createOyunsPlusVoucherRequest,
   fetchOyunsPlusBrandCoupons,
@@ -16,7 +16,7 @@ import { useLang } from "../i18n/useLang";
 import { queryKeys } from "../queryKeys";
 import { OyunsPlusSkeleton } from "../components/Skeleton";
 import { OyunsPlusMembershipCard } from "../components/OyunsPlusMembershipCard";
-import oyunsPlusPoints from "../assets/oyuns-plus-points.svg";
+import { BrandAbout, BrandLogo, BrandPage, BrandTab, BrandTile, CouponCard, CouponsEmpty, CouponViewSwitch, formatCouponValue, formatPoints, PointsMark, useCouponViewMode, useFavoriteBrands } from "../components/OyunsPlusCatalog";
 
 interface Props {
   userId?: number;
@@ -52,21 +52,11 @@ function validReceiverPhone(value: string, countryCode: "mn" | "ru") {
   return normalizePhone(value, countryCode) !== "";
 }
 
-function formatPoints(value: number) {
-  return value.toLocaleString("mn-MN");
-}
-
 function formatDate(value: string | null | undefined, lang: string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString(lang === "mn" ? "mn-MN" : "ru-RU", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-function formatDiscount(coupon: OyunsPlusCoupon) {
-  const value = Number(coupon.discount_value || 0);
-  if (coupon.value_type === "percentage") return `${value.toLocaleString()}%`;
-  return `${value.toLocaleString()} ${coupon.currency_code || (coupon.country_code === "mn" ? "MNT" : "RUB")}`;
 }
 
 function historyLabel(entry: OyunsPlusHistoryEntry, t: (key: string, params?: Record<string, string | number>) => string) {
@@ -76,23 +66,6 @@ function historyLabel(entry: OyunsPlusHistoryEntry, t: (key: string, params?: Re
   if (entry.source_type === "gift_completed") return t("oyuns_plus.history_source_gift");
   if (entry.source_type === "fuel_order_completed") return t("oyuns_plus.history_source_fuel");
   return t("oyuns_plus.history_source_exchange");
-}
-
-function PointsMark({ className = "" }: { className?: string }) {
-  return <img src={oyunsPlusPoints} alt="" aria-hidden="true" className={`oyuns-plus-points-mark ${className}`} />;
-}
-
-function BrandLogo({ brand, small = false }: { brand: OyunsPlusBrand; small?: boolean }) {
-  if (brand.logo_url) return <img src={brand.logo_url} alt="" className={small ? "oyuns-plus-brand-logo oyuns-plus-brand-logo--small" : "oyuns-plus-brand-logo"} />;
-  return <span className={small ? "oyuns-plus-brand-logo oyuns-plus-brand-logo--small oyuns-plus-brand-logo--fallback" : "oyuns-plus-brand-logo oyuns-plus-brand-logo--fallback"} aria-hidden="true">VA</span>;
-}
-
-function BrandRow({ brand, onOpen, t }: { brand: OyunsPlusBrand; onOpen: () => void; t: (key: string, params?: Record<string, string | number>) => string }) {
-  return <button type="button" onClick={onOpen} className="oyuns-plus-brand-row"><BrandLogo brand={brand} /><span className="oyuns-plus-brand-row-copy"><strong>{brand.name}</strong>{brand.description && <span>{brand.description}</span>}<small>{t("oyuns_plus.offer_count", { count: brand.offer_count })}</small></span><ChevronRight className="oyuns-plus-row-chevron" aria-hidden="true" /></button>;
-}
-
-function CouponRow({ coupon, onOpen, t, lang }: { coupon: OyunsPlusCoupon; onOpen: () => void; t: (key: string, params?: Record<string, string | number>) => string; lang: string }) {
-  return <button type="button" onClick={onOpen} className={`oyuns-plus-coupon-row ${coupon.is_sold_out ? "oyuns-plus-coupon-row--sold-out" : ""}`}><span className="oyuns-plus-coupon-row-copy"><strong>{coupon.name}</strong><span>{formatDiscount(coupon)}</span>{coupon.expires_at && <small>{t("oyuns_plus.expires", { date: formatDate(coupon.expires_at, lang) })}</small>}</span><span className="oyuns-plus-coupon-row-price"><span>{formatPoints(coupon.points_price)}</span><PointsMark />{coupon.is_sold_out && <small>{t("oyuns_plus.sold_out")}</small>}</span><ChevronRight className="oyuns-plus-row-chevron" aria-hidden="true" /></button>;
 }
 
 export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }: Props) {
@@ -107,6 +80,9 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
   const [formError, setFormError] = useState("");
   const [requestSuccess, setRequestSuccess] = useState<{ name: string; balance: number } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [brandTab, setBrandTab] = useState<BrandTab>("coupons");
+  const [couponView, setCouponView] = useCouponViewMode();
+  const { favorites, toggle: toggleFavorite } = useFavoriteBrands();
 
   const summaryQuery = useQuery({ queryKey: userId ? queryKeys.oyunsPlus.summary(userId) : ["oyuns-plus", "summary", "anonymous"], queryFn: fetchOyunsPlusSummary, enabled: Boolean(userId), staleTime: 0 });
   const brandsQuery = useQuery({ queryKey: queryKeys.oyunsPlus.brands, queryFn: fetchOyunsPlusBrands, enabled: Boolean(userId) && !selectedBrand, staleTime: 0, refetchOnMount: "always" });
@@ -150,11 +126,12 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
   if (isProfileLoading) return <div aria-busy="true"><OyunsPlusSkeleton /></div>;
 
   const balance = summaryQuery.data?.points_balance ?? 0;
-  const brands = brandsQuery.data?.brands || [];
+  // Favorites float to the top; the stable sort keeps the admin-defined order within each group.
+  const brands = [...(brandsQuery.data?.brands || [])].sort((a, b) => Number(favorites.includes(b.id)) - Number(favorites.includes(a.id)));
   const coupons = couponsQuery.data?.coupons || [];
   const selectedBrandData = couponsQuery.data?.brand || selectedBrand;
 
-  const openBrand = (brand: OyunsPlusBrand) => { setSelectedBrand(brand); setSelectedCoupon(null); setRequestSuccess(null); setFormError(""); };
+  const openBrand = (brand: OyunsPlusBrand) => { setSelectedBrand(brand); setBrandTab("coupons"); setSelectedCoupon(null); setRequestSuccess(null); setFormError(""); window.scrollTo({ top: 0 }); };
   const openCoupon = (coupon: OyunsPlusCoupon) => { setSelectedCoupon(coupon); setShowForm(false); setRequestSuccess(null); setFormError(""); };
   const backFromCoupon = () => { setSelectedCoupon(null); setRequestSuccess(null); setFormError(""); };
   const backFromBrand = () => { setSelectedCoupon(null); setSelectedBrand(null); };
@@ -192,13 +169,15 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
       <div className="oyuns-plus-panel"><div className="oyuns-plus-panel-title flex items-center gap-2"><History className="h-4 w-4" /> {t("oyuns_plus.history_title")}</div>{historyQuery.isLoading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-maroon-600" /></div> : historyQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.history_error")}</div> : !historyQuery.data?.entries.length ? <div className="oyuns-plus-empty">{t("oyuns_plus.history_empty")}</div> : <div className="space-y-2">{historyQuery.data.entries.map((entry, index) => <HistoryRow key={entry.id || index} entry={entry} lang={lang} t={t} />)}</div>}</div>
     </section> : selectedCoupon && selectedBrandData ? <section className="oyuns-plus-detail-view">
       <button type="button" onClick={backFromCoupon} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {selectedBrandData.name}</button>
-      <div className="oyuns-plus-detail-card oyuns-plus-coupon-detail-card"><div className="oyuns-plus-coupon-detail-brand"><BrandLogo brand={selectedBrandData} small /><span>{selectedBrandData.name}</span></div><div className="oyuns-plus-detail-content"><div className="oyuns-plus-detail-price"><span>{formatPoints(selectedCoupon.points_price)}</span><PointsMark /></div><div className="oyuns-plus-discount-badge"><Tag className="h-3.5 w-3.5" /> {formatDiscount(selectedCoupon)}</div><h2>{selectedCoupon.name}</h2><p>{selectedCoupon.description || t("oyuns_plus.no_description")}</p>{selectedCoupon.expires_at && <div className="oyuns-plus-expiry">{t("oyuns_plus.expires", { date: formatDate(selectedCoupon.expires_at, lang) })}</div>}
+      <div className="oyuns-plus-detail-card oyuns-plus-coupon-detail-card"><div className="oyuns-plus-coupon-detail-brand"><BrandLogo brand={selectedBrandData} size="sm" /><span>{selectedBrandData.name}</span></div><div className="oyuns-plus-detail-content"><div className="oyuns-plus-detail-price"><span>{formatPoints(selectedCoupon.points_price)}</span><PointsMark /></div><div className="oyuns-plus-discount-badge"><Tag className="h-3.5 w-3.5" /> {formatCouponValue(selectedCoupon)}</div>{selectedCoupon.badge_label && <div className="oyuns-plus-coupon-badge oyuns-plus-coupon-badge--detail">{selectedCoupon.badge_label}</div>}<h2>{selectedCoupon.name}</h2><p>{selectedCoupon.description || t("oyuns_plus.no_description")}</p>{selectedCoupon.expires_at && <div className="oyuns-plus-expiry">{t("oyuns_plus.expires", { date: formatDate(selectedCoupon.expires_at, lang) })}</div>}
         {requestSuccess ? <div className="oyuns-plus-success" role="status"><SuccessCheck /><strong>{t("oyuns_plus.request_success")}</strong><span>{t("oyuns_plus.request_success_balance", { balance: formatPoints(requestSuccess.balance) })}</span></div> : <><button type="button" disabled={selectedCoupon.is_sold_out || balance < selectedCoupon.points_price || requestMutation.isPending} onClick={() => setShowForm((value) => !value)} className="oyuns-plus-primary-button disabled:cursor-not-allowed disabled:opacity-50">{selectedCoupon.is_sold_out ? t("oyuns_plus.sold_out") : balance < selectedCoupon.points_price ? t("oyuns_plus.points_shortfall", { points: formatPoints(selectedCoupon.points_price - balance) }) : requestMutation.isPending ? t("oyuns_plus.submitting") : <><span>{formatPoints(selectedCoupon.points_price)}</span><PointsMark /></>}</button>{showForm && <div className="oyuns-plus-receiver-form"><label>{t("oyuns_plus.receiver_name")}<input value={receiverName} onChange={(event) => setReceiverName(event.target.value)} autoComplete="name" /></label><label>{t("oyuns_plus.receiver_phone")}<input value={receiverPhone} onChange={(event) => setReceiverPhone(event.target.value)} inputMode="tel" placeholder="Утасны дугаар" /></label>{formError && <div className="oyuns-plus-error" role="alert">{formError}</div>}<button type="button" onClick={submitRequest} disabled={requestMutation.isPending} className="oyuns-plus-primary-button">{requestMutation.isPending ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t("oyuns_plus.submit_request")}</button></div>}</>}
       </div></div>
-    </section> : selectedBrand ? <section className="oyuns-plus-brand-view" aria-live="polite">
-      <button type="button" onClick={backFromBrand} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {t("oyuns_plus.all_brands")}</button><div className="oyuns-plus-brand-header"><BrandLogo brand={selectedBrandData || selectedBrand} /><div><h2>{selectedBrandData?.name || selectedBrand.name}</h2>{selectedBrandData?.description && <p>{selectedBrandData.description}</p>}</div></div>
-      {couponsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.coupons_error")}</div> : couponsQuery.isLoading ? <div className="oyuns-plus-coupon-list"><OyunsPlusSkeleton /></div> : coupons.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.coupons_empty")}</p></div> : <div className="oyuns-plus-coupon-list">{coupons.map((coupon) => <CouponRow key={coupon.id} coupon={coupon} onOpen={() => openCoupon(coupon)} t={t} lang={lang} />)}</div>}
-    </section> : <>{brandsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.brands_error")}</div> : brandsQuery.isLoading ? <OyunsPlusSkeleton /> : brands.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.brands_empty")}</p></div> : <div className="oyuns-plus-brand-list">{brands.map((brand) => <BrandRow key={brand.id} brand={brand} onOpen={() => openBrand(brand)} t={t} />)}</div>}<div className="oyuns-plus-note">{t("oyuns_plus.vouchers_note")}</div></>}
+    </section> : selectedBrand && selectedBrandData ? <BrandPage brand={selectedBrandData} tab={brandTab} onTabChange={setBrandTab} favorite={favorites.includes(selectedBrandData.id)} onToggleFavorite={() => toggleFavorite(selectedBrandData.id)} onBack={backFromBrand} couponCount={couponsQuery.data ? coupons.length : selectedBrandData.offer_count} t={t}>
+      {brandTab === "about" ? <BrandAbout brand={selectedBrandData} t={t} /> : <div role="tabpanel">
+        <div className="oyuns-plus-coupon-toolbar"><span>{t("oyuns_plus.offer_count", { count: coupons.length })}</span><CouponViewSwitch mode={couponView} onChange={setCouponView} t={t} /></div>
+        {couponsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.coupons_error")}</div> : couponsQuery.isLoading ? <OyunsPlusSkeleton /> : coupons.length === 0 ? <CouponsEmpty t={t} /> : <div className={couponView === "grid" ? "oyuns-plus-coupon-grid" : "oyuns-plus-coupon-list"}>{coupons.map((coupon) => <CouponCard key={coupon.id} coupon={coupon} balance={balance} view={couponView} onOpen={() => openCoupon(coupon)} t={t} expiry={coupon.expires_at ? t("oyuns_plus.expires", { date: formatDate(coupon.expires_at, lang) }) : undefined} />)}</div>}
+      </div>}
+    </BrandPage> : <>{brandsQuery.isError ? <div className="oyuns-plus-error">{t("oyuns_plus.brands_error")}</div> : brandsQuery.isLoading ? <OyunsPlusSkeleton /> : brands.length === 0 ? <div className="oyuns-plus-empty-card"><Gift className="mx-auto mb-2 h-8 w-8 text-maroon-500" /><p>{t("oyuns_plus.brands_empty")}</p></div> : <div className="oyuns-plus-brand-grid">{brands.map((brand) => <BrandTile key={brand.id} brand={brand} balance={balance} favorite={favorites.includes(brand.id)} onOpen={() => openBrand(brand)} t={t} />)}</div>}<div className="oyuns-plus-note">{t("oyuns_plus.vouchers_note")}</div></>}
   </div>;
 }
 

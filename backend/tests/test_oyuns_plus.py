@@ -6,7 +6,10 @@ from decimal import Decimal
 from main import (
     _get_current_shift_admin_id,
     _get_oyuns_plus_totals,
+    _clean_oyuns_plus_brand_profile,
+    _normalize_oyuns_plus_link,
     _normalize_oyuns_plus_phone,
+    _oyuns_plus_brand_stats,
     _oyuns_plus_coupon_response,
     _oyuns_plus_coupon_is_public,
     _oyuns_plus_expired,
@@ -107,6 +110,42 @@ def test_coupon_response_derives_currency_and_remaining_inventory():
     assert coupon.currency_code == "MNT"
     assert coupon.remaining_purchase_count == 1
     assert coupon.is_sold_out is False
+
+
+def test_coupon_response_trims_optional_badge_label():
+    base = {"id": "c", "brand_id": "b", "name": "Coffee", "points_price": 10, "value_type": "amount", "discount_value": "100"}
+    assert _oyuns_plus_coupon_response({**base, "badge_label": "  Хэмнэлт 10%  "}).badge_label == "Хэмнэлт 10%"
+    assert _oyuns_plus_coupon_response({**base, "badge_label": "   "}).badge_label is None
+
+
+def test_brand_stats_price_range_ignores_sold_out_coupons():
+    rows = [
+        {"id": "a", "brand_id": "b1", "points_price": 300, "total_purchase_limit": None},
+        {"id": "b", "brand_id": "b1", "points_price": 100, "total_purchase_limit": 1},
+        {"id": "c", "brand_id": "b1", "points_price": 500, "total_purchase_limit": 5},
+        {"id": "d", "brand_id": "b2", "points_price": 50, "total_purchase_limit": 1},
+    ]
+    stats = _oyuns_plus_brand_stats(rows, {"b": 1, "c": 2, "d": 1})
+    assert stats["b1"] == {"offer_count": 3, "available_count": 2, "min_points_price": 300, "max_points_price": 500}
+    assert stats["b2"] == {"offer_count": 1, "available_count": 0, "min_points_price": None, "max_points_price": None}
+
+
+def test_brand_links_assume_https_and_reject_other_schemes():
+    assert _normalize_oyuns_plus_link("example.mn", "website_url") == "https://example.mn"
+    assert _normalize_oyuns_plus_link("http://insta.com/x", "instagram_url") == "http://insta.com/x"
+    assert _normalize_oyuns_plus_link("  ", "website_url") is None
+    for value in ("javascript:alert(1)", "ftp://example.mn", "https://", "exa mple.mn"):
+        try:
+            _normalize_oyuns_plus_link(value, "website_url")
+        except HTTPException as exc:
+            assert exc.status_code == 422
+        else:
+            raise AssertionError(f"expected {value!r} to be rejected")
+
+
+def test_brand_profile_cleanup_clears_blank_fields_and_tidies_categories():
+    cleaned = _clean_oyuns_plus_brand_profile({"category": " Фитнес клуб, , Спорт ", "website_url": "", "phone": "  ", "address": " УБ "})
+    assert cleaned == {"category": "Фитнес клуб, Спорт", "website_url": None, "phone": None, "address": "УБ"}
 
 
 def test_coupon_expiry_parser_handles_expired_and_open_values():
