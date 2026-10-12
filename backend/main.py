@@ -1286,6 +1286,26 @@ def _get_oyuns_plus_balance(client, user_id: int) -> int:
     return total
 
 
+def _get_oyuns_plus_totals(client, user_id: int) -> tuple[int, int, int]:
+    """Return (balance, earned, spent) from the full ledger.
+
+    Refunds give back redeemed points, so they reduce `spent` instead of
+    counting as earnings.
+    """
+    res = client.table("oyuns_plus_points_ledger").select("points,source_type").eq("user_id", user_id).execute()
+    balance = earned = spent = 0
+    for row in res.data or []:
+        points = _safe_int(row.get("points"), 0)
+        balance += points
+        if row.get("source_type") == "voucher_refund":
+            spent -= points
+        elif points < 0:
+            spent -= points
+        else:
+            earned += points
+    return balance, earned, max(0, spent)
+
+
 def _normalize_oyuns_plus_phone(value: str, country_code: str | None = None) -> str:
     """Normalize Mongolian and Russian mobile numbers to international format."""
     digits = re.sub(r"\D", "", str(value or ""))
@@ -5013,11 +5033,13 @@ async def oyuns_plus_summary(user=Depends(get_jwt_authenticated_user)):
     invited_verified = verified_res.count if verified_res.count is not None else len(verified_res.data or [])
     referral_max_uses = settings["oyuns_plus_referral_max_uses"]
 
-    points_balance = _get_oyuns_plus_balance(client, user.id)
+    points_balance, points_earned_total, points_spent_total = _get_oyuns_plus_totals(client, user.id)
 
     return OyunsPlusSummaryResponse(
         enabled=bool(settings["oyuns_plus_enabled"]),
         points_balance=points_balance,
+        points_earned_total=points_earned_total,
+        points_spent_total=points_spent_total,
         point_value_rub=1,
         threshold_rub=settings["oyuns_plus_threshold_rub"],
         points_per_threshold=settings["oyuns_plus_points_per_threshold"],

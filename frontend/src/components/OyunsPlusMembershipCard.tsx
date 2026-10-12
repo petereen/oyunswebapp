@@ -1,299 +1,249 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { Check, ChevronRight, Copy, RefreshCw, RotateCcw, Users } from "lucide-react";
+import oyunsPlusLogo from "../assets/oyuns-plus-points.svg";
+import { useLang } from "../i18n/useLang";
 
-export const MAX_TILT = 16;
-export const TILT_LERP_FACTOR = 0.18;
-export const POINTER_CLICK_THRESHOLD = 8;
-export const GYRO_BETA_BASELINE = 40;
-export const GYRO_TILT_RANGE = 36;
-export const SHEEN_OPACITY_IDLE = 0.14;
-export const SHEEN_OPACITY_ACTIVE = 0.23;
-export const GLARE_OPACITY_IDLE = 0.06;
-export const GLARE_OPACITY_ACTIVE = 0.13;
-export const CARD_RETURN_DURATION_MS = 500;
-
-type Tilt = { x: number; y: number };
-type OrientationStatus = "unsupported" | "enabled" | "denied";
-
-type DeviceOrientationConstructor = typeof DeviceOrientationEvent & {
-  requestPermission?: () => Promise<PermissionState>;
-};
+export const FLIP_DURATION_MS = 600;
+export const COPY_FEEDBACK_MS = 1800;
 
 export interface OyunsPlusMembershipCardProps {
-  /** Imported SVG URL or an inline SVG data URL for the OYUNS+ mark. */
-  logoSvg: string;
-  userName: string;
+  cardHolder: string;
   points: number | string;
-  pointsLabel: string;
+  /** Unit shown under point values; defaults to the translated "points". */
+  currency?: string;
+  /** Lifetime earned points shown on the back face. */
+  earnedPoints?: number | string;
+  /** Points spent on vouchers, shown under the earned total when > 0. */
+  spentPoints?: number;
   referralCode: string;
-  onMenuOpen: () => void;
-  cardHolderLabel?: string;
-  referralLabel?: string;
+  invitedCount: number;
+  tagline?: string;
+  /** Custom brand mark; defaults to the OYUNS+ gradient logo. */
+  logo?: ReactNode;
+  /** When set, the invited count becomes a link into the details view. */
+  onDetailsOpen?: () => void;
   className?: string;
 }
 
 /**
  * Usage:
- * <OyunsPlusMembershipCard logoSvg={oyunsPlusLogo} userName="Тэмүүлэн" points={1280}
- *   pointsLabel="ОНОО" referralCode="OYUNS42" onMenuOpen={openLegacyMenu} />
+ * <OyunsPlusMembershipCard cardHolder="Тэмүүлэн Очирбат" points={10000} currency="ОНОО"
+ *   earnedPoints={12500} spentPoints={2500} referralCode="NJAGR10R" invitedCount={15}
+ *   onDetailsOpen={openSettings} />
+ * Must render inside <LangProvider>.
  */
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
 
 function formatPoints(points: number | string) {
   if (typeof points === "string") return points;
   return points.toLocaleString("mn-MN");
 }
 
-function pointerTilt(clientX: number, clientY: number, rect: DOMRect): Tilt {
-  const normalizedX = clamp((clientX - rect.left) / rect.width * 2 - 1, -1, 1);
-  const normalizedY = clamp((clientY - rect.top) / rect.height * 2 - 1, -1, 1);
-  return {
-    x: clamp(-normalizedY * MAX_TILT, -MAX_TILT, MAX_TILT),
-    y: clamp(normalizedX * MAX_TILT, -MAX_TILT, MAX_TILT),
-  };
+function signedPoints(points: number | string) {
+  if (typeof points === "string") return points;
+  return `${points > 0 ? "+" : ""}${formatPoints(points)}`;
 }
 
-function orientationTilt(beta: number, gamma: number): Tilt {
-  return {
-    x: clamp(((beta - GYRO_BETA_BASELINE) / GYRO_TILT_RANGE) * MAX_TILT, -MAX_TILT, MAX_TILT),
-    y: clamp((gamma / GYRO_TILT_RANGE) * MAX_TILT, -MAX_TILT, MAX_TILT),
-  };
+/** Angled gold pills that sit in the bottom-right corner of both faces. */
+function AccentBars({ id }: { id: string }) {
+  const bars = [
+    { x1: 58, y1: 222, x2: 168, y2: 112, opacity: 1 },
+    { x1: 112, y1: 218, x2: 184, y2: 146, opacity: 0.8 },
+    { x1: 166, y1: 214, x2: 192, y2: 188, opacity: 0.5 },
+  ];
+  return (
+    <svg className="oyuns-flip-card__accent" viewBox="0 0 200 200" preserveAspectRatio="xMaxYMax meet" aria-hidden="true">
+      <defs>
+        <linearGradient id={`${id}-gold`} gradientUnits="userSpaceOnUse" x1="60" y1="110" x2="190" y2="220">
+          <stop offset="0%" stopColor="#FDC830" />
+          <stop offset="100%" stopColor="#F37335" />
+        </linearGradient>
+        <filter id={`${id}-glow`} x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="9" />
+        </filter>
+      </defs>
+      <g filter={`url(#${id}-glow)`} opacity="0.5">
+        {bars.map((bar, index) => <line key={index} {...bar} stroke={`url(#${id}-gold)`} strokeWidth="24" strokeLinecap="round" />)}
+      </g>
+      {bars.map((bar, index) => <line key={index} {...bar} stroke={`url(#${id}-gold)`} strokeWidth="22" strokeLinecap="round" />)}
+      {/* Top-edge highlight gives the pills a soft inner sheen. */}
+      <line x1="54" y1="218" x2="164" y2="108" stroke="#fff" strokeOpacity="0.28" strokeWidth="4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DefaultLogo() {
+  return <img src={oyunsPlusLogo} alt="" className="h-6 w-auto drop-shadow-[0_0_8px_rgba(253,200,48,0.35)] sm:h-7" />;
 }
 
 export function OyunsPlusMembershipCard({
-  logoSvg,
-  userName,
+  cardHolder,
   points,
-  pointsLabel,
+  currency,
+  earnedPoints,
+  spentPoints = 0,
   referralCode,
-  onMenuOpen,
-  cardHolderLabel = "CARD HOLDER",
-  referralLabel = "REFERRAL CODE",
+  invitedCount,
+  tagline,
+  logo,
+  onDetailsOpen,
   className = "",
 }: OyunsPlusMembershipCardProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const targetTiltRef = useRef<Tilt>({ x: 0, y: 0 });
-  const renderedTiltRef = useRef<Tilt>({ x: 0, y: 0 });
-  const activeRef = useRef(false);
-  const pointerDownRef = useRef(false);
-  const pointerMovedRef = useRef(false);
-  const pointerStartRef = useRef({ x: 0, y: 0 });
-  const suppressClickRef = useRef(false);
-  const [isActive, setIsActive] = useState(false);
-  const [orientationStatus, setOrientationStatus] = useState<OrientationStatus>("unsupported");
+  const { t } = useLang();
+  const unitLabel = currency ?? t("oyuns_plus.card_points_unit");
+  const invitedText = t("oyuns_plus.card_invited_count", { count: invitedCount });
+  const [flipped, setFlipped] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
 
-  const setActive = (next: boolean) => {
-    if (activeRef.current === next) return;
-    activeRef.current = next;
-    cardRef.current?.setAttribute("data-active", String(next));
-    setIsActive(next);
+  useEffect(() => () => {
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+  }, []);
+
+  const toggle = () => setFlipped((value) => !value);
+
+  const stop = (handler: () => void) => (event: MouseEvent) => {
+    event.stopPropagation();
+    handler();
   };
 
-  const writeTilt = (tilt: Tilt) => {
-    const card = cardRef.current;
-    if (!card) return;
-    const sheenX = clamp(50 + tilt.y * 1.7, 0, 100);
-    const sheenY = clamp(50 - tilt.x * 1.7, 0, 100);
-    const glareX = clamp(50 - tilt.y * 2.2, 8, 92);
-    const glareY = clamp(50 + tilt.x * 2.2, 8, 92);
-    card.style.setProperty("--oyuns-tilt-x", `${tilt.x}deg`);
-    card.style.setProperty("--oyuns-tilt-y", `${tilt.y}deg`);
-    card.style.setProperty("--oyuns-sheen-x", `${sheenX}%`);
-    card.style.setProperty("--oyuns-sheen-y", `${sheenY}%`);
-    card.style.setProperty("--oyuns-glare-x", `${glareX}%`);
-    card.style.setProperty("--oyuns-glare-y", `${glareY}%`);
-  };
-
-  const animateTilt = () => {
-    if (animationFrameRef.current !== null) return;
-
-    const frame = () => {
-      animationFrameRef.current = null;
-      const current = renderedTiltRef.current;
-      const target = targetTiltRef.current;
-      const next = {
-        x: current.x + (target.x - current.x) * TILT_LERP_FACTOR,
-        y: current.y + (target.y - current.y) * TILT_LERP_FACTOR,
-      };
-      const settled = Math.abs(target.x - next.x) < 0.01 && Math.abs(target.y - next.y) < 0.01;
-      renderedTiltRef.current = settled ? target : next;
-      writeTilt(renderedTiltRef.current);
-      if (!settled) animationFrameRef.current = window.requestAnimationFrame(frame);
-    };
-
-    animationFrameRef.current = window.requestAnimationFrame(frame);
-  };
-
-  const driveTilt = (tilt: Tilt) => {
-    setActive(true);
-    targetTiltRef.current = tilt;
-    animateTilt();
-  };
-
-  const returnToFlat = () => {
-    setActive(false);
-    targetTiltRef.current = { x: 0, y: 0 };
-    if (animationFrameRef.current !== null) {
-      window.cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    renderedTiltRef.current = { x: 0, y: 0 };
-    writeTilt(renderedTiltRef.current);
-  };
-
-  const driveFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    driveTilt(pointerTilt(event.clientX, event.clientY, rect));
-  };
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    pointerDownRef.current = true;
-    pointerMovedRef.current = false;
-    pointerStartRef.current = { x: event.clientX, y: event.clientY };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    if (event.pointerType !== "mouse" && orientationStatus !== "enabled" && "DeviceOrientationEvent" in window) void requestOrientation();
-    driveFromPointer(event);
-  };
-
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType !== "mouse" && !pointerDownRef.current) return;
-    if (pointerDownRef.current) {
-      const distance = Math.hypot(event.clientX - pointerStartRef.current.x, event.clientY - pointerStartRef.current.y);
-      if (distance > POINTER_CLICK_THRESHOLD) pointerMovedRef.current = true;
-    }
-    driveFromPointer(event);
-  };
-
-  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const wasDragged = pointerMovedRef.current;
-    pointerDownRef.current = false;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-
-    if (wasDragged) {
-      suppressClickRef.current = true;
-      window.setTimeout(() => { suppressClickRef.current = false; }, 0);
-      if (event.pointerType !== "mouse" && orientationStatus !== "enabled") returnToFlat();
-      return;
-    }
-
-    if (event.pointerType !== "mouse" && orientationStatus !== "enabled") returnToFlat();
-  };
-
-  const handleCardClick = () => {
-    if (suppressClickRef.current) return;
-    onMenuOpen();
-  };
-
-  const handleCardKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    onMenuOpen();
-  };
-
-  const requestOrientation = async () => {
-    const OrientationEvent = window.DeviceOrientationEvent as unknown as DeviceOrientationConstructor | undefined;
+  const copyReferral = async () => {
+    if (!referralCode) return;
     try {
-      const permission = OrientationEvent?.requestPermission ? await OrientationEvent.requestPermission() : "granted";
-      if (permission !== "granted") {
-        setOrientationStatus("denied");
-        return;
-      }
-      setOrientationStatus("enabled");
+      await navigator.clipboard.writeText(referralCode);
+      setCopied(true);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
     } catch {
-      setOrientationStatus("denied");
+      setCopied(false);
     }
   };
 
-  useEffect(() => {
-    const isTouchDevice = navigator.maxTouchPoints > 0 || window.matchMedia?.("(pointer: coarse)").matches;
-    if (!isTouchDevice || !("DeviceOrientationEvent" in window)) return;
-    void requestOrientation();
-  }, []);
-
-  useEffect(() => {
-    if (orientationStatus !== "enabled") return undefined;
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      if (typeof event.beta !== "number" || typeof event.gamma !== "number") return;
-      driveTilt(orientationTilt(event.beta, event.gamma));
-    };
-    window.addEventListener("deviceorientation", handleOrientation, true);
-    return () => window.removeEventListener("deviceorientation", handleOrientation, true);
-  }, [orientationStatus]);
-
-  useEffect(() => {
-    writeTilt({ x: 0, y: 0 });
-    return () => {
-      if (animationFrameRef.current !== null) window.cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, []);
-
-  const logoShimmerStyle = {
-    maskImage: `url("${logoSvg}")`,
-    WebkitMaskImage: `url("${logoSvg}")`,
-  } as CSSProperties;
-  const cardStyle = {
-    "--oyuns-sheen-opacity-idle": SHEEN_OPACITY_IDLE,
-    "--oyuns-sheen-opacity-active": SHEEN_OPACITY_ACTIVE,
-    "--oyuns-glare-opacity-idle": GLARE_OPACITY_IDLE,
-    "--oyuns-glare-opacity-active": GLARE_OPACITY_ACTIVE,
-    "--oyuns-card-return-duration": `${CARD_RETURN_DURATION_MS}ms`,
-  } as CSSProperties;
+  const brandMark = logo ?? <DefaultLogo />;
+  const label = "truncate text-[10px] font-medium uppercase tracking-[0.14em] text-blue-300/60";
+  const unit = "text-[11px] font-medium uppercase tracking-widest text-blue-200/60";
+  const title = "text-xs font-medium uppercase tracking-wider text-blue-200/80 sm:text-sm";
 
   return (
-    <div className={`oyuns-plus-membership-card-shell ${className}`} data-slot="oyuns-plus-membership-card-shell">
+    <div className={`oyuns-flip-card mx-auto w-full max-w-[420px] ${className}`} data-slot="oyuns-plus-membership-card-shell">
       <div
-        ref={cardRef}
-        className="oyuns-plus-membership-card"
+        className="oyuns-flip-card__inner relative aspect-[1.586/1] w-full cursor-pointer select-none"
         data-slot="oyuns-plus-membership-card"
-        data-active={isActive}
-        role="button"
-        tabIndex={0}
-        aria-label={`${formatPoints(points)} ${pointsLabel}`}
-        onClick={handleCardClick}
-        onKeyDown={handleCardKeyDown}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={() => { if (orientationStatus !== "enabled") returnToFlat(); }}
-        onPointerEnter={(event) => { if (event.pointerType === "mouse") setActive(true); }}
-        onPointerLeave={() => { if (!pointerDownRef.current && orientationStatus !== "enabled") returnToFlat(); }}
-        style={cardStyle}
+        data-flipped={flipped}
+        onClick={toggle}
       >
-        <span className="oyuns-plus-membership-card__base" aria-hidden="true" />
-        <span className="oyuns-plus-membership-card__sheen" aria-hidden="true" />
-        <span className="oyuns-plus-membership-card__glare" aria-hidden="true" />
-        <span className="oyuns-plus-membership-card__noise" aria-hidden="true" />
+        {/* Front */}
+        <section
+          className="oyuns-flip-card__face"
+          aria-hidden={flipped}
+          inert={flipped}
+          aria-label={`OYUNS PLUS, ${formatPoints(points)} ${unitLabel}`}
+        >
+          <AccentBars id="oyuns-front" />
+          <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
+            <header className="flex items-center justify-between gap-3">
+              <span className={title}>OYUNS PLUS</span>
+              <span className="flex shrink-0 items-center" aria-hidden="true">{brandMark}</span>
+            </header>
 
-        <span className="oyuns-plus-membership-card__content">
-          <span className="oyuns-plus-membership-card__topline">
-            <span className="oyuns-plus-membership-card__title">OYUNS PLUS</span>
-            <span className="oyuns-plus-membership-card__logo" aria-hidden="true">
-              <img src={logoSvg} alt="" />
-              <span className="oyuns-plus-membership-card__logo-shimmer" style={logoShimmerStyle} />
-            </span>
-          </span>
+            <div className="min-w-0">
+              <div className="truncate text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">{formatPoints(points)}</div>
+              <div className={`mt-1 ${unit}`}>{unitLabel}</div>
+            </div>
 
-          <span className="oyuns-plus-membership-card__points">
-            <span className="oyuns-plus-membership-card__points-value">{formatPoints(points)}</span>
-            <span className="oyuns-plus-membership-card__points-label">{pointsLabel}</span>
-          </span>
+            <footer className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className={label}>{t("oyuns_plus.card_holder")}</div>
+                <div className="mt-1 truncate text-sm font-semibold uppercase tracking-wide text-white">{cardHolder || "—"}</div>
+              </div>
+              <button
+                type="button"
+                onClick={stop(toggle)}
+                className="oyuns-flip-card__chip shrink-0"
+                aria-label={t("oyuns_plus.card_flip")}
+              >
+                <span className="oyuns-flip-card__chip-label uppercase">{t("oyuns_plus.card_virtual")}</span>
+                <RefreshCw className="oyuns-flip-card__chip-icon h-3 w-3" aria-hidden="true" />
+              </button>
+            </footer>
+          </div>
+        </section>
 
-          <span className="oyuns-plus-membership-card__footer">
-            <span className="oyuns-plus-membership-card__field">
-              <span className="oyuns-plus-membership-card__field-label">{cardHolderLabel}</span>
-              <span className="oyuns-plus-membership-card__field-value">{userName || "—"}</span>
-            </span>
-            <span className="oyuns-plus-membership-card__field oyuns-plus-membership-card__field--right">
-              <span className="oyuns-plus-membership-card__field-label">{referralLabel}</span>
-              <span className="oyuns-plus-membership-card__field-value">{referralCode || "—"}</span>
-            </span>
-          </span>
-        </span>
+        {/* Back */}
+        <section
+          className="oyuns-flip-card__face oyuns-flip-card__face--back"
+          aria-hidden={!flipped}
+          inert={!flipped}
+          aria-label={`OYUNS PLUS, ${t("oyuns_plus.card_referral_code")}`}
+        >
+          <AccentBars id="oyuns-back" />
+          <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
+            <header className="flex items-center justify-between gap-3">
+              <span className={title}>OYUNS PLUS</span>
+              <button
+                type="button"
+                onClick={stop(toggle)}
+                className="oyuns-flip-card__icon-button"
+                aria-label={t("oyuns_plus.card_flip_back")}
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </header>
+
+            <div className="grid grid-cols-2 items-start gap-4">
+              <div className="min-w-0">
+                <div className={label}>{t("oyuns_plus.card_total_earned")}</div>
+                <div className="mt-1.5 truncate text-2xl font-bold tabular-nums tracking-tight text-emerald-400 sm:text-3xl">{signedPoints(earnedPoints ?? points)}</div>
+                <div className={`mt-0.5 ${unit}`}>{unitLabel}</div>
+                {spentPoints > 0 && (
+                  <div className="mt-2 truncate text-[11px] tabular-nums text-blue-200/50">
+                    {t("oyuns_plus.card_spent", { points: `−${formatPoints(spentPoints)}` })}
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0">
+                <div className={label}>{t("oyuns_plus.card_referral_code")}</div>
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 backdrop-blur-sm">
+                  <span className="truncate font-mono text-sm font-bold tracking-wider text-white">{referralCode || "—"}</span>
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); void copyReferral(); }}
+                    disabled={!referralCode}
+                    className="oyuns-flip-card__copy"
+                    data-copied={copied}
+                    aria-label={copied ? t("oyuns_plus.card_copied") : t("oyuns_plus.card_copy")}
+                  >
+                    {copied
+                      ? <Check key="check" className="oyuns-flip-card__check h-3.5 w-3.5" aria-hidden="true" />
+                      : <Copy key="copy" className="h-3.5 w-3.5" aria-hidden="true" />}
+                  </button>
+                </div>
+                <span className="sr-only" role="status">{copied ? t("oyuns_plus.card_copied") : ""}</span>
+
+                <div className={`mt-3 ${label}`}>{t("oyuns_plus.card_invited")}</div>
+                {onDetailsOpen ? (
+                  <button
+                    type="button"
+                    onClick={stop(onDetailsOpen)}
+                    className="group mt-1 flex items-center gap-1.5 text-sm font-semibold text-white"
+                  >
+                    <Users className="h-3.5 w-3.5 text-blue-200/70" aria-hidden="true" />
+                    <span>{invitedText}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-blue-200/50 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </button>
+                ) : (
+                  <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-white">
+                    <Users className="h-3.5 w-3.5 text-blue-200/70" aria-hidden="true" />
+                    <span>{invitedText}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <footer className="truncate text-center text-[11px] font-normal tracking-wide text-blue-200/50">{tagline ?? t("oyuns_plus.card_tagline")}</footer>
+          </div>
+        </section>
       </div>
-
     </div>
   );
 }

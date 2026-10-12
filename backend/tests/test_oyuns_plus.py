@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from main import (
     _get_current_shift_admin_id,
+    _get_oyuns_plus_totals,
     _normalize_oyuns_plus_phone,
     _oyuns_plus_coupon_response,
     _oyuns_plus_coupon_is_public,
@@ -153,3 +154,28 @@ def test_current_shift_admin_id_is_none_when_shift_is_closed():
             return FakeQuery()
 
     assert _get_current_shift_admin_id(FakeClient()) is None
+
+
+def test_oyuns_plus_totals_split_earned_and_net_spent():
+    rows = [
+        {"points": 500, "source_type": "exchange_completed"},
+        {"points": 200, "source_type": "referral_kyc_approved"},
+        {"points": -300, "source_type": "voucher_redeem"},
+        {"points": 100, "source_type": "voucher_refund"},
+    ]
+
+    class FakeQuery:
+        def select(self, *_args):
+            return self
+
+        def eq(self, *_args):
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=rows)
+
+    class FakeClient:
+        def table(self, _name):
+            return FakeQuery()
+
+    assert _get_oyuns_plus_totals(FakeClient(), 1) == (500, 700, 200)

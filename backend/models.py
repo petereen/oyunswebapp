@@ -347,6 +347,8 @@ class ReferralCodeValidateResponse(BaseModel):
 class OyunsPlusSummaryResponse(BaseModel):
     enabled: bool = True
     points_balance: int = 0
+    points_earned_total: int = 0
+    points_spent_total: int = 0
     point_value_rub: int = 1
     threshold_rub: int = DEFAULT_OYUNS_PLUS_THRESHOLD_RUB
     points_per_threshold: int = DEFAULT_OYUNS_PLUS_POINTS_PER_THRESHOLD

@@ -175,12 +175,13 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
   return <div className="oyuns-plus-page space-y-4">
     {!selectedBrand && !selectedCoupon && <div className="oyuns-plus-balance-sticky oyuns-plus-membership-hero">
       <OyunsPlusMembershipCard
-        logoSvg={oyunsPlusPoints}
-        userName={userName}
-        points={summaryQuery.isLoading ? "—" : formatPoints(balance)}
-        pointsLabel={lang === "mn" ? "ОНОО" : "БАЛЛЫ"}
+        cardHolder={userName}
+        points={summaryQuery.isLoading ? "—" : balance}
+        earnedPoints={summaryQuery.isLoading ? "—" : summaryQuery.data?.points_earned_total ?? balance}
+        spentPoints={summaryQuery.data?.points_spent_total ?? 0}
         referralCode={summaryQuery.data?.referral_code || ""}
-        onMenuOpen={() => setShowSettings(true)}
+        invitedCount={summaryQuery.data?.invited_total ?? 0}
+        onDetailsOpen={() => setShowSettings(true)}
       />
     </div>}
 

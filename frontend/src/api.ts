@@ -691,6 +691,10 @@ export async function validateReferralCode(code: string): Promise<ReferralCodeVa
 export interface OyunsPlusSummary {
   enabled: boolean;
   points_balance: number;
+  /** Lifetime points earned (refunds excluded). */
+  points_earned_total?: number;
+  /** Points spent on vouchers, net of refunds. */
+  points_spent_total?: number;
   point_value_rub: number;
   threshold_rub: number;
   points_per_threshold: number;
