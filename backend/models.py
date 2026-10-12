@@ -728,6 +728,9 @@ class UserSearchItem(BaseModel):
     last_name: Optional[str] = None
     username: Optional[str] = None
     phone: Optional[str] = None
+    phone_mnt: Optional[str] = None
+    phone_intl: Optional[str] = None
+    email: Optional[str] = None
     verified: bool = False
     total_transactions: int = 0
     created_at: Optional[datetime] = None
@@ -736,6 +739,28 @@ class UserSearchItem(BaseModel):
 class UserSearchResponse(BaseModel):
     users: list[UserSearchItem]
     total: int = 0
+
+
+# Admin -> user direct messages sent through the bot
+class AdminUserMessageTemplate(BaseModel):
+    id: str
+    label: str
+    preview: str  # plain-text rendering of what the user will receive
+    button_text: Optional[str] = None
+
+
+class AdminUserMessageTemplatesResponse(BaseModel):
+    templates: list[AdminUserMessageTemplate]
+
+
+class AdminUserMessageRequest(BaseModel):
+    template: str
+
+
+class AdminUserMessageResponse(BaseModel):
+    ok: bool = True
+    user_id: int
+    telegram_message_id: Optional[int] = None
 
 
 # Admin Transaction History (all transactions)

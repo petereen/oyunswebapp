@@ -106,6 +106,10 @@ from models import (
     UserPromoCodesResponse,
     UserSearchItem,
     UserSearchResponse,
+    AdminUserMessageRequest,
+    AdminUserMessageResponse,
+    AdminUserMessageTemplate,
+    AdminUserMessageTemplatesResponse,
     WorkingHoursResponse,
     WorkingHoursUpdateRequest,
     # Gift-related models
@@ -169,7 +173,9 @@ from models import (
 from storage import presign_upload, public_url
 from telegram import (
     TelegramChatValidationError,
+    TelegramDeliveryError,
     send_admin_notification,
+    send_user_message,
     send_user_notification,
     send_user_photo,
     send_user_photos,
@@ -8558,63 +8564,301 @@ async def create_manual_driver_transaction(
 
 # ============= User Search for Admin =============
 
+_USER_SEARCH_COLUMNS = "id,first_name,last_name,phone,phone_mnt,phone_intl,email,verified,created_at"
+_USER_SEARCH_TEXT_COLUMNS = ("first_name", "last_name", "email")
+_USER_SEARCH_PHONE_COLUMNS = ("phone", "phone_mnt", "phone_intl")
+_USER_SEARCH_CANDIDATE_LIMIT = 200
+_USER_SEARCH_RESULT_LIMIT = 50
+_USER_SEARCH_MAX_TOKENS = 5
+_MAX_BIGINT_DIGITS = 18
+
+
+def _user_search_tokens(query: str) -> list[str]:
+    """Split an admin search string into safe, case-folded search tokens.
+
+    A query made only of digits and phone punctuation ("+976 9911-2233") is kept
+    as one numeric token, otherwise it is split on whitespace so that
+    "Бат Эрдэнэ" matches in any order. Characters that are special in PostgREST
+    filters or LIKE patterns (commas, parentheses, quotes, %, *, backslash) are
+    dropped so user input can never break or widen the filter.
+    """
+    query = (query or "").strip()
+    if not query:
+        return []
+    if re.fullmatch(r"[\d\s+\-().]+", query):
+        digits = re.sub(r"\D", "", query)
+        return [digits] if digits else []
+    tokens: list[str] = []
+    for raw in query.split():
+        token = re.sub(r"[^\w@.+\-']", "", raw).lstrip("@").strip(".+-'").casefold()
+        if token and token not in tokens:
+            tokens.append(token)
+    return tokens[:_USER_SEARCH_MAX_TOKENS]
+
+
+def _user_search_phone_variants(digits: str) -> list[str]:
+    """Digit strings to look for in phone columns (full number and local part)."""
+    if len(digits) < 3:
+        return []
+    variants = [digits]
+    if len(digits) >= 9:
+        variants.append(digits[-8:])  # strips a country code such as 976
+    return variants
+
+
+def _user_search_or_filter(token: str, text_columns: list[str]) -> str:
+    clauses = [f"{column}.ilike.%{token}%" for column in text_columns]
+    if token.isdigit():
+        if len(token) <= _MAX_BIGINT_DIGITS:
+            clauses.append(f"id.eq.{int(token)}")
+        for variant in _user_search_phone_variants(token):
+            clauses.extend(f"{column}.ilike.%{variant}%" for column in _USER_SEARCH_PHONE_COLUMNS)
+    return ",".join(clauses)
+
+
+def _digits(value) -> str:
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def _score_user_search_match(row: dict, tokens: list[str]) -> int | None:
+    """Return a relevance score, or None when any token fails to match the user."""
+    first = str(row.get("first_name") or "").casefold()
+    last = str(row.get("last_name") or "").casefold()
+    username = str(row.get("username") or "").casefold()
+    email = str(row.get("email") or "").casefold()
+    user_id = str(row.get("id") or "")
+    phones = [_digits(row.get(column)) for column in _USER_SEARCH_PHONE_COLUMNS]
+    phones = [phone for phone in phones if phone]
+    full_names = {f"{first} {last}".strip(), f"{last} {first}".strip()}
+
+    total = 0
+    for token in tokens:
+        score = 0
+        if token == user_id:
+            score = 1000
+        elif token in full_names or token == username:
+            score = 900
+        elif token.isdigit():
+            variants = _user_search_phone_variants(token)
+            if any(phone.endswith(variant) for variant in variants for phone in phones):
+                score = 800
+            elif any(variant in phone for variant in variants for phone in phones):
+                score = 300
+        else:
+            if first.startswith(token) or last.startswith(token) or username.startswith(token):
+                score = 200
+            elif token in first or token in last or token in username:
+                score = 100
+            elif token in email:
+                score = 60
+        if not score:
+            return None
+        total += score
+    if len(tokens) > 1 and f"{first} {last}".strip() == " ".join(tokens):
+        total += 100
+    return total
+
+
+def _count_transactions_by_user(client, user_ids: list[int]) -> dict[int, int]:
+    """Count transactions for many users with paged queries instead of one per user."""
+    counts = {user_id: 0 for user_id in user_ids}
+    if not user_ids:
+        return counts
+    page_size = 1000
+    offset = 0
+    while offset < 20000:
+        rows = (
+            client.table("transactions")
+            .select("user_id")
+            .in_("user_id", user_ids)
+            .order("id")
+            .range(offset, offset + page_size - 1)
+            .execute()
+            .data
+            or []
+        )
+        for row in rows:
+            owner = row.get("user_id")
+            if owner in counts:
+                counts[owner] += 1
+        if len(rows) < page_size:
+            break
+        offset += page_size
+    return counts
+
+
+def _search_users(client, raw_query: str) -> list[dict]:
+    """Find users by Telegram ID, name (any order), @username, phone or email.
+
+    PostgREST narrows the candidate set using the most selective token; every
+    token is then verified and ranked here so multi-word queries are AND-ed.
+    """
+    tokens = _user_search_tokens(raw_query)
+    pivot = max(tokens, key=len) if tokens else None
+
+    # The username column may be missing on older deployments, so degrade gracefully.
+    rows: list[dict] = []
+    for with_username in (True, False):
+        columns = _USER_SEARCH_COLUMNS + (",username" if with_username else "")
+        text_columns = list(_USER_SEARCH_TEXT_COLUMNS) + (["username"] if with_username else [])
+        try:
+            query = client.table("users").select(columns)
+            if pivot is None:
+                return (
+                    query.order("created_at", desc=True, nullsfirst=False)
+                    .limit(_USER_SEARCH_RESULT_LIMIT)
+                    .execute()
+                    .data
+                    or []
+                )
+            rows = (
+                query.or_(_user_search_or_filter(pivot, text_columns))
+                .order("id", desc=True)
+                .limit(_USER_SEARCH_CANDIDATE_LIMIT)
+                .execute()
+                .data
+                or []
+            )
+            break
+        except Exception:
+            if not with_username:
+                raise
+            logger.warning("User search retrying without username column", exc_info=True)
+
+    ranked = []
+    for row in rows:
+        score = _score_user_search_match(row, tokens)
+        if score is not None:
+            ranked.append((score, row))
+    ranked.sort(key=lambda item: (-item[0], -int(item[1].get("id") or 0)))
+    return [row for _, row in ranked[:_USER_SEARCH_RESULT_LIMIT]]
+
+
 @app.get("/api/admin/user-search", response_model=UserSearchResponse)
 async def admin_user_search(
     q: str = "",
     admin=Depends(require_admin),
 ):
-    """Search users by ID, name, or phone. Optimized for flexible search."""
+    """Search users by Telegram ID, name, @username, phone or email."""
     client = get_supabase()
-    
-    q = q.strip() if q else ""
-    
-    users_data = []
-    
-    if q:
-        # Try to search by ID if it looks like a number
-        if q.isdigit():
-            # Search by exact ID
-            res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").eq("id", int(q)).execute()
-            users_data = res.data or []
-        else:
-            # Search by name or phone - use multiple queries for better results
-            # First try exact starts-with match for better relevance
-            res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").or_(
-                f"first_name.ilike.{q}%,last_name.ilike.{q}%,phone.ilike.%{q}%"
-            ).order("id", desc=True).limit(50).execute()
-            users_data = res.data or []
-            
-            # If no results, try contains match
-            if not users_data:
-                res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").or_(
-                    f"first_name.ilike.%{q}%,last_name.ilike.%{q}%"
-                ).order("id", desc=True).limit(50).execute()
-                users_data = res.data or []
-    else:
-        # No query - return recent users
-        res = client.table("users").select("id,first_name,last_name,phone,verified,created_at").order("id", desc=True).limit(50).execute()
-        users_data = res.data or []
-    
-    # Build response with transaction counts
-    users = []
-    for row in users_data:
-        user_id = row.get("id")
-        # Get transaction count for this user
-        tx_res = client.table("transactions").select("id", count="exact").eq("user_id", user_id).execute()
-        tx_count = tx_res.count if tx_res.count else 0
-        
-        users.append(UserSearchItem(
-            id=user_id,
+    rows = [row for row in _search_users(client, q[:100]) if row.get("id") is not None]
+    counts = _count_transactions_by_user(client, [row["id"] for row in rows])
+
+    users = [
+        UserSearchItem(
+            id=row["id"],
             first_name=row.get("first_name"),
             last_name=row.get("last_name"),
-            username=None,  # Not stored in this schema
+            username=row.get("username"),
             phone=row.get("phone"),
-            verified=row.get("verified", False),
-            total_transactions=tx_count,
+            phone_mnt=row.get("phone_mnt"),
+            phone_intl=row.get("phone_intl"),
+            email=row.get("email"),
+            verified=bool(row.get("verified")),
+            total_transactions=counts.get(row["id"], 0),
             created_at=row.get("created_at"),
-        ))
-    
+        )
+        for row in rows
+    ]
     return UserSearchResponse(users=users, total=len(users))
+
+
+# ============= Admin -> user messages via the bot =============
+
+_SUPPORT_HANDLE = "@oyuns_finance"
+_SUPPORT_URL = "https://t.me/OYUNS_Finance"
+
+# Templates are rendered server-side so the admin UI previews exactly what is sent.
+_USER_MESSAGE_TEMPLATES = {
+    "contact_support": {
+        "label": "Админ холбогдож чадаагүй",
+        "heading": "Уучлаарай",
+        "body": "Админ тантай холбогдож чадаагүй тул та дараах хаягаар бидэнтэй холбогдоно уу.",
+        "contact_title": "OYUNS Finance",
+        "button_text": "💬 OYUNS Finance руу бичих",
+    },
+}
+
+
+def _render_user_message(template_id: str) -> tuple[str, str, dict]:
+    """Return (telegram_html, plain_preview, reply_markup) for a template id."""
+    template = _USER_MESSAGE_TEMPLATES.get(template_id)
+    if template is None:
+        raise HTTPException(status_code=400, detail="Unknown message template")
+    heading = html.escape(template["heading"], quote=False)
+    body = html.escape(template["body"], quote=False)
+    contact_title = html.escape(template["contact_title"], quote=False)
+    message_html = (
+        f"🙏 <b>{heading}</b>\n\n"
+        f"{body}\n\n"
+        f"💬 <b>{contact_title}</b>\n"
+        f"👉 {_SUPPORT_HANDLE}"
+    )
+    preview = (
+        f"🙏 {template['heading']}\n\n"
+        f"{template['body']}\n\n"
+        f"💬 {template['contact_title']}\n"
+        f"👉 {_SUPPORT_HANDLE}"
+    )
+    reply_markup = {"inline_keyboard": [[{"text": template["button_text"], "url": _SUPPORT_URL}]]}
+    return message_html, preview, reply_markup
+
+
+@app.get("/api/admin/user-message-templates", response_model=AdminUserMessageTemplatesResponse)
+async def admin_user_message_templates(admin=Depends(require_admin)):
+    templates = []
+    for template_id, template in _USER_MESSAGE_TEMPLATES.items():
+        _, preview, _ = _render_user_message(template_id)
+        templates.append(AdminUserMessageTemplate(
+            id=template_id,
+            label=template["label"],
+            preview=preview,
+            button_text=template["button_text"],
+        ))
+    return AdminUserMessageTemplatesResponse(templates=templates)
+
+
+@app.post("/api/admin/users/{user_id}/message", response_model=AdminUserMessageResponse)
+async def admin_send_user_message(
+    user_id: int,
+    payload: AdminUserMessageRequest,
+    admin=Depends(require_admin_user),
+):
+    """Send a predefined message to a user through the bot."""
+    message_html, _, reply_markup = _render_user_message(payload.template)
+
+    client = get_supabase()
+    found = client.table("users").select("id").eq("id", user_id).limit(1).execute().data
+    if not found:
+        raise HTTPException(status_code=404, detail="Хэрэглэгч олдсонгүй")
+
+    try:
+        message_id = send_user_message(user_id, message_html, reply_markup=reply_markup)
+    except TelegramDeliveryError as exc:
+        log_admin_action(
+            client=client,
+            admin_user_id=admin.id,
+            action_type="user_message_failed",
+            target_type="user",
+            target_id=str(user_id),
+            details={"template": payload.template, "error": exc.description[:300]},
+        )
+        if exc.unreachable:
+            raise HTTPException(
+                status_code=422,
+                detail="Хэрэглэгч ботыг блоклосон эсвэл ботыг эхлүүлээгүй тул мессеж хүргэж чадсангүй.",
+            ) from exc
+        raise HTTPException(status_code=502, detail=f"Telegram мессеж илгээж чадсангүй: {exc.description[:200]}") from exc
+
+    log_admin_action(
+        client=client,
+        admin_user_id=admin.id,
+        action_type="user_message",
+        target_type="user",
+        target_id=str(user_id),
+        details={"template": payload.template, "telegram_message_id": message_id},
+    )
+    return AdminUserMessageResponse(user_id=user_id, telegram_message_id=message_id)
 
 
 # Public endpoint for admin bank accounts (users need to see where to send money)

@@ -1298,6 +1298,9 @@ export interface UserSearchItem {
   last_name?: string;
   username?: string;
   phone?: string;
+  phone_mnt?: string;
+  phone_intl?: string;
+  email?: string;
   verified: boolean;
   total_transactions: number;
   created_at?: string;
@@ -1308,9 +1311,34 @@ export interface UserSearchResponse {
   total: number;
 }
 
-export async function searchUsers(query: string = ""): Promise<UserSearchResponse> {
-  const res = await api.get(`/admin/user-search?q=${encodeURIComponent(query)}`);
+export async function searchUsers(
+  query: string = "",
+  signal?: AbortSignal,
+): Promise<UserSearchResponse> {
+  const res = await api.get("/admin/user-search", { params: { q: query }, signal });
   return res.data as UserSearchResponse;
+}
+
+export interface AdminUserMessageTemplate {
+  id: string;
+  label: string;
+  preview: string;
+  button_text?: string | null;
+}
+
+export async function fetchUserMessageTemplates(): Promise<AdminUserMessageTemplate[]> {
+  const res = await api.get("/admin/user-message-templates");
+  return (res.data?.templates ?? []) as AdminUserMessageTemplate[];
+}
+
+export async function sendUserMessage(userId: number, template: string): Promise<void> {
+  try {
+    await api.post(`/admin/users/${userId}/message`, { template });
+  } catch (error: any) {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) throw new Error(detail);
+    throw error;
+  }
 }
 
 // ============= Admin Bank Account Management =============

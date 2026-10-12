@@ -10,6 +10,16 @@ class TelegramChatValidationError(RuntimeError):
     """The configured Telegram destination cannot be used by this bot."""
 
 
+class TelegramDeliveryError(RuntimeError):
+    """Telegram refused to deliver a direct message to a user."""
+
+    def __init__(self, description: str, *, unreachable: bool = False):
+        super().__init__(description)
+        self.description = description
+        # True when the user blocked the bot or never started it.
+        self.unreachable = unreachable
+
+
 def validate_telegram_group_chat(chat_id: int) -> dict:
     """Resolve a group through Telegram before accepting work for it."""
     settings = get_settings()
@@ -167,3 +177,39 @@ def send_user_photos(user_id: int, photo_urls: list[str], caption: str | None = 
     except Exception as e:
         logger.error(f"Failed to send media group to user {user_id}: {e}")
         return False
+
+
+def send_user_message(user_id: int, text: str, reply_markup: dict | None = None) -> int | None:
+    """Send an HTML message to a user and return its Telegram message id.
+
+    Unlike send_user_notification this reports failures, so callers that need to
+    tell an admin whether the message arrived can do so.
+    """
+    settings = get_settings()
+    payload = {"chat_id": user_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{settings.bot_token}/sendMessage",
+            json=payload,
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        logger.error(f"Failed to reach Telegram while messaging user {user_id}: {exc}")
+        raise TelegramDeliveryError("Could not reach Telegram") from exc
+
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+
+    if response.status_code != 200 or not body.get("ok"):
+        description = str(body.get("description") or f"Telegram returned HTTP {response.status_code}")
+        logger.warning(f"Telegram rejected message to user {user_id}: {description}")
+        lowered = description.lower()
+        unreachable = response.status_code == 403 or "chat not found" in lowered or "user is deactivated" in lowered
+        raise TelegramDeliveryError(description, unreachable=unreachable)
+
+    return (body.get("result") or {}).get("message_id")
