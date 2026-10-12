@@ -1,26 +1,19 @@
-import { MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { Check, ChevronRight, Copy, RefreshCw, RotateCcw, Users } from "lucide-react";
+import { MouseEvent, ReactNode, useState } from "react";
+import { ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
 import oyunsPlusLogo from "../assets/oyuns-plus-points.svg";
 import { useLang } from "../i18n/useLang";
 
 export const FLIP_DURATION_MS = 600;
-export const COPY_FEEDBACK_MS = 1800;
 
 export interface OyunsPlusMembershipCardProps {
   cardHolder: string;
   points: number | string;
   /** Unit shown under point values; defaults to the translated "points". */
   currency?: string;
-  /** Lifetime earned points shown on the back face. */
-  earnedPoints?: number | string;
-  /** Points spent on vouchers, shown under the earned total when > 0. */
-  spentPoints?: number;
-  referralCode: string;
-  invitedCount: number;
   tagline?: string;
   /** Custom brand mark; defaults to the OYUNS+ gradient logo. */
   logo?: ReactNode;
-  /** When set, the invited count becomes a link into the details view. */
+  /** When set, the back face shows a "details" button that opens the user's Oyuns profile. */
   onDetailsOpen?: () => void;
   className?: string;
 }
@@ -28,19 +21,13 @@ export interface OyunsPlusMembershipCardProps {
 /**
  * Usage:
  * <OyunsPlusMembershipCard cardHolder="Тэмүүлэн Очирбат" points={10000} currency="ОНОО"
- *   earnedPoints={12500} spentPoints={2500} referralCode="NJAGR10R" invitedCount={15}
- *   onDetailsOpen={openSettings} />
+ *   onDetailsOpen={openProfile} />
  * Must render inside <LangProvider>.
  */
 
 function formatPoints(points: number | string) {
   if (typeof points === "string") return points;
   return points.toLocaleString("mn-MN");
-}
-
-function signedPoints(points: number | string) {
-  if (typeof points === "string") return points;
-  return `${points > 0 ? "+" : ""}${formatPoints(points)}`;
 }
 
 /** Angled gold pills that sit in the bottom-right corner of both faces. */
@@ -79,10 +66,6 @@ export function OyunsPlusMembershipCard({
   cardHolder,
   points,
   currency,
-  earnedPoints,
-  spentPoints = 0,
-  referralCode,
-  invitedCount,
   tagline,
   logo,
   onDetailsOpen,
@@ -90,32 +73,13 @@ export function OyunsPlusMembershipCard({
 }: OyunsPlusMembershipCardProps) {
   const { t } = useLang();
   const unitLabel = currency ?? t("oyuns_plus.card_points_unit");
-  const invitedText = t("oyuns_plus.card_invited_count", { count: invitedCount });
   const [flipped, setFlipped] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<number | null>(null);
-
-  useEffect(() => () => {
-    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
-  }, []);
 
   const toggle = () => setFlipped((value) => !value);
 
   const stop = (handler: () => void) => (event: MouseEvent) => {
     event.stopPropagation();
     handler();
-  };
-
-  const copyReferral = async () => {
-    if (!referralCode) return;
-    try {
-      await navigator.clipboard.writeText(referralCode);
-      setCopied(true);
-      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-    } catch {
-      setCopied(false);
-    }
   };
 
   const brandMark = logo ?? <DefaultLogo />;
@@ -173,7 +137,7 @@ export function OyunsPlusMembershipCard({
           className="oyuns-flip-card__face oyuns-flip-card__face--back"
           aria-hidden={!flipped}
           inert={!flipped}
-          aria-label={`OYUNS PLUS, ${t("oyuns_plus.card_referral_code")}`}
+          aria-label={`OYUNS PLUS, ${t("oyuns_plus.card_total_points")}`}
         >
           <AccentBars id="oyuns-back" />
           <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
@@ -189,55 +153,20 @@ export function OyunsPlusMembershipCard({
               </button>
             </header>
 
-            <div className="grid grid-cols-2 items-start gap-4">
-              <div className="min-w-0">
-                <div className={label}>{t("oyuns_plus.card_total_earned")}</div>
-                <div className="mt-1.5 truncate text-2xl font-bold tabular-nums tracking-tight text-emerald-400 sm:text-3xl">{signedPoints(earnedPoints ?? points)}</div>
-                <div className={`mt-0.5 ${unit}`}>{unitLabel}</div>
-                {spentPoints > 0 && (
-                  <div className="mt-2 truncate text-[11px] tabular-nums text-blue-200/50">
-                    {t("oyuns_plus.card_spent", { points: `−${formatPoints(spentPoints)}` })}
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0">
-                <div className={label}>{t("oyuns_plus.card_referral_code")}</div>
-                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 backdrop-blur-sm">
-                  <span className="truncate font-mono text-sm font-bold tracking-wider text-white">{referralCode || "—"}</span>
-                  <button
-                    type="button"
-                    onClick={(event) => { event.stopPropagation(); void copyReferral(); }}
-                    disabled={!referralCode}
-                    className="oyuns-flip-card__copy"
-                    data-copied={copied}
-                    aria-label={copied ? t("oyuns_plus.card_copied") : t("oyuns_plus.card_copy")}
-                  >
-                    {copied
-                      ? <Check key="check" className="oyuns-flip-card__check h-3.5 w-3.5" aria-hidden="true" />
-                      : <Copy key="copy" className="h-3.5 w-3.5" aria-hidden="true" />}
-                  </button>
-                </div>
-                <span className="sr-only" role="status">{copied ? t("oyuns_plus.card_copied") : ""}</span>
-
-                <div className={`mt-3 ${label}`}>{t("oyuns_plus.card_invited")}</div>
-                {onDetailsOpen ? (
-                  <button
-                    type="button"
-                    onClick={stop(onDetailsOpen)}
-                    className="group mt-1 flex items-center gap-1.5 text-sm font-semibold text-white"
-                  >
-                    <Users className="h-3.5 w-3.5 text-blue-200/70" aria-hidden="true" />
-                    <span>{invitedText}</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-blue-200/50 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </button>
-                ) : (
-                  <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-white">
-                    <Users className="h-3.5 w-3.5 text-blue-200/70" aria-hidden="true" />
-                    <span>{invitedText}</span>
-                  </div>
-                )}
-              </div>
+            <div className="min-w-0">
+              <div className={label}>{t("oyuns_plus.card_total_points")}</div>
+              <div className="mt-1.5 truncate text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">{formatPoints(points)}</div>
+              <div className={`mt-0.5 ${unit}`}>{unitLabel}</div>
+              {onDetailsOpen && (
+                <button
+                  type="button"
+                  onClick={stop(onDetailsOpen)}
+                  className="group mt-3 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+                >
+                  <span>{t("oyuns_plus.card_details")}</span>
+                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </button>
+              )}
             </div>
 
             <footer className="truncate text-center text-[11px] font-normal tracking-wide text-blue-200/50">{tagline ?? t("oyuns_plus.card_tagline")}</footer>

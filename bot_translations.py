@@ -1437,7 +1437,7 @@ _backend_translations = {
         "ru": "🎁 Запрос на ваучер <b>{card_name}</b> успешно создан!\n\nМы свяжемся с вами после подтверждения.",
     },
     "notif_oyuns_plus_fulfilled": {
-        "mn": "✅ Таны <b>{card_name}</b> эрх илгээгдлээ!",
+        "mn": "✅ Таны <b>{card_name}</b> купон илгээгдлээ!",
         "ru": "✅ Ваш ваучер <b>{card_name}</b> отправлен!",
     },
     "notif_oyuns_plus_refunded": {

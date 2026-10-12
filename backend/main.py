@@ -1548,7 +1548,11 @@ def _signed_oyuns_plus_confirmation_url(client, path: str | None) -> str | None:
     try:
         response = client.storage.from_(OYUNS_PLUS_CONFIRMATION_BUCKET).create_signed_url(path, 900)
         if isinstance(response, dict):
-            return response.get("signedURL") or response.get("signed_url")
+            url = response.get("signedURL") or response.get("signed_url")
+            if url and not str(url).startswith("http"):
+                # Telegram needs an absolute URL; older SDKs return a storage-relative one.
+                url = f"{get_settings().supabase_url.rstrip('/')}/storage/v1/{str(url).lstrip('/')}"
+            return url
     except Exception as exc:
         logger.warning("Unable to sign Oyuns+ confirmation photo: %s", exc)
     return None
@@ -5145,6 +5149,25 @@ async def oyuns_plus_history(user=Depends(get_jwt_authenticated_user)):
     )
     current_balance = _get_oyuns_plus_balance(client, user.id)
     running_balance = current_balance
+    request_ids = [
+        str(row.get("source_id")) for row in (res.data or [])
+        if row.get("source_type") == "voucher_redeem" and row.get("source_id")
+    ]
+    fulfilled_requests: dict[str, dict] = {}
+    if request_ids:
+        try:
+            request_rows = (
+                client.table("oyuns_plus_voucher_requests")
+                .select("id,status,confirmation_photo_path,confirmation_note")
+                .eq("user_id", user.id)
+                .in_("id", request_ids)
+                .execute()
+                .data
+                or []
+            )
+            fulfilled_requests = {str(r["id"]): r for r in request_rows}
+        except Exception as exc:
+            logger.warning("Unable to load Oyuns+ request confirmations for history: %s", exc)
     entries: list[OyunsPlusHistoryEntry] = []
     for row in (res.data or []):
         points = _safe_int(row.get("points"), 0)
@@ -5167,6 +5190,11 @@ async def oyuns_plus_history(user=Depends(get_jwt_authenticated_user)):
             voucher_name=metadata.get("card_name") or metadata.get("voucher_name"),
             balance_after=running_balance,
             metadata=metadata,
+            request_status=(fulfilled_requests.get(str(row.get("source_id"))) or {}).get("status"),
+            confirmation_photo_url=_signed_oyuns_plus_confirmation_url(
+                client, (fulfilled_requests.get(str(row.get("source_id"))) or {}).get("confirmation_photo_path")
+            ),
+            confirmation_note=(fulfilled_requests.get(str(row.get("source_id"))) or {}).get("confirmation_note"),
         ))
         running_balance -= points
     return OyunsPlusHistoryResponse(entries=entries, current_balance=current_balance)
@@ -5778,11 +5806,29 @@ async def admin_confirm_oyuns_plus_request(request_id: str, payload: OyunsPlusVo
     if user_id:
         try:
             lang = _get_user_lang(user_id)
-            send_user_notification(user_id, tb(lang, "notif_oyuns_plus_fulfilled", card_name=result.get("card_name_snapshot") or ""))
+            message = tb(lang, "notif_oyuns_plus_fulfilled", card_name=result.get("card_name_snapshot") or "")
+            note = (result.get("confirmation_note") or "").strip()
+            note_text = f"\n\n💬 {html.escape(note)}" if note else ""
+            photo_url = _signed_oyuns_plus_confirmation_url(client, result.get("confirmation_photo_path"))
+            # Telegram captions are limited to 1024 characters; send a long note separately.
+            caption = message + note_text if len(message + note_text) <= 1024 else message
+            photo_sent = bool(photo_url) and send_user_photo(user_id, photo_url, caption)
+            if not photo_sent:
+                send_user_notification(user_id, message + note_text)
+            elif caption == message and note_text:
+                send_user_notification(user_id, note_text.strip())
         except Exception:
             logger.exception("Failed to send Oyuns+ fulfilled notification")
-    user_rows = client.table("users").select("id,first_name,last_name,username,lang").eq("id", result.get("user_id")).limit(1).execute().data
-    return _oyuns_plus_request_response(result, user_rows[0] if user_rows else None, client)
+    # The request is already fulfilled at this point; enriching the response with
+    # user data must never turn a successful confirmation into a 500.
+    user_row = None
+    if user_id:
+        try:
+            user_rows = client.table("users").select("id,first_name,last_name,username,lang").eq("id", user_id).limit(1).execute().data
+            user_row = user_rows[0] if user_rows else None
+        except Exception as exc:
+            logger.warning("Unable to enrich fulfilled Oyuns+ request with user data: %s", exc)
+    return _oyuns_plus_request_response(result, user_row, client)
 
 
 @app.post("/api/admin/oyuns-plus/requests/{request_id}/refund")

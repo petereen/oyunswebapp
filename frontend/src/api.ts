@@ -723,6 +723,9 @@ export interface OyunsPlusHistoryEntry {
   voucher_name?: string | null;
   balance_after: number;
   metadata?: Record<string, unknown>;
+  request_status?: "pending" | "fulfilled" | "refunded" | null;
+  confirmation_photo_url?: string | null;
+  confirmation_note?: string | null;
 }
 
 export interface OyunsPlusHistory {

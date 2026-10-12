@@ -1,11 +1,11 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { OyunsPlusMembershipCard } from "./OyunsPlusMembershipCard";
 import { LangProvider } from "../i18n/useLang";
 
 function renderCard(onDetailsOpen = vi.fn()) {
   localStorage.setItem("oyuns_lang", "mn");
-  render(<LangProvider><OyunsPlusMembershipCard cardHolder="Тэмүүлэн Очирбат" points={10000} earnedPoints={12500} spentPoints={2500} referralCode="NJAGR10R" invitedCount={15} onDetailsOpen={onDetailsOpen} /></LangProvider>);
+  render(<LangProvider><OyunsPlusMembershipCard cardHolder="Тэмүүлэн Очирбат" points={10000} onDetailsOpen={onDetailsOpen} /></LangProvider>);
   return document.querySelector('[data-slot="oyuns-plus-membership-card"]')!;
 }
 
@@ -21,25 +21,18 @@ describe("OyunsPlusMembershipCard", () => {
     expect(card).toHaveAttribute("data-flipped", "true");
   });
 
-  it("copies the referral code and opens details without flipping", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+  it("shows total points and opens details from the back without flipping", () => {
     const onDetailsOpen = vi.fn();
     const card = renderCard(onDetailsOpen);
     fireEvent.click(card);
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Код хуулах" })); });
-    expect(writeText).toHaveBeenCalledWith("NJAGR10R");
-    expect(screen.getByRole("button", { name: "Код хуулагдлаа" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /15 хүн/ }));
+    expect(screen.getByText("Нийт оноо")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Дэлгэрэнгүй" }));
     expect(onDetailsOpen).toHaveBeenCalledOnce();
     expect(card).toHaveAttribute("data-flipped", "true");
   });
 
-  it("shows localized labels with earned and spent totals", () => {
+  it("shows the card holder label on the front", () => {
     renderCard();
     expect(screen.getByText("Карт эзэмшигч")).toBeInTheDocument();
-    expect(screen.getByText("Цуглуулсан")).toBeInTheDocument();
-    expect(screen.getByText("+12,500")).toBeInTheDocument();
-    expect(screen.getByText("Зарцуулсан −2,500")).toBeInTheDocument();
   });
 });

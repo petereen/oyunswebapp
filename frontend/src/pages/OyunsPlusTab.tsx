@@ -154,10 +154,6 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
       <OyunsPlusMembershipCard
         cardHolder={userName}
         points={summaryQuery.isLoading ? "—" : balance}
-        earnedPoints={summaryQuery.isLoading ? "—" : summaryQuery.data?.points_earned_total ?? balance}
-        spentPoints={summaryQuery.data?.points_spent_total ?? 0}
-        referralCode={summaryQuery.data?.referral_code || ""}
-        invitedCount={summaryQuery.data?.invited_total ?? 0}
         onDetailsOpen={() => setShowSettings(true)}
       />
     </div>}
@@ -183,5 +179,15 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
 
 function HistoryRow({ entry, lang, t }: { entry: OyunsPlusHistoryEntry; lang: string; t: (key: string, params?: Record<string, string | number>) => string }) {
   const positive = entry.points >= 0;
-  return <div className="oyuns-plus-history-row"><div className="flex min-w-0 items-start gap-2">{positive ? <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#00C885]" /> : <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-[#FF3B57]" />}<div className="min-w-0"><div className="truncate text-xs font-semibold">{historyLabel(entry, t)}</div><div className="text-[10px] text-slate-500">{formatDate(entry.created_at, lang)}</div></div></div><div className="text-right"><div className={`text-xs font-bold ${positive ? "text-[#00C885]" : "text-[#FF3B57]"}`}>{positive ? "+" : ""}{formatPoints(entry.points)}</div><div className="text-[10px] text-slate-500">{t("oyuns_plus.balance_after", { balance: formatPoints(entry.balance_after) })}</div></div></div>;
+  const [open, setOpen] = useState(false);
+  const hasConfirmation = entry.transaction_type === "redeemed" && Boolean(entry.confirmation_photo_url || entry.confirmation_note);
+  const row = <div className="oyuns-plus-history-row"><div className="flex min-w-0 items-start gap-2">{positive ? <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#00C885]" /> : <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-[#FF3B57]" />}<div className="min-w-0"><div className="truncate text-xs font-semibold">{historyLabel(entry, t)}</div><div className="text-[10px] text-slate-500">{formatDate(entry.created_at, lang)}</div></div></div><div className="text-right"><div className={`text-xs font-bold ${positive ? "text-[#00C885]" : "text-[#FF3B57]"}`}>{positive ? "+" : ""}{formatPoints(entry.points)}</div><div className="text-[10px] text-slate-500">{t("oyuns_plus.balance_after", { balance: formatPoints(entry.balance_after) })}</div></div></div>;
+  if (!hasConfirmation) return row;
+  return <div>
+    <button type="button" className="w-full text-left" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{row}</button>
+    {open ? <div className="mt-1 space-y-2 rounded-xl border border-slate-200 bg-white/60 p-3">
+      {entry.confirmation_photo_url ? <a href={entry.confirmation_photo_url} target="_blank" rel="noreferrer"><img src={entry.confirmation_photo_url} alt={t("oyuns_plus.confirmation_photo")} className="max-h-72 w-full rounded-lg object-contain" /></a> : null}
+      {entry.confirmation_note ? <div><div className="text-[10px] font-semibold uppercase text-slate-500">{t("oyuns_plus.confirmation_note")}</div><div className="whitespace-pre-wrap text-xs">{entry.confirmation_note}</div></div> : null}
+    </div> : null}
+  </div>;
 }

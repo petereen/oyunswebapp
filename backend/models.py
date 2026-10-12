@@ -372,6 +372,9 @@ class OyunsPlusHistoryEntry(BaseModel):
     voucher_name: Optional[str] = None
     balance_after: int = 0
     metadata: dict = Field(default_factory=dict)
+    request_status: Optional[str] = None
+    confirmation_photo_url: Optional[str] = None
+    confirmation_note: Optional[str] = None
 
 
 class OyunsPlusHistoryResponse(BaseModel):
