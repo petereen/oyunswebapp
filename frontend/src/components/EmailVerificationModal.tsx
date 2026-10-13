@@ -285,8 +285,10 @@ export function EmailVerificationPanel({ emailAddress, onVerified, onClose, auto
 
 export function EmailVerificationModal(props: Props) {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[110] p-4 overflow-auto">
-      <EmailVerificationPanel {...props} />
+    <div className="fixed inset-0 bg-black/60 z-[110] overflow-y-auto overscroll-contain">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <EmailVerificationPanel {...props} />
+      </div>
     </div>
   );
 }
