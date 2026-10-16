@@ -42,7 +42,7 @@ def validate_automatic_coupon(config: dict) -> None:
         raise HTTPException(422, "validity_days must be between 1 and 3650")
 
 
-def issue_promo_code(client, *, user_id: int, card: dict, receiver_name: str, receiver_phone: str) -> dict:
+def issue_promo_code(client, *, user_id: int, card: dict, receiver_name: str | None, receiver_phone: str | None) -> dict:
     # Price, SKU and validity come from the server-loaded coupon, never the purchaser.
     validate_automatic_coupon(card)
     for attempt in range(5):

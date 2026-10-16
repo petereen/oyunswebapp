@@ -5300,15 +5300,20 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
         card_id = str(uuid.UUID(payload.card_id))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="card_id must be a UUID") from exc
-    receiver_name = payload.receiver_name.strip()
-    if not receiver_name:
-        raise HTTPException(status_code=422, detail="Receiver name is required")
     card_lookup = client.table("oyuns_plus_cards").select("id,country_code,brand_id,issuance_mode,sku_tier,points_price,validity_days").eq("id", card_id).limit(1).execute().data or []
     if not card_lookup:
         raise HTTPException(status_code=404, detail="CARD_NOT_AVAILABLE")
-    receiver_phone = _normalize_oyuns_plus_phone(payload.receiver_phone, str(card_lookup[0].get("country_code") or "mn"))
+    automatic = card_lookup[0].get("issuance_mode") == "automatic"
+    if automatic:
+        receiver_name = None
+        receiver_phone = None
+    else:
+        receiver_name = (payload.receiver_name or "").strip()
+        if not receiver_name:
+            raise HTTPException(status_code=422, detail="Receiver name is required")
+        receiver_phone = _normalize_oyuns_plus_phone(payload.receiver_phone or "", str(card_lookup[0].get("country_code") or "mn"))
     try:
-        if card_lookup[0].get("issuance_mode") == "automatic":
+        if automatic:
             result = issue_promo_code(client, user_id=user.id, card=card_lookup[0],
                                       receiver_name=receiver_name, receiver_phone=receiver_phone)
         else:

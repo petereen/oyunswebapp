@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Skip receiver name and phone entry for automatic promo purchases while preserving manual validation (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/api.ts, backend/main.py, backend/models.py, backend/partner_promos.py, supabase/migrations/20261016000000_optional_receiver_for_automatic_promos.sql, PARTNER_PROMO_CODES.md)
 - [x] Format automatic Oyuns+ promo delivery messages and hide codes behind Telegram spoiler reveal (backend/main.py)
 - [x] Add authenticated partner API endpoint to list all issued promo codes and SKU tiers (backend/partner_promos.py, PARTNER_PROMO_CODES.md)
 - [x] Explain why Automatic coupon issuance is disabled and show partner config/brand mismatch status (frontend/src/components/admin/AdminOyunsPlusCards.tsx)

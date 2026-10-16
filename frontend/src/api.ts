@@ -856,8 +856,8 @@ export interface OyunsPlusVoucherRequest {
 
 export async function createOyunsPlusVoucherRequest(payload: {
   card_id: string;
-  receiver_name: string;
-  receiver_phone: string;
+  receiver_name?: string;
+  receiver_phone?: string;
 }) {
   const res = await api.post('/oyuns-plus/requests', payload);
   return res.data as OyunsPlusVoucherRequest & { balance_after: number };

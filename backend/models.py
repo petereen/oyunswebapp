@@ -553,8 +553,8 @@ class OyunsPlusCardUpdateRequest(BaseModel):
 
 class OyunsPlusVoucherRequestCreate(BaseModel):
     card_id: str
-    receiver_name: str = Field(..., min_length=1, max_length=160)
-    receiver_phone: str = Field(..., min_length=8, max_length=20)
+    receiver_name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    receiver_phone: Optional[str] = Field(default=None, min_length=8, max_length=20)
 
 
 class OyunsPlusVoucherRequestResponse(BaseModel):

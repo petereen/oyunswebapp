@@ -11,7 +11,7 @@ The generator uses Python `secrets.choice` and ten random characters excluding `
 
 ## Setup
 
-1. Apply `supabase/migrations/20261015000000_add_partner_promo_codes.sql` after the existing OYUNS+ migrations. `database/add_partner_promo_codes.sql` is an identical standalone copy; apply only one. This migration must be applied before deploying the updated backend.
+1. Apply `supabase/migrations/20261015000000_add_partner_promo_codes.sql` and then `supabase/migrations/20261016000000_optional_receiver_for_automatic_promos.sql` after the existing OYUNS+ migrations. The `database/add_*.sql` files are standalone copies; apply each corresponding migration only once. Apply the migrations before deploying the updated backend.
 2. Create or choose the partner's existing OYUNS+ brand. Set backend environment variables:
 
    ```dotenv
@@ -21,7 +21,7 @@ The generator uses Python `secrets.choice` and ten random characters excluding `
 
    Generate the secret with `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`. Supply the key privately to the partner's server. Keep it out of frontend variables, source control, and client applications. Restart the backend after setting or rotating it; settings are cached.
 3. In admin Settings → OYUNS+ brands, open that brand and use the existing coupon form. Choose **Automatic** first, then enter a SKU tier and validity days (1–3650), along with the existing coupon name, discount/value, points price, purchase limit, and availability fields. Multiple offers and SKU tiers can coexist under the same brand. Other brands retain **Manual**.
-4. Purchase through the normal OYUNS+ client flow. The existing receiver fields remain required. The code and expiration appear immediately; the fulfillment note also preserves them in purchase history and the admin fulfilled requests view. The existing notification path sends the code to the purchaser; automatic requests do not enter the pending admin queue.
+4. Purchase through the normal OYUNS+ client flow. Automatic offers skip receiver name and phone entry; manual offers still require both. The code and expiration appear immediately and in purchase history. The existing notification path sends the code to the purchaser; automatic requests do not enter the pending admin queue.
 
 Missing or invalid partner configuration disables automatic issuance. The admin-only `/api/admin/oyuns-plus/partner-config` endpoint exposes availability and brand UUID, never the API key.
 
