@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Add authenticated partner API endpoint to list all issued promo codes and SKU tiers (backend/partner_promos.py, PARTNER_PROMO_CODES.md)
 - [x] Explain why Automatic coupon issuance is disabled and show partner config/brand mismatch status (frontend/src/components/admin/AdminOyunsPlusCards.tsx)
 - [x] Audit OYUNS Plus brand/coupon admin, atomic redemption, ledger, fulfillment, and history; plan partner integration
 - [x] Add partner-scoped automatic coupon schema and atomic issuance/refund revocation migration

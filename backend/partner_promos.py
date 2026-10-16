@@ -93,3 +93,21 @@ def verify_partner_promo_code(code: str, brand_id: str = Depends(require_partner
     if row["status"] != "ACTIVE" or expired:
         return JSONResponse({"is_valid": False, "error": "EXPIRED_OR_REVOKED", "expires_at": row.get("expires_at")}, headers=headers)
     return JSONResponse({"is_valid": True, **{key: row[key] for key in ("code", "sku_tier", "issued_at", "expires_at")}}, headers=headers)
+
+
+@router.get("/api/v1/partner/promo-codes")
+def list_partner_promo_codes(brand_id: str = Depends(require_partner)):
+    """List every code issued for this partner, without exposing purchaser data."""
+    page_size = 1000
+    rows = []
+    start = 0
+    while True:
+        page = (get_supabase().table("loyalty_promo_codes")
+                .select("code,sku_tier,status,issued_at,expires_at")
+                .eq("brand_id", brand_id)
+                .range(start, start + page_size - 1).execute().data or [])
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        start += page_size
+    return JSONResponse({"promo_codes": rows}, headers={"Cache-Control": "no-store"})

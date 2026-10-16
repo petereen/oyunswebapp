@@ -27,6 +27,31 @@ Missing or invalid partner configuration disables automatic issuance. The admin-
 
 ## Partner verification API
 
+To sync the full partner catalog, request the list endpoint. It returns every code issued for the configured partner brand, including its SKU, status, and issue/expiry timestamps. It never returns purchaser data.
+
+```http
+GET /api/v1/partner/promo-codes
+Authorization: Bearer <PARTNER_API_KEY>
+```
+
+Example response:
+
+```json
+{
+  "promo_codes": [
+    {
+      "code": "GAL-ABCDE-FGHJK",
+      "sku_tier": "vpn_premium_3m",
+      "status": "ACTIVE",
+      "issued_at": "2026-10-15T08:00:00+00:00",
+      "expires_at": "2026-11-14T08:00:00+00:00"
+    }
+  ]
+}
+```
+
+The endpoint reads all rows in batches, so large lists are not truncated by the database API's per-request row limit. It uses the same Bearer authentication, partner brand scoping, and `Cache-Control: no-store` header as code lookup.
+
 ```http
 GET /api/v1/partner/promo-codes/GAL-ABCDE-FGHJK
 Authorization: Bearer <PARTNER_API_KEY>
