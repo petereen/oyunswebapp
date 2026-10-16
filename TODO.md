@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Explain why Automatic coupon issuance is disabled and show partner config/brand mismatch status (frontend/src/components/admin/AdminOyunsPlusCards.tsx)
 - [x] Audit OYUNS Plus brand/coupon admin, atomic redemption, ledger, fulfillment, and history; plan partner integration
 - [x] Add partner-scoped automatic coupon schema and atomic issuance/refund revocation migration
 - [x] Add secure random generator, partner Bearer GET API, and backend issuance/admin integration
