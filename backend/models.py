@@ -427,6 +427,9 @@ class OyunsPlusBrand(BaseModel):
 
 
 class OyunsPlusCoupon(BaseModel):
+    issuance_mode: Literal["manual", "automatic"] = "manual"
+    sku_tier: Optional[str] = Field(default=None, max_length=80)
+    validity_days: Optional[int] = Field(default=None, ge=1, le=3650)
     id: str
     brand_id: str
     name: str
@@ -495,6 +498,9 @@ class OyunsPlusBrandUpdateRequest(BaseModel):
 
 
 class OyunsPlusCouponCreateRequest(BaseModel):
+    issuance_mode: Literal["manual", "automatic"] = "manual"
+    sku_tier: Optional[str] = Field(default=None, max_length=80)
+    validity_days: Optional[int] = Field(default=None, ge=1, le=3650)
     brand_id: str
     name: str = Field(..., min_length=1, max_length=160)
     description: str = Field(default="", max_length=4000)
@@ -509,6 +515,9 @@ class OyunsPlusCouponCreateRequest(BaseModel):
 
 
 class OyunsPlusCouponUpdateRequest(BaseModel):
+    issuance_mode: Optional[Literal["manual", "automatic"]] = None
+    sku_tier: Optional[str] = Field(default=None, max_length=80)
+    validity_days: Optional[int] = Field(default=None, ge=1, le=3650)
     brand_id: Optional[str] = None
     name: Optional[str] = Field(default=None, min_length=1, max_length=160)
     description: Optional[str] = Field(default=None, max_length=4000)
@@ -569,6 +578,9 @@ class OyunsPlusVoucherRequestResponse(BaseModel):
 
 
 class OyunsPlusVoucherRequestCreateResponse(OyunsPlusVoucherRequestResponse):
+    code: Optional[str] = None
+    sku_tier: Optional[str] = None
+    expires_at: Optional[str] = None
     balance_after: int
 
 

@@ -1,5 +1,5 @@
 import { MouseEvent, ReactNode, useState } from "react";
-import { ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
+import { Check, ChevronRight, Copy, RefreshCw, RotateCcw } from "lucide-react";
 import oyunsPlusLogo from "../assets/oyuns-plus-points.svg";
 import { useLang } from "../i18n/useLang";
 
@@ -8,6 +8,9 @@ export const FLIP_DURATION_MS = 600;
 export interface OyunsPlusMembershipCardProps {
   cardHolder: string;
   points: number | string;
+  referralCode?: string;
+  onReferralCopy?: () => void;
+  referralCopied?: boolean;
   /** Unit shown under point values; defaults to the translated "points". */
   currency?: string;
   tagline?: string;
@@ -65,6 +68,9 @@ function DefaultLogo() {
 export function OyunsPlusMembershipCard({
   cardHolder,
   points,
+  referralCode,
+  onReferralCopy,
+  referralCopied = false,
   currency,
   tagline,
   logo,
@@ -137,7 +143,7 @@ export function OyunsPlusMembershipCard({
           className="oyuns-flip-card__face oyuns-flip-card__face--back"
           aria-hidden={!flipped}
           inert={!flipped}
-          aria-label={`OYUNS PLUS, ${t("oyuns_plus.card_total_points")}`}
+          aria-label={`OYUNS PLUS, ${t("oyuns_plus.settings_referral_code")}`}
         >
           <AccentBars id="oyuns-back" />
           <div className="relative z-10 flex h-full flex-col justify-between p-5 sm:p-6">
@@ -153,15 +159,28 @@ export function OyunsPlusMembershipCard({
               </button>
             </header>
 
-            <div className="min-w-0">
-              <div className={label}>{t("oyuns_plus.card_total_points")}</div>
-              <div className="mt-1.5 truncate text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">{formatPoints(points)}</div>
-              <div className={`mt-0.5 ${unit}`}>{unitLabel}</div>
+            <div className="absolute inset-x-5 top-1/2 flex min-w-0 -translate-y-1/2 items-center justify-between gap-2 sm:inset-x-6" data-slot="oyuns-plus-card-back-content">
+              <div className="min-w-0 flex-1">
+                <div className={label}>{t("oyuns_plus.settings_referral_code")}</div>
+                <div className="mt-1 flex min-w-0 items-center gap-1">
+                  <span className="min-w-0 truncate text-xl font-bold tracking-wide text-white sm:text-2xl">{referralCode || "—"}</span>
+                  <button
+                    type="button"
+                    onClick={onReferralCopy ? stop(onReferralCopy) : undefined}
+                    disabled={!referralCode || !onReferralCopy}
+                    className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 disabled:opacity-40"
+                    aria-label={t(referralCopied ? "oyuns_plus.settings_copied" : "oyuns_plus.settings_copy")}
+                  >
+                    {referralCopied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+                  </button>
+                  <span className="sr-only" role="status">{referralCopied ? t("oyuns_plus.settings_copied") : ""}</span>
+                </div>
+              </div>
               {onDetailsOpen && (
                 <button
                   type="button"
                   onClick={stop(onDetailsOpen)}
-                  className="group mt-3 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
+                  className="group inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20"
                 >
                   <span>{t("oyuns_plus.card_details")}</span>
                   <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />

@@ -8,6 +8,7 @@ import {
   createAdminOyunsPlusCoupon,
   fetchAdminOyunsPlusBrandCoupons,
   fetchAdminOyunsPlusBrands,
+  fetchAdminOyunsPlusPartnerConfig,
   OyunsPlusBrand,
   OyunsPlusCoupon,
   presignAdminOyunsPlusUpload,
@@ -31,7 +32,7 @@ const contactFields: { key: "address" | "map_url" | "website_url" | "instagram_u
   { key: "facebook_url", label: "Facebook", placeholder: "https://facebook.com/brand", icon: Facebook, inputMode: "url" },
   { key: "phone", label: "Утас", placeholder: "+976 9911 2233", icon: Phone, inputMode: "tel" },
 ];
-const emptyCoupon = { name: "", description: "", badge_label: "", value_type: "amount" as "amount" | "percentage", discount_value: "", points_price: 0, country_code: "mn" as "mn" | "ru", total_purchase_limit: "", expires_at: "", is_active: true };
+const emptyCoupon = { issuance_mode: "manual" as "manual" | "automatic", sku_tier: "", validity_days: 30, name: "", description: "", badge_label: "", value_type: "amount" as "amount" | "percentage", discount_value: "", points_price: 0, country_code: "mn" as "mn" | "ru", total_purchase_limit: "", expires_at: "", is_active: true };
 const validLogo = (file: File) => ["image/jpeg", "image/png", "image/webp"].includes(file.type) && file.size <= 2 * 1024 * 1024;
 
 function toLocalDateTime(value?: string | null) {
@@ -77,6 +78,7 @@ function AdminOyunsPlusCatalogContent() {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [error, setError] = useState("");
 
+  const partnerConfig = useQuery({ queryKey: ["admin", "oyuns-plus", "partner-config"], queryFn: fetchAdminOyunsPlusPartnerConfig });
   const brandsQuery = useQuery({ queryKey: queryKeys.admin.oyunsPlusBrands, queryFn: () => fetchAdminOyunsPlusBrands(true) });
   const couponsQuery = useQuery({ queryKey: selectedBrandId ? queryKeys.admin.oyunsPlusBrandCoupons(selectedBrandId) : ["admin", "oyuns-plus", "brands", "none", "coupons"], queryFn: () => fetchAdminOyunsPlusBrandCoupons(selectedBrandId!, true), enabled: Boolean(selectedBrandId) });
   const brands = brandsQuery.data?.brands ?? [];
@@ -120,7 +122,8 @@ function AdminOyunsPlusCatalogContent() {
       if (!targetBrandId || !couponForm.name.trim()) throw new Error("Брэнд болон купоны нэр шаардлагатай.");
       const discount = Number(couponForm.discount_value);
       if (!Number.isFinite(discount) || discount <= 0 || (couponForm.value_type === "percentage" && discount > 100)) throw new Error("Хөнгөлөлтийн утгыг зөв оруулна уу.");
-      const payload = { brand_id: targetBrandId, name: couponForm.name.trim(), description: couponForm.description.trim(), badge_label: couponForm.badge_label.trim() || null, value_type: couponForm.value_type, discount_value: discount, points_price: Number(couponForm.points_price), country_code: couponForm.country_code, total_purchase_limit: couponForm.total_purchase_limit ? Number(couponForm.total_purchase_limit) : null, expires_at: couponForm.expires_at ? new Date(couponForm.expires_at).toISOString() : null, is_active: couponForm.is_active };
+      if (couponForm.issuance_mode === "automatic" && (!partnerConfig.data?.enabled || targetBrandId !== partnerConfig.data.brand_id)) throw new Error("Automatic зөвхөн тохируулсан түнш брэндэд боломжтой.");
+      const payload = { issuance_mode: couponForm.issuance_mode, sku_tier: couponForm.issuance_mode === "automatic" ? couponForm.sku_tier.trim() : null, validity_days: couponForm.issuance_mode === "automatic" ? couponForm.validity_days : null, brand_id: targetBrandId, name: couponForm.name.trim(), description: couponForm.description.trim(), badge_label: couponForm.badge_label.trim() || null, value_type: couponForm.value_type, discount_value: discount, points_price: Number(couponForm.points_price), country_code: couponForm.country_code, total_purchase_limit: couponForm.total_purchase_limit ? Number(couponForm.total_purchase_limit) : null, expires_at: couponForm.expires_at ? new Date(couponForm.expires_at).toISOString() : null, is_active: couponForm.is_active };
       return editingCoupon ? updateAdminOyunsPlusCoupon(editingCoupon, payload) : createAdminOyunsPlusCoupon(payload);
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: queryKeys.admin.oyunsPlusBrandCoupons(selectedBrandId || "") }); if (couponBrandId) void queryClient.invalidateQueries({ queryKey: queryKeys.admin.oyunsPlusBrandCoupons(couponBrandId) }); void queryClient.invalidateQueries({ queryKey: queryKeys.admin.oyunsPlusBrands }); setCouponForm(emptyCoupon); setCouponBrandId(selectedBrandId); setEditingCoupon(null); },
@@ -132,7 +135,7 @@ function AdminOyunsPlusCatalogContent() {
 
   const resetBrandForm = () => { setBrandForm(emptyBrand); setEditingBrand(null); setLogoFile(null); setCoverFile(null); setError(""); };
   const startBrandEdit = (brand: OyunsPlusBrand) => { setEditingBrand(brand.id); setBrandForm({ name: brand.name, description: brand.description, logo_url: brand.logo_url || "", logo_path: brand.logo_path || null, cover_url: brand.cover_url || "", cover_path: brand.cover_path || null, category: brand.category || "", address: brand.address || "", map_url: brand.map_url || "", website_url: brand.website_url || "", instagram_url: brand.instagram_url || "", facebook_url: brand.facebook_url || "", phone: brand.phone || "", is_active: brand.is_active, sort_order: brand.sort_order }); setLogoFile(null); setCoverFile(null); setError(""); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const startCouponEdit = (coupon: OyunsPlusCoupon) => { setEditingCoupon(coupon.id); setCouponBrandId(coupon.brand_id); setCouponForm({ name: coupon.name, description: coupon.description, badge_label: coupon.badge_label || "", value_type: coupon.value_type || "amount", discount_value: coupon.discount_value == null ? "" : String(coupon.discount_value), points_price: coupon.points_price, country_code: coupon.country_code, total_purchase_limit: coupon.total_purchase_limit == null ? "" : String(coupon.total_purchase_limit), expires_at: toLocalDateTime(coupon.expires_at), is_active: coupon.is_active }); setError(""); };
+  const startCouponEdit = (coupon: OyunsPlusCoupon) => { setEditingCoupon(coupon.id); setCouponBrandId(coupon.brand_id); setCouponForm({ issuance_mode: coupon.issuance_mode || "manual", sku_tier: coupon.sku_tier || "", validity_days: coupon.validity_days || 30, name: coupon.name, description: coupon.description, badge_label: coupon.badge_label || "", value_type: coupon.value_type || "amount", discount_value: coupon.discount_value == null ? "" : String(coupon.discount_value), points_price: coupon.points_price, country_code: coupon.country_code, total_purchase_limit: coupon.total_purchase_limit == null ? "" : String(coupon.total_purchase_limit), expires_at: toLocalDateTime(coupon.expires_at), is_active: coupon.is_active }); setError(""); };
 
   if (selectedBrand) {
     return <div className="space-y-4">
@@ -140,6 +143,8 @@ function AdminOyunsPlusCatalogContent() {
       <AdminSectionHeader icon={Archive} title={selectedBrand.name} count={coupons.length} action={<AdminRefreshButton onClick={() => void couponsQuery.refetch()} loading={couponsQuery.isFetching} label="Купон шинэчлэх" />} />
       <form className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-dark-600 dark:bg-dark-800" onSubmit={(event) => { event.preventDefault(); saveCoupon.mutate(); }}>
         <div className="flex items-center justify-between"><h3 className="font-semibold">{editingCoupon ? "Купон засах" : "Шинэ купон"}</h3>{editingCoupon && <button type="button" className="text-xs text-slate-500" onClick={() => { setEditingCoupon(null); setCouponForm(emptyCoupon); setCouponBrandId(selectedBrandId); }}>Цуцлах</button>}</div>
+        <label className="grid gap-1 text-sm font-semibold">Код олгох төрөл<select value={couponForm.issuance_mode} onChange={(event) => setCouponForm({ ...couponForm, issuance_mode: event.target.value as "manual" | "automatic" })} className="rounded-xl border px-3 py-2 font-normal dark:border-dark-600 dark:bg-dark-700"><option value="manual">Manual</option><option value="automatic" disabled={!partnerConfig.data?.enabled || (couponBrandId || selectedBrandId) !== partnerConfig.data.brand_id}>Automatic</option></select></label>
+        {couponForm.issuance_mode === "automatic" && <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-sm font-semibold">SKU tier<input required maxLength={80} pattern="[a-z][a-z0-9_]{0,79}" placeholder="vpn_premium_3m" value={couponForm.sku_tier} onChange={(event) => setCouponForm({ ...couponForm, sku_tier: event.target.value })} className="rounded-xl border px-3 py-2 font-normal dark:border-dark-600 dark:bg-dark-700" /></label><label className="grid gap-1 text-sm font-semibold">Код хүчинтэй хоног<input required type="number" min="1" max="3650" value={couponForm.validity_days} onChange={(event) => setCouponForm({ ...couponForm, validity_days: Number(event.target.value) })} className="rounded-xl border px-3 py-2 font-normal dark:border-dark-600 dark:bg-dark-700" /></label></div>}
         <label className="grid gap-1 text-sm font-semibold">Брэнд<select value={couponBrandId || selectedBrandId || ""} onChange={(event) => setCouponBrandId(event.target.value)} className="rounded-xl border px-3 py-2 font-normal dark:border-dark-600 dark:bg-dark-700">{brands.filter((brand) => !brand.archived_at).map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
         <input required value={couponForm.name} onChange={(event) => setCouponForm({ ...couponForm, name: event.target.value })} placeholder="Купоны нэр" className="w-full rounded-xl border px-3 py-2 dark:border-dark-600 dark:bg-dark-700" />
         <textarea value={couponForm.description} onChange={(event) => setCouponForm({ ...couponForm, description: event.target.value })} placeholder="Тайлбар" className="min-h-20 w-full rounded-xl border px-3 py-2 dark:border-dark-600 dark:bg-dark-700" />

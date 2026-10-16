@@ -1,6 +1,14 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Audit OYUNS Plus brand/coupon admin, atomic redemption, ledger, fulfillment, and history; plan partner integration
+- [x] Add partner-scoped automatic coupon schema and atomic issuance/refund revocation migration
+- [x] Add secure random generator, partner Bearer GET API, and backend issuance/admin integration
+- [x] Add Manual / Automatic selection, SKU and validity settings to existing coupon admin
+- [x] Add generator/API/issuance regression tests and verify backend/frontend checks (83 backend tests; all OYUNS Plus tests, TypeScript, build, and local Postgres transaction assertions pass; 4 finance dashboard failures reproduced on unchanged HEAD)
+- [x] Document migration, partner brand/key configuration, and verification API usage (PARTNER_PROMO_CODES.md)
+- [x] Replace membership card back total with a copyable referral code in inherited Montserrat and vertically centered right-side details button (frontend/src/components/OyunsPlusMembershipCard.tsx, frontend/src/pages/OyunsPlusTab.tsx)
+- [x] Verify membership card referral copying and frontend checks (10 focused tests, TypeScript, and production build passed)
 - [x] Rework standalone dashboard shell into persistent Balance, Profit, and Transactions areas (frontend/src/pages/DashboardPanel.tsx)
 - [x] Simplify Balance layout and make financial action feedback/accessibility complete (frontend/src/pages/BalanceProfitPage.tsx)
 - [x] Simplify Profit and Transactions layouts while preserving current data and workflows (frontend/src/pages/BalanceProfitPage.tsx, frontend/src/pages/DashboardPanel.tsx)
@@ -30,7 +38,7 @@
 - [x] Replace the Oyuns+ user catalog with brand list → coupon list → existing purchase flow (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/index.css)
 - [x] Replace flat Oyuns+ admin card management with nested brand and coupon CRUD (frontend/src/components/admin/, frontend/src/components/admin/AdminSettingsContainer.tsx)
 - [x] Add frontend regression coverage and verify frontend tests, typecheck, and production build
-- [ ] Run backend regression tests in an environment with the project dependencies installed
+- [x] Run backend regression tests in an isolated environment with the project dependencies installed (83 passed)
 - [x] Fix Oyuns+ refund conflict handling, optional confirmation explanation, and active filter contrast (backend/main.py, backend/models.py, frontend/src/api.ts, frontend/src/components/admin/AdminOyunsPlusRequests.tsx, database/)
 - [x] Add Oyuns+ admin deep-link buttons and card country-specific phone validation (backend/main.py, backend/models.py, frontend/src/App.tsx, frontend/src/pages/OyunsPlusTab.tsx, frontend/src/components/admin/AdminOyunsPlusCards.tsx, database migration)
 - [x] Keep the standalone Oyuns+ schema copy and phone-validation regression coverage aligned (database/add_oyuns_plus_vouchers.sql, backend/tests/test_oyuns_plus.py)
@@ -114,7 +122,7 @@
 - [x] Add authorized manual confirmation API for group-managed transactions with proof URLs
 - [x] Add admin-panel manual confirm button and proof image attachment flow
 - [x] Add regression coverage for manual group confirmation
-- [ ] Verify backend tests and frontend production build
+- [x] Verify backend tests and frontend production build (83 backend tests and frontend build passed)
 
 ## Completed Tasks
 - [x] Default the dashboard timezone to Ulaanbaatar while preserving an explicitly saved Moscow choice (frontend/src/pages/DashboardPanel.tsx)

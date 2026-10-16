@@ -27,6 +27,8 @@ class Settings:
     telegram_login_client_id: str | None = None
     telegram_login_client_secret: str | None = None
     telegram_login_nonce_ttl_seconds: int = 300
+    partner_api_key: str | None = None
+    partner_brand_id: str | None = None
     admin_api_key: str | None = None
     storage_bucket_passports: str = "passports"
     storage_bucket_receipts: str = "bills"
@@ -176,6 +178,8 @@ def get_settings() -> Settings:
         telegram_login_client_id=telegram_login_client_id,
         telegram_login_client_secret=telegram_login_client_secret,
         telegram_login_nonce_ttl_seconds=telegram_login_nonce_ttl_seconds,
+        partner_api_key=os.getenv("PARTNER_API_KEY", "").strip() or None,
+        partner_brand_id=os.getenv("PARTNER_BRAND_ID", "").strip() or None,
         admin_api_key=admin_api_key,
         dev_mode=dev_mode,
         fuel_admin_api_key=fuel_admin_api_key,

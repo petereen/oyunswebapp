@@ -78,7 +78,7 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [formError, setFormError] = useState("");
-  const [requestSuccess, setRequestSuccess] = useState<{ name: string; balance: number } | null>(null);
+  const [requestSuccess, setRequestSuccess] = useState<{ name: string; balance: number; code?: string | null; expires_at?: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   const [brandTab, setBrandTab] = useState<BrandTab>("coupons");
   const [couponView, setCouponView] = useCouponViewMode();
@@ -105,7 +105,7 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
   const requestMutation = useMutation({
     mutationFn: createOyunsPlusVoucherRequest,
     onSuccess: async (result) => {
-      setRequestSuccess({ name: result.card_name, balance: result.balance_after });
+      setRequestSuccess({ name: result.card_name, balance: result.balance_after, code: result.code, expires_at: result.expires_at });
       setShowForm(false); setReceiverName(""); setReceiverPhone(""); setFormError("");
       if (userId) {
         queryClient.setQueryData(queryKeys.oyunsPlus.summary(userId), (current: typeof summaryQuery.data) => current ? { ...current, points_balance: result.balance_after } : current);
@@ -154,6 +154,9 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
       <OyunsPlusMembershipCard
         cardHolder={userName}
         points={summaryQuery.isLoading ? "—" : balance}
+        referralCode={summaryQuery.data?.referral_code}
+        onReferralCopy={copyReferral}
+        referralCopied={copied}
         onDetailsOpen={() => setShowSettings(true)}
       />
     </div>}
@@ -166,7 +169,7 @@ export function OyunsPlusTab({ userId, userName = "", isProfileLoading = false }
     </section> : selectedCoupon && selectedBrandData ? <section className="oyuns-plus-detail-view">
       <button type="button" onClick={backFromCoupon} className="oyuns-plus-back-button"><ArrowLeft className="h-4 w-4" /> {selectedBrandData.name}</button>
       <div className="oyuns-plus-detail-card oyuns-plus-coupon-detail-card"><div className="oyuns-plus-coupon-detail-brand"><BrandLogo brand={selectedBrandData} size="sm" /><span>{selectedBrandData.name}</span></div><div className="oyuns-plus-detail-content"><div className="oyuns-plus-detail-price"><span>{formatPoints(selectedCoupon.points_price)}</span><PointsMark /></div><div className="oyuns-plus-discount-badge"><Tag className="h-3.5 w-3.5" /> {formatCouponValue(selectedCoupon)}</div>{selectedCoupon.badge_label && <div className="oyuns-plus-coupon-badge oyuns-plus-coupon-badge--detail">{selectedCoupon.badge_label}</div>}<h2>{selectedCoupon.name}</h2><p>{selectedCoupon.description || t("oyuns_plus.no_description")}</p>{selectedCoupon.expires_at && <div className="oyuns-plus-expiry">{t("oyuns_plus.expires", { date: formatDate(selectedCoupon.expires_at, lang) })}</div>}
-        {requestSuccess ? <div className="oyuns-plus-success" role="status"><SuccessCheck /><strong>{t("oyuns_plus.request_success")}</strong><span>{t("oyuns_plus.request_success_balance", { balance: formatPoints(requestSuccess.balance) })}</span></div> : <><button type="button" disabled={selectedCoupon.is_sold_out || balance < selectedCoupon.points_price || requestMutation.isPending} onClick={() => setShowForm((value) => !value)} className="oyuns-plus-primary-button disabled:cursor-not-allowed disabled:opacity-50">{selectedCoupon.is_sold_out ? t("oyuns_plus.sold_out") : balance < selectedCoupon.points_price ? t("oyuns_plus.points_shortfall", { points: formatPoints(selectedCoupon.points_price - balance) }) : requestMutation.isPending ? t("oyuns_plus.submitting") : <><span>{formatPoints(selectedCoupon.points_price)}</span><PointsMark /></>}</button>{showForm && <div className="oyuns-plus-receiver-form"><label>{t("oyuns_plus.receiver_name")}<input value={receiverName} onChange={(event) => setReceiverName(event.target.value)} autoComplete="name" /></label><label>{t("oyuns_plus.receiver_phone")}<input value={receiverPhone} onChange={(event) => setReceiverPhone(event.target.value)} inputMode="tel" placeholder="Утасны дугаар" /></label>{formError && <div className="oyuns-plus-error" role="alert">{formError}</div>}<button type="button" onClick={submitRequest} disabled={requestMutation.isPending} className="oyuns-plus-primary-button">{requestMutation.isPending ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t("oyuns_plus.submit_request")}</button></div>}</>}
+        {requestSuccess ? <div className="oyuns-plus-success" role="status"><SuccessCheck /><strong>{t(requestSuccess.code ? "oyuns_plus.code_issued" : "oyuns_plus.request_success")}</strong>{requestSuccess.code && <><code className="select-all break-all font-semibold">{requestSuccess.code}</code><button type="button" className="oyuns-plus-secondary-button" onClick={() => { void navigator.clipboard.writeText(requestSuccess.code!).catch(() => setFormError(t("oyuns_plus.copy_error"))); }} aria-label={t("oyuns_plus.copy_code")}><Copy className="h-4 w-4" /></button>{requestSuccess.expires_at && <span>{t("oyuns_plus.expires", { date: formatDate(requestSuccess.expires_at, lang) })}</span>}{formError && <span role="alert">{formError}</span>}</>}<span>{t("oyuns_plus.request_success_balance", { balance: formatPoints(requestSuccess.balance) })}</span></div> : <><button type="button" disabled={selectedCoupon.is_sold_out || balance < selectedCoupon.points_price || requestMutation.isPending} onClick={() => setShowForm((value) => !value)} className="oyuns-plus-primary-button disabled:cursor-not-allowed disabled:opacity-50">{selectedCoupon.is_sold_out ? t("oyuns_plus.sold_out") : balance < selectedCoupon.points_price ? t("oyuns_plus.points_shortfall", { points: formatPoints(selectedCoupon.points_price - balance) }) : requestMutation.isPending ? t("oyuns_plus.submitting") : <><span>{formatPoints(selectedCoupon.points_price)}</span><PointsMark /></>}</button>{showForm && <div className="oyuns-plus-receiver-form"><label>{t("oyuns_plus.receiver_name")}<input value={receiverName} onChange={(event) => setReceiverName(event.target.value)} autoComplete="name" /></label><label>{t("oyuns_plus.receiver_phone")}<input value={receiverPhone} onChange={(event) => setReceiverPhone(event.target.value)} inputMode="tel" placeholder="Утасны дугаар" /></label>{formError && <div className="oyuns-plus-error" role="alert">{formError}</div>}<button type="button" onClick={submitRequest} disabled={requestMutation.isPending} className="oyuns-plus-primary-button">{requestMutation.isPending ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : t("oyuns_plus.submit_request")}</button></div>}</>}
       </div></div>
     </section> : selectedBrand && selectedBrandData ? <BrandPage brand={selectedBrandData} tab={brandTab} onTabChange={setBrandTab} favorite={favorites.includes(selectedBrandData.id)} onToggleFavorite={() => toggleFavorite(selectedBrandData.id)} onBack={backFromBrand} couponCount={couponsQuery.data ? coupons.length : selectedBrandData.offer_count} t={t}>
       {brandTab === "about" ? <BrandAbout brand={selectedBrandData} t={t} /> : <div role="tabpanel">

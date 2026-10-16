@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   fetchBrands: vi.fn(),
   fetchBrandCoupons: vi.fn(),
   fetchHistory: vi.fn(),
+  createRequest: vi.fn(),
 }));
 const { fetchSummary, fetchBrands, fetchBrandCoupons, fetchHistory } = mocks;
 
@@ -20,6 +21,7 @@ vi.mock("../api", async () => {
     fetchOyunsPlusBrands: mocks.fetchBrands,
     fetchOyunsPlusBrandCoupons: mocks.fetchBrandCoupons,
     fetchOyunsPlusHistory: mocks.fetchHistory,
+    createOyunsPlusVoucherRequest: mocks.createRequest,
   };
 });
 
@@ -38,6 +40,41 @@ describe("OyunsPlusTab brand-first catalog", () => {
       coupons: [{ id: "coupon-1", brand_id: "brand-1", name: "Latte", description: "One drink", value_type: "amount", discount_value: 1500, currency_code: "MNT", points_price: 100, country_code: "mn", purchase_count: 0, remaining_purchase_count: 2, total_purchase_limit: 2, is_sold_out: false, needs_review: false, is_active: true }],
     });
     fetchHistory.mockResolvedValue({ entries: [], current_balance: 1000 });
+  });
+
+  it("copies the user's referral code from the card back without flipping", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    localStorage.setItem("oyuns_lang", "mn");
+    renderPage();
+    await screen.findByText("REF42");
+    const card = document.querySelector('[data-slot="oyuns-plus-membership-card"]')!;
+    fireEvent.click(card);
+    fireEvent.click(screen.getByRole("button", { name: "Хуулах" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("REF42"));
+    expect(await screen.findByRole("button", { name: "Амжилттай хууллаа!" })).toBeInTheDocument();
+    expect(card).toHaveAttribute("data-flipped", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Дэлгэрэнгүй" }));
+    await waitFor(() => expect(fetchHistory).toHaveBeenCalled());
+  });
+
+  it("shows the automatically issued code immediately and allows copying it", async () => {
+    localStorage.setItem("oyuns_lang", "mn");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    mocks.createRequest.mockResolvedValue({ id: "request-1", status: "fulfilled", card_name: "Latte", balance_after: 900, code: "GAL-ABCDE-FGHJK", expires_at: "2027-01-01T00:00:00Z" });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /Blue Coffee/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Latte/ }));
+    fireEvent.click(screen.getByRole("button", { name: "100" }));
+    const fields = document.querySelectorAll(".oyuns-plus-receiver-form input");
+    fireEvent.change(fields[0], { target: { value: "Test User" } });
+    fireEvent.change(fields[1], { target: { value: "99112233" } });
+    fireEvent.click(document.querySelector(".oyuns-plus-receiver-form button")!);
+    expect(await screen.findByText("GAL-ABCDE-FGHJK")).toBeInTheDocument();
+    expect(screen.getByText("Промо код үүслээ")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Промо код хуулах" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("GAL-ABCDE-FGHJK"));
   });
 
   it("navigates from the single brand list to its coupon list and detail", async () => {

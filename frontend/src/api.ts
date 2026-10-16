@@ -782,6 +782,9 @@ export interface OyunsPlusBrand extends OyunsPlusBrandProfile {
 }
 
 export interface OyunsPlusCoupon {
+  issuance_mode?: "manual" | "automatic";
+  sku_tier?: string | null;
+  validity_days?: number | null;
   id: string;
   brand_id: string;
   name: string;
@@ -829,6 +832,9 @@ export async function fetchOyunsPlusBrandCoupons(brandId: string): Promise<Oyuns
 }
 
 export interface OyunsPlusVoucherRequest {
+  code?: string | null;
+  sku_tier?: string | null;
+  expires_at?: string | null;
   id: string;
   status: "pending" | "fulfilled" | "refunded";
   card_id: string;
@@ -919,7 +925,14 @@ export async function fetchAdminOyunsPlusBrandCoupons(brandId: string, includeAr
   return res.data as OyunsPlusCouponCatalog;
 }
 
+export async function fetchAdminOyunsPlusPartnerConfig(): Promise<{ brand_id: string | null; enabled: boolean }> {
+  return (await api.get("/admin/oyuns-plus/partner-config")).data;
+}
+
 export async function createAdminOyunsPlusCoupon(payload: {
+  issuance_mode?: "manual" | "automatic";
+  sku_tier?: string | null;
+  validity_days?: number | null;
   brand_id: string;
   name: string;
   description: string;
@@ -937,6 +950,9 @@ export async function createAdminOyunsPlusCoupon(payload: {
 }
 
 export async function updateAdminOyunsPlusCoupon(couponId: string, payload: Partial<{
+  issuance_mode?: "manual" | "automatic";
+  sku_tier?: string | null;
+  validity_days?: number | null;
   brand_id: string;
   name: string;
   description: string;

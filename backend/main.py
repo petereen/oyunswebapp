@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from partner_promos import router as partner_router, issue_promo_code, validate_automatic_coupon, partner_brand_id
 from config import get_settings
 from db import get_supabase
 from models import (
@@ -718,6 +719,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Oyunsbot WebApp", version="0.1.0", lifespan=lifespan)
 
+app.include_router(partner_router)
+
+
 # Add validation error handler to log detailed errors
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -1333,6 +1337,8 @@ def _oyuns_plus_rpc_error(exc: Exception) -> HTTPException:
     upper = message.upper()
     if "INSUFFICIENT_POINTS" in upper:
         return HTTPException(status_code=409, detail="INSUFFICIENT_POINTS")
+    if "PARTNER_COUPON_NOT_AVAILABLE" in upper or "AUTOMATIC_ISSUANCE_REQUIRED" in upper:
+        return HTTPException(status_code=409, detail="PARTNER_COUPON_NOT_AVAILABLE")
     if "CARD_NOT_AVAILABLE" in upper:
         return HTTPException(status_code=404, detail="CARD_NOT_AVAILABLE")
     if "CARD_SOLD_OUT" in upper:
@@ -1424,6 +1430,9 @@ def _oyuns_plus_coupon_response(row: dict, purchase_count: int = 0) -> OyunsPlus
         brand_id=str(row.get("brand_id")),
         name=str(row.get("name") or ""),
         description=str(row.get("description") or ""),
+        issuance_mode=row.get("issuance_mode") or "manual",
+        sku_tier=row.get("sku_tier"),
+        validity_days=row.get("validity_days"),
         badge_label=(str(row.get("badge_label") or "").strip() or None),
         value_type=value_type if value_type in {"amount", "percentage"} else None,
         discount_value=row.get("discount_value"),
@@ -5246,7 +5255,7 @@ async def oyuns_plus_brand_coupons(brand_id: str, user=Depends(get_jwt_authentic
         raise HTTPException(status_code=404, detail="BRAND_NOT_AVAILABLE")
     rows = (
         client.table("oyuns_plus_cards")
-        .select("id,brand_id,name,description,badge_label,value_type,discount_value,points_price,country_code,total_purchase_limit,expires_at,needs_review,is_active,archived_at,created_at,updated_at")
+        .select("id,brand_id,name,description,badge_label,value_type,discount_value,points_price,country_code,total_purchase_limit,expires_at,needs_review,is_active,archived_at,created_at,updated_at,issuance_mode,sku_tier,validity_days")
         .eq("brand_id", normalized_brand_id)
         .eq("is_active", True)
         .is_("archived_at", "null")
@@ -5294,17 +5303,23 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
     receiver_name = payload.receiver_name.strip()
     if not receiver_name:
         raise HTTPException(status_code=422, detail="Receiver name is required")
-    card_lookup = client.table("oyuns_plus_cards").select("id,country_code").eq("id", card_id).limit(1).execute().data or []
+    card_lookup = client.table("oyuns_plus_cards").select("id,country_code,brand_id,issuance_mode,sku_tier,points_price,validity_days").eq("id", card_id).limit(1).execute().data or []
     if not card_lookup:
         raise HTTPException(status_code=404, detail="CARD_NOT_AVAILABLE")
     receiver_phone = _normalize_oyuns_plus_phone(payload.receiver_phone, str(card_lookup[0].get("country_code") or "mn"))
     try:
-        result = client.rpc("create_oyuns_plus_voucher_request", {
-            "p_user_id": user.id,
-            "p_card_id": card_id,
-            "p_receiver_name": receiver_name,
-            "p_receiver_phone": receiver_phone,
-        }).execute().data
+        if card_lookup[0].get("issuance_mode") == "automatic":
+            result = issue_promo_code(client, user_id=user.id, card=card_lookup[0],
+                                      receiver_name=receiver_name, receiver_phone=receiver_phone)
+        else:
+            result = client.rpc("create_oyuns_plus_voucher_request", {
+                "p_user_id": user.id,
+                "p_card_id": card_id,
+                "p_receiver_name": receiver_name,
+                "p_receiver_phone": receiver_phone,
+            }).execute().data
+    except HTTPException:
+        raise
     except Exception as exc:
         raise _oyuns_plus_rpc_error(exc)
     if isinstance(result, list):
@@ -5313,7 +5328,7 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
         raise HTTPException(status_code=500, detail="Oyuns+ request was not created")
 
     card_name = str(result.get("card_name") or "")
-    shift_admin_id = _get_current_shift_admin_id(client)
+    shift_admin_id = _get_current_shift_admin_id(client) if result.get("status") != "fulfilled" else None
     if shift_admin_id:
         try:
             settings = get_settings()
@@ -5339,15 +5354,19 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
             )
         except Exception:
             logger.exception("Failed to send Oyuns+ notification to shift admin %s", shift_admin_id)
-    else:
+    elif result.get("status") != "fulfilled":
         logger.info("No active shift admin; skipping Oyuns+ purchase notification")
     try:
         lang = _get_user_lang(user.id)
-        send_user_notification(user.id, tb(lang, "notif_oyuns_plus_request_created", card_name=card_name))
+        send_user_notification(user.id, (html.escape(result["confirmation_note"]) if result.get("code") else tb(lang, "notif_oyuns_plus_request_created", card_name=card_name)))
     except Exception:
         logger.exception("Failed to send Oyuns+ request-created notification")
 
     return OyunsPlusVoucherRequestCreateResponse(
+        code=result.get("code"),
+        sku_tier=result.get("sku_tier"),
+        expires_at=result.get("expires_at"),
+        confirmation_note=result.get("confirmation_note"),
         id=str(result["id"]),
         status=str(result.get("status") or "pending"),
         card_id=str(result.get("card_id") or card_id),
@@ -5467,6 +5486,11 @@ async def admin_restore_oyuns_plus_brand(brand_id: str, admin=Depends(require_ad
     return _oyuns_plus_brand_response(result[0])
 
 
+@app.get("/api/admin/oyuns-plus/partner-config")
+async def admin_oyuns_plus_partner_config(admin=Depends(require_admin)):
+    return {"brand_id": partner_brand_id(), "enabled": bool(partner_brand_id() and get_settings().partner_api_key)}
+
+
 @app.get("/api/admin/oyuns-plus/brands/{brand_id}/coupons", response_model=OyunsPlusCouponsResponse)
 async def admin_oyuns_plus_brand_coupons(brand_id: str, include_archived: bool = True, admin=Depends(require_admin)):
     client = get_supabase()
@@ -5495,6 +5519,7 @@ async def admin_create_oyuns_plus_coupon(brand_id: str, payload: OyunsPlusCoupon
     client = get_supabase()
     if str(payload.brand_id) != str(brand_id):
         raise HTTPException(status_code=422, detail="Coupon brand_id does not match the route")
+    validate_automatic_coupon(payload.model_dump())
     _validate_oyuns_plus_coupon_value(payload.value_type, payload.discount_value)
     brand_rows = client.table("oyuns_plus_brands").select("id,is_active,archived_at").eq("id", brand_id).limit(1).execute().data or []
     if not brand_rows or brand_rows[0].get("archived_at"):
@@ -5503,6 +5528,9 @@ async def admin_create_oyuns_plus_coupon(brand_id: str, payload: OyunsPlusCoupon
         raise HTTPException(status_code=422, detail="An inactive brand cannot expose an active coupon")
     row = client.table("oyuns_plus_cards").insert({
         "brand_id": brand_id,
+        "issuance_mode": payload.issuance_mode,
+        "sku_tier": payload.sku_tier if payload.issuance_mode == "automatic" else None,
+        "validity_days": payload.validity_days if payload.issuance_mode == "automatic" else None,
         "name": payload.name.strip(),
         "description": payload.description.strip(),
         "badge_label": (payload.badge_label or "").strip() or None,
@@ -5535,6 +5563,11 @@ async def admin_update_oyuns_plus_coupon(coupon_id: str, payload: OyunsPlusCoupo
         raise HTTPException(status_code=404, detail="Coupon not found")
     existing = rows[0]
     updates = payload.model_dump(exclude_unset=True)
+    if "issuance_mode" in updates and updates["issuance_mode"] is None:
+        raise HTTPException(422, "issuance_mode cannot be null")
+    validate_automatic_coupon({**existing, **updates})
+    if updates.get("issuance_mode", existing.get("issuance_mode")) == "manual":
+        updates.update(sku_tier=None, validity_days=None)
     if "name" in updates:
         updates["name"] = str(updates["name"]).strip()
         if not updates["name"]:
