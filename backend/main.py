@@ -5358,7 +5358,34 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
         logger.info("No active shift admin; skipping Oyuns+ purchase notification")
     try:
         lang = _get_user_lang(user.id)
-        send_user_notification(user.id, (html.escape(result["confirmation_note"]) if result.get("code") else tb(lang, "notif_oyuns_plus_request_created", card_name=card_name)))
+        if result.get("code"):
+            expires_at = result.get("expires_at")
+            expiry_text = ""
+            if expires_at:
+                try:
+                    expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                    expiry_text = expiry.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                except (TypeError, ValueError):
+                    expiry_text = str(expires_at)
+            if lang == "mn":
+                delivery_message = (
+                    "✅ <b>Таны промо код бэлэн боллоо!</b>\n\n"
+                    f"🎟️ Багц: <b>{html.escape(str(result.get('sku_tier') or card_name))}</b>\n"
+                    f"🔐 Код: <span class=\"tg-spoiler\"><code>{html.escape(str(result['code']))}</code></span>\n"
+                    f"📅 Хүчинтэй хугацаа: <b>{html.escape(expiry_text or '—')}</b>\n\n"
+                    "Кодыг харахын тулд дээрх нуусан хэсгийг товшино уу."
+                )
+            else:
+                delivery_message = (
+                    "✅ <b>Ваш промокод готов!</b>\n\n"
+                    f"🎟️ Пакет: <b>{html.escape(str(result.get('sku_tier') or card_name))}</b>\n"
+                    f"🔐 Код: <span class=\"tg-spoiler\"><code>{html.escape(str(result['code']))}</code></span>\n"
+                    f"📅 Действует до: <b>{html.escape(expiry_text or '—')}</b>\n\n"
+                    "Нажмите на скрытую строку выше, чтобы показать код."
+                )
+        else:
+            delivery_message = tb(lang, "notif_oyuns_plus_request_created", card_name=card_name)
+        send_user_notification(user.id, delivery_message)
     except Exception:
         logger.exception("Failed to send Oyuns+ request-created notification")
 
