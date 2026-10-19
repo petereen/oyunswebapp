@@ -50,7 +50,27 @@ Example response:
 }
 ```
 
-The endpoint reads all rows in batches, so large lists are not truncated by the database API's per-request row limit. It uses the same Bearer authentication, partner brand scoping, and `Cache-Control: no-store` header as code lookup.
+The endpoint reads all rows in batches, so large lists are not truncated by the database API's per-request row limit. It includes `used_at` (null until redeemed) and uses the same Bearer authentication, partner brand scoping, and `Cache-Control: no-store` header as code lookup.
+
+## Partner redemption callback
+
+After the VPN service consumes a code, it reports the redemption to this endpoint:
+
+```http
+POST https://app.oyuns.mn/api/v1/partner/promo-codes
+Authorization: Bearer <PARTNER_API_KEY>
+Content-Type: application/json
+
+{"code": "GAL-GD3YP-Z6CEP"}
+```
+
+Successful redemption, HTTP 200:
+
+```json
+{"used": true, "code": "GAL-GD3YP-Z6CEP", "status": "USED", "used_at": "2026-10-19T08:00:00+00:00"}
+```
+
+Apply `supabase/migrations/20261019000000_partner_promo_code_redemption.sql` before deploying this callback. The database stores status `USED` and the UTC `used_at` timestamp. A repeated callback for the same used code returns HTTP 200 with the original timestamp, so partner retries are safe. Unknown codes return 404; expired or revoked codes return 409. All responses are brand-scoped, authenticated, and carry `Cache-Control: no-store`.
 
 ```http
 GET /api/v1/partner/promo-codes/GAL-ABCDE-FGHJK

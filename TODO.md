@@ -1,6 +1,7 @@
 # Project Task Tracker
 
 ## Current Milestone
+- [x] Add authenticated partner POST callback to mark promo codes used, persist redemption timestamps, and document deployment/API behavior (backend/partner_promos.py, supabase/migrations/20261019000000_partner_promo_code_redemption.sql, PARTNER_PROMO_CODES.md)
 - [x] Skip receiver name and phone entry for automatic promo purchases while preserving manual validation (frontend/src/pages/OyunsPlusTab.tsx, frontend/src/api.ts, backend/main.py, backend/models.py, backend/partner_promos.py, supabase/migrations/20261016000000_optional_receiver_for_automatic_promos.sql, PARTNER_PROMO_CODES.md)
 - [x] Format automatic Oyuns+ promo delivery messages and hide codes behind Telegram spoiler reveal (backend/main.py)
 - [x] Add authenticated partner API endpoint to list all issued promo codes and SKU tiers (backend/partner_promos.py, PARTNER_PROMO_CODES.md)

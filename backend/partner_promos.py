@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, constr
 
 from config import get_settings
 from db import get_supabase
@@ -13,6 +14,10 @@ from db import get_supabase
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_PATTERN = re.compile(r"^GAL-[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$")
 router = APIRouter()
+
+
+class PartnerPromoCodeUseRequest(BaseModel):
+    code: constr(pattern=r"^GAL-[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$")
 
 
 def generate_promo_code() -> str:
@@ -80,7 +85,7 @@ def verify_partner_promo_code(code: str, brand_id: str = Depends(require_partner
     rows = []
     if CODE_PATTERN.fullmatch(code):
         rows = (get_supabase().table("loyalty_promo_codes")
-                .select("code,sku_tier,status,issued_at,expires_at")
+                .select("code,sku_tier,status,issued_at,expires_at,used_at")
                 .eq("brand_id", brand_id).eq("code", code).limit(1).execute().data or [])
     if not rows:
         return JSONResponse({"is_valid": False, "error": "NOT_FOUND"}, status_code=404, headers=headers)
@@ -90,9 +95,41 @@ def verify_partner_promo_code(code: str, brand_id: str = Depends(require_partner
         expired = expiry <= datetime.now(timezone.utc)
     except (ValueError, TypeError, KeyError, AttributeError):
         expired = True
+    if row["status"] == "USED":
+        return JSONResponse({"is_valid": False, "error": "USED", "expires_at": row.get("expires_at"), "used_at": row.get("used_at")}, headers=headers)
     if row["status"] != "ACTIVE" or expired:
         return JSONResponse({"is_valid": False, "error": "EXPIRED_OR_REVOKED", "expires_at": row.get("expires_at")}, headers=headers)
     return JSONResponse({"is_valid": True, **{key: row[key] for key in ("code", "sku_tier", "issued_at", "expires_at")}}, headers=headers)
+
+
+@router.post("/api/v1/partner/promo-codes")
+def mark_partner_promo_code_used(payload: PartnerPromoCodeUseRequest, brand_id: str = Depends(require_partner)):
+    """Record partner redemption; duplicate callbacks for a used code are safe to retry."""
+    headers = {"Cache-Control": "no-store"}
+    now = datetime.now(timezone.utc).isoformat()
+    client = get_supabase()
+    updated = (client.table("loyalty_promo_codes")
+               .update({"status": "USED", "used_at": now})
+               .eq("brand_id", brand_id).eq("code", payload.code).eq("status", "ACTIVE")
+               .gt("expires_at", now).select("code,status,used_at")
+               .execute().data or [])
+    if updated:
+        return JSONResponse({"used": True, **updated[0]}, headers=headers)
+
+    rows = (client.table("loyalty_promo_codes")
+            .select("code,status,expires_at,used_at")
+            .eq("brand_id", brand_id).eq("code", payload.code).limit(1).execute().data or [])
+    if not rows:
+        return JSONResponse({"used": False, "error": "NOT_FOUND"}, status_code=404, headers=headers)
+    row = rows[0]
+    if row["status"] == "USED":
+        return JSONResponse({"used": True, "code": row["code"], "status": "USED", "used_at": row.get("used_at")}, headers=headers)
+    try:
+        expired = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00")) <= datetime.now(timezone.utc)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        expired = True
+    error = "EXPIRED" if expired else "REVOKED"
+    return JSONResponse({"used": False, "error": error}, status_code=409, headers=headers)
 
 
 @router.get("/api/v1/partner/promo-codes")
@@ -103,7 +140,7 @@ def list_partner_promo_codes(brand_id: str = Depends(require_partner)):
     start = 0
     while True:
         page = (get_supabase().table("loyalty_promo_codes")
-                .select("code,sku_tier,status,issued_at,expires_at")
+                .select("code,sku_tier,status,issued_at,expires_at,used_at")
                 .eq("brand_id", brand_id)
                 .range(start, start + page_size - 1).execute().data or [])
         rows.extend(page)
