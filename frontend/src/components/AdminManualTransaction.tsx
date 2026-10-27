@@ -103,6 +103,7 @@ function ReceiptSection({ title, label, urls, uploading, onFiles, onRemove }: Re
 
 function DriverManualForm({ onOpenInbox }: Props) {
   const [driverName, setDriverName] = useState("");
+  const [transactionAt, setTransactionAt] = useState("");
   const [direction, setDirection] = useState<Direction>("buy");
   const [liveRates, setLiveRates] = useState({ buy_rate: 0, sell_rate: 0 });
   const [exchangeRate, setExchangeRate] = useState("");
@@ -173,6 +174,7 @@ function DriverManualForm({ onOpenInbox }: Props) {
         exchange_rate: numericRate,
         receipt_paths: paymentUrls,
         transfer_receipt_paths: transferUrls,
+        transaction_at: transactionAt ? new Date(`${transactionAt}:00+03:00`).toISOString() : undefined,
       });
       setSuccess({ invoice: result.invoice, amount: result.converted_amount, currency: result.currency_to });
     } catch (submitError: any) {
@@ -184,6 +186,7 @@ function DriverManualForm({ onOpenInbox }: Props) {
 
   const reset = () => {
     setDriverName("");
+    setTransactionAt("");
     setAmount("");
     setPaymentUrls([]);
     setTransferUrls([]);
@@ -214,6 +217,7 @@ function DriverManualForm({ onOpenInbox }: Props) {
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
         <label className="mb-2 block text-sm font-semibold">1. Нэр</label>
         <input value={driverName} onChange={(event) => setDriverName(event.target.value)} placeholder="Овог нэр эсвэл Facebook нэр" className="input-modern" />
+        <label className="mt-3 block text-sm">Гүйлгээний огноо, цаг (Moscow, optional)<span className="mt-1 flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-400" /><input value={transactionAt} onChange={(event) => setTransactionAt(event.target.value)} type="datetime-local" className="input-modern" /></span></label>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
@@ -238,7 +242,7 @@ function DriverManualForm({ onOpenInbox }: Props) {
 
       <section className="rounded-2xl border border-[#2D62EC]/20 bg-[#2D62EC]/5 p-5">
         <div className="mb-3 text-sm font-semibold">Шалгах мэдээлэл</div>
-        <div className="grid gap-2 text-sm sm:grid-cols-2"><span>Жолооч: {driverName.trim() || "—"}</span><span>Чиглэл: {sourceCurrency} → {destinationCurrency}</span><span>Дүн: {amount || "—"} {sourceCurrency}</span><span>Ханш: {exchangeRate || "—"}</span><span>Очих дүн: {convertedAmount ? `${convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${destinationCurrency}` : "—"}</span><span>Төлбөрийн баримт: {paymentUrls.length} файл</span><span>Шилжүүлсэн баримт: {transferUrls.length} файл</span></div>
+        <div className="grid gap-2 text-sm sm:grid-cols-2"><span>Жолооч: {driverName.trim() || "—"}</span><span>Огноо: {transactionAt ? transactionAt.replace("T", " ") : "Одоо"}</span><span>Чиглэл: {sourceCurrency} → {destinationCurrency}</span><span>Дүн: {amount || "—"} {sourceCurrency}</span><span>Ханш: {exchangeRate || "—"}</span><span>Очих дүн: {convertedAmount ? `${convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${destinationCurrency}` : "—"}</span><span>Төлбөрийн баримт: {paymentUrls.length} файл</span><span>Шилжүүлсэн баримт: {transferUrls.length} файл</span></div>
       </section>
 
       <button onClick={submit} disabled={submitting || uploading} className="w-full rounded-xl bg-[#00C885] py-3 font-semibold text-white shadow-btn disabled:cursor-not-allowed disabled:opacity-50">{submitting ? <span className="inline-flex items-center gap-2"><RefreshCw className="h-4 w-4 animate-spin" /> Бүртгэж байна…</span> : "Баталгаажсан гүйлгээ бүртгэх"}</button>
