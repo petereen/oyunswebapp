@@ -14,22 +14,17 @@ import {
 } from "../api";
 import { useTheme } from "../hooks/useTheme";
 import oyunsIcon from "../assets/oyuns-icon.png";
-import { BalanceProfitPage, DashboardTimeZone } from "./BalanceProfitPage";
+import { BalanceProfitPage } from "./BalanceProfitPage";
+import { formatUb, ubDateIso, ubDateParts, UB_UTC_OFFSET } from "../utils/time";
 
 type PeriodKey = "today" | "7d" | "30d" | "90d" | "month" | "year" | "all" | "custom";
 type DashboardPage = "balance" | "profit" | "transactions";
 
 const DASHBOARD_VIEW_PARAM = "dashboard-tab";
-const DASHBOARD_TIMEZONE_STORAGE = "oyuns_dashboard_timezone";
 
 function readDashboardPage(): DashboardPage {
   const value = new URLSearchParams(window.location.search).get(DASHBOARD_VIEW_PARAM);
   return value === "profit" || value === "transactions" ? value : "balance";
-}
-
-function readDashboardTimeZone(): DashboardTimeZone {
-  const savedTimeZone = localStorage.getItem(DASHBOARD_TIMEZONE_STORAGE);
-  return savedTimeZone === "moscow" ? "moscow" : "ub";
 }
 
 const PERIODS: { key: PeriodKey; label: string }[] = [
@@ -90,26 +85,31 @@ const fmtDuration = (m: number | null | undefined) => {
 
 const fmtDateTime = (iso: string) => {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-GB", { year: "2-digit", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return formatUb(iso, { year: "2-digit", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }, "en-GB") || iso;
 };
+
+// Start of a UB calendar day (YYYY-MM-DD) as a Date.
+const ubDayStart = (dateIso: string) => new Date(`${dateIso}T00:00:00${UB_UTC_OFFSET}`);
 
 function computeRange(period: PeriodKey, custom: { start: string; end: string }) {
   const now = new Date();
   const end = now;
   let start: Date | null = null;
   switch (period) {
-    case "today": start = new Date(now.getFullYear(), now.getMonth(), now.getDate()); break;
+    case "today": start = ubDayStart(ubDateIso(now)); break;
     case "7d": start = new Date(now.getTime() - 7 * 864e5); break;
     case "30d": start = new Date(now.getTime() - 30 * 864e5); break;
     case "90d": start = new Date(now.getTime() - 90 * 864e5); break;
-    case "month": start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+    case "month": {
+      const p = ubDateParts(now);
+      start = ubDayStart(`${p.year}-${p.month}-01`);
+      break;
+    }
     case "year": start = new Date(now.getTime() - 365 * 864e5); break;
     case "all": return { start: undefined, end: undefined, granularity: "month" as const };
     case "custom": {
-      const s = custom.start ? new Date(custom.start + "T00:00:00") : null;
-      const e = custom.end ? new Date(custom.end + "T23:59:59") : now;
+      const s = custom.start ? ubDayStart(custom.start) : null;
+      const e = custom.end ? new Date(ubDayStart(custom.end).getTime() + 864e5 - 1000) : now;
       if (!s) return { start: undefined, end: undefined, granularity: "month" as const };
       const days = (e.getTime() - s.getTime()) / 864e5;
       return { start: s.toISOString(), end: e.toISOString(), granularity: days > 92 ? "month" as const : "day" as const };
@@ -229,16 +229,11 @@ export function DashboardPanel() {
 
 function AuthedDashboard({ theme, onLogout }: { theme: string; onLogout: () => void }) {
   const [page, setPage] = useState<DashboardPage>(readDashboardPage);
-  const [timeZone, setTimeZone] = useState<DashboardTimeZone>(readDashboardTimeZone);
   const tabs: { key: DashboardPage; label: string }[] = [
     { key: "balance", label: "Баланс" },
     { key: "profit", label: "Ашиг" },
     { key: "transactions", label: "Гүйлгээ" },
   ];
-
-  useEffect(() => {
-    localStorage.setItem(DASHBOARD_TIMEZONE_STORAGE, timeZone);
-  }, [timeZone]);
 
   useEffect(() => {
     const onPopState = () => setPage(readDashboardPage());
@@ -289,27 +284,14 @@ function AuthedDashboard({ theme, onLogout }: { theme: string; onLogout: () => v
               ))}
             </nav>
             {page !== "transactions" && (
-              <fieldset className="flex items-center gap-1 rounded-2xl border border-slate-200 dark:border-dark-600 bg-white dark:bg-dark-800 p-1">
-                <legend className="sr-only">Таймзон</legend>
-                {([{ key: "moscow", label: "Москва · MSK" }, { key: "ub", label: "Улаанбаатар · UB" }] as const).map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    aria-pressed={timeZone === option.key}
-                    onClick={() => setTimeZone(option.key)}
-                    className={`min-h-10 px-3 rounded-xl text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${timeZone === option.key ? "bg-maroon-600 text-white" : "text-slate-600 dark:text-ivory-400 hover:bg-slate-100 dark:hover:bg-dark-700"}`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </fieldset>
+              <span className="text-xs font-semibold text-slate-500 dark:text-ivory-400">Улаанбаатарын цаг · UB</span>
             )}
           </div>
         </header>
 
         <main id="dashboard-main">
           <div className={page === "transactions" ? "hidden" : ""} aria-hidden={page === "transactions"}>
-            <BalanceProfitPage activePage={page === "profit" ? "profit" : "balance"} dashboardTimeZone={timeZone} />
+            <BalanceProfitPage activePage={page === "profit" ? "profit" : "balance"} dashboardTimeZone="ub" />
           </div>
           <div className={page === "transactions" ? "" : "hidden"} aria-hidden={page !== "transactions"}>
             <DashboardContent theme={theme} active={page === "transactions"} />
@@ -805,7 +787,7 @@ function exportCsv(rows: DashboardTransaction[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `oyuns-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `oyuns-transactions-${ubDateIso()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { fetchAdminGifts, approveGift, rejectGift, requestPresign, AdminGift } from "../api";
 import { ADMIN_CONTROL_CLASS, AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
+import { formatUb } from "../utils/time";
 
 export function AdminGifts() {
   const [gifts, setGifts] = useState<AdminGift[]>([]);
@@ -149,16 +150,8 @@ export function AdminGifts() {
   };
 
   // Format date
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString("mn-MN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const formatDate = (dateStr: string) =>
+    formatUb(dateStr, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) || dateStr;
 
   return (
     <div className="space-y-3">

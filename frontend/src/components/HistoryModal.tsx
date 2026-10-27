@@ -4,6 +4,7 @@ import { fetchHistory } from "../api";
 import { useState } from "react";
 import { useLang } from "../i18n/useLang";
 import { queryKeys } from "../queryKeys";
+import { formatUb } from "../utils/time";
 
 interface HistoryItem {
   invoice: string;
@@ -60,14 +61,7 @@ function getStatusInfo(status: string, t: (key: string) => string) {
 }
 
 function formatDate(dateStr: string, locale: string): string {
-  const date = new Date(dateStr.endsWith("Z") ? dateStr : dateStr + "Z");
-  return date.toLocaleDateString(locale, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatUb(dateStr, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }, locale) || dateStr;
 }
 
 function getTimeAgo(dateStr: string, t: (key: string, params?: Record<string, string | number>) => string): string {

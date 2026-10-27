@@ -13,6 +13,7 @@ import { useLang } from "../i18n/useLang";
 import { queryKeys } from "../queryKeys";
 import { Entitlements } from "../hooks/useEntitlements";
 import { StatsSkeleton, Skeleton } from "../components/Skeleton";
+import { formatUb } from "../utils/time";
 
 interface MonthlyData { month: string; amount: number; }
 interface AnalyticsData {
@@ -54,8 +55,7 @@ function getStatusInfo(status: string, t: (k: string) => string) {
 }
 
 function formatDate(dateStr: string, locale: string): string {
-  const date = new Date(dateStr.endsWith("Z") ? dateStr : dateStr + "Z");
-  return date.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatUb(dateStr, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }, locale) || dateStr;
 }
 
 function getTimeAgo(dateStr: string, t: (k: string, p?: Record<string, string | number>) => string): string {

@@ -350,7 +350,7 @@ export function Dashboard({ initData, user, isAuthenticating, authError }: Props
                         {serviceStatus?.message}
                       </div>
                       <div className="text-xs text-slate-400">
-                        {t("home.working_hours_detail")}
+                        {t("home.working_hours_detail", { hours: serviceStatus?.working_hours || "09:00 - 04:00 (УБ)" })}
                       </div>
                     </div>
                     <button

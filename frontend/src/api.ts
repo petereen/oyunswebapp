@@ -1304,11 +1304,10 @@ export async function closeShift(adminId: number) {
 
 // ============= Working Hours Management =============
 
+// All working hours are Ulaanbaatar time.
 export interface WorkingHoursConfig {
-  start_hour_moscow: number;
-  end_hour_moscow: number;
-  start_time_moscow: string;
-  end_time_moscow: string;
+  start_hour_ub: number;
+  end_hour_ub: number;
   start_time_ub: string;
   end_time_ub: string;
   is_enabled: boolean;
@@ -1316,8 +1315,8 @@ export interface WorkingHoursConfig {
 }
 
 export interface WorkingHoursUpdatePayload {
-  start_hour_moscow: number;
-  end_hour_moscow: number;
+  start_hour_ub: number;
+  end_hour_ub: number;
   is_enabled: boolean;
 }
 
@@ -2146,7 +2145,8 @@ export type PlaneTicketSalesResponse = {
   summary: PlaneTicketSalesSummary;
 };
 
-export type DashboardTimeZone = "moscow" | "ub";
+// The finance dashboard always uses Ulaanbaatar time.
+export type DashboardTimeZone = "ub";
 
 export async function fetchTreasuryAccounts(): Promise<TreasuryAccount[]> {
   const res = await dashboardApi.get("/dashboard/treasury-accounts");

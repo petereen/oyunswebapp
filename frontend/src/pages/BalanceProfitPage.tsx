@@ -36,7 +36,6 @@ const PANEL_CLASS = "finance-panel bg-white dark:bg-dark-800 rounded-2xl border 
 const INPUT_CLASS = "finance-input w-full rounded-xl border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700 px-3 py-2 text-sm tabular-nums focus-visible:ring-2 focus-visible:ring-maroon-500";
 
 const DASHBOARD_TIMEZONES: { key: DashboardTimeZone; label: string; short: string; iana: string }[] = [
-  { key: "moscow", label: "Москвагийн цаг", short: "MSK", iana: "Europe/Moscow" },
   { key: "ub", label: "Улаанбаатарын цаг", short: "UB", iana: "Asia/Ulaanbaatar" },
 ];
 
@@ -88,7 +87,7 @@ function zonedDateTimeToUtcIso(timeZone: DashboardTimeZone, dateIso: string, tim
   return new Date(guess.getTime() - (asIfUtc - guess.getTime())).toISOString();
 }
 
-const todayIso = (timeZone: DashboardTimeZone = "moscow") => zonedDateIso(new Date(), timeZone);
+const todayIso = (timeZone: DashboardTimeZone = "ub") => zonedDateIso(new Date(), timeZone);
 
 const fmtNum = (n: number | null | undefined, digits = 0) =>
   (n ?? 0).toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
@@ -1325,7 +1324,7 @@ function exportBalanceHistoryCsv(rows: BalanceHistoryRow[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `dashboard-balance-history-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `dashboard-balance-history-${todayIso()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

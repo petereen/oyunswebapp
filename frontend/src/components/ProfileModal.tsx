@@ -4,6 +4,7 @@ import { X, Phone, CreditCard, CheckCircle2, Tag, ChevronDown, ChevronUp, Gift, 
 import { fetchMe, fetchUserPromoCodes, updateBankInfo, UpdateBankInfoInput } from "../api";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone } from "./RegistrationModal";
 import { queryKeys } from "../queryKeys";
+import { formatUb } from "../utils/time";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
 
@@ -464,7 +465,7 @@ export function ProfileModal({ userId, onClose }: Props) {
                               </div>
                               {promo.expires_at && (
                                 <div className="mt-1 text-xs text-slate-400">
-                                  Дуусах: {new Date(promo.expires_at).toLocaleDateString()}
+                                  Дуусах: {formatUb(promo.expires_at, { year: "numeric", month: "2-digit", day: "2-digit" })}
                                 </div>
                               )}
                             </div>

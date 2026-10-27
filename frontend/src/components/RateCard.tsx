@@ -2,6 +2,7 @@ import { Wallet, TrendingUp, Clock3 } from "lucide-react";
 import { Rate } from "../api";
 import { useLang } from "../i18n/useLang";
 import { RateCardSkeleton } from "./Skeleton";
+import { formatUb } from "../utils/time";
 
 interface Props {
   rate?: Rate;
@@ -26,7 +27,7 @@ export function RateCard({ rate }: Props) {
           </div>
           <div className="text-[10px] text-white/40 flex items-center gap-1">
             <Clock3 className="w-3 h-3" />
-            <span>{rate?.updated_at ? new Date(rate.updated_at).toLocaleTimeString(lang === "ru" ? "ru-RU" : "mn-MN", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+            <span>{rate?.updated_at ? formatUb(rate.updated_at, { hour: "2-digit", minute: "2-digit" }, lang === "ru" ? "ru-RU" : "mn-MN", "ub") || "—" : "—"}</span>
           </div>
         </div>
 

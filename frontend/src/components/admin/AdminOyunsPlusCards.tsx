@@ -20,6 +20,7 @@ import {
 import { queryKeys } from "../../queryKeys";
 import { prepareImageForUpload } from "../../utils/imageUpload";
 import { AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./AdminPanelPrimitives";
+import { parseServerDate, ubDateParts, ubLocalInputToIso } from "../../utils/time";
 
 const emptyBrand = { name: "", description: "", logo_url: "", logo_path: null as string | null, cover_url: "", cover_path: null as string | null, category: "", address: "", map_url: "", website_url: "", instagram_url: "", facebook_url: "", phone: "", is_active: true, sort_order: 0 };
 type BrandForm = typeof emptyBrand;
@@ -35,12 +36,12 @@ const contactFields: { key: "address" | "map_url" | "website_url" | "instagram_u
 const emptyCoupon = { issuance_mode: "manual" as "manual" | "automatic", sku_tier: "", validity_days: 30, name: "", description: "", badge_label: "", value_type: "amount" as "amount" | "percentage", discount_value: "", points_price: 0, country_code: "mn" as "mn" | "ru", total_purchase_limit: "", expires_at: "", is_active: true };
 const validLogo = (file: File) => ["image/jpeg", "image/png", "image/webp"].includes(file.type) && file.size <= 2 * 1024 * 1024;
 
+// datetime-local inputs are edited in Ulaanbaatar time.
 function toLocalDateTime(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const date = parseServerDate(value);
+  if (!date) return "";
+  const p = ubDateParts(date);
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 
 function formatCouponValue(coupon: OyunsPlusCoupon) {
@@ -123,7 +124,7 @@ function AdminOyunsPlusCatalogContent() {
       const discount = Number(couponForm.discount_value);
       if (!Number.isFinite(discount) || discount <= 0 || (couponForm.value_type === "percentage" && discount > 100)) throw new Error("Хөнгөлөлтийн утгыг зөв оруулна уу.");
       if (couponForm.issuance_mode === "automatic" && (!partnerConfig.data?.enabled || targetBrandId !== partnerConfig.data.brand_id)) throw new Error("Automatic зөвхөн тохируулсан түнш брэндэд боломжтой.");
-      const payload = { issuance_mode: couponForm.issuance_mode, sku_tier: couponForm.issuance_mode === "automatic" ? couponForm.sku_tier.trim() : null, validity_days: couponForm.issuance_mode === "automatic" ? couponForm.validity_days : null, brand_id: targetBrandId, name: couponForm.name.trim(), description: couponForm.description.trim(), badge_label: couponForm.badge_label.trim() || null, value_type: couponForm.value_type, discount_value: discount, points_price: Number(couponForm.points_price), country_code: couponForm.country_code, total_purchase_limit: couponForm.total_purchase_limit ? Number(couponForm.total_purchase_limit) : null, expires_at: couponForm.expires_at ? new Date(couponForm.expires_at).toISOString() : null, is_active: couponForm.is_active };
+      const payload = { issuance_mode: couponForm.issuance_mode, sku_tier: couponForm.issuance_mode === "automatic" ? couponForm.sku_tier.trim() : null, validity_days: couponForm.issuance_mode === "automatic" ? couponForm.validity_days : null, brand_id: targetBrandId, name: couponForm.name.trim(), description: couponForm.description.trim(), badge_label: couponForm.badge_label.trim() || null, value_type: couponForm.value_type, discount_value: discount, points_price: Number(couponForm.points_price), country_code: couponForm.country_code, total_purchase_limit: couponForm.total_purchase_limit ? Number(couponForm.total_purchase_limit) : null, expires_at: ubLocalInputToIso(couponForm.expires_at) ?? null, is_active: couponForm.is_active };
       return editingCoupon ? updateAdminOyunsPlusCoupon(editingCoupon, payload) : createAdminOyunsPlusCoupon(payload);
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: queryKeys.admin.oyunsPlusBrandCoupons(selectedBrandId || "") }); if (couponBrandId) void queryClient.invalidateQueries({ queryKey: queryKeys.admin.oyunsPlusBrandCoupons(couponBrandId) }); void queryClient.invalidateQueries({ queryKey: queryKeys.admin.oyunsPlusBrands }); setCouponForm(emptyCoupon); setCouponBrandId(selectedBrandId); setEditingCoupon(null); },

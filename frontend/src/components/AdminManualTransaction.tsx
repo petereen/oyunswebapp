@@ -22,6 +22,7 @@ import {
   ManualTransactionCreateInput,
 } from "../api";
 import { prepareImageForUpload } from "../utils/imageUpload";
+import { ubLocalInputToIso } from "../utils/time";
 
 type Direction = "buy" | "sell";
 
@@ -174,7 +175,7 @@ function DriverManualForm({ onOpenInbox }: Props) {
         exchange_rate: numericRate,
         receipt_paths: paymentUrls,
         transfer_receipt_paths: transferUrls,
-        transaction_at: transactionAt ? new Date(`${transactionAt}:00+03:00`).toISOString() : undefined,
+        transaction_at: ubLocalInputToIso(transactionAt),
       });
       setSuccess({ invoice: result.invoice, amount: result.converted_amount, currency: result.currency_to });
     } catch (submitError: any) {
@@ -217,7 +218,7 @@ function DriverManualForm({ onOpenInbox }: Props) {
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
         <label className="mb-2 block text-sm font-semibold">1. Нэр</label>
         <input value={driverName} onChange={(event) => setDriverName(event.target.value)} placeholder="Овог нэр эсвэл Facebook нэр" className="input-modern" />
-        <label className="mt-3 block text-sm">Гүйлгээний огноо, цаг (Moscow, optional)<span className="mt-1 flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-400" /><input value={transactionAt} onChange={(event) => setTransactionAt(event.target.value)} type="datetime-local" className="input-modern" /></span></label>
+        <label className="mt-3 block text-sm">Гүйлгээний огноо, цаг (УБ цаг, заавал биш)<span className="mt-1 flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-400" /><input value={transactionAt} onChange={(event) => setTransactionAt(event.target.value)} type="datetime-local" className="input-modern" /></span></label>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
@@ -396,7 +397,7 @@ function PersonManualForm({ onOpenInbox }: Props) {
       receiver_card_number: direction === "sell" ? receiver.cardNumber.trim() : undefined,
       receiver_owner_name: receiver.ownerName.trim(),
       receipt_paths: receiptUrls,
-      transaction_at: transactionAt ? new Date(`${transactionAt}:00+03:00`).toISOString() : undefined,
+      transaction_at: ubLocalInputToIso(transactionAt),
     };
     try {
       const result = await createManualTransaction(payload);
@@ -477,7 +478,7 @@ function PersonManualForm({ onOpenInbox }: Props) {
           <label className="text-sm">Эзэмшигчийн нэр<input value={receiver.ownerName} onChange={(event) => updateReceiver("ownerName", event.target.value)} className="input-modern mt-1" /></label>
           {direction === "buy" ? <label className="text-sm sm:col-span-2">MNT дансны дугаар<input value={receiver.accountNumber} onChange={(event) => updateReceiver("accountNumber", event.target.value)} className="input-modern mt-1" /></label> : <><label className="text-sm">RUB утас / SBP<input value={receiver.phone} onChange={(event) => updateReceiver("phone", event.target.value)} className="input-modern mt-1" /></label><label className="text-sm">Картын дугаар<input value={receiver.cardNumber} onChange={(event) => updateReceiver("cardNumber", event.target.value)} className="input-modern mt-1" /></label></>}
         </div>
-        <label className="mt-3 block text-sm">Анхны хүсэлтийн цаг (Moscow, optional)<span className="mt-1 flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-400" /><input value={transactionAt} onChange={(event) => setTransactionAt(event.target.value)} type="datetime-local" className="input-modern" /></span></label>
+        <label className="mt-3 block text-sm">Анхны хүсэлтийн цаг (УБ цаг, заавал биш)<span className="mt-1 flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-400" /><input value={transactionAt} onChange={(event) => setTransactionAt(event.target.value)} type="datetime-local" className="input-modern" /></span></label>
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">

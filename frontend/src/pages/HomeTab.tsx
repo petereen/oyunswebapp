@@ -467,7 +467,7 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
               </div>
               <div className="text-xs text-dark-600 dark:text-ivory-300">{serviceStatus?.message}</div>
               <div className="text-[11px] text-dark-600 dark:text-ivory-400 mt-1">
-                {t("home.working_hours_schedule")}
+                {t("home.working_hours_schedule", { hours: serviceStatus?.working_hours || "09:00 - 04:00 (УБ)" })}
               </div>
             </div>
           </div>

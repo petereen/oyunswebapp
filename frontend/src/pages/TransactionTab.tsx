@@ -18,6 +18,7 @@ import { queryKeys } from "../queryKeys";
 import { Entitlements } from "../hooks/useEntitlements";
 import { TransactionFrameSkeleton } from "../components/Skeleton";
 import { SuccessCheck } from "../components/SuccessCheck";
+import { generateInvoiceId as generateUbInvoiceId } from "../utils/time";
 
 interface Props {
   initData: string;
@@ -257,20 +258,7 @@ export function TransactionTab({
     };
   }, [editInvoiceId, user?.id]);
 
-  const generateInvoiceId = () => {
-    const now = new Date();
-    const moscowOffset = 3 * 60;
-    const localOffset = now.getTimezoneOffset();
-    const moscowTime = new Date(now.getTime() + (moscowOffset + localOffset) * 60 * 1000);
-    const y = moscowTime.getFullYear();
-    const mo = String(moscowTime.getMonth() + 1).padStart(2, "0");
-    const d = String(moscowTime.getDate()).padStart(2, "0");
-    const h = String(moscowTime.getHours()).padStart(2, "0");
-    const mi = String(moscowTime.getMinutes()).padStart(2, "0");
-    const s = String(moscowTime.getSeconds()).padStart(2, "0");
-    const r = String(Math.floor(Math.random() * 100)).padStart(2, "0");
-    return `${y}${mo}${d}-${h}${mi}${s}-${r}`;
-  };
+  const generateInvoiceId = () => generateUbInvoiceId();
 
   const handleProceed = (dir: "buy" | "sell", amt: number, rt: number) => {
     if (dir === "sell" && isSellLockedForReverification) {

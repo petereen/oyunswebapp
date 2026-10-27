@@ -32,6 +32,7 @@ import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
 import { queryKeys } from "../queryKeys";
 import { Skeleton } from "./Skeleton";
+import { generateInvoiceId as generateUbInvoiceId } from "../utils/time";
 
 interface Props {
   buyRate: number;
@@ -117,22 +118,7 @@ export function GiftFlow({ buyRate, sellRate, onBack, onSuccess }: Props) {
   }, []);
 
   // Generate invoice ID
-  const generateInvoiceId = () => {
-    const now = new Date();
-    const moscowOffset = 3 * 60;
-    const localOffset = now.getTimezoneOffset();
-    const moscowTime = new Date(now.getTime() + (moscowOffset + localOffset) * 60 * 1000);
-
-    const year = moscowTime.getFullYear();
-    const month = String(moscowTime.getMonth() + 1).padStart(2, "0");
-    const day = String(moscowTime.getDate()).padStart(2, "0");
-    const hours = String(moscowTime.getHours()).padStart(2, "0");
-    const minutes = String(moscowTime.getMinutes()).padStart(2, "0");
-    const seconds = String(moscowTime.getSeconds()).padStart(2, "0");
-    const random = String(Math.floor(Math.random() * 100)).padStart(2, "0");
-
-    return `GIFT-${year}${month}${day}-${hours}${minutes}${seconds}-${random}`;
-  };
+  const generateInvoiceId = () => `GIFT-${generateUbInvoiceId()}`;
 
   // Calculate converted amount
   const effectiveRate = direction === "buy" ? buyRate : sellRate;

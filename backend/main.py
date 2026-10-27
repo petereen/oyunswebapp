@@ -173,6 +173,7 @@ from models import (
     TournamentVoteStatus,
 )
 from storage import presign_upload, public_url
+from timeutil import UB_TZ, format_ub, now_ub, now_ub_iso, parse_dt, to_ub, today_ub, ub_day
 from telegram import (
     TelegramChatValidationError,
     TelegramDeliveryError,
@@ -1113,9 +1114,10 @@ async def get_rate_history(days: int = 30):
         days = 30
 
     client = get_supabase()
-    today = datetime.now(timezone.utc).date()
+    # bot_rates.updated_at holds Ulaanbaatar wall-clock time, so use UB days.
+    today = now_ub().date()
     start_date = today - timedelta(days=days - 1)
-    start_at = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+    start_at = datetime.combine(start_date, datetime.min.time())
 
     # Fetch the last uploaded rate before the requested window so the first
     # days can also carry forward a known rate.
@@ -2324,41 +2326,36 @@ async def update_exchange_group_settings(
     return _get_exchange_group_settings(client)
 
 
-def moscow_to_ub_hour(moscow_hour: int) -> int:
-    """Convert Moscow time hour to Ulaanbaatar time (Moscow + 5 hours)."""
-    return (moscow_hour + 5) % 24
+DEFAULT_START_HOUR_UB = 9
+DEFAULT_END_HOUR_UB = 4
 
 
-def format_working_hours_ub(start_moscow: int, end_moscow: int) -> str:
+def _working_hours_ub(config: dict | None) -> tuple[int, int, bool]:
+    """Return (start_hour_ub, end_hour_ub, is_enabled) from a working_hours row."""
+    config = config or {}
+    start_hour = config.get("start_hour_ub")
+    end_hour = config.get("end_hour_ub")
+    start_hour = DEFAULT_START_HOUR_UB if start_hour is None else int(start_hour)
+    end_hour = DEFAULT_END_HOUR_UB if end_hour is None else int(end_hour)
+    return start_hour % 24, end_hour % 24, bool(config.get("is_enabled", True))
+
+
+def format_working_hours_ub(start_hour_ub: int, end_hour_ub: int) -> str:
     """Format working hours in UB time."""
-    start_ub = moscow_to_ub_hour(start_moscow)
-    end_ub = moscow_to_ub_hour(end_moscow)
-    return f"{start_ub:02d}:00 - {end_ub:02d}:00 (УБ)"
+    return f"{start_hour_ub:02d}:00 - {end_hour_ub:02d}:00 (УБ)"
 
 
 def _compute_service_status(client) -> dict:
     """Compute current service status from working-hours and shift settings."""
-    from zoneinfo import ZoneInfo
-
     hours_res = client.table("working_hours").select("*").eq("id", 1).limit(1).execute()
-    if hours_res.data:
-        hours_config = hours_res.data[0]
-        start_hour = hours_config.get("start_hour_moscow", 4)
-        end_hour = hours_config.get("end_hour_moscow", 23)
-        is_enabled = hours_config.get("is_enabled", True)
-    else:
-        start_hour = 4
-        end_hour = 23
-        is_enabled = True
+    start_hour, end_hour, is_enabled = _working_hours_ub(hours_res.data[0] if hours_res.data else None)
 
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now_moscow = datetime.now(moscow_tz)
-    hour_moscow = now_moscow.hour
+    hour_ub = now_ub().hour
 
     if start_hour < end_hour:
-        is_within_hours = start_hour <= hour_moscow < end_hour
+        is_within_hours = start_hour <= hour_ub < end_hour
     else:
-        is_within_hours = hour_moscow >= start_hour or hour_moscow < end_hour
+        is_within_hours = hour_ub >= start_hour or hour_ub < end_hour
 
     if not is_enabled:
         is_within_hours = False
@@ -2372,7 +2369,7 @@ def _compute_service_status(client) -> dict:
     if not is_enabled:
         message = "Үйлчилгээ түр хаалттай байна"
     elif not is_within_hours:
-        message = f"Ажлын цаг: {working_hours_str} / {start_hour:02d}:00 - {end_hour:02d}:00 (Москва)"
+        message = f"Ажлын цаг: {working_hours_str}"
     elif not is_shift_active:
         message = "Одоогоор админ ээлжинд алга байна"
     else:
@@ -2464,8 +2461,7 @@ async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
     )
     
     # Filter to only pending/approved or recently (within 24h) completed/successful/rejected
-    from datetime import datetime
-    now = datetime.now()
+    now = now_ub()
     # Fetch admin bank accounts for name resolution
     admin_banks = {}
     banks_res = client.table("admin_bank_accounts").select("id,bank_name").execute()
@@ -2489,8 +2485,8 @@ async def get_active_transactions(user=Depends(get_jwt_authenticated_user)):
             timestamp_str = row.get("timestamp", "")
             if timestamp_str:
                 try:
-                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                    if (now.astimezone() - timestamp).total_seconds() < 86400:  # 24 hours
+                    timestamp = parse_dt(timestamp_str)
+                    if timestamp and (now - timestamp).total_seconds() < 86400:  # 24 hours
                         row["can_edit"] = False
                         items.append(row)
                 except:
@@ -2534,11 +2530,9 @@ async def history(user=Depends(get_jwt_authenticated_user)):
 async def get_analytics(user=Depends(get_jwt_authenticated_user)):
     """Get transaction analytics for the user - monthly spending by direction."""
     try:
-        from zoneinfo import ZoneInfo
         from collections import defaultdict
-        
+
         client = get_supabase()
-        moscow_tz = ZoneInfo("Europe/Moscow")
         
         # Get all transactions for this user (include all statuses except rejected)
         res = (
@@ -2575,8 +2569,10 @@ async def get_analytics(user=Depends(get_jwt_authenticated_user)):
                 timestamp_str = trx.get("timestamp", "")
                 if not timestamp_str:
                     continue
-                timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01"
+                timestamp = to_ub(timestamp_str)
+                if timestamp is None:
+                    continue
+                month_key = timestamp.strftime("%Y-%m")  # Format: "2026-01" (UB month)
                 
                 amount = float(trx.get("amount", 0) or 0)
                 currency_from = (trx.get("currency_from", "") or "").upper()
@@ -2792,8 +2788,10 @@ def _completion_duration_minutes(row: dict):
     start = row.get("receipt_submitted_at") or row.get("timestamp")
     if completed_at and start:
         try:
-            c = datetime.fromisoformat(str(completed_at).replace("Z", "+00:00"))
-            s = datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+            c = parse_dt(completed_at)
+            s = parse_dt(start)
+            if c is None or s is None:
+                return None
             paused = float(row.get("total_paused_seconds") or 0)
             return max(0.0, (c - s).total_seconds() / 60.0 - paused / 60.0)
         except (TypeError, ValueError):
@@ -2970,7 +2968,8 @@ async def dashboard_transactions(
                 user_stats[user_id]["count"] += 1
                 user_stats[user_id]["volume_rub"] += rub
 
-            bucket = ts[:7] if granularity == "month" else ts[:10]
+            ub_date = ub_day(ts)
+            bucket = ub_date[:7] if granularity == "month" else ub_date
             if bucket:
                 ts_buckets[bucket]["count"] += 1
                 ts_buckets[bucket][f"{direction}_volume_rub"] += rub
@@ -3068,20 +3067,16 @@ async def dashboard_transactions(
 # Dashboard Page 1: Balance accounting + Profit calculator (dashboard auth)
 # ============================================================================
 
-def _dashboard_timezone_key(value) -> str:
-    normalized = str(value or "moscow").strip().lower()
-    if normalized in {"ub", "ulaanbaatar", "asia/ulaanbaatar"}:
-        return "ub"
-    return "moscow"
+def _dashboard_timezone_key(value=None) -> str:
+    """The dashboard always uses Ulaanbaatar time; the tz param is kept for API compatibility."""
+    return "ub"
 
 
-def _dashboard_zoneinfo(tz_key: str):
-    from zoneinfo import ZoneInfo
-
-    return ZoneInfo("Asia/Ulaanbaatar" if tz_key == "ub" else "Europe/Moscow")
+def _dashboard_zoneinfo(tz_key: str = "ub"):
+    return UB_TZ
 
 
-def _dashboard_day_bounds(date_str: str | None, tz_key: str = "moscow"):
+def _dashboard_day_bounds(date_str: str | None, tz_key: str = "ub"):
     """Return (start_iso, end_iso, date_iso) for the selected dashboard-local day."""
     from datetime import timedelta
 
@@ -3118,14 +3113,14 @@ def _dashboard_db_error(exc: Exception, action: str):
     return HTTPException(status_code=500, detail=f"{action}: {msg}")
 
 
-def _dashboard_today(tz_key: str = "moscow") -> str:
-    """Current calendar date in the selected dashboard timezone as YYYY-MM-DD."""
-    return datetime.now(_dashboard_zoneinfo(tz_key)).strftime("%Y-%m-%d")
+def _dashboard_today(tz_key: str = "ub") -> str:
+    """Current business date (Ulaanbaatar) as YYYY-MM-DD."""
+    return today_ub()
 
 
-def _moscow_today() -> str:
-    """Current calendar date in Moscow time as YYYY-MM-DD."""
-    return _dashboard_today("moscow")
+def _business_today() -> str:
+    """Current business date (Ulaanbaatar) as YYYY-MM-DD."""
+    return today_ub()
 
 
 def _dashboard_local_day_from_value(value, tz_key: str) -> str | None:
@@ -3306,7 +3301,7 @@ def _dashboard_latest_prior_balance_rows(client, admin_ids: list[int], day: str)
     return latest
 
 
-def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], tz_key: str = "moscow") -> dict:
+def _dashboard_daily_transaction_totals(client, day: str, admin_ids: list[int], tz_key: str = "ub") -> dict:
     if not admin_ids:
         return {}
     start_iso, end_iso, _ = _dashboard_day_bounds(day, tz_key)
@@ -3422,7 +3417,7 @@ def _treasury_account_transaction_baseline(
     client,
     admin_id: int | None,
     day: str,
-    tz_key: str = "moscow",
+    tz_key: str = "ub",
     admin_bank_id: str | None = None,
 ) -> dict[str, float]:
     if admin_id is None:
@@ -3507,7 +3502,7 @@ def _account_transaction_totals(accounts: list[dict], txn_totals_by_admin: dict)
     return totals_by_account
 
 
-def _dashboard_previous_closing_balance(client, prior_row: dict, tz_key: str = "moscow") -> float:
+def _dashboard_previous_closing_balance(client, prior_row: dict, tz_key: str = "ub") -> float:
     entered_balance = prior_row.get("entered_balance")
     if entered_balance is not None:
         return float(entered_balance or 0)
@@ -3525,7 +3520,7 @@ def _dashboard_previous_closing_balance(client, prior_row: dict, tz_key: str = "
     )
 
 
-def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str, tz_key: str = "moscow") -> dict[int, dict]:
+def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str, tz_key: str = "ub") -> dict[int, dict]:
     admin_ids = [int(admin["admin_id"]) for admin in admins if admin.get("admin_id") is not None]
     if not admin_ids:
         return {}
@@ -3555,7 +3550,7 @@ def _ensure_dashboard_balance_rows(client, admins: list[dict], day: str, tz_key:
     return _dashboard_balance_rows_for_day(client, admin_ids, day)
 
 
-def _dashboard_balance_payload(client, day: str, selected_admin_id: int | None, tz_key: str = "moscow") -> dict:
+def _dashboard_balance_payload(client, day: str, selected_admin_id: int | None, tz_key: str = "ub") -> dict:
     admins = _dashboard_admins(client)
     scoped_admins = _dashboard_scoped_admins(admins, selected_admin_id)
     rows_by_admin = _ensure_dashboard_balance_rows(client, scoped_admins, day, tz_key=tz_key)
@@ -3717,7 +3712,7 @@ def _dashboard_balance_history_candidate_days(client, today: str) -> list[str]:
 
 def _ensure_dashboard_balance_history_snapshots(client) -> None:
     _rollover_treasury_accounts(client)
-    today = _moscow_today()
+    today = _business_today()
     for day in _dashboard_balance_history_candidate_days(client, today):
         history_key = _dashboard_balance_history_row_key(day, None)
         exists = (
@@ -3919,7 +3914,7 @@ def _dashboard_daily_rows_from_accounts(
     }
 
 
-def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None, tz_key: str = "moscow") -> dict:
+def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None, tz_key: str = "ub") -> dict:
     admins = _dashboard_admins(client)
     accounts = _rollover_treasury_accounts(client, admin_id=selected_admin_id, tz_key=tz_key)
     today = _dashboard_today(tz_key)
@@ -4023,11 +4018,11 @@ def _dashboard_treasury_balance_payload(client, selected_admin_id: int | None, t
     }
 
 
-def _rollover_treasury_accounts(client, admin_id: int | None = None, tz_key: str = "moscow") -> list[dict]:
+def _rollover_treasury_accounts(client, admin_id: int | None = None, tz_key: str = "ub") -> list[dict]:
     """Carry each account's computed balance into prev_balance when its day ends.
 
     Lazy rollover: when an account's stored balance_date is before the current
-    Moscow day, today's computed balance becomes the new previous-day balance
+    UB business day, today's computed balance becomes the new previous-day balance
     and the daily fields (rub_to_mnt, mnt_to_rub, adjustment) reset to 0. Daily
     RUB→MNT / MNT→RUB figures come from completed transactions for the assigned
     admin; separate other income/expense rows stay informational only. This is
@@ -4100,7 +4095,7 @@ def _rollover_treasury_accounts(client, admin_id: int | None = None, tz_key: str
             client.table("treasury_accounts").update(upd).eq("id", a["id"]).execute()
             a = {**a, **upd}
         elif not bdate:
-            # First time we see this account: stamp it with today's Moscow date.
+            # First time we see this account: stamp it with today's UB business date.
             client.table("treasury_accounts").update({"balance_date": today}).eq("id", a["id"]).execute()
             a = {**a, "balance_date": today}
         refreshed.append(a)
@@ -4213,7 +4208,7 @@ def _sync_black_rates_into_cost_rates(client, rates: dict[str, float | None]) ->
 
 
 def _plane_ticket_sale_row(client, payload: dict) -> dict:
-    sale_date = str(payload.get("sale_date") or payload.get("date") or _moscow_today())[:10]
+    sale_date = str(payload.get("sale_date") or payload.get("date") or _business_today())[:10]
     try:
         datetime.strptime(sale_date, "%Y-%m-%d")
     except (TypeError, ValueError):
@@ -4279,7 +4274,7 @@ async def create_treasury_account(payload: dict, auth=Depends(get_dashboard_auth
         raise HTTPException(status_code=400, detail="Missing required field: name")
     normalized_admin_id = _validated_dashboard_admin_id(client, payload.get("admin_id"), "admin_id")
     normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.get("admin_bank_id"), "admin_bank_id") if treasury_bank_supported else None
-    balance_day = _moscow_today()
+    balance_day = _business_today()
     insert_data = {
         "name": payload.get("name").strip(),
         "admin_id": normalized_admin_id,
@@ -4333,7 +4328,7 @@ async def update_treasury_account(account_id: str, payload: dict, auth=Depends(g
         update_data["admin_id"] = normalized_admin_id
         previous_admin_id = _optional_int(existing_account.get("admin_id"), "admin_id") if existing_account else None
         if previous_admin_id != normalized_admin_id:
-            update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _moscow_today()))
+            update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _business_today()))
     normalized_admin_bank_id = str(existing_account.get("admin_bank_id")) if existing_account and existing_account.get("admin_bank_id") else None
     if treasury_bank_supported and "admin_bank_id" in payload:
         normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.get("admin_bank_id"), "admin_bank_id")
@@ -4341,14 +4336,14 @@ async def update_treasury_account(account_id: str, payload: dict, auth=Depends(g
     admin_changed = existing_account is not None and _optional_int(existing_account.get("admin_id"), "admin_id") != normalized_admin_id
     bank_changed = existing_account is not None and str(existing_account.get("admin_bank_id") or "") != str(normalized_admin_bank_id or "")
     if admin_changed or bank_changed:
-        update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _moscow_today(), admin_bank_id=normalized_admin_bank_id))
+        update_data.update(_treasury_account_transaction_baseline(client, normalized_admin_id, _business_today(), admin_bank_id=normalized_admin_bank_id))
     for num_field in ("display_order",):
         if num_field in payload:
             update_data[num_field] = float(payload[num_field] or 0)
     if "entered_balance" in payload:
         update_data["entered_balance"] = _optional_float(payload.get("entered_balance"), "entered_balance")
     if any(k in payload for k in ("admin_id", "entered_balance")):
-        update_data["balance_date"] = _moscow_today()
+        update_data["balance_date"] = _business_today()
     if "currency" in payload:
         update_data["currency"] = (payload.get("currency") or "RUB").upper()
     if "is_active" in payload:
@@ -4414,7 +4409,7 @@ async def upsert_dashboard_balance_daily(payload: dict, auth=Depends(get_dashboa
     if "entered_balance" not in payload:
         raise HTTPException(status_code=400, detail="entered_balance is required")
     entered_balance = _optional_float(payload.get("entered_balance"), "entered_balance")
-    day = str(payload.get("balance_date") or _moscow_today())[:10]
+    day = str(payload.get("balance_date") or _business_today())[:10]
 
     admins = _dashboard_scoped_admins(_dashboard_admins(client), normalized_admin_id)
     try:
@@ -4477,7 +4472,7 @@ async def create_dashboard_balance_adjustment(payload: dict, auth=Depends(get_da
         raise HTTPException(status_code=400, detail="amount is required")
     if abs(amount) < 0.0000001:
         raise HTTPException(status_code=400, detail="amount must not be 0")
-    day = str(payload.get("balance_date") or _moscow_today())[:10]
+    day = str(payload.get("balance_date") or _business_today())[:10]
     now = datetime.now(timezone.utc).isoformat()
     insert_payload = {
         "admin_id": normalized_admin_id,
@@ -4528,7 +4523,7 @@ async def delete_dashboard_balance_adjustment(adjustment_id: str, auth=Depends(g
 
 
 @app.get("/api/dashboard/balance")
-async def dashboard_balance(date: str = None, admin_id: int = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
+async def dashboard_balance(date: str = None, admin_id: int = None, tz: str = "ub", auth=Depends(get_dashboard_auth)):
     """Manual per-account balance calculator scoped to one admin or all admins.
 
     Previous balance rolls over automatically. RUB→MNT and MNT→RUB are derived
@@ -4553,7 +4548,7 @@ async def dashboard_balance(date: str = None, admin_id: int = None, tz: str = "m
 
 
 @app.get("/api/dashboard/balance/history")
-async def dashboard_balance_history(days: int = 30, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
+async def dashboard_balance_history(days: int = 30, tz: str = "ub", auth=Depends(get_dashboard_auth)):
     client = get_supabase()
     tz_key = _dashboard_timezone_key(tz)
     normalized_days = max(1, min(int(days or 30), 180))
@@ -4632,7 +4627,7 @@ async def dashboard_black_rate(start: str = None, end: str = None, date: str = N
 
 
 @app.get("/api/dashboard/cost-rates")
-async def list_cost_rates(start: str = None, end: str = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
+async def list_cost_rates(start: str = None, end: str = None, tz: str = "ub", auth=Depends(get_dashboard_auth)):
     """List stored cost rates (өртөг ханш) within an optional date range."""
     client = get_supabase()
     tz_key = _dashboard_timezone_key(tz)
@@ -4736,7 +4731,7 @@ async def upsert_cost_rate_period_usd(payload: dict, auth=Depends(get_dashboard_
 
 
 @app.get("/api/dashboard/plane-ticket-sales")
-async def list_plane_ticket_sales(start: str = None, end: str = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
+async def list_plane_ticket_sales(start: str = None, end: str = None, tz: str = "ub", auth=Depends(get_dashboard_auth)):
     """List manual plane-ticket sales for the selected window."""
     tz_key = _dashboard_timezone_key(tz)
     client = get_supabase()
@@ -4794,7 +4789,7 @@ async def delete_plane_ticket_sale(sale_id: str, auth=Depends(get_dashboard_auth
 async def dashboard_profit_transactions(
     start: str = None,
     end: str = None,
-    tz: str = "moscow",
+    tz: str = "ub",
     include_tickets: bool = True,
     auth=Depends(get_dashboard_auth),
 ):
@@ -4846,7 +4841,7 @@ async def dashboard_profit_transactions(
         if not _is_successful_status(r.get("status")):
             continue
         ts = str(r.get("timestamp") or "")
-        day = ts[:10]
+        day = ub_day(ts)
         cost_rate = _cost_rate_for(day)
         if cost_rate is None:
             continue
@@ -4923,7 +4918,7 @@ async def dashboard_profit_transactions(
 
 
 @app.get("/api/dashboard/profit")
-async def dashboard_profit(start: str = None, end: str = None, tz: str = "moscow", auth=Depends(get_dashboard_auth)):
+async def dashboard_profit(start: str = None, end: str = None, tz: str = "ub", auth=Depends(get_dashboard_auth)):
     """Profit over a period, joining each transaction's date to its cost rate.
 
     Direction comes from each transaction's currency_from/currency_to:
@@ -4986,7 +4981,7 @@ async def dashboard_profit(start: str = None, end: str = None, tz: str = "moscow
         if not _is_successful_status(r.get("status")):
             continue
         ts = r.get("timestamp") or ""
-        day = ts[:10]
+        day = ub_day(ts)
         cost_rate = _cost_rate_for(day)
         if cost_rate is None:
             if day:
@@ -5052,12 +5047,10 @@ async def dashboard_profit(start: str = None, end: str = None, tz: str = "moscow
 
 @app.get("/api/me", response_model=MeResponse)
 async def me(user=Depends(get_jwt_authenticated_user)):
-    from zoneinfo import ZoneInfo
     
     settings = get_settings()
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
+    now = now_ub_iso()
     
     # Check if user already exists - don't overwrite registered names
     existing = client.table("users").select("id,first_name").eq("id", user.id).limit(1).execute()
@@ -5367,11 +5360,7 @@ async def create_oyuns_plus_request(payload: OyunsPlusVoucherRequestCreate, user
             expires_at = result.get("expires_at")
             expiry_text = ""
             if expires_at:
-                try:
-                    expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
-                    expiry_text = expiry.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-                except (TypeError, ValueError):
-                    expiry_text = str(expires_at)
+                expiry_text = format_ub(expires_at, "%Y-%m-%d %H:%M (УБ)") or str(expires_at)
             if lang == "mn":
                 delivery_message = (
                     "✅ <b>Таны промо код бэлэн боллоо!</b>\n\n"
@@ -6324,11 +6313,9 @@ async def oyuns_sags_admin_update_settings(payload: dict, admin=Depends(get_oyun
 @app.post("/api/agree-terms")
 async def agree_terms(user=Depends(get_jwt_authenticated_user)):
     """Record that user has agreed to terms of service."""
-    from zoneinfo import ZoneInfo
     
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
+    now = now_ub_iso()
     
     client.table("users").update({
         "agreed_terms": True,
@@ -6345,11 +6332,9 @@ async def register_basic(
 ):
     """Collect Level 1 registration data and require email verification before activation."""
     import re
-    from zoneinfo import ZoneInfo
 
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
+    now = now_ub_iso()
     normalized_email = payload.email.strip().lower()
     if not normalized_email:
         raise HTTPException(status_code=400, detail="Email is required for verification")
@@ -6458,11 +6443,9 @@ async def start_email_verification(
     add or change their email before requesting an OTP code.
     """
     import re
-    from zoneinfo import ZoneInfo
 
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
+    now = now_ub_iso()
 
     normalized_email = payload.email.strip().lower()
     if not normalized_email or not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", normalized_email):
@@ -6531,12 +6514,10 @@ async def complete_email_verification(
     user=Depends(get_jwt_authenticated_user),
 ):
     """Promote a user to Level 1 after a successful Supabase email OTP verification."""
-    from zoneinfo import ZoneInfo
 
     settings = get_settings()
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz)
+    now = now_ub()
 
     current_user_res = (
         client.table("users")
@@ -6621,11 +6602,9 @@ async def register_user(
     user=Depends(get_jwt_authenticated_user),
 ):
     """Submit user registration for verification."""
-    from zoneinfo import ZoneInfo
     
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
+    now = now_ub_iso()
     
     # Format bank details as comma-separated strings
     # RUB bank is optional - only format if provided
@@ -6694,11 +6673,9 @@ async def update_bank_info(
     When bank info is changed, verified is set to FALSE but ready_for_verification stays TRUE,
     requiring admin re-verification.
     """
-    from zoneinfo import ZoneInfo
     
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
+    now = now_ub_iso()
     
     # Check if only email is being updated (no bank info change at all)
     only_email_update = (
@@ -6793,7 +6770,6 @@ async def create_exchange(
     payload: ExchangeCreateRequest,
     user=Depends(get_jwt_authenticated_user),
 ):
-    from zoneinfo import ZoneInfo
     
     logger.info(f"=== CREATE EXCHANGE REQUEST ===")
     logger.info(f"User ID: {user.id}, Amount: {payload.amount}, Direction: {payload.direction}")
@@ -6807,8 +6783,7 @@ async def create_exchange(
     admin_bank_supported = _transactions_admin_bank_id_supported(client)
     normalized_admin_bank_id = _validated_admin_bank_account_id(client, payload.admin_bank_id, "admin_bank_id") if payload.admin_bank_id else None
 
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz)
+    now = now_ub()
     invoice = payload.invoice or generate_invoice(now)
     direction = payload.direction.lower()
     if direction not in {"buy", "sell"}:
@@ -7500,23 +7475,14 @@ async def admin_action(
         receipt_submitted_str = trx.get("receipt_submitted_at")
         if receipt_submitted_str:
             try:
-                from zoneinfo import ZoneInfo
-                moscow_tz = ZoneInfo("Europe/Moscow")
-                
-                # Parse the receipt_submitted_at timestamp
-                receipt_time = datetime.fromisoformat(receipt_submitted_str.replace('Z', '+00:00'))
-                
-                # If receipt_time is naive (no timezone), assume it's already in Moscow time
-                if receipt_time.tzinfo is None:
-                    receipt_time = receipt_time.replace(tzinfo=moscow_tz)
-                
-                # Get current time in Moscow timezone
-                now_moscow = datetime.now(moscow_tz)
-                
+                receipt_time = parse_dt(receipt_submitted_str)
+                if receipt_time is None:
+                    raise ValueError(f"unparsable receipt_submitted_at: {receipt_submitted_str}")
+
                 paused_seconds = _to_decimal(update_payload.get("total_paused_seconds", trx.get("total_paused_seconds")), Decimal("0"))
 
                 # Calculate duration in minutes and subtract paused waiting-edit time
-                raw_minutes = (now_moscow - receipt_time).total_seconds() / 60
+                raw_minutes = (now_ub() - receipt_time).total_seconds() / 60
                 duration_minutes = max(0.0, raw_minutes - (float(paused_seconds) / 60.0))
                 update_payload["completion_duration_minutes"] = round(duration_minutes, 2)
                 logger.info(f"Completion duration: {duration_minutes:.2f} minutes (from receipt_submitted_at: {receipt_submitted_str})")
@@ -8205,7 +8171,6 @@ async def admin_kyc_action(
     request: Request = None,
 ):
     """Approve or reject user verification."""
-    from zoneinfo import ZoneInfo
     
     # Get admin user ID for logging
     admin_user_id = None
@@ -8219,8 +8184,7 @@ async def admin_kyc_action(
         pass
     
     client = get_supabase()
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
+    now = now_ub_iso()
     
     # Fetch user info first (including referral and bank fields)
     user_res = (
@@ -8515,7 +8479,6 @@ async def create_manual_transaction(
     payload: ManualTransactionCreateRequest,
     admin=Depends(require_admin_user),
 ):
-    from zoneinfo import ZoneInfo
 
     client = get_supabase()
     now = datetime.now(timezone.utc)
@@ -8564,7 +8527,7 @@ async def create_manual_transaction(
             logger.exception("Failed to create manual transaction user stub %s: %s", payload.telegram_id, exc)
             raise HTTPException(status_code=500, detail="Failed to create user record") from exc
 
-    invoice = generate_invoice(now.astimezone(ZoneInfo("Europe/Moscow")))
+    invoice = generate_invoice(now)
     converted_amount = (
         payload.amount * payload.exchange_rate
         if direction == "buy"
@@ -8696,9 +8659,8 @@ async def create_manual_driver_transaction(
     if not receipt_paths or not transfer_paths:
         raise HTTPException(status_code=400, detail="Payment and transfer receipts are required")
 
-    from zoneinfo import ZoneInfo
 
-    invoice = generate_invoice(now.astimezone(ZoneInfo("Europe/Moscow")))
+    invoice = generate_invoice(now)
     converted_amount = (
         payload.amount * payload.exchange_rate
         if direction == "buy"
@@ -9580,73 +9542,53 @@ async def close_shift(payload: ShiftCloseRequest, admin=Depends(require_admin)):
 
 @app.get("/api/admin/working-hours", response_model=WorkingHoursResponse)
 async def get_working_hours(admin=Depends(require_admin)):
-    """Get current working hours configuration."""
+    """Get current working hours configuration (Ulaanbaatar time)."""
     client = get_supabase()
     res = client.table("working_hours").select("*").eq("id", 1).limit(1).execute()
-    
-    if not res.data:
-        # Return defaults if not configured
-        return WorkingHoursResponse(
-            start_hour_moscow=4,
-            end_hour_moscow=23,
-            start_time_moscow="04:00",
-            end_time_moscow="23:00",
-            start_time_ub="09:00",
-            end_time_ub="04:00",
-            is_enabled=True,
-            updated_at=None
-        )
-    
-    config = res.data[0]
-    start_hour = config.get("start_hour_moscow", 4)
-    end_hour = config.get("end_hour_moscow", 23)
-    
+    config = res.data[0] if res.data else None
+    start_hour, end_hour, is_enabled = _working_hours_ub(config)
+
     return WorkingHoursResponse(
-        start_hour_moscow=start_hour,
-        end_hour_moscow=end_hour,
-        start_time_moscow=f"{start_hour:02d}:00",
-        end_time_moscow=f"{end_hour:02d}:00",
-        start_time_ub=f"{moscow_to_ub_hour(start_hour):02d}:00",
-        end_time_ub=f"{moscow_to_ub_hour(end_hour):02d}:00",
-        is_enabled=config.get("is_enabled", True),
-        updated_at=config.get("updated_at")
+        start_hour_ub=start_hour,
+        end_hour_ub=end_hour,
+        start_time_ub=f"{start_hour:02d}:00",
+        end_time_ub=f"{end_hour:02d}:00",
+        is_enabled=is_enabled,
+        updated_at=(config or {}).get("updated_at"),
     )
 
 
 @app.put("/api/admin/working-hours")
 async def update_working_hours(
-    payload: WorkingHoursUpdateRequest, 
+    payload: WorkingHoursUpdateRequest,
     admin=Depends(require_admin)
 ):
-    """Update working hours configuration."""
-    # Validate hours
-    if not (0 <= payload.start_hour_moscow <= 23):
+    """Update working hours configuration (Ulaanbaatar time)."""
+    if not (0 <= payload.start_hour_ub <= 23):
         raise HTTPException(status_code=400, detail="Start hour must be between 0 and 23")
-    if not (0 <= payload.end_hour_moscow <= 23):
+    if not (0 <= payload.end_hour_ub <= 23):
         raise HTTPException(status_code=400, detail="End hour must be between 0 and 23")
-    
+
     client = get_supabase()
-    now = datetime.now(timezone.utc)
-    
+
     update_payload = {
         "id": 1,
-        "start_hour_moscow": payload.start_hour_moscow,
-        "end_hour_moscow": payload.end_hour_moscow,
+        "start_hour_ub": payload.start_hour_ub,
+        "end_hour_ub": payload.end_hour_ub,
         "is_enabled": payload.is_enabled,
-        "updated_at": now.isoformat()
+        "updated_at": now_ub_iso(),
     }
-    
-    # Upsert the configuration
+
     result = client.table("working_hours").upsert(update_payload).execute()
-    
+
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to update working hours")
-    
+
     return {
-        "ok": True, 
-        "message": f"Working hours updated: {payload.start_hour_moscow:02d}:00 - {payload.end_hour_moscow:02d}:00 Moscow",
-        "start_time_ub": f"{moscow_to_ub_hour(payload.start_hour_moscow):02d}:00",
-        "end_time_ub": f"{moscow_to_ub_hour(payload.end_hour_moscow):02d}:00"
+        "ok": True,
+        "message": f"Working hours updated: {payload.start_hour_ub:02d}:00 - {payload.end_hour_ub:02d}:00 UB",
+        "start_time_ub": f"{payload.start_hour_ub:02d}:00",
+        "end_time_ub": f"{payload.end_hour_ub:02d}:00"
     }
 
 
@@ -10960,8 +10902,7 @@ async def fuel_active_orders(user=Depends(get_authenticated_user)):
     ).order("created_at", desc=True).execute()
 
     # Also include recently completed/rejected (last 24h)
-    msk_tz = timezone(timedelta(hours=3))
-    cutoff = (datetime.now(msk_tz) - timedelta(hours=24)).isoformat()
+    cutoff = (now_ub() - timedelta(hours=24)).isoformat()
     recent_res = client.table("fuel_orders").select("*").eq("user_id", user.id).in_(
         "status", ["completed", "rejected"]
     ).gte("updated_at", cutoff).execute()

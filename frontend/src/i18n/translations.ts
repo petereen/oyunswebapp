@@ -41,7 +41,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "home.sell": { ru: "Продать", mn: "Зарах" },
   "home.working_hours_ended": { ru: "Рабочие часы закончились", mn: "Бидний ажлын цаг дууссан байна" },
   "home.temporarily_closed": { ru: "Временно закрыто", mn: "Түр хаалттай" },
-  "home.working_hours_schedule": { ru: "Москва 04:00-23:00 / УБ 09:00-04:00", mn: "Москва 04:00-23:00 / УБ 09:00–04:00" },
+  "home.working_hours_schedule": { ru: "Рабочие часы: {hours}", mn: "Ажлын цаг: {hours}" },
   "home.profile_load_failed": { ru: "❌ Не удалось загрузить профиль:", mn: "❌ Профайл ачаалж чадсангүй:" },
   "home.theme_toggle": { ru: "Сменить тему", mn: "Загвар солих" },
   "home.profile": { ru: "Профиль", mn: "Профайл" },
@@ -760,7 +760,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "home.rate_label": { ru: "КУРС", mn: "ХАНШ" },
   "home.send_gift_button": { ru: "ОТПРАВИТЬ ПОДАРОК", mn: "БЭЛЭГ ИЛГЭЭХ" },
   "home.register_button_desc": { ru: "Нажмите кнопку регистрации в правом верхнем углу.", mn: "Баруун дээр байрлах товчийг дарна уу." },
-  "home.working_hours_detail": { ru: "Мы работаем: Москва 04:00-23:00, УБ 09:00–04:00 (следующего дня).", mn: "Бид Москвагийн цагаар 04:00-23:00 хооронд, Улаанбаатарын цагаар 09:00–04:00(дараа өдрийн) цагийн хооронд ажиллаж байна." },
+  "home.working_hours_detail": { ru: "Мы работаем по времени Улан-Батора: {hours}.", mn: "Бид Улаанбаатарын цагаар {hours} хооронд ажиллаж байна." },
   "home.auth_debug_hint": { ru: "Проверьте консоль, найдите «=== Telegram Auth Debug ==»", mn: "Дэлгэцийн консолыг шалгаж, \"=== Telegram Auth Debug ==\" гэсэн мэдээлэл олоорой" },
   "home.rates_load_failed": { ru: "Не удалось загрузить курсы валют.", mn: "Валютын ханш татаж чадсангүй." },
 

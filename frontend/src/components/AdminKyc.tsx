@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { fetchKycPending, kycAction, KycItem } from "../api";
 import { AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
+import { formatUb } from "../utils/time";
 
 // No props needed - auth is removed
 export function AdminKyc() {
@@ -63,13 +64,7 @@ export function AdminKyc() {
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "—";
-    return new Date(dateString).toLocaleDateString("mn-MN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatUb(dateString, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) || "—";
   };
 
   const parseRubBank = (bankStr: string | null | undefined) => {

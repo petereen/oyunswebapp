@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   openShift: vi.fn().mockResolvedValue({ ok: true }),
   transferShift: vi.fn().mockResolvedValue({ ok: true }),
   closeShift: vi.fn().mockResolvedValue({ ok: true }),
-  fetchWorkingHours: vi.fn().mockResolvedValue({ start_hour_moscow: 4, end_hour_moscow: 23, start_time_moscow: "04:00", end_time_moscow: "23:00", start_time_ub: "09:00", end_time_ub: "04:00", is_enabled: true, updated_at: null }),
+  fetchWorkingHours: vi.fn().mockResolvedValue({ start_hour_ub: 9, end_hour_ub: 4, start_time_ub: "09:00", end_time_ub: "04:00", is_enabled: true, updated_at: null }),
   updateWorkingHours: vi.fn().mockResolvedValue({ ok: true }),
 }));
 

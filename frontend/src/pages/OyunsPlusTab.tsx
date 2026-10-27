@@ -17,6 +17,7 @@ import { queryKeys } from "../queryKeys";
 import { OyunsPlusSkeleton } from "../components/Skeleton";
 import { OyunsPlusMembershipCard } from "../components/OyunsPlusMembershipCard";
 import { BrandAbout, BrandLogo, BrandPage, BrandTab, BrandTile, CouponCard, CouponsEmpty, CouponViewSwitch, formatCouponValue, formatPoints, PointsMark, useCouponViewMode, useFavoriteBrands } from "../components/OyunsPlusCatalog";
+import { formatUb } from "../utils/time";
 
 interface Props {
   userId?: number;
@@ -54,9 +55,7 @@ function validReceiverPhone(value: string, countryCode: "mn" | "ru") {
 
 function formatDate(value: string | null | undefined, lang: string) {
   if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(lang === "mn" ? "mn-MN" : "ru-RU", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatUb(value, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }, lang === "mn" ? "mn-MN" : "ru-RU") || value;
 }
 
 function historyLabel(entry: OyunsPlusHistoryEntry, t: (key: string, params?: Record<string, string | number>) => string) {

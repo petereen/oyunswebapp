@@ -28,6 +28,7 @@ import {
   updateUserLabel,
 } from "../api";
 import { useAdminShiftContext } from "../hooks/useAdminShift";
+import { formatUb, parseServerDate } from "../utils/time";
 import { ADMIN_CONTROL_CLASS, AdminCountBadge, AdminEmptyState, AdminRefreshButton } from "./admin/AdminPanelPrimitives";
 
 const LABEL_PRESETS: { name: string; color: string; bg: string; border: string }[] = [
@@ -75,29 +76,14 @@ function keepFocusInside(event: KeyboardEvent, container: HTMLElement | null) {
   }
 }
 
-// Format date to Moscow/UB timezone
-function formatToTimezone(dateStr: string, tz: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleString("en-GB", {
-    timeZone: tz,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+// Format date in Ulaanbaatar time
+function formatToUb(dateStr: string): string {
+  return formatUb(dateStr, { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }, "en-GB") || dateStr;
 }
 
 function getTimeAgo(dateStr: string, nowMs: number): string {
-  // Parse the timestamp as UTC
-  let then: Date;
-  if (dateStr.endsWith('Z') || dateStr.includes('+')) {
-    then = new Date(dateStr);
-  } else {
-    // Assume UTC if no timezone specified
-    then = new Date(dateStr + 'Z');
-  }
-  
+  const then = parseServerDate(dateStr) ?? new Date(NaN);
+
   // Get current time in UTC
   const now = nowMs;
   const thenMs = then.getTime();
@@ -297,9 +283,9 @@ export function AdminInbox() {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "oldest":
-          return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+          return (parseServerDate(a.timestamp)?.getTime() ?? 0) - (parseServerDate(b.timestamp)?.getTime() ?? 0);
         case "newest":
-          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+          return (parseServerDate(b.timestamp)?.getTime() ?? 0) - (parseServerDate(a.timestamp)?.getTime() ?? 0);
         case "amount_asc":
           return Number(a.amount) - Number(b.amount);
         case "amount_desc":
@@ -1064,8 +1050,7 @@ export function AdminInbox() {
 
                 {/* Timestamps */}
                 <div className="text-xs text-slate-500 space-y-1 p-2 bg-slate-50 rounded-lg">
-                  <div>УБ: {formatToTimezone(item.timestamp, "Asia/Ulaanbaatar")}</div>
-                  <div>МСК: {formatToTimezone(item.timestamp, "Europe/Moscow")}</div>
+                  <div>УБ: {formatToUb(item.timestamp)}</div>
                   <div className="text-slate-400">{getTimeAgo(item.timestamp, relativeNowMs)}</div>
                 </div>
 

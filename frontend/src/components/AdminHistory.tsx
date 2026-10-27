@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { History, Search, Filter, ChevronLeft, ChevronRight, Copy, Check, ExternalLink } from "lucide-react";
 import { fetchAdminHistory, AdminHistoryItem } from "../api";
 import { ADMIN_CONTROL_CLASS, AdminEmptyState, AdminRefreshButton, AdminSectionHeader } from "./admin/AdminPanelPrimitives";
+import { formatUb } from "../utils/time";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "Бүгд" },
@@ -79,16 +80,8 @@ export function AdminHistory() {
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString("mn-MN", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const formatDate = (dateStr: string) =>
+    formatUb(dateStr, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) || dateStr;
 
   const formatAmount = (amount: number, currency: string) => {
     return new Intl.NumberFormat("mn-MN").format(amount) + (currency === "RUB" ? " ₽" : " ₮");

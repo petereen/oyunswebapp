@@ -20,6 +20,7 @@ import {
 } from "../../api";
 import { queryKeys } from "../../queryKeys";
 import { useAdminShiftContext } from "../../hooks/useAdminShift";
+import { formatUb } from "../../utils/time";
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
@@ -41,14 +42,14 @@ export function AdminShiftBar({ mode = "all" }: Props) {
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [showWorkingHoursModal, setShowWorkingHoursModal] = useState(false);
   const [selectedAdminId, setSelectedAdminId] = useState<number | null>(null);
-  const [editStartHour, setEditStartHour] = useState(4);
-  const [editEndHour, setEditEndHour] = useState(23);
+  const [editStartHour, setEditStartHour] = useState(9);
+  const [editEndHour, setEditEndHour] = useState(4);
   const [editIsEnabled, setEditIsEnabled] = useState(true);
 
   useEffect(() => {
     if (!workingHours) return;
-    setEditStartHour(workingHours.start_hour_moscow);
-    setEditEndHour(workingHours.end_hour_moscow);
+    setEditStartHour(workingHours.start_hour_ub);
+    setEditEndHour(workingHours.end_hour_ub);
     setEditIsEnabled(workingHours.is_enabled);
   }, [workingHours]);
 
@@ -86,8 +87,8 @@ export function AdminShiftBar({ mode = "all" }: Props) {
 
   const workingHoursMutation = useMutation({
     mutationFn: () => updateWorkingHours({
-      start_hour_moscow: editStartHour,
-      end_hour_moscow: editEndHour,
+      start_hour_ub: editStartHour,
+      end_hour_ub: editEndHour,
       is_enabled: editIsEnabled,
     }),
     onSuccess: () => {
@@ -127,7 +128,7 @@ export function AdminShiftBar({ mode = "all" }: Props) {
             <span className={`text-sm font-medium ${shift?.is_shift_active ? "text-green-700 dark:text-green-300" : "text-slate-600 dark:text-ivory-300"}`}>
               {shiftLoading ? "Ээлж ачаалж байна..." : shift?.is_shift_active ? `Ээлж: ${shift.current_admin_name || `Admin ${shift.current_admin_id}`}` : "Ээлж идэвхгүй байна"}
             </span>
-            {shift?.last_updated && <span className="text-xs text-green-600 dark:text-green-400">({new Date(shift.last_updated).toLocaleTimeString()}-с)</span>}
+            {shift?.last_updated && <span className="text-xs text-green-600 dark:text-green-400">({formatUb(shift.last_updated, { hour: "2-digit", minute: "2-digit" })}-с)</span>}
           </div>
           <div className="flex items-center gap-2">
             {shift?.is_shift_active ? (
@@ -153,8 +154,7 @@ export function AdminShiftBar({ mode = "all" }: Props) {
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-600 dark:text-blue-300" />
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Ажлын цаг: {workingHours?.start_time_moscow || "04:00"} - {workingHours?.end_time_moscow || "23:00"} (Москва)</span>
-              <span className="text-xs text-blue-600 dark:text-blue-400">{workingHours?.start_time_ub || "09:00"} - {workingHours?.end_time_ub || "04:00"} (УБ)</span>
+              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Ажлын цаг: {workingHours?.start_time_ub || "09:00"} - {workingHours?.end_time_ub || "04:00"} (УБ)</span>
             </div>
             {workingHours && !workingHours.is_enabled && <span className="px-2 py-0.5 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full">Түр хаалттай</span>}
           </div>
@@ -192,9 +192,9 @@ export function AdminShiftBar({ mode = "all" }: Props) {
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-dark-700 rounded-lg"><div className="flex items-center gap-2"><Power className={`w-4 h-4 ${editIsEnabled ? "text-green-600" : "text-slate-400"}`} /><span className="text-sm font-medium dark:text-ivory-200">Үйлчилгээ {editIsEnabled ? "идэвхтэй" : "идэвхгүй"}</span></div><button onClick={() => setEditIsEnabled((enabled) => !enabled)} className={`relative w-12 h-6 rounded-full transition-colors ${editIsEnabled ? "bg-green-500" : "bg-slate-300"}`}><span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${editIsEnabled ? "right-1" : "left-1"}`} /></button></div>
               <div className="grid grid-cols-2 gap-4">
-                {[{ label: "Эхлэх (Москвагийн цагаар)", value: editStartHour, set: setEditStartHour }, { label: "Дуусах (Москвагийн цагаар)", value: editEndHour, set: setEditEndHour }].map((field) => <div key={field.label}><label className="block text-sm font-medium text-slate-700 dark:text-ivory-300 mb-1">{field.label}</label><select value={field.value} onChange={(event) => field.set(Number(event.target.value))} disabled={!editIsEnabled} className="w-full border border-maroon-200 dark:border-dark-600 rounded-lg p-3 text-sm bg-white dark:bg-dark-700 dark:text-ivory-200">{HOURS.map((hour) => <option key={hour} value={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select><div className="text-xs text-slate-500 mt-1">УБ: {String((field.value + 5) % 24).padStart(2, "0")}:00</div></div>)}
+                {[{ label: "Эхлэх (УБ цагаар)", value: editStartHour, set: setEditStartHour }, { label: "Дуусах (УБ цагаар)", value: editEndHour, set: setEditEndHour }].map((field) => <div key={field.label}><label className="block text-sm font-medium text-slate-700 dark:text-ivory-300 mb-1">{field.label}</label><select value={field.value} onChange={(event) => field.set(Number(event.target.value))} disabled={!editIsEnabled} className="w-full border border-maroon-200 dark:border-dark-600 rounded-lg p-3 text-sm bg-white dark:bg-dark-700 dark:text-ivory-200">{HOURS.map((hour) => <option key={hour} value={hour}>{String(hour).padStart(2, "0")}:00</option>)}</select></div>)}
               </div>
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300"><div className="font-medium mb-1">Ажлын цаг:</div><div>Москва: {String(editStartHour).padStart(2, "0")}:00 - {String(editEndHour).padStart(2, "0")}:00</div><div>Улаанбаатар: {String((editStartHour + 5) % 24).padStart(2, "0")}:00 - {String((editEndHour + 5) % 24).padStart(2, "0")}:00</div></div>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-300"><div className="font-medium mb-1">Ажлын цаг:</div><div>Улаанбаатар: {String(editStartHour).padStart(2, "0")}:00 - {String(editEndHour).padStart(2, "0")}:00</div></div>
               <div className="flex gap-2"><button onClick={() => setShowWorkingHoursModal(false)} className="flex-1 py-2 rounded-lg bg-slate-100 dark:bg-dark-700 text-slate-700 dark:text-ivory-200 hover:bg-slate-200">Цуцлах</button><button onClick={() => workingHoursMutation.mutate()} disabled={workingHoursMutation.isPending} className="flex-1 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">{workingHoursMutation.isPending && <RefreshCw className="w-4 h-4 animate-spin" />}Хадгалах</button></div>
             </div>
           </div>

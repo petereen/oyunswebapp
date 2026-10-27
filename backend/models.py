@@ -744,30 +744,28 @@ class ServiceStatusResponse(BaseModel):
     message: Optional[str] = None
 
 
-# Working Hours Management
+# Working Hours Management (all hours are Ulaanbaatar time)
 class WorkingHoursConfig(BaseModel):
     id: int = 1
-    start_hour_moscow: int = 4  # 04:00 Moscow time
-    end_hour_moscow: int = 23   # 23:00 Moscow time
+    start_hour_ub: int = 9   # 09:00 UB time
+    end_hour_ub: int = 4     # 04:00 UB time (next day)
     is_enabled: bool = True
     updated_at: Optional[datetime] = None
     updated_by: Optional[int] = None  # Admin who last updated
 
 
 class WorkingHoursResponse(BaseModel):
-    start_hour_moscow: int = 4
-    end_hour_moscow: int = 23
-    start_time_moscow: str = "04:00"  # Formatted time
-    end_time_moscow: str = "23:00"
-    start_time_ub: str = "09:00"  # Equivalent UB time
+    start_hour_ub: int = 9
+    end_hour_ub: int = 4
+    start_time_ub: str = "09:00"
     end_time_ub: str = "04:00"
     is_enabled: bool = True
     updated_at: Optional[datetime] = None
 
 
 class WorkingHoursUpdateRequest(BaseModel):
-    start_hour_moscow: int  # 0-23
-    end_hour_moscow: int    # 0-23
+    start_hour_ub: int  # 0-23
+    end_hour_ub: int    # 0-23
     is_enabled: bool = True
 
 

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS treasury_accounts (
     adjustment    NUMERIC NOT NULL DEFAULT 0,
     -- The actual balance physically present in the bank account for today.
     entered_balance NUMERIC,
-    -- Moscow calendar day the daily figures belong to (used for rollover).
+    -- Ulaanbaatar calendar day the daily figures belong to (used for rollover).
     balance_date  DATE,
     currency      TEXT NOT NULL DEFAULT 'RUB',
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,
@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_treasury_accounts_admin_bank_order
 
 
 -- ── General daily balance calculator ────────────────────────────────────────
--- One row per admin per Moscow day. opening_balance is carried from the
+-- One row per admin per Ulaanbaatar day. opening_balance is carried from the
 -- previous day's entered closing balance; entered_balance is the actual amount
 -- the admin reports for the current day.
 CREATE TABLE IF NOT EXISTS dashboard_balance_daily (

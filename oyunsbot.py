@@ -16,7 +16,6 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from supabase import create_client, Client
 import re
 
-from zoneinfo import ZoneInfo
 from math import ceil
 from telebot.types import InputMediaPhoto
 from typing import Dict, List, Set
@@ -24,6 +23,7 @@ from typing import Dict, List, Set
 from bot_translations import t
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
+from timeutil import UB_TZ, now_ub, now_ub_iso, parse_dt
 from exchange_group import (
     completion_caption_matches,
     format_requisites_message,
@@ -38,10 +38,8 @@ _exchange_group_media_flush_scheduled: Set[str] = set()
 _exchange_group_media_dispatches: Dict[str, dict] = {}
 _exchange_group_dispatch_thread: threading.Thread | None = None
 
-MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 MIN_RUB = 2000
 MIN_RUB_TO_MNT = 100
-UB_TZ = ZoneInfo("Asia/Ulaanbaatar")
 MIN_VOLUME_RUB      = 50_000    # threshold in 
 MIN_VOLUME_RUB_2      = 100_000
 VOLUME_DISCOUNT_MNT = 0.2       # in MNT
@@ -56,10 +54,25 @@ def sanitize_markdown(text: str) -> str:
     return re.sub(r'([_*`\[\]\(\)])', r'\\\1', str(text))
     
 def is_within_ub_business_hours():
-    now_ub = datetime.now(MOSCOW_TZ).time()
-    start = time(4, 0)           # not time(04, 00)
-    end   = time(22, 59)     # up until 22:59:59
-    return start <= now_ub <= end
+    """Working hours (Ulaanbaatar time) from the shared working_hours table."""
+    start_hour, end_hour, enabled = 9, 4, True
+    try:
+        res = supabase.table("working_hours").select("start_hour_ub,end_hour_ub,is_enabled").eq("id", 1).limit(1).execute()
+        if res.data:
+            row = res.data[0]
+            if row.get("start_hour_ub") is not None:
+                start_hour = int(row["start_hour_ub"]) % 24
+            if row.get("end_hour_ub") is not None:
+                end_hour = int(row["end_hour_ub"]) % 24
+            enabled = bool(row.get("is_enabled", True))
+    except Exception as e:
+        print(f"⚠️ Could not load working hours, using defaults: {e}")
+    if not enabled:
+        return False
+    hour = now_ub().hour
+    if start_hour < end_hour:
+        return start_hour <= hour < end_hour
+    return hour >= start_hour or hour < end_hour
 
 # Replace with your bot token
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip().replace('"', '').replace("'", "")
@@ -725,7 +738,7 @@ def update_user_session(user_id, data: dict):
     existing = get_user_session(user_id)
     existing.update(data)
     existing["user_id"] = user_id
-    existing["last_updated"] = datetime.utcnow().isoformat()
+    existing["last_updated"] = datetime.now(timezone.utc).isoformat()
     supabase.table("user_sessions").upsert(existing).execute()
 
 def get_user_session(user_id):
@@ -913,14 +926,11 @@ def terms_handler(message):
 PAGE_SIZE = 5  # items per page
 
 def format_ub(dt_str: str) -> str:
-    # your transactions.timestamp is UTC ISO without TZ
-    try:
-        dt = datetime.fromisoformat(dt_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=ZoneInfo("UTC"))
-        return dt.astimezone(UB_TZ).strftime("%Y-%m-%d %H:%M")
-    except Exception:
+    """Format a DB timestamp in Ulaanbaatar time."""
+    dt = parse_dt(dt_str)
+    if dt is None:
         return dt_str[:16] if dt_str else "-"
+    return dt.astimezone(UB_TZ).strftime("%Y-%m-%d %H:%M")
 
 def compute_converted(txn) -> tuple[float, str]:
     amt  = float(txn["amount"])
@@ -1089,7 +1099,7 @@ def log_admin_activity(action_type: str, performed_by_admin_id: int, target_admi
             "action_type": action_type,
             "performed_by_admin_id": performed_by_admin_id,
             "is_automatic": is_automatic,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         if target_admin_id is not None:
@@ -1137,7 +1147,7 @@ def set_current_admin_id(new_admin_id, performed_by_admin_id=None, is_automatic=
         
         supabase.table("admin_shifts").update({
             "current_admin_id": new_admin_id,
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.now(timezone.utc).isoformat()
         }).eq("id", 1).execute()  # 👈 "id" нь 1 гэж шууд зааж байна
 
         # Log the activity
@@ -1253,7 +1263,7 @@ def close_shift_callback(call):
         previous_admin_id = get_current_admin_id()
         supabase.table("admin_shifts").update({
             "current_admin_id": None,
-            "last_updated": datetime.utcnow().isoformat()
+            "last_updated": datetime.now(timezone.utc).isoformat()
         }).eq("id", 1).execute()
         
         log_admin_activity(
@@ -1355,7 +1365,7 @@ def create_promo_code_in_db(code: str, user_id: int, discount: float = 0.2, sour
         source: optional string to mark the origin of the promo (e.g., 'referral', 'system', 'admin')
     """
     try:
-        now = datetime.now(MOSCOW_TZ).isoformat()
+        now = now_ub_iso()
         data = {
             "code": code.upper(),  # Store in uppercase for consistency
             "aliases": [],
@@ -1397,11 +1407,9 @@ def choose_gift_outcome() -> str:
 # ✅ Generate Unique Invoice ID With Random Digits
 def generate_invoice():
     import random
-    # Москвагийн цаг = UTC + 3
-    moscow_time = datetime.utcnow() + timedelta(hours=3)
-    # Новый формат: YYYYMMDD-HHMMSS-XX где XX - случайное число от 00 до 99
+    # Улаанбаатарын цаг. Формат: YYYYMMDD-HHMMSS-XX (XX = 00..99)
     random_suffix = random.randint(0, 99)
-    invoice = moscow_time.strftime("%Y%m%d-%H%M%S") + f"-{random_suffix:02d}"  # Жишээ: 20250421-194532-42
+    invoice = now_ub().strftime("%Y%m%d-%H%M%S") + f"-{random_suffix:02d}"  # Жишээ: 20250421-194532-42
     return invoice
 
 # ✅ Функция для проверки формата инвойса (поддерживает оба формата)
@@ -1477,7 +1485,7 @@ def record_transaction(user_id, invoice_id, amount, currency_from, currency_to, 
         "sell_rate":      current_sell,    # base MNT→RUB rate at the moment of logging
         "bank_details":   bank_details,
         "status":         status,
-        "timestamp":      datetime.utcnow().isoformat()
+        "timestamp":      datetime.now(timezone.utc).isoformat()
     }
     if receipt_ts:
         data["receipt_submitted_at"] = receipt_ts
@@ -2167,10 +2175,8 @@ def profile_menu(call):
             discount = promo.get('discount', 0)
             created_at = promo.get('created_at', '')
             if created_at:
-                try:
-                    promo_date = datetime.fromisoformat(created_at.replace('Z', '+00:00')).strftime('%Y-%m-%d')
-                except:
-                    promo_date = created_at[:10] if len(created_at) >= 10 else created_at
+                parsed_created = parse_dt(created_at)
+                promo_date = parsed_created.astimezone(UB_TZ).strftime('%Y-%m-%d') if parsed_created else created_at[:10]
             else:
                 promo_date = 'N/A'
             code_escaped = sanitize_markdown(promo.get('code', ''))
@@ -3465,7 +3471,7 @@ def handle_transaction_action(call):
     bank_details = txn.get("bank_details", "")
 
     # 3️⃣ Prepare timestamp and payload
-    now_moscow = datetime.now(MOSCOW_TZ).isoformat()
+    now_ub_str = now_ub_iso()
     if is_confirmed:
         updates = {
             # Confirming the request approves it. Completion happens only
@@ -3477,8 +3483,8 @@ def handle_transaction_action(call):
     elif is_waiting_edit:
         updates = {
             "status": "waiting_edit",
-            "waiting_started_at": now_moscow,
-            "timer_paused_at": now_moscow,
+            "waiting_started_at": now_ub_str,
+            "timer_paused_at": now_ub_str,
             "completed_at": None,
             "completed_by_admin": None,
         }
@@ -3493,7 +3499,7 @@ def handle_transaction_action(call):
         updates = {
             "status":       "rejected",
             # if you want to track when we rejected too:
-            # "rejected_at": now_moscow
+            # "rejected_at": now_ub_str
         }
 
     # 4️⃣ Write back to Supabase
@@ -3761,13 +3767,13 @@ def _cache_invite_mapping(referrer_id: int, invite_link: str):
         existing = supabase.table("referral_links").select("id").eq("invite_link", invite_link).limit(1).execute()
         if existing.data:
             # Update existing record
-            supabase.table("referral_links").update({"referrer_id": referrer_id, "created_at": datetime.now(MOSCOW_TZ).isoformat()}).eq("invite_link", invite_link).execute()
+            supabase.table("referral_links").update({"referrer_id": referrer_id, "created_at": now_ub_iso()}).eq("invite_link", invite_link).execute()
         else:
             # Insert new record
             supabase.table("referral_links").insert({
                 "referrer_id": referrer_id,
                 "invite_link": invite_link,
-                "created_at": datetime.now(MOSCOW_TZ).isoformat(),
+                "created_at": now_ub_iso(),
                 "is_active": True
             }).execute()
         print(f"✅ Saved invite link mapping: {referrer_id} -> {invite_link}")
@@ -3840,7 +3846,7 @@ def get_or_create_referral_link(referrer_id: int) -> str | None:
         print(f"📝 Creating new invite link for {referrer_id}...")
         link_obj = bot.create_chat_invite_link(
             chat_id=REFERRAL_TARGET_CHAT_ID,
-            name=f"ref_{referrer_id}_{int(datetime.now(MOSCOW_TZ).timestamp())}",
+            name=f"ref_{referrer_id}_{int(now_ub().timestamp())}",
             member_limit=5,  # Expires after 5 joins
             creates_join_request=False
         )
@@ -4031,8 +4037,8 @@ def handle_chat_member_update(update):
             "friend_user_id": friend_id,
             "friend_username": friend_username,
             "status": "accepted",
-            "verified_at": datetime.now(MOSCOW_TZ).isoformat(),
-            "created_at": datetime.now(MOSCOW_TZ).isoformat(),
+            "verified_at": now_ub_iso(),
+            "created_at": now_ub_iso(),
             "awarded": False,
             "invite_link": invite_link,
         }
@@ -4049,8 +4055,8 @@ def handle_chat_member_update(update):
                     "referrer_id": referrer_id,
                     "friend_username": friend_username,
                     "status": "accepted",
-                    "verified_at": datetime.now(MOSCOW_TZ).isoformat(),
-                    "created_at": datetime.now(MOSCOW_TZ).isoformat(),
+                    "verified_at": now_ub_iso(),
+                    "created_at": now_ub_iso(),
                     "awarded": False,
                 }
                 supabase.table("referrals").insert(minimal).execute()
@@ -4184,8 +4190,8 @@ def verify_channel_join_handler(call):
             "friend_user_id": user_id,
             "friend_username": friend_username,
             "status": "accepted",
-            "verified_at": datetime.now(MOSCOW_TZ).isoformat(),
-            "created_at": datetime.now(MOSCOW_TZ).isoformat(),
+            "verified_at": now_ub_iso(),
+            "created_at": now_ub_iso(),
             "awarded": False,
         }
         
@@ -4304,7 +4310,7 @@ def collect_referral_usernames(message):
             "referrer_id": user_id,
             "friend_username": username,
             "status": "pending",
-            "created_at": datetime.now(MOSCOW_TZ).isoformat(),
+            "created_at": now_ub_iso(),
             "awarded": False
         }
         try:
@@ -4383,7 +4389,7 @@ def approve_referral_handler(call):
         for ref_id in referral_ids:
             supabase.table("referrals").update({
                 "status": "accepted",
-                "verified_at": datetime.now(MOSCOW_TZ).isoformat()
+                "verified_at": now_ub_iso()
             }).eq("id", ref_id).execute()
         
         print(f"✅ Moderator approved {len(referral_ids)} referrals for user {user_id}")
@@ -4394,7 +4400,7 @@ def approve_referral_handler(call):
         # Notify moderator
         bot.answer_callback_query(call.id, "✅ Баталгаажлаа!")
         bot.edit_message_text(
-            f"{call.message.text}\n\n✅ **Баталгаажсан** ({datetime.now(MOSCOW_TZ).strftime('%Y-%m-%d %H:%M')})",
+            f"{call.message.text}\n\n✅ **Баталгаажсан** ({now_ub().strftime('%Y-%m-%d %H:%M')})",
             call.message.chat.id,
             call.message.message_id,
             parse_mode="Markdown"
@@ -4547,7 +4553,7 @@ def payment_receipt(message):
     pending_transactions[user_id] = {
         "invoice": invoice,
         "receipt_id": receipt_id,
-        "receipt_submitted_at": datetime.now(MOSCOW_TZ).isoformat(),
+        "receipt_submitted_at": now_ub_iso(),
         "bank_details": None,
         "admin_bill_id": None
     }
@@ -4696,11 +4702,11 @@ def cmd_status(message):
     currency_to = txn["currency_to"].upper()
     converted = round(amt * rate if currency_from == "RUB" else amt / rate, 2)
 
-    created = txn.get('timestamp', 'N/A')[:19] if txn.get('timestamp') else 'N/A'
+    created = format_ub(txn['timestamp']) if txn.get('timestamp') else 'N/A'
     message_text = t(lang_admin, "admin_status_info", emoji=emoji, invoice=invoice, status_name=status_name, amt=amt, currency_from=currency_from, converted=converted, currency_to=currency_to, rate=rate, user_id=txn['user_id'], created=created)
 
     if txn.get("completed_at"):
-        message_text += t(lang_admin, "admin_status_completed_at", date=txn['completed_at'][:19])
+        message_text += t(lang_admin, "admin_status_completed_at", date=format_ub(txn['completed_at']))
     if txn.get("completed_by_admin"):
         message_text += t(lang_admin, "admin_status_confirmed_by", admin=txn['completed_by_admin'])
     if txn.get("admin_comment"):
@@ -4805,7 +4811,7 @@ def handle_passport_or_receipt(message):
             resp      = requests.get(file_url)
             resp.raise_for_status()
 
-            file_name = f"{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+            file_name = f"{user_id}_{now_ub().strftime('%Y%m%d%H%M%S')}.jpg"
             with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
                 tmp.write(resp.content)
                 temp_path = tmp.name
@@ -4852,7 +4858,7 @@ def handle_passport_or_receipt(message):
             bill_url = storage_upload_file(supabase, "bills", file_name, temp_path, "image/jpeg")
 
             # Log transaction start time when user sends bill screenshot
-            receipt_submitted_at = datetime.now(MOSCOW_TZ).isoformat()
+            receipt_submitted_at = now_ub_iso()
             try:
                 resp = supabase.table("transactions").update({
                     "bill_id":     photo_id,
@@ -4911,7 +4917,7 @@ def handle_passport_or_receipt(message):
             bill_url = storage_upload_file(supabase, "bills", file_name, temp_path, "image/jpeg")
             
             # Record transaction
-            receipt_submitted_at = datetime.now(MOSCOW_TZ).isoformat()
+            receipt_submitted_at = now_ub_iso()
             
             amount_rub = session.get("amount")  # RUB amount
             rate = session.get("rate", 1)
@@ -5035,9 +5041,9 @@ def handle_passport_or_receipt(message):
 
             # 4) Update DB
             # Timestamp when admin uploads their confirmation bill (used to compute admin handling duration)
-            admin_bill_submitted_at = datetime.now(MOSCOW_TZ).isoformat()
+            admin_bill_submitted_at = now_ub_iso()
             # completed_at remains the time we mark the transaction finished
-            completed_at = datetime.now(MOSCOW_TZ).isoformat()
+            completed_at = now_ub_iso()
             updates = {
                 "status": "successful",
                 "admin_bill_id": message.photo[-1].file_id,
@@ -5071,38 +5077,13 @@ def handle_passport_or_receipt(message):
             duration_minutes = None
             if receipt_submitted_at:
                 try:
-                    # Parse start time (receipt_submitted_at) - handle various ISO formats
-                    start_time_str = receipt_submitted_at
-                    if start_time_str.endswith('Z'):
-                        start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
-                    elif '+' in start_time_str or (start_time_str.count('-') >= 3 and 'T' in start_time_str):
-                        start_time = datetime.fromisoformat(start_time_str)
-                    else:
-                        # No timezone info, assume it's already in Moscow timezone format
-                        start_time = datetime.fromisoformat(start_time_str)
-                    
-                    # Ensure start_time is in Moscow timezone
-                    if start_time.tzinfo is None:
-                        start_time = start_time.replace(tzinfo=MOSCOW_TZ)
-                    else:
-                        start_time = start_time.astimezone(MOSCOW_TZ)
-                    
-                    # Parse end time (admin uploaded the confirmation bill)
+                    start_time = parse_dt(receipt_submitted_at)
                     # Use admin_bill_submitted_at when available (represents when admin handled the request)
                     end_time_str = admin_bill_submitted_at if 'admin_bill_submitted_at' in locals() else completed_at
-                    if end_time_str.endswith('Z'):
-                        end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
-                    elif '+' in end_time_str or (end_time_str.count('-') >= 3 and 'T' in end_time_str):
-                        end_time = datetime.fromisoformat(end_time_str)
-                    else:
-                        end_time = datetime.fromisoformat(end_time_str)
-                    
-                    # Ensure end_time is in Moscow timezone
-                    if end_time.tzinfo is None:
-                        end_time = end_time.replace(tzinfo=MOSCOW_TZ)
-                    else:
-                        end_time = end_time.astimezone(MOSCOW_TZ)
-                    
+                    end_time = parse_dt(end_time_str)
+                    if start_time is None or end_time is None:
+                        raise ValueError("missing start/end time")
+
                     duration_minutes = (end_time - start_time).total_seconds() / 60.0
                     
                     # Store duration in transactions table
@@ -5239,7 +5220,7 @@ def save_text_feedback(message):
             "rating": rating,
             "invoice": invoice,
             "comment": comment,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
 
         markup = InlineKeyboardMarkup()
@@ -5857,15 +5838,14 @@ def broadcast_rates(message):
         return bot.reply_to(message, t(lang_s, "admin_broadcast_rate_error", error=str(e)))
 
     # 2. Build caption
-    now = datetime.now(UB_TZ)
+    now = now_ub()
     date_str = now.strftime("%Y/%m/%d")
     ub_time = now.strftime("%H:%M")
-    msk_time = datetime.now(MOSCOW_TZ).strftime("%H:%M")
 
     caption = (
         f"💸 <b>{_ub_greeting()}!</b>\n"
         f"\n"
-        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time} | МСК: {msk_time}</b>\n"
+        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time}</b>\n"
         f"\n"
         f"🔹 <b>Рубль авах</b>(РУБ-МНТ): <b>{buy_rate}</b>\n"
         f"🔹 <b>Рубль зарах</b>(МНТ-РУБ): <b>{sell_rate}</b>\n"
@@ -5919,15 +5899,14 @@ def _build_broadcast_caption() -> str | None:
         print(f"❌ AutoBroadcast: failed to fetch rates: {e}")
         return None
 
-    now = datetime.now(UB_TZ)
+    now = now_ub()
     date_str = now.strftime("%Y/%m/%d")
     ub_time = now.strftime("%H:%M")
-    msk_time = datetime.now(MOSCOW_TZ).strftime("%H:%M")
 
     return (
         f"💸 <b>{_ub_greeting()}!</b>\n"
         f"\n"
-        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time} | МСК: {msk_time}</b>\n"
+        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time}</b>\n"
         f"\n"
         f"🔹 <b>Рубль авах</b>(РУБ-МНТ): <b>{buy_rate}</b>\n"
         f"🔹 <b>Рубль зарах</b>(МНТ-РУБ): <b>{sell_rate}</b>\n"
@@ -5944,12 +5923,12 @@ def _auto_broadcast_loop():
     global _last_auto_broadcast_date
     while True:
         try:
-            now_ub = datetime.now(UB_TZ)
-            today = now_ub.date()
+            now_ub_dt = now_ub()
+            today = now_ub_dt.date()
 
-            if now_ub.hour == 11 and _last_auto_broadcast_date != today:
+            if now_ub_dt.hour == 11 and _last_auto_broadcast_date != today:
                 _last_auto_broadcast_date = today
-                print(f"📡 AutoBroadcast triggered at {now_ub.strftime('%H:%M')} Ulaanbaatar time")
+                print(f"📡 AutoBroadcast triggered at {now_ub_dt.strftime('%H:%M')} Ulaanbaatar time")
 
                 caption = _build_broadcast_caption()
                 if not caption:
@@ -5974,7 +5953,7 @@ def _auto_broadcast_loop():
                 try:
                     bot.send_message(
                         1932946217,
-                        f"📡 Автомат broadcast дууслаа ({now_ub.strftime('%H:%M')} Ulaanbaatar time)\n"
+                        f"📡 Автомат broadcast дууслаа ({now_ub_dt.strftime('%H:%M')} Ulaanbaatar time)\n"
                         f"📤 Амжилттай: {success}\n❌ Алдаатай: {failed}",
                     )
                 except Exception:
@@ -6006,15 +5985,14 @@ def test_broadcast_rates(message):
         return bot.reply_to(message, t(lang_s, "admin_broadcast_rate_error", error=str(e)))
 
     # 2. Build caption
-    now = datetime.now(UB_TZ)
+    now = now_ub()
     date_str = now.strftime("%Y/%m/%d")
     ub_time = now.strftime("%H:%M")
-    msk_time = datetime.now(MOSCOW_TZ).strftime("%H:%M")
 
     caption = (
         f"💸 <b>{_ub_greeting()}!</b>\n"
         f"\n"
-        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time} | МСК: {msk_time}</b>\n"
+        f"📊 <b>ХАНШИЙН МЭДЭЭЛЭЛ. {date_str}, УБ: {ub_time}</b>\n"
         f"\n"
         f"🔹 <b>Рубль авах</b>(РУБ-МНТ): <b>{buy_rate}</b>\n"
         f"🔹 <b>Рубль зарах</b>(МНТ-РУБ): <b>{sell_rate}</b>\n"

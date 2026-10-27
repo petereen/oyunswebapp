@@ -200,7 +200,7 @@ BEGIN
     VALUES (p_code, p_user_id, card.brand_id, (result->>'id')::UUID, card.sku_tier,
             card.points_price, NOW() + make_interval(days => card.validity_days))
     RETURNING * INTO promo;
-    note := promo.code || E'\n' || promo.sku_tier || E'\n' || to_char(promo.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI') || ' UTC';
+    note := promo.code || E'\n' || promo.sku_tier || E'\n' || to_char(promo.expires_at AT TIME ZONE 'Asia/Ulaanbaatar', 'YYYY-MM-DD HH24:MI') || ' (УБ)';
     UPDATE public.oyuns_plus_voucher_requests SET status = 'fulfilled', confirmation_note = note,
         fulfilled_at = NOW(), updated_at = NOW() WHERE id = promo.request_id;
     RETURN result || jsonb_build_object('status', 'fulfilled', 'code', promo.code,

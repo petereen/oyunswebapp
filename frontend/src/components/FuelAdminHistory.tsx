@@ -3,6 +3,7 @@ import { History, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, MapPin, X }
 import { fetchFuelAdminHistory, FuelOrder } from "../api";
 import { FuelChat } from "./FuelChat";
 import { useFuelLang } from "../i18n/useFuelLang";
+import { formatUb } from "../utils/time";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -115,7 +116,7 @@ export function FuelAdminHistory() {
                   {order.station_name} • {order.liters}л • {order.final_amount.toLocaleString()} {order.payment_currency}
                 </div>
                 <div className="text-[10px] text-slate-400">
-                  {new Date(order.created_at).toLocaleString("mn-MN")}
+                  {formatUb(order.created_at)}
                 </div>
               </div>
               {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}

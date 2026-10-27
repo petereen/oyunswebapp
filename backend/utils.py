@@ -22,6 +22,7 @@ except ImportError:
     JWT_AVAILABLE = False
 
 from models import AuthenticatedUser
+from timeutil import UB_TZ, now_ub, now_ub_iso
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -615,23 +616,17 @@ def debug_telegram_validation(init_data: str, bot_token: str) -> Dict[str, Any]:
 
 
 def generate_invoice(now: datetime = None) -> str:
-    """Generate invoice ID using Moscow timezone."""
+    """Generate invoice ID (YYYYMMDD-HHMMSS-XX) in Ulaanbaatar time."""
     import random
-    from zoneinfo import ZoneInfo
-    
-    moscow_tz = ZoneInfo("Europe/Moscow")
+
     if now is None:
-        now = datetime.now(moscow_tz)
+        now = now_ub()
+    elif now.tzinfo is None:
+        # Naive datetimes are treated as UTC
+        now = now.replace(tzinfo=timezone.utc).astimezone(UB_TZ)
     else:
-        # Convert to Moscow time if timezone-aware
-        if now.tzinfo is not None:
-            now = now.astimezone(moscow_tz)
-        else:
-            # Assume UTC if no timezone
-            from datetime import timezone
-            now = now.replace(tzinfo=timezone.utc).astimezone(moscow_tz)
-    
-    # Format: YYYYMMDD-HHMMSS-XX (XX = 2 random digits)
+        now = now.astimezone(UB_TZ)
+
     random_digits = f"{random.randint(0, 99):02d}"
     return now.strftime("%Y%m%d-%H%M%S") + "-" + random_digits
 
@@ -655,11 +650,8 @@ def log_admin_action(
         target_id: ID of the affected resource
         details: Additional context (rejection reason, comments, etc.)
     """
-    from zoneinfo import ZoneInfo
-    
-    moscow_tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(moscow_tz).isoformat()
-    
+    now = now_ub_iso()
+
     try:
         client.table("admin_actions").insert({
             "admin_user_id": admin_user_id,

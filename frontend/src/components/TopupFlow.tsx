@@ -21,6 +21,7 @@ import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
 import { queryKeys } from "../queryKeys";
 import { Skeleton } from "./Skeleton";
+import { generateInvoiceId as generateUbInvoiceId } from "../utils/time";
 
 interface Props {
   sellRate: number;
@@ -84,18 +85,7 @@ export function TopupFlow({ sellRate, onBack, onSuccess }: Props) {
 
   useEffect(() => {
     if (step === 3 && !invoiceId) {
-      const now = new Date();
-      const moscowOffset = 3 * 60;
-      const localOffset = now.getTimezoneOffset();
-      const moscowTime = new Date(now.getTime() + (moscowOffset + localOffset) * 60 * 1000);
-      const year = moscowTime.getFullYear();
-      const month = String(moscowTime.getMonth() + 1).padStart(2, "0");
-      const day = String(moscowTime.getDate()).padStart(2, "0");
-      const hours = String(moscowTime.getHours()).padStart(2, "0");
-      const minutes = String(moscowTime.getMinutes()).padStart(2, "0");
-      const seconds = String(moscowTime.getSeconds()).padStart(2, "0");
-      const random = String(Math.floor(Math.random() * 100)).padStart(2, "0");
-      setInvoiceId(`${year}${month}${day}-${hours}${minutes}${seconds}-${random}`);
+      setInvoiceId(generateUbInvoiceId());
     }
   }, [step, invoiceId]);
 

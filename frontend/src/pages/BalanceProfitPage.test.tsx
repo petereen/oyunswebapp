@@ -44,7 +44,7 @@ const profit = {
 
 function renderPage(activePage: "balance" | "profit" = "balance") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
-  return render(<QueryClientProvider client={client}><BalanceProfitPage activePage={activePage} dashboardTimeZone="moscow" /></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><BalanceProfitPage activePage={activePage} dashboardTimeZone="ub" /></QueryClientProvider>);
 }
 
 beforeEach(() => {
@@ -94,7 +94,7 @@ describe("finance balance and profit workspaces", () => {
     expect(screen.getByText(/энэ томьёонд орохгүй/)).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Өдрийн тооцооны түүх нээх" }));
-    await waitFor(() => expect(mocks.fetchBalanceHistory).toHaveBeenCalledWith({ days: 60, tz: "moscow" }));
+    await waitFor(() => expect(mocks.fetchBalanceHistory).toHaveBeenCalledWith({ days: 60, tz: "ub" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "CSV" })).toBeEnabled());
     let historyBlob: Blob | null = null;
     vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn((blob: Blob) => { historyBlob = blob; return "blob:history"; }), revokeObjectURL: vi.fn() });
@@ -105,7 +105,7 @@ describe("finance balance and profit workspaces", () => {
 
     fireEvent.change(screen.getAllByLabelText("“Main RUB” оруулсан баланс")[0], { target: { value: "1060" } });
     fireEvent.click(screen.getAllByRole("button", { name: "“Main RUB” дансны үлдэгдэл хадгалах" })[0]);
-    await waitFor(() => expect(mocks.updateTreasuryAccount).toHaveBeenCalledWith("account-1", expect.objectContaining({ entered_balance: 1060, tz: "moscow" })));
+    await waitFor(() => expect(mocks.updateTreasuryAccount).toHaveBeenCalledWith("account-1", expect.objectContaining({ entered_balance: 1060, tz: "ub" })));
 
     fireEvent.change(screen.getByLabelText("Дүн (₽)"), { target: { value: "75" } });
     fireEvent.change(screen.getByLabelText("Таг"), { target: { value: "Commission" } });
@@ -141,7 +141,7 @@ describe("finance balance and profit workspaces", () => {
     fireEvent.change(screen.getAllByLabelText("Дуусах огноо")[0], { target: { value: "2026-09-03" } });
     fireEvent.change(screen.getAllByLabelText("USD ханш").at(-1)!, { target: { value: "90" } });
     fireEvent.click(screen.getByRole("button", { name: "Period USD хадгалах" }));
-    await waitFor(() => expect(mocks.saveCostRatePeriodUsd).toHaveBeenCalledWith(expect.objectContaining({ start: "2026-09-01", end: "2026-09-03", usd_rate: 90, tz: "moscow" })));
+    await waitFor(() => expect(mocks.saveCostRatePeriodUsd).toHaveBeenCalledWith(expect.objectContaining({ start: "2026-09-01", end: "2026-09-03", usd_rate: 90, tz: "ub" })));
 
     fireEvent.click(screen.getByRole("button", { name: "Google Sheets-ээс black ханш татах" }));
     await waitFor(() => expect(mocks.fetchBlackRates).toHaveBeenCalled());

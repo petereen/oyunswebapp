@@ -10,6 +10,7 @@ import { queryKeys } from "../queryKeys";
 import { formatRussianPhone, formatCardNumber, formatIBAN, formatMongolianPhone, RegistrationModal } from "../components/RegistrationModal";
 import { EmailVerificationModal } from "../components/EmailVerificationModal";
 import { useLang } from "../i18n/useLang";
+import { formatUb } from "../utils/time";
 
 const TERMS_URL = "https://oyuns.mn/user-agreement";
 const RUB_BANKS = ["Сбербанк", "Т-Банк", "Альфа-Банк", "ВТБ", "Райффайзен банк", "Газпромбанк", "ПСБ", "Россельхозбанк", "Бусад"];
@@ -382,7 +383,7 @@ export function ProfilePage({ userId, onBack, onLogout }: Props) {
                               <span className={`text-xs px-2 py-0.5 rounded-full ${promo.active ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-silver dark:bg-dark-600 text-dark-600 dark:text-ivory-400"}`}>{promo.active ? t("profile.promo_active") : t("profile.promo_inactive")}</span>
                             </div>
                             <div className="mt-1 text-sm text-dark-600 dark:text-ivory-300"><span className="font-medium text-green-600 dark:text-green-400">+{promo.discount} ₮</span> {t("profile.promo_added")}</div>
-                            {promo.expires_at && <div className="mt-1 text-xs text-dark-600 dark:text-ivory-400">{t("profile.promo_expires")} {new Date(promo.expires_at).toLocaleDateString()}</div>}
+                            {promo.expires_at && <div className="mt-1 text-xs text-dark-600 dark:text-ivory-400">{t("profile.promo_expires")} {formatUb(promo.expires_at, { year: "numeric", month: "2-digit", day: "2-digit" })}</div>}
                           </div>
                         ))}
                       </div>

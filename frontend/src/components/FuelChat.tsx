@@ -10,6 +10,7 @@ import {
   FuelChatMessage,
 } from "../api";
 import { useFuelLang } from "../i18n/useFuelLang";
+import { formatUb } from "../utils/time";
 
 interface Props {
   orderId: string;
@@ -130,10 +131,7 @@ export function FuelChat({ orderId, isAdmin }: Props) {
                     isMe ? "text-white/60" : "text-dark-400 dark:text-ivory-500"
                   }`}
                 >
-                  {new Date(m.created_at).toLocaleTimeString("mn-MN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatUb(m.created_at, { hour: "2-digit", minute: "2-digit" })}
                 </div>
               </div>
             </div>

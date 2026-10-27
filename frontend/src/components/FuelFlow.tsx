@@ -35,6 +35,8 @@ import {
 import { FuelChat } from "./FuelChat";
 import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
+import { generateInvoiceId as generateUbInvoiceId } from "../utils/time";
+import { formatUb } from "../utils/time";
 
 interface Props {
   sellRate: number;
@@ -177,20 +179,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
   }, [initialOrderId]);
 
   // Generate invoice ID
-  const generateInvoiceId = useCallback(() => {
-    const now = new Date();
-    const moscowOffset = 3 * 60;
-    const localOffset = now.getTimezoneOffset();
-    const moscowTime = new Date(now.getTime() + (moscowOffset + localOffset) * 60 * 1000);
-    const y = moscowTime.getFullYear();
-    const mo = String(moscowTime.getMonth() + 1).padStart(2, "0");
-    const d = String(moscowTime.getDate()).padStart(2, "0");
-    const h = String(moscowTime.getHours()).padStart(2, "0");
-    const mi = String(moscowTime.getMinutes()).padStart(2, "0");
-    const s = String(moscowTime.getSeconds()).padStart(2, "0");
-    const r = String(Math.floor(Math.random() * 100)).padStart(2, "0");
-    return `F${y}${mo}${d}-${h}${mi}${s}-${r}`;
-  }, []);
+  const generateInvoiceId = useCallback(() => `F${generateUbInvoiceId()}`, []);
 
   // Calculation
   const calculation = useMemo((): FuelCalculation | null => {
@@ -572,7 +561,7 @@ export function FuelFlow({ sellRate, onBack, onSuccess, initialOrderId }: Props)
                         {getStatusLabel(order.status)}
                       </span>
                       <span className="text-[10px] text-dark-400">
-                        {new Date(order.created_at).toLocaleDateString(lang === "ru" ? "ru-RU" : "mn-MN")}
+                        {formatUb(order.created_at, { year: "numeric", month: "2-digit", day: "2-digit" }, lang === "ru" ? "ru-RU" : "mn-MN")}
                       </span>
                     </div>
                     <div className="text-xs text-dark-800 dark:text-ivory-200">

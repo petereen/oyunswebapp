@@ -7,6 +7,7 @@ import { useLang } from "../i18n/useLang";
 import { prepareImageForUpload } from "../utils/imageUpload";
 import { queryKeys } from "../queryKeys";
 import { SuccessCheck } from "./SuccessCheck";
+import { generateInvoiceId as generateUbInvoiceId } from "../utils/time";
 
 interface Props {
   userId?: number;
@@ -106,24 +107,8 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
   const [error, setError] = useState<string>("");
   const [copied, setCopied] = useState<string>("");
 
-  // Generate invoice ID using Moscow timezone
-  const generateInvoiceId = () => {
-    const now = new Date();
-    // Convert to Moscow time (UTC+3)
-    const moscowOffset = 3 * 60; // minutes
-    const localOffset = now.getTimezoneOffset(); // minutes (negative for east of UTC)
-    const moscowTime = new Date(now.getTime() + (moscowOffset + localOffset) * 60 * 1000);
-    
-    const year = moscowTime.getFullYear();
-    const month = String(moscowTime.getMonth() + 1).padStart(2, '0');
-    const day = String(moscowTime.getDate()).padStart(2, '0');
-    const hours = String(moscowTime.getHours()).padStart(2, '0');
-    const minutes = String(moscowTime.getMinutes()).padStart(2, '0');
-    const seconds = String(moscowTime.getSeconds()).padStart(2, '0');
-    const random = String(Math.floor(Math.random() * 100)).padStart(2, '0');
-    
-    return `${year}${month}${day}-${hours}${minutes}${seconds}-${random}`;
-  };
+  // Invoice ID in Ulaanbaatar time
+  const generateInvoiceId = () => generateUbInvoiceId();
 
   // Calculate effective rate with promo discount
   const baseRate = useMemo(() => {
