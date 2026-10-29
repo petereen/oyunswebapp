@@ -2772,6 +2772,23 @@ def _load_recent_rub_bank_usage(client, account_ids: list[str]) -> list[dict] | 
     return rows
 
 
+def _record_group_dispatcher(client, invoice: str, acting_admin_id) -> None:
+    """Remember which admin clicked "send to group" (falls back to the admin on shift)."""
+    admin_id = acting_admin_id
+    if admin_id is None:
+        shift_res = client.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
+        if shift_res.data and shift_res.data[0].get("current_admin_id") is not None:
+            admin_id = shift_res.data[0]["current_admin_id"]
+    if admin_id is None:
+        return
+    try:
+        client.table("exchange_group_dispatches").update(
+            {"dispatched_by_admin": int(admin_id)}
+        ).eq("invoice", invoice).execute()
+    except Exception as exc:
+        logging.getLogger("uvicorn.error").warning("Could not record group dispatcher for %s: %s", invoice, exc)
+
+
 def _completion_duration_minutes(row: dict):
     """Minutes from receipt submission to completion, minus paused (waiting-edit) time.
 
@@ -7344,6 +7361,7 @@ async def admin_action(
                         raise HTTPException(status_code=500, detail="Could not requeue Telegram group dispatch") from exc
                     if not retry_result.data:
                         raise HTTPException(status_code=500, detail="Telegram group dispatch was not requeued")
+                    _record_group_dispatcher(client, payload.invoice, admin_user_id)
                 # A repeated click is idempotent and must not notify the user twice.
                 return {"ok": True, "queued": True}
             raise HTTPException(
@@ -7389,6 +7407,7 @@ async def admin_action(
         if not rpc_result.data:
             raise HTTPException(status_code=500, detail="Telegram group dispatch was not queued")
         group_approval_performed = True
+        _record_group_dispatcher(client, payload.invoice, admin_user_id)
 
     if payload.status == "waiting_edit":
         bank_details = (trx.get("bank_details") or "").strip()
@@ -8684,7 +8703,6 @@ async def create_manual_driver_transaction(
         "receipt_submitted_at": now.isoformat(),
         "completed_at": now.isoformat(),
         "completed_by_admin": admin.id,
-        "completion_duration_minutes": 0,
         "is_manual": True,
         "manual_created_by_admin_id": admin.id,
         "manual_created_at": now.isoformat(),

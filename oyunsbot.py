@@ -426,6 +426,26 @@ def _award_group_completion_points(transaction: dict, rub_amount) -> None:
             print(f"❌ Failed to award group-completion points: {exc}")
 
 
+def _exchange_group_dispatcher_admin(dispatch: dict):
+    """Admin who sent the transaction to the group (falls back to the admin on shift)."""
+    try:
+        res = (
+            supabase.table("exchange_group_dispatches")
+            .select("dispatched_by_admin")
+            .eq("id", dispatch.get("id"))
+            .limit(1)
+            .execute()
+        )
+        if res.data and res.data[0].get("dispatched_by_admin") is not None:
+            return int(res.data[0]["dispatched_by_admin"])
+        shift = supabase.table("admin_shifts").select("current_admin_id").eq("id", 1).limit(1).execute()
+        if shift.data and shift.data[0].get("current_admin_id") is not None:
+            return int(shift.data[0]["current_admin_id"])
+    except Exception as exc:
+        print(f"❌ Could not resolve group dispatcher admin: {exc}")
+    return None
+
+
 def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
     messages = sorted(messages, key=lambda item: item.message_id)
     first = messages[0]
@@ -490,7 +510,7 @@ def _complete_exchange_group_proof(dispatch: dict, messages: list) -> None:
             "admin_bill_url": json.dumps(proof_urls),
             "admin_bill_submitted_at": now.isoformat(),
             "completed_at": now.isoformat(),
-            "completed_by_admin": None,
+            "completed_by_admin": _exchange_group_dispatcher_admin(dispatch),
             "timer_paused_at": None,
         }
         if duration_minutes is not None:
