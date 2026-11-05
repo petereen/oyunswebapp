@@ -10338,12 +10338,12 @@ async def preapprove_gift(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Get gift
-    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    res = client.table("gifts").select("*").eq("id", gift_id).limit(1).execute()
     
     if not res.data:
         raise HTTPException(status_code=404, detail="Gift not found")
     
-    gift = res.data
+    gift = res.data[0]
     
     if gift.get("status") != "pending_admin":
         raise HTTPException(status_code=400, detail="Gift cannot be preapproved")
@@ -10407,12 +10407,12 @@ async def finalize_gift(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Get gift
-    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    res = client.table("gifts").select("*").eq("id", gift_id).limit(1).execute()
     
     if not res.data:
         raise HTTPException(status_code=404, detail="Gift not found")
     
-    gift = res.data
+    gift = res.data[0]
     
     if gift.get("status") != "preapproved":
         raise HTTPException(status_code=400, detail="Gift must be preapproved first")
@@ -10523,12 +10523,12 @@ async def approve_gift(
     
     try:
         # Get gift
-        res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+        res = client.table("gifts").select("*").eq("id", gift_id).limit(1).execute()
         
         if not res.data:
             raise HTTPException(status_code=404, detail="Gift not found")
         
-        gift = res.data
+        gift = res.data[0]
         
         if gift.get("status") != "pending_admin":
             raise HTTPException(status_code=400, detail="Gift cannot be approved")
@@ -10638,12 +10638,12 @@ async def reject_gift(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Get gift
-    res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
+    res = client.table("gifts").select("*").eq("id", gift_id).limit(1).execute()
     
     if not res.data:
         raise HTTPException(status_code=404, detail="Gift not found")
     
-    gift = res.data
+    gift = res.data[0]
     
     # Update gift status
     client.table("gifts").update({
