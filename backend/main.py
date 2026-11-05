@@ -9907,14 +9907,27 @@ async def lookup_recipient_by_phone(
     
     try:
         # Search in users table
-        res = (
-            client.table("users")
-            .select("id, first_name, last_name, phone, bank_rub, bank_mnt")
-            .eq("verified", True)
-            .execute()
-        )
+        # Paginate: Supabase caps a single response at 1000 rows by default,
+        # which silently dropped users beyond the first page.
+        all_users = []
+        page_size = 1000
+        offset = 0
+        while True:
+            page = (
+                client.table("users")
+                .select("id, first_name, last_name, phone, bank_rub, bank_mnt")
+                .eq("verified", True)
+                .order("id")
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            rows = page.data or []
+            all_users.extend(rows)
+            if len(rows) < page_size:
+                break
+            offset += page_size
         
-        for u in res.data or []:
+        for u in all_users:
             # Don't allow sending to yourself
             if u.get("id") == user.id:
                 continue
