@@ -120,8 +120,12 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
-  // RUB bank info - optional
-  const [hasRubBank, setHasRubBank] = useState(false);
+  // Which country account(s) to register: Mongolian, Russian, or both
+  const [country, setCountry] = useState<"mn" | "ru" | "both">("mn");
+  const hasMntBank = country === "mn" || country === "both";
+  const hasRubBank = country === "ru" || country === "both";
+
+  // RUB bank info
   const [rubBankName, setRubBankName] = useState("");
   const [rubBankNameOther, setRubBankNameOther] = useState("");
   const [rubPhoneSbp, setRubPhoneSbp] = useState("");
@@ -195,9 +199,11 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
   };
 
   const isFormValid = () => {
-    // MNT bank info required
-    const actualMntBankName = getActualMntBankName();
-    if (!actualMntBankName || !mntAccountNumber.trim() || !mntOwnerName.trim() || !mntPhone.trim()) return false;
+    // MNT bank info required when Mongolian account is selected
+    if (hasMntBank) {
+      const actualMntBankName = getActualMntBankName();
+      if (!actualMntBankName || !mntAccountNumber.trim() || !mntOwnerName.trim() || !mntPhone.trim()) return false;
+    }
 
     // Passport required
     if (!passportUrl) return false;
@@ -228,11 +234,11 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
         rub_card_number: hasRubBank ? rubCardNumber.trim() : "",
         rub_owner_name: hasRubBank ? rubOwnerName.trim() : "",
         // MNT bank info
-        mnt_bank_name: getActualMntBankName(),
-        mnt_account_number: mntAccountNumber.trim(),
-        mnt_owner_name: mntOwnerName.trim(),
+        mnt_bank_name: hasMntBank ? getActualMntBankName() : "",
+        mnt_account_number: hasMntBank ? mntAccountNumber.trim() : "",
+        mnt_owner_name: hasMntBank ? mntOwnerName.trim() : "",
         // Store just the 8 digits of Mongolian phone (remove +976 and formatting)
-        mnt_phone: mntPhone.replace(/\D/g, '').replace(/^976/, '').slice(0, 8),
+        mnt_phone: hasMntBank ? mntPhone.replace(/\D/g, '').replace(/^976/, '').slice(0, 8) : "",
         passport_storage_url: passportUrl,
       };
 
@@ -274,27 +280,35 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
 
         {/* Content */}
         <div className="registration-modal-content p-5 space-y-4">
-          {/* RUB Bank Section - Optional */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-maroon-700 font-semibold">
-                <CreditCard className="w-4 h-4" />
-                <span>{t("reg.rub_bank_section")}</span>
-              </div>
-            </div>
+          {/* Country selector */}
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              ["mn", t("reg.country_mn")],
+              ["ru", t("reg.country_ru")],
+              ["both", t("reg.country_both")],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setCountry(value)}
+                className={`py-2.5 rounded-lg border text-sm font-semibold transition ${
+                  country === value
+                    ? "bg-maroon-600 text-white border-maroon-600"
+                    : "bg-white text-maroon-700 border-maroon-200 hover:bg-maroon-50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-            {/* Checkbox to enable RUB bank */}
-            <label className="flex items-center gap-3 cursor-pointer p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition">
-              <input
-                type="checkbox"
-                checked={hasRubBank}
-                onChange={(e) => setHasRubBank(e.target.checked)}
-                className="w-5 h-5 rounded border-slate-300 text-maroon-600 focus:ring-maroon-500"
-              />
-              <span className="text-sm text-slate-600">
-                {t("reg.has_rub_bank")}
-              </span>
-            </label>
+          {/* RUB Bank Section */}
+          {hasRubBank && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-maroon-700 font-semibold">
+              <CreditCard className="w-4 h-4" />
+              <span>{t("reg.rub_bank_section")}</span>
+            </div>
 
             {hasRubBank && (
               <div className="space-y-3 pl-2 border-l-2 border-maroon-200">
@@ -357,9 +371,11 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
               </div>
             )}
           </div>
+          )}
 
           {/* MNT Bank Section */}
-          <div className="space-y-3 pt-3 border-t border-slate-100">
+          {hasMntBank && (
+          <div className={`space-y-3 ${hasRubBank ? "pt-3 border-t border-slate-100" : ""}`}>
             <div className="flex items-center gap-2 text-maroon-700 font-semibold">
               <Building className="w-4 h-4" />
               <span>{t("reg.mnt_bank_section")}</span>
@@ -421,6 +437,7 @@ export function RegistrationModal({ onRegistered, onClose }: Props) {
               />
             </div>
           </div>
+          )}
 
           {/* Passport Upload Section */}
           <div className="space-y-3 pt-3 border-t border-slate-100">

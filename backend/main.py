@@ -6629,12 +6629,23 @@ async def register_user(
     if payload.rub_bank_name and payload.rub_phone_sbp:
         bank_rub = f"{payload.rub_bank_name},{payload.rub_phone_sbp},{payload.rub_card_number},{payload.rub_owner_name}"
     
-    bank_mnt = f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone}"
+    has_mnt = all([
+        payload.mnt_bank_name.strip(), payload.mnt_account_number.strip(),
+        payload.mnt_owner_name.strip(), payload.mnt_phone.strip(),
+    ])
+    has_rub = bool(bank_rub)
+    if not has_mnt and not has_rub:
+        raise HTTPException(status_code=400, detail="Register at least one account: Mongolian or Russian")
+    if not has_mnt and any([payload.mnt_bank_name, payload.mnt_account_number, payload.mnt_owner_name, payload.mnt_phone]):
+        raise HTTPException(status_code=400, detail="Incomplete Mongolian account details")
+    bank_mnt = (
+        f"{payload.mnt_bank_name},{payload.mnt_account_number},{payload.mnt_owner_name},{payload.mnt_phone}"
+        if has_mnt else ""
+    )
     
     # Update user record with KYC info
     # Name/email already set in Level 1 registration, only update if provided
     update_payload = {
-        "bank_mnt": bank_mnt,
         "passport_storage_url": payload.passport_storage_url,
         "ready_for_verification": True,
         "agreed_terms": True,
@@ -6652,6 +6663,9 @@ async def register_user(
     if payload.email:
         update_payload["email"] = payload.email
     
+    if bank_mnt:
+        update_payload["bank_mnt"] = bank_mnt
+
     # Add RUB bank only if provided
     if bank_rub:
         update_payload["bank_rub"] = bank_rub
@@ -6669,7 +6683,7 @@ async def register_user(
             f"📋 <b>Шинэ бүртгэл баталгаажуулалт хүлээгдэж байна</b>\n\n"
             f"👤 Хэрэглэгч: {payload.last_name} {payload.first_name}\n"
             f"📧 Имэйл: {payload.email or '-'}\n"
-            f"📱 Монгол утас: {payload.mnt_phone}\n"
+            f"📱 Монгол утас: {payload.mnt_phone or '-'}\n"
             f"📱 Утас СБП (RU): {payload.rub_phone_sbp or '-'}\n"
             f"🆔 Telegram ID: {user.id}\n"
         )

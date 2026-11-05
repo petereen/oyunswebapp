@@ -616,10 +616,11 @@ class RegistrationRequest(BaseModel):
     rub_card_number: str = ""
     rub_owner_name: str = ""
     # MNT bank info: bank_name, account_number, owner_name, phone
-    mnt_bank_name: str
-    mnt_account_number: str
-    mnt_owner_name: str
-    mnt_phone: str  # Mongolian phone number
+    # Optional: a user may register a Mongolian account, a Russian account, or both
+    mnt_bank_name: str = ""
+    mnt_account_number: str = ""
+    mnt_owner_name: str = ""
+    mnt_phone: str = ""  # Mongolian phone number
     passport_storage_url: str  # Passport image URL
 
 
