@@ -99,6 +99,7 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
   
   // Show Russian bank warning when user tries to sell (MNT->RUB) without bank info
   const [showRubBankWarning, setShowRubBankWarning] = useState(false);
+  const [showMntBankWarning, setShowMntBankWarning] = useState(false);
 
   // Final
   const [useSavedBank, setUseSavedBank] = useState<boolean | null>(null);
@@ -183,6 +184,13 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
   }, [direction, availableMntAdminBanks, selectedMntAdminBank]);
 
   const handleSelectDirection = (dir: "buy" | "sell") => {
+    if (dir === "buy") {
+      const hasMntBank = savedBankMnt && savedBankMnt.trim() && savedBankMnt !== ",,,";
+      if (!hasMntBank) {
+        setShowMntBankWarning(true);
+        return;
+      }
+    }
     if (dir === "sell") {
       const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
       if (!hasRubBank) {
@@ -436,6 +444,25 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
         </button>
       </div>
 
+      {/* MNT bank warning - only shown when user tries RUB->MNT without Mongolian bank info */}
+      {showMntBankWarning && (
+        <div className="flex flex-col items-center gap-4 py-6">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+            <CreditCard className="w-8 h-8 text-amber-600" />
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-amber-700 mb-2">{t("ef.mnt_bank_required_title")}</div>
+            <div className="text-sm text-slate-600 mb-4">{t("ef.mnt_bank_required_desc")}</div>
+          </div>
+          <button
+            onClick={() => setShowMntBankWarning(false)}
+            className="mt-2 px-6 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition"
+          >
+            {t("ef.understood")}
+          </button>
+        </div>
+      )}
+
       {/* RUB bank warning - only shown when user tries MNT->RUB without bank info */}
       {showRubBankWarning && (
         <div className="flex flex-col items-center gap-4 py-6">
@@ -468,7 +495,7 @@ export function ExchangeFlow({ userId, buyRate, sellRate, savedBankRub, savedBan
       )}
 
       {/* Step 0: Direction Selection */}
-      {step === 0 && !showRubBankWarning && (
+      {step === 0 && !showRubBankWarning && !showMntBankWarning && (
         <div className="flex flex-col gap-4">
           <div className="text-center text-slate-600 mb-2">{t("ef.select_direction")}</div>
           <button

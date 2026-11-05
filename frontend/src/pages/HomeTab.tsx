@@ -73,7 +73,8 @@ export function HomeTab({ initData, user, isAuthenticating, authError, needsBrow
     return parts[3]?.trim() || "";
   };
   const mntPhone = getMntPhone(userProfile?.bank_mnt);
-  const missingPhoneMnt = !mntPhone;
+  const hasMntBank = Boolean(userProfile?.bank_mnt?.replace(/,/g, "").trim());
+  const missingPhoneMnt = hasMntBank && !mntPhone;
   const missingRequiredInfo = missingEmail || missingPhoneMnt;
 
   const [showRegistration, setShowRegistration] = useState(false);

@@ -60,6 +60,7 @@ export function TransactionTab({
   const savedBankRub = userProfile?.bank_rub;
   const savedBankMnt = userProfile?.bank_mnt;
   const hasRubBank = savedBankRub && savedBankRub.trim() && savedBankRub !== ",,,";
+  const hasMntBank = savedBankMnt && savedBankMnt.trim() && savedBankMnt !== ",,,";
   const isSellLockedForReverification = userProfile?.verified === false
     && Boolean(userProfile?.ready_for_verification)
     && verificationLevel >= 2;
@@ -112,6 +113,7 @@ export function TransactionTab({
   const [mntOwnerName, setMntOwnerName] = useState("");
   const [useSavedBank, setUseSavedBank] = useState<boolean | null>(null);
   const [showRubBankWarning, setShowRubBankWarning] = useState(false);
+  const [showMntBankWarning, setShowMntBankWarning] = useState(false);
 
   // Misc
   const [invoiceId, setInvoiceId] = useState("");
@@ -267,6 +269,10 @@ export function TransactionTab({
     }
     if (dir === "sell" && !hasRubBank) {
       setShowRubBankWarning(true);
+      return;
+    }
+    if (dir === "buy" && !hasMntBank) {
+      setShowMntBankWarning(true);
       return;
     }
     setDirection(dir);
@@ -595,6 +601,27 @@ export function TransactionTab({
           />
         )}
       </>
+    );
+  }
+
+  // No MNT bank warning (only when user tries RUB->MNT without Mongolian bank info)
+  if (showMntBankWarning) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-8 animate-fadeIn">
+        <div className="w-16 h-16 bg-gold-100 dark:bg-gold-900/30 rounded-full flex items-center justify-center">
+          <CreditCard className="w-8 h-8 text-gold-600" />
+        </div>
+        <div className="text-center">
+          <div className="text-lg font-semibold text-gold-700 dark:text-gold-400 mb-2">{t("ef.mnt_bank_required_title")}</div>
+          <div className="text-sm text-dark-600 dark:text-ivory-300 mb-4">{t("ef.mnt_bank_required_desc")}</div>
+        </div>
+        <button
+          onClick={() => setShowMntBankWarning(false)}
+          className="mt-2 px-6 py-3 bg-maroon-600 text-white rounded-xl font-semibold hover:bg-maroon-700 transition"
+        >
+          {t("ef.understood")}
+        </button>
+      </div>
     );
   }
 

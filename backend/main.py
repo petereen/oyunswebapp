@@ -6820,6 +6820,16 @@ async def create_exchange(
     if direction not in {"buy", "sell"}:
         raise HTTPException(status_code=400, detail="Invalid direction")
 
+    if direction == "buy":
+        # RUB->MNT pays out to a Mongolian account; Russian-only users cannot receive MNT.
+        mnt_res = client.table("users").select("bank_mnt").eq("id", user.id).limit(1).execute()
+        saved_mnt = ((mnt_res.data or [{}])[0].get("bank_mnt") or "").replace(",", "").strip()
+        if not saved_mnt:
+            raise HTTPException(
+                status_code=400,
+                detail="RUB->MNT requires a registered Mongolian bank account",
+            )
+
     if direction == "sell" and _is_sell_direction_locked_for_reverification(client, user.id):
         raise HTTPException(
             status_code=400,
