@@ -27,7 +27,7 @@ FROM (
     JOIN admin_users a ON a.id = aa.admin_user_id
     WHERE aa.action_type = 'transaction_approved'
     ORDER BY aa.target_id, aa.created_at ASC
-) x
+) 
 WHERE x.target_id = t.invoice
   AND t.completed_by_admin IS NULL
   AND t.status IN ('successful', 'completed');

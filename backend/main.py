@@ -10194,17 +10194,19 @@ async def confirm_gift(
     
     try:
         # Get the gift
-        res = client.table("gifts").select("*").eq("id", gift_id).single().execute()
-        
+        # Avoid .single(): its object+json response parsing can fail with
+        # "JSON could not be generated" and hide the actual row in the error.
+        res = client.table("gifts").select("*").eq("id", gift_id).limit(1).execute()
+
         if not res.data:
             raise HTTPException(status_code=404, detail="Gift not found")
-        
-        gift = res.data
-        
+
+        gift = res.data[0]
+
         # Verify recipient
         if gift.get("recipient_user_id") != user.id:
             raise HTTPException(status_code=403, detail="Not your gift")
-        
+
         # Verify status
         if gift.get("status") != "pending_recipient":
             raise HTTPException(status_code=400, detail="Gift already confirmed")
